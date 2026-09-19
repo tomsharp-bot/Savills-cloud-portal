@@ -10,7 +10,7 @@ HHSRS Reporter is a **separate product**. Do not merge it here.
 
 ## What this app does
 
-- Cookie-session login (`admin` | `surveyor` | `client`). Client/surveyor with no Personnel project ticks stay on login (admins always enter).
+- Cookie-session login (`admin` | `surveyor` | `client`)
 - Projects on **Current / Upcoming / Archive** boards (archive board shows the 5 most recent; **See Full Archive** lists all)
 - Create/Edit **Project Target** as a count or percent — shown on Summary
 - Survey-type ticks drive **Summary** KPI columns
