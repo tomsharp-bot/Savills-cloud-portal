@@ -49,6 +49,14 @@ export function canUseLoader(user: AuthedUser): boolean {
   return isAdmin(user);
 }
 
+export function canExportStock(user: AuthedUser): boolean {
+  return isAdmin(user) || isSurveyor(user);
+}
+
+export function canClearStock(user: AuthedUser): boolean {
+  return isAdmin(user);
+}
+
 export function canSeeDocuments(user: AuthedUser): boolean {
   return isAdmin(user) || isSurveyor(user);
 }

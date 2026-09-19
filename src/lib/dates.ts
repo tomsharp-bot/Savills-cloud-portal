@@ -28,10 +28,22 @@ export function formatVisitDateDisplay(v: unknown): string {
   return s;
 }
 
+/** Stock-grid display: DD/MM/YY. Upload parse still accepts DD/MM/YYYY and DD/MM/YY. */
+export function formatStockDate(v: unknown): string {
+  const full = formatVisitDateDisplay(v);
+  const m = full.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (!m) return full;
+  const yy = m[3].length === 4 ? m[3].slice(-2) : m[3].padStart(2, "0");
+  return `${m[1]}/${m[2]}/${yy}`;
+}
+
 export function visitDateSortKey(v: unknown): string {
   const disp = formatVisitDateDisplay(v);
-  const m = disp.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m) return `${m[3]}${m[2]}${m[1]}`;
+  const m = disp.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (m) {
+    const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${year}${m[2]}${m[1]}`;
+  }
   return String(v || "");
 }
 

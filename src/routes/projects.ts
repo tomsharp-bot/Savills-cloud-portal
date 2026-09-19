@@ -4,9 +4,12 @@ import { prisma } from "../lib/prisma.js";
 import { canSeeProject, clientForcedTab, includedTypeLabels, isAdmin, isClient, PROJECT_TABS } from "../lib/access.js";
 import { buildSummary } from "../lib/summary.js";
 import { userAccessIds } from "../middleware/auth.js";
-import { formatDocDate } from "../lib/dates.js";
+import { formatDocDate, formatStockDate } from "../lib/dates.js";
 import { formatBytes } from "../lib/documents.js";
 import { reapplyExternalLink } from "../lib/external.js";
+import { parseProjectTarget } from "../lib/project-target.js";
+import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
+import { STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 
 export const projectsRouter = Router();
 
@@ -33,18 +36,53 @@ projectsRouter.get("/", async (req: Request, res: Response) => {
   const accessIds = await userAccessIds(user.id);
   const all = await prisma.project.findMany({ orderBy: { createdAt: "asc" } });
   const visible = all.filter((p) => canSeeProject(user, p, accessIds));
+  const archived = visible.filter((p) => p.stage === "archive");
   const boards = {
     current: visible.filter((p) => p.stage === "current"),
     upcoming: isAdmin(user) ? visible.filter((p) => p.stage === "upcoming") : [],
-    archive: visible.filter((p) => p.stage === "archive"),
+    archive: recentArchived(archived),
   };
   res.render("projects", {
     title: "Projects",
     user,
     boards,
+    archiveTotal: archived.length,
+    archiveLimit: ARCHIVE_BOARD_LIMIT,
     selectedId: String(req.query.selected || ""),
     notice: req.query.notice || "",
     error: req.query.error || "",
+  });
+});
+
+projectsRouter.get("/archive", async (req: Request, res: Response) => {
+  const user = req.user!;
+  const accessIds = await userAccessIds(user.id);
+  const all = await prisma.project.findMany({
+    where: { stage: "archive" },
+    orderBy: { updatedAt: "desc" },
+  });
+  const visible = all.filter((p) => canSeeProject(user, p, accessIds));
+  const sortKeyRaw = String(req.query.sort || "updatedAt");
+  const sortKey = sortKeyRaw === "name" || sortKeyRaw === "projectManager" ? sortKeyRaw : "updatedAt";
+  const dir = req.query.dir === "asc" ? "asc" : "desc";
+  const q = String(req.query.q || "").trim().toLowerCase();
+  const filtered = q
+    ? visible.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.projectManager.toLowerCase().includes(q)
+      )
+    : visible;
+  res.render("archive", {
+    title: "Projects Archive",
+    user,
+    projects: sortArchived(filtered, sortKey, dir),
+    q: String(req.query.q || ""),
+    sortKey,
+    dir,
+    notice: req.query.notice || "",
+    error: req.query.error || "",
+    formatDocDate,
   });
 });
 
@@ -58,6 +96,7 @@ projectsRouter.post("/", async (req: Request, res: Response) => {
   const projectManager = String(req.body.projectManager || "").trim() || "TBC";
   const stage = (req.body.stage === "current" ? "current" : "upcoming") as ProjectStage;
   const types = readTypes(req.body);
+  const target = parseProjectTarget(req.body);
   if (!name) {
     res.redirect("/projects?error=" + encodeURIComponent("Enter a project name"));
     return;
@@ -71,7 +110,7 @@ projectsRouter.post("/", async (req: Request, res: Response) => {
     res.redirect("/projects?error=" + encodeURIComponent("Name already used"));
     return;
   }
-  await prisma.project.create({ data: { name, projectManager, stage, ...types } });
+  await prisma.project.create({ data: { name, projectManager, stage, ...types, ...target } });
   res.redirect("/projects?notice=" + encodeURIComponent("Created " + name));
 });
 
@@ -84,6 +123,7 @@ projectsRouter.post("/:id/edit", async (req: Request, res: Response) => {
   const projectManager = String(req.body.projectManager || "").trim() || "TBC";
   const stage = String(req.body.stage || "upcoming") as ProjectStage;
   const types = readTypes(req.body);
+  const target = parseProjectTarget(req.body);
   if (!name || !anyTypeOn(types)) {
     res.redirect("/projects?error=" + encodeURIComponent("Name and at least one survey type are required"));
     return;
@@ -95,7 +135,7 @@ projectsRouter.post("/:id/edit", async (req: Request, res: Response) => {
   }
   await prisma.project.update({
     where: { id: req.params.id },
-    data: { name, projectManager, stage, ...types },
+    data: { name, projectManager, stage, ...types, ...target },
   });
   res.redirect("/projects?notice=" + encodeURIComponent("Updated " + name));
 });
@@ -127,7 +167,8 @@ projectsRouter.post("/:id/copy", async (req: Request, res: Response) => {
       typeCommercial: src.typeCommercial,
       typeOther: src.typeOther,
       typeValidations: src.typeValidations,
-      projectTargetPercent: src.projectTargetPercent,
+      projectTargetValue: src.projectTargetValue,
+      projectTargetUnit: src.projectTargetUnit,
     },
   });
   res.redirect("/projects?notice=" + encodeURIComponent("Copied to " + name));
@@ -259,7 +300,16 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     externalLink,
     flashRefresh,
     formatDocDate,
+    formatStockDate,
     formatBytes,
+    stockLabels: STOCK_LABELS,
+    stockSelectCols: STOCK_SELECT_COLS,
+    stockDateCols: STOCK_DATE_COLS,
+    stockColsByKind: {
+      dwelling: stockColumns("dwelling"),
+      block: stockColumns("block"),
+      garage: stockColumns("garage"),
+    },
     notice: req.query.notice || "",
     error: req.query.error || "",
   });

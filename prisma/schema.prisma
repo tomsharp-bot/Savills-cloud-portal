@@ -25,6 +25,11 @@ enum AssetKind {
   garage
 }
 
+enum ProjectTargetUnit {
+  count
+  percent
+}
+
 model User {
   id                String   @id @default(cuid())
   username          String   @unique
@@ -44,20 +49,21 @@ model User {
 }
 
 model Project {
-  id                   String       @id @default(cuid())
-  name                 String       @unique
+  id                   String            @id @default(cuid())
+  name                 String            @unique
   projectManager       String
-  stage                ProjectStage @default(upcoming)
-  typeConditionOnly    Boolean      @default(true)
-  typeConditionEpc     Boolean      @default(false)
-  typeBlocks           Boolean      @default(true)
-  typeGarages          Boolean      @default(true)
-  typeCommercial       Boolean      @default(false)
-  typeOther            Boolean      @default(false)
-  typeValidations      Boolean      @default(false)
-  projectTargetPercent Int          @default(75)
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  stage                ProjectStage      @default(upcoming)
+  typeConditionOnly    Boolean           @default(true)
+  typeConditionEpc     Boolean           @default(false)
+  typeBlocks           Boolean           @default(true)
+  typeGarages          Boolean           @default(true)
+  typeCommercial       Boolean           @default(false)
+  typeOther            Boolean           @default(false)
+  typeValidations      Boolean           @default(false)
+  projectTargetValue   Int               @default(75)
+  projectTargetUnit    ProjectTargetUnit @default(percent)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
   access               ProjectAccess[]
   assets               Asset[]
   visitLogs            VisitLog[]

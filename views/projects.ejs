@@ -42,7 +42,20 @@
         <% boardMeta.forEach(board => { %>
           <% if (!(board.adminOnly && !isAdmin)) { %>
           <div class="project-board">
-            <h3 class="section-title"><%= board.title %></h3>
+            <div class="board-head">
+              <h3 class="section-title"><%= board.title %></h3>
+              <% if (board.key === "archive") { %>
+                <a class="btn btn-ghost btn-sm" href="/projects/archive">See Full Archive</a>
+              <% } %>
+            </div>
+            <% if (board.key === "archive") { %>
+              <p class="board-note">
+                <% if (!archiveTotal) { %>None archived yet.
+                <% } else if (archiveTotal > archiveLimit) { %>Showing the <%= archiveLimit %> most recently archived of <%= archiveTotal %>.
+                <% } else { %>Showing <%= archiveTotal %> archived project<%= archiveTotal === 1 ? "" : "s" %>.
+                <% } %>
+              </p>
+            <% } %>
             <div class="<%= board.gridClass %>">
               <% const items = boards[board.key]; %>
               <% if (!items.length) { %>
@@ -61,7 +74,8 @@
                           id: p.id, name: p.name, projectManager: p.projectManager, stage: p.stage,
                           typeConditionOnly: p.typeConditionOnly, typeConditionEpc: p.typeConditionEpc,
                           typeBlocks: p.typeBlocks, typeGarages: p.typeGarages, typeCommercial: p.typeCommercial,
-                          typeOther: p.typeOther, typeValidations: p.typeValidations
+                          typeOther: p.typeOther, typeValidations: p.typeValidations,
+                          projectTargetValue: p.projectTargetValue, projectTargetUnit: p.projectTargetUnit
                         }) %>'>Edit Project</button>
                       <% } %>
                       <a class="btn btn-ghost btn-sm" href="/projects?selected=<%= p.id %>">Select</a>
@@ -110,6 +124,7 @@
         <option value="upcoming">Upcoming (surveyors cannot see)</option>
         <option value="current">Current (live)</option>
       </select>
+      <%- include("partials/project-target", { prefix: "create", value: 75, unit: "percent" }) %>
       <%- include("partials/type-ticks", { title: "Survey types in this project", types: {
         typeConditionOnly: true, typeConditionEpc: false, typeBlocks: true, typeGarages: true,
         typeCommercial: false, typeOther: false, typeValidations: false
@@ -136,6 +151,7 @@
         <option value="current">Current (live)</option>
         <option value="archive">Archive (completed)</option>
       </select>
+      <%- include("partials/project-target", { prefix: "edit", value: 75, unit: "percent" }) %>
       <%- include("partials/type-ticks", { title: "Survey types / needs for this project", types: {
         typeConditionOnly: false, typeConditionEpc: false, typeBlocks: false, typeGarages: false,
         typeCommercial: false, typeOther: false, typeValidations: false

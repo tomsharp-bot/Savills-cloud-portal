@@ -30,6 +30,17 @@ describe("Stocklist refresh plan", () => {
     assert.equal(plan.matched[0].address.street, "High St");
   });
 
+  it("maps Patch and Surveyor from a stocklist export so they can be re-uploaded", () => {
+    const existing = [row({ uprn: "A" })];
+    const plan = planStocklistRefresh(
+      existing,
+      [{ UPRN: "A", Patch: "Patch 4", Surveyor: "AS", Street: "High St" }],
+      false
+    );
+    assert.equal(plan.matched[0].address.patch, "Patch 4");
+    assert.equal(plan.matched[0].address.surveyor, "AS");
+  });
+
   it("errors when no UPRN values are present", () => {
     const plan = planStocklistRefresh([row({ uprn: "A" })], [{ Street: "Nope" }], true);
     assert.equal(plan.error, "No UPRN column / values found in file");

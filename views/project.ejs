@@ -188,14 +188,18 @@
             </div>
 
             <div class="stock-refresh-box">
-              <h4>Refresh stocklist</h4>
-              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a current stock Excel/CSV (must include a <strong>UPRN</strong> column). Compares against the selected target tab above (Auto → Dwellings). <strong>Added</strong> UPRNs become new stock rows (Asset Status “No Visit”). <strong>Removed</strong> UPRNs stay on the list as “Not on latest stocklist”. If already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved.</p>
+              <h4>Upload or refresh stocklist</h4>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a stock Excel/CSV with a <strong>UPRN</strong> column. The first upload on an empty project loads the full list. Later uploads add new UPRNs and mark removed ones mid-job (they stay as “Not on latest stocklist”). Compares against the selected target tab above (Auto → Dwellings). New rows start as Asset Status “No Visit”. If a removed row is already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved. Use <strong>Export stocklist</strong> to download the current grids, edit Patch / Surveyor, and re-upload here.</p>
               <form class="stock-tools" method="post" action="/projects/<%= project.id %>/stock-refresh" enctype="multipart/form-data">
                 <input type="file" id="stock-refresh-file" name="file" accept=".xlsx,.xls,.csv" required />
                 <input type="hidden" name="target" id="stock-refresh-target" value="auto" />
                 <label class="chk" for="stock-refresh-omit-removed"><input type="checkbox" id="stock-refresh-omit-removed" name="omitRemoved" value="true" checked /> Also omit removed assets from counts</label>
-                <button type="submit" class="btn btn-primary" id="btn-stock-refresh-apply">Apply stocklist refresh</button>
+                <button type="submit" class="btn btn-primary" id="btn-stock-refresh-apply">Apply stocklist</button>
               </form>
+              <div class="stock-tools">
+                <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=all">Export stocklist</a>
+                <button type="button" class="btn btn-danger btn-sm" data-clear-stock>Clear entire stocklist</button>
+              </div>
               <% if (flashRefresh) { %>
               <div class="stock-refresh-results">
                 <div class="stock-refresh-panel">
@@ -313,6 +317,34 @@
     </section>
   </div>
 </div>
+<% if (isAdmin) { %>
+<div id="modal-clear-stock" class="modal-back hidden">
+  <div class="modal">
+    <h3>Clear entire stocklist</h3>
+    <div id="clear-step-1">
+      <p>Are you sure? This deletes all dwellings, blocks and garages for this project. Summary counts will update. The visit log is kept unless you choose otherwise on the next step.</p>
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" data-close="modal-clear-stock">Cancel</button>
+        <button type="button" class="btn btn-danger" id="clear-stock-next">Continue</button>
+      </div>
+    </div>
+    <div id="clear-step-2" class="hidden">
+      <p>Type <strong>CLEAR</strong> to confirm.</p>
+      <label for="clear-stock-typed">Confirm</label>
+      <input id="clear-stock-typed" type="text" autocomplete="off" placeholder="CLEAR" />
+      <label class="chk"><input type="checkbox" id="clear-stock-wipe-log" /> Also delete visit log</label>
+      <form id="form-clear-stock" method="post" action="/projects/<%= project.id %>/stock/clear">
+        <input type="hidden" name="confirm" id="clear-stock-confirm-field" value="" />
+        <input type="hidden" name="wipeVisitLog" id="clear-stock-wipe-field" value="" />
+      </form>
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" data-close="modal-clear-stock">Cancel</button>
+        <button type="button" class="btn btn-danger" id="clear-stock-confirm">Clear stocklist</button>
+      </div>
+    </div>
+  </div>
+</div>
+<% } %>
 <script src="/js/app.js"></script>
 </body>
 </html>

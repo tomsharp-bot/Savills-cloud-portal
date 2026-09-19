@@ -1,0 +1,9 @@
+<label for="<%= prefix %>-target-value">Project Target</label>
+<div class="target-row">
+  <input id="<%= prefix %>-target-value" name="projectTargetValue" type="number" min="0" step="1" value="<%= value %>" />
+  <select id="<%= prefix %>-target-unit" name="projectTargetUnit">
+    <option value="percent" <%= unit === "percent" ? "selected" : "" %>>percent</option>
+    <option value="count" <%= unit === "count" ? "selected" : "" %>>count</option>
+  </select>
+</div>
+<p class="target-help">Percent = share of dwellings to complete. Count = number of surveys to hit.</p>
