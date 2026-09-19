@@ -74,9 +74,45 @@
           <% if (tab === "documents") { %>
             <h3 style="margin:0 0 4px;color:var(--navy)">Project Documents</h3>
             <p style="margin:0;color:var(--muted);font-size:.9rem">Excel, Word and PDF. Surveyors can open/download; only Admins can upload or delete.</p>
-            <div class="placeholder-box">
-              Document store is stubbed this slice.<br/>
-              TODO: upload to DigitalOcean Spaces bucket <strong>cloud-portal-vault</strong> (LON1).
+            <% if (isAdmin) { %>
+            <form class="docs-toolbar" method="post" action="/projects/<%= project.id %>/documents" enctype="multipart/form-data">
+              <input type="file" name="file" accept=".xlsx,.xls,.doc,.docx,.pdf" required />
+              <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+            </form>
+            <% } else { %>
+            <p class="docs-hint">You can download or open files. Upload and delete are Admin-only.</p>
+            <% } %>
+            <p class="docs-hint">Stored on local disk at <code>uploads/projects/<%= project.id %>/</code>. TODO: move to DigitalOcean Spaces bucket <strong>cloud-portal-vault</strong> (LON1).</p>
+            <div style="overflow-x:auto">
+              <table class="docs-table">
+                <thead>
+                  <tr><th>Name</th><th>Type</th><th>Size</th><th>Uploaded by</th><th>Date</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  <% if (!documents.length) { %>
+                    <tr><td colspan="6" class="empty">No documents yet.</td></tr>
+                  <% } else { %>
+                    <% documents.forEach(d => { %>
+                      <tr>
+                        <td><%= d.name %></td>
+                        <td><%= d.type %></td>
+                        <td><%= formatBytes(d.size) %></td>
+                        <td><%= d.uploadedBy %></td>
+                        <td><%= formatDocDate(d.uploadedAt) %></td>
+                        <td>
+                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/documents/<%= d.id %>/view" target="_blank">View</a>
+                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/documents/<%= d.id %>/download">Download</a>
+                          <% if (isAdmin) { %>
+                          <form class="inline-form" method="post" action="/projects/<%= project.id %>/documents/<%= d.id %>/delete" onsubmit="return confirm('Delete <%= d.name %>?');">
+                            <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+                          </form>
+                          <% } %>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  <% } %>
+                </tbody>
+              </table>
             </div>
           <% } %>
 
@@ -153,16 +189,51 @@
 
             <div class="stock-refresh-box">
               <h4>Refresh stocklist</h4>
-              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">
-                TODO this slice: mid-job stocklist refresh (add / keep-removed / omit-from-counts). Endpoint stubbed at <code>POST /projects/:id/stock-refresh</code>.
-              </p>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a current stock Excel/CSV (must include a <strong>UPRN</strong> column). Compares against the selected target tab above (Auto → Dwellings). <strong>Added</strong> UPRNs become new stock rows (Asset Status “No Visit”). <strong>Removed</strong> UPRNs stay on the list as “Not on latest stocklist”. If already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved.</p>
+              <form class="stock-tools" method="post" action="/projects/<%= project.id %>/stock-refresh" enctype="multipart/form-data">
+                <input type="file" id="stock-refresh-file" name="file" accept=".xlsx,.xls,.csv" required />
+                <input type="hidden" name="target" id="stock-refresh-target" value="auto" />
+                <label class="chk" for="stock-refresh-omit-removed"><input type="checkbox" id="stock-refresh-omit-removed" name="omitRemoved" value="true" checked /> Also omit removed assets from counts</label>
+                <button type="submit" class="btn btn-primary" id="btn-stock-refresh-apply">Apply stocklist refresh</button>
+              </form>
+              <% if (flashRefresh) { %>
+              <div class="stock-refresh-results">
+                <div class="stock-refresh-panel">
+                  <h5>Added: <span class="count"><%= flashRefresh.added.length %></span></h5>
+                  <ul>
+                    <% if (!flashRefresh.added.length) { %><li class="empty">None</li><% } %>
+                    <% flashRefresh.added.forEach(u => { %><li><%= u %></li><% }) %>
+                  </ul>
+                </div>
+                <div class="stock-refresh-panel">
+                  <h5>Removed: <span class="count"><%= flashRefresh.removed.length %></span></h5>
+                  <ul>
+                    <% if (!flashRefresh.removed.length) { %><li class="empty">None</li><% } %>
+                    <% flashRefresh.removed.forEach(u => { %><li><%= u %></li><% }) %>
+                  </ul>
+                </div>
+              </div>
+              <% } %>
             </div>
 
             <div class="external-link-box">
               <h4 style="margin:16px 0 6px;color:var(--navy);font-size:.95rem">External-only list</h4>
-              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">
-                TODO: link an Excel with UPRN + External flag, store on Spaces bucket <strong>cloud-portal-vault</strong> (LON1), re-lookup on admin login (XLOOKUP-like).
-                Schema already has an <code>external</code> column on stock; Ext-Only status is applied when External = Yes.
+              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Link an Excel/CSV with UPRN + an External flag column (Yes / True / Y / 1). Matching UPRNs get <strong>External = Yes</strong> and Asset Status <strong>Ext-Only</strong>; visit dates stay put. The linked UPRN set is stored in Postgres and re-applied when an admin logs in or opens this project. TODO: pull the file from Spaces bucket <strong>cloud-portal-vault</strong> (LON1).</p>
+              <form class="stock-tools" method="post" action="/projects/<%= project.id %>/external" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".xlsx,.xls,.csv" required />
+                <label for="external-flag-col">Flag column</label>
+                <input id="external-flag-col" name="flagCol" type="text" value="<%= externalLink ? externalLink.flagCol : 'External' %>" placeholder="e.g. External" style="width:120px" />
+                <button type="submit" class="btn btn-primary">Link &amp; apply External list</button>
+              </form>
+              <form method="post" action="/projects/<%= project.id %>/external/clear" class="stock-tools">
+                <button type="submit" class="btn btn-ghost">Clear link</button>
+              </form>
+              <p class="loader-log">
+                <% if (externalLink) { %>
+                  Linked: <%= externalLink.fileName %> · <%= Array.isArray(externalLink.uprns) ? externalLink.uprns.length : 0 %> flagged UPRN(s). Auto-refreshes on admin login / project open.
+                <% } else { %>
+                  No External list linked yet.
+                <% } %>
               </p>
             </div>
 

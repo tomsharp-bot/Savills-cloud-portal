@@ -13,6 +13,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || "development",
   databaseUrl: required("DATABASE_URL"),
   sessionSecret: required("SESSION_SECRET", "dev-only-change-me"),
+  uploadDir: process.env.UPLOAD_DIR || "uploads",
   spaces: {
     endpoint: process.env.SPACES_ENDPOINT || "",
     region: process.env.SPACES_REGION || "lon1",
