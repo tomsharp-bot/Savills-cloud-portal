@@ -5,6 +5,8 @@ import { canSeeProject, clientForcedTab, includedTypeLabels, isAdmin, isClient, 
 import { buildSummary } from "../lib/summary.js";
 import { userAccessIds } from "../middleware/auth.js";
 import { formatDocDate } from "../lib/dates.js";
+import { formatBytes } from "../lib/documents.js";
+import { reapplyExternalLink } from "../lib/external.js";
 
 export const projectsRouter = Router();
 
@@ -170,6 +172,15 @@ projectsRouter.get("/:id", async (req, res) => {
   const requested = String(req.query.tab || (isClient(user) ? "completions" : "summary"));
   let tab = clientForcedTab(user, PROJECT_TABS.includes(requested as (typeof PROJECT_TABS)[number]) ? requested : "summary");
   if (tab === "loader" && !isAdmin(user)) tab = "summary";
+  if (tab === "documents" && isClient(user)) tab = "completions";
+
+  if (isAdmin(user)) {
+    try {
+      await reapplyExternalLink(project.id);
+    } catch (err) {
+      console.error("External re-apply on project view failed", err);
+    }
+  }
 
   const assets = await prisma.asset.findMany({
     where: { projectId: project.id },
@@ -217,6 +228,18 @@ projectsRouter.get("/:id", async (req, res) => {
           take: 20,
         })
       : [];
+  const documents =
+    tab === "documents"
+      ? await prisma.projectDocument.findMany({
+          where: { projectId: project.id },
+          orderBy: { uploadedAt: "desc" },
+        })
+      : [];
+  const externalLink = tab === "loader" ? await prisma.externalLink.findUnique({ where: { projectId: project.id } }) : null;
+  const flashRefresh = req.session?.flashRefresh?.projectId === project.id ? req.session.flashRefresh : null;
+  if (req.session?.flashRefresh?.projectId === project.id) {
+    req.session.flashRefresh = undefined;
+  }
 
   res.render("project", {
     title: project.name,
@@ -232,7 +255,11 @@ projectsRouter.get("/:id", async (req, res) => {
     completions,
     visitLogs,
     loaderHistory,
+    documents,
+    externalLink,
+    flashRefresh,
     formatDocDate,
+    formatBytes,
     notice: req.query.notice || "",
     error: req.query.error || "",
   });

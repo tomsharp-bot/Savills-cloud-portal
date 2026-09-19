@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/passwords.js";
+import { reapplyAllExternalLinks } from "../lib/external.js";
 
 export const authRouter = Router();
 
@@ -38,6 +39,13 @@ authRouter.post("/login", async (req, res) => {
 
   req.session = req.session || {};
   req.session.userId = user.id;
+  if (user.role === "admin") {
+    try {
+      await reapplyAllExternalLinks();
+    } catch (err) {
+      console.error("External list re-apply on login failed", err);
+    }
+  }
   res.redirect("/projects");
 });
 

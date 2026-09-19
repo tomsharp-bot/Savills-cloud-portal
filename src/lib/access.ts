@@ -49,6 +49,14 @@ export function canUseLoader(user: AuthedUser): boolean {
   return isAdmin(user);
 }
 
+export function canSeeDocuments(user: AuthedUser): boolean {
+  return isAdmin(user) || isSurveyor(user);
+}
+
+export function canManageDocuments(user: AuthedUser): boolean {
+  return isAdmin(user);
+}
+
 export function canManagePersonnel(user: AuthedUser): boolean {
   return isAdmin(user);
 }

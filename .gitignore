@@ -6,4 +6,6 @@ dist/
 coverage/
 tmp/
 uploads/tmp/
+uploads/projects/*
+!uploads/projects/.gitkeep
 .prisma/

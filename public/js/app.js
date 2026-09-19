@@ -162,6 +162,14 @@
     });
   }
 
+  const loaderTarget = document.getElementById("loader-target");
+  const stockTarget = document.getElementById("stock-refresh-target");
+  if (loaderTarget && stockTarget) {
+    const sync = () => { stockTarget.value = loaderTarget.value || "auto"; };
+    loaderTarget.addEventListener("change", sync);
+    sync();
+  }
+
   const visitFilter = document.getElementById("visit-log-filter");
   const visitTable = document.getElementById("visit-log-table");
   if (visitFilter && visitTable) {

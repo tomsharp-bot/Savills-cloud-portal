@@ -9,7 +9,9 @@ import { personnelRouter } from "./routes/personnel.js";
 import { stockRouter } from "./routes/stock.js";
 import { loaderRouter } from "./routes/loader.js";
 import { completionsRouter } from "./routes/completions.js";
+import { documentsRouter } from "./routes/documents.js";
 import { isAdmin, roleLabel } from "./lib/access.js";
+import { prisma } from "./lib/prisma.js";
 
 const viewsDir = path.join(process.cwd(), "views");
 const publicDir = path.join(process.cwd(), "public");
@@ -44,8 +46,15 @@ export function createApp() {
     next();
   });
 
-  app.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "savills-cloud-portal" });
+  app.get("/health", async (_req, res) => {
+    let db = "unknown";
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      db = "up";
+    } catch {
+      db = "down";
+    }
+    res.status(200).json({ ok: true, service: "savills-cloud-portal", db });
   });
 
   app.use(authRouter);
@@ -59,6 +68,7 @@ export function createApp() {
   app.use(stockRouter);
   app.use(loaderRouter);
   app.use(completionsRouter);
+  app.use(documentsRouter);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error(err);

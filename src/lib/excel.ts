@@ -88,6 +88,18 @@ export function parseCsvText(text: string): RawRow[] {
   return rows;
 }
 
+function pickUprnSheet(workbook: XLSX.WorkBook): { name: string; sheet: XLSX.WorkSheet } | null {
+  if (!workbook?.SheetNames?.length) return null;
+  let name = workbook.SheetNames.find((n) => {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[n], { header: 1, defval: "" }) as unknown[][];
+    if (!rows.length) return false;
+    const hdr = rows[0].map((h) => String(h || "").trim().toLowerCase());
+    return hdr.includes("uprn");
+  });
+  if (!name) name = workbook.SheetNames[0];
+  return { name, sheet: workbook.Sheets[name] };
+}
+
 export function parseWorkbook(buffer: Buffer, filename: string): RawRow[] {
   const name = (filename || "").toLowerCase();
   if (name.endsWith(".csv")) {
@@ -95,6 +107,18 @@ export function parseWorkbook(buffer: Buffer, filename: string): RawRow[] {
   }
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const picked = pickDataSheet(wb);
+  if (!picked) throw new Error("No sheet found");
+  return rowsFromSheet(picked.sheet);
+}
+
+/** Stocklist / External list: first sheet with a UPRN column (or first sheet). */
+export function parseUprnWorkbook(buffer: Buffer, filename: string): RawRow[] {
+  const name = (filename || "").toLowerCase();
+  if (name.endsWith(".csv")) {
+    return parseCsvText(buffer.toString("utf8"));
+  }
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const picked = pickUprnSheet(wb);
   if (!picked) throw new Error("No sheet found");
   return rowsFromSheet(picked.sheet);
 }
@@ -108,5 +132,4 @@ export function rowHasUprn(row: RawRow): boolean {
  * - Quarantine-style " Data" sheets with extra unused columns
  * - Merged header rows / two-row headers
  * - Very large workbooks (~938 visits) streaming
- * - Mid-job stocklist refresh (separate from visit Apply)
  */

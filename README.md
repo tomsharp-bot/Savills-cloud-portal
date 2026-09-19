@@ -4,38 +4,28 @@ Role-based Mark Up / stock-condition survey progress tracker for Tom Sharp’s t
 
 Intended domain: **savillscloudportal.co.uk**
 
-This repo is the first **live multi-user slice** of the agreed HTML mock. Excel stays an import/export feed — Postgres is the live store.
+Excel stays an import/export feed — Postgres is the live store.
 
 HHSRS Reporter is a **separate product**. Do not merge it here.
 
-## What this slice does
+## What this app does
 
 - Cookie-session login (`admin` | `surveyor` | `client`)
-- Projects on **Current / Upcoming / Archive** boards (create / copy / edit / delete for admins)
-- Survey-type ticks drive which **Summary** KPI columns show
-- **Personnel** (surveyors, clients, admins) with project ticks and freeze
-- Stock tabs **Dwellings / Blocks / Garages** with recipe column order, Site Comments, Omit Asset, External, “X of Y Assets Displayed”
-- **Completions** list with view/download stubs (clients land here)
-- **Data Loader**: Excel/CSV parse (Asset Visits or Data sheet), Asset Status rules, cumulative Visit Log, Auto-route to D/B/G
-
-## Stack
-
-- Node.js 20+, Express, TypeScript, EJS (mock CSS)
-- Prisma + PostgreSQL
-- `xlsx` (SheetJS) for visit uploads
-- Docker Compose for local Postgres
-
-```
-src/            Express app, routes, Asset Status / loader logic
-views/          Server-rendered pages matching the mock
-public/         CSS + small UI JS
-prisma/         Schema, migration, seed
-```
+- Projects on **Current / Upcoming / Archive** boards
+- Survey-type ticks drive **Summary** KPI columns
+- **Personnel** (surveyors, clients, admins)
+- Stock tabs **Dwellings / Blocks / Garages** (Site Comments, Omit Asset, External, “X of Y Assets Displayed”)
+- **Data Loader**: visit Excel/CSV, Asset Status rules, Visit Log, Auto-route D/B/G
+- **Mid-job stocklist refresh** (add / keep-removed / omit-from-counts)
+- **External-only list** (persist UPRN set, re-apply on admin login)
+- **Documents** (local disk now; Spaces later)
+- **Completions** view/download stubs
 
 ## Local setup
 
 ```bash
 cp .env.example .env
+# For local work you can set NODE_ENV=development in .env
 npm install
 docker compose up -d
 npx prisma migrate deploy
@@ -45,58 +35,101 @@ npm run dev
 
 Open http://localhost:3000
 
-If you already have Postgres on port 5432 (no Docker), create a database and set `DATABASE_URL` to match `.env.example`.
+If Postgres is already on port 5432, create a database and point `DATABASE_URL` at it.
 
-### Demo logins
+### Demo logins (seeded)
 
-| Role     | Username  | Password           |
-|----------|-----------|--------------------|
-| Admin    | `phil.m`  | `PhilMoon2468`     |
-| Surveyor | `peter.m` | `PeterMay2468`     |
-| Surveyor | `alex.s`  | `AlexSurveyor2468` |
-| Client   | `client.j`| `ClientJones2468`  |
+| Role     | Username   | Password           |
+|----------|------------|--------------------|
+| Admin    | `phil.m`   | `PhilMoon2468`     |
+| Surveyor | `peter.m`  | `PeterMay2468`     |
+| Surveyor | `alex.s`   | `AlexSurveyor2468` |
+| Client   | `client.j` | `ClientJones2468`  |
 
-Role rules (locked):
+Do **not** weaken these in production seed. Change them only via Personnel after go-live if needed.
 
-- **Admin** — all boards including Upcoming, Personnel, Data Loader, Omit Asset
-- **Surveyor** — Current + Archive if ticked; **not** Upcoming; Site Comments editable only
-- **Client** — ticked projects only; Completions view/download; no Personnel, no Upcoming, no loader
-
-## Tests
+### Tests
 
 ```bash
 npm test
+npm run build
 ```
 
-Covers Asset Status mapping from Access Type and Auto-route (Garage → Garages, Block → Blocks, else Dwellings).
+---
 
-## DigitalOcean (next — not in this slice)
+## Deploy on DigitalOcean
 
-Tom already has a London account (Managed Postgres + Spaces vault). When you are ready:
+App Platform spec lives at **`.do/app.yaml`**. Region: **London (`lon`)**. Do not put real secrets in git.
 
-1. **App Platform** — create an app from this GitHub repo, Node buildpack, London.
-   - Build: `npm ci && npx prisma generate && npm run build`
-   - Run: `npx prisma migrate deploy && npm start`
-2. **Env vars** (never commit real values):
-   - `DATABASE_URL` — Managed Postgres connection string (`hhsrs-db` or a dedicated portal DB — confirm in the DO panel)
-   - `SESSION_SECRET` — long random string
-   - `NODE_ENV=production`
-   - Spaces placeholders: `SPACES_BUCKET=cloud-portal-vault`, `SPACES_REGION=lon1`, plus `SPACES_ENDPOINT` / `SPACES_KEY` / `SPACES_SECRET`
-3. **Spaces** — private bucket **`cloud-portal-vault`** (LON1). Office → Archive folder layout. Do **not** use retired `hhsrs-photos`.
-4. **Domain** — point `savillscloudportal.co.uk` at the App Platform app and enable HTTPS. Out of scope here.
+### 1. Managed Postgres (London)
 
-## Explicit TODOs (out of this slice)
+1. In DigitalOcean → **Databases**, use the existing London Postgres (`hhsrs-db` or a dedicated portal DB — confirm in the panel).
+2. Create a database (e.g. `savills_cloud_portal`) if you are not sharing the HHSRS schema.
+3. Copy the connection string. You will paste it as `DATABASE_URL`.
+4. Trusted sources: allow the App Platform app (or temporarily “allow all” until the app exists, then lock down).
 
-- Full DigitalOcean deploy (steps above only)
-- Spaces photo store beyond env placeholders
-- External-only XLOOKUP file on Spaces (stock `external` column + UI note exist)
-- Mid-job stocklist refresh (stub `POST /projects/:id/stock-refresh`)
-- Domain DNS / HTTPS
-- HHSRS Reporter (keep separate)
-- Excel polish: two-row headers, huge workbooks, quarantine-only edge cases
+### 2. Create the App from GitHub
+
+1. **Apps** → **Create App** → GitHub → `tomsharp-bot/Savills-cloud-portal`, branch **`main`**, London.
+2. Or import `.do/app.yaml` if the panel offers a spec file.
+3. Confirm commands:
+   - **Build:** `npm ci && npx prisma generate && npm run build`
+   - **Run:** `npx prisma migrate deploy && npm start`
+4. HTTP port **3000** (the app also honours `PORT` from App Platform and binds `0.0.0.0`).
+5. Health check path: **`/health`** (JSON `{"ok":true,...}` — HTTP 200 when the process is up).
+
+### 3. Environment variables Tom must set
+
+Set these in **App Settings → App-Level / web component Environment Variables**. Mark secrets as encrypted.
+
+| Variable | Required | Example / notes |
+|----------|----------|-----------------|
+| `DATABASE_URL` | **Yes** | Managed Postgres URL. Attach the database in the UI *or* paste the URL. |
+| `SESSION_SECRET` | **Yes** | Long random string (not the local example). |
+| `NODE_ENV` | **Yes** | `production` |
+| `PORT` | No | App Platform sets this. Default in code is `3000`. |
+| `SPACES_BUCKET` | No | `cloud-portal-vault` |
+| `SPACES_REGION` | No | `lon1` |
+| `SPACES_ENDPOINT` | No | Spaces endpoint host, when you wire files |
+| `SPACES_KEY` | No | Spaces access key — **leave empty until needed** |
+| `SPACES_SECRET` | No | Spaces secret — **leave empty until needed** |
+
+Never commit real keys. The spec file only declares the names.
+
+### 4. First deploy
+
+1. Deploy. Run command applies **`prisma migrate deploy`** (schema only — **does not seed**).
+2. Seed **once**, not on every deploy. After the first successful deploy, open the app’s **console** (or a one-off job) and run:
+   ```bash
+   npm run seed
+   ```
+   That creates demo users/projects. **Do not** add `npm run seed` to the Run command.
+3. Expected URL: `https://savills-cloud-portal-<hash>.ondigitalocean.app` (App Platform shows the exact host). Later point **savillscloudportal.co.uk** at this app and enable HTTPS.
+
+### 5. After go-live
+
+- Spaces bucket **`cloud-portal-vault`** (LON1) for photos / External XLOOKUP file — not wired yet (local `uploads/projects/{id}/` + DB UPRN set).
+- Domain DNS / HTTPS still a Tom + DO console step.
+
+---
+
+## Stack
+
+- Node.js 20+, Express, TypeScript, EJS
+- Prisma + PostgreSQL
+- Docker Compose for local Postgres
+
+```
+src/            Express app, Asset Status / loader / refresh
+views/          Server-rendered pages (mock CSS)
+public/         CSS + UI JS
+prisma/         Schema, migrations, seed
+.do/app.yaml    App Platform spec
+uploads/        Local documents (gitignored contents)
+```
 
 ## Product vocabulary
 
 - Key: **UPRN**
-- **Asset Status** from visit **Access Type**: No Visit (default) → No Access / Appt Made Not Kept / Access Refused / Void / Full Survey
+- **Asset Status** from visit **Access Type**: No Visit (default) → No Access / Appt Made Not Kept / Access Refused / Void / Full Survey (plus Ext-Only from the External list)
 - Survey-type ticks: Condition Only, Condition + EPC, Blocks, Garages, Commercial Units, Other, Validations

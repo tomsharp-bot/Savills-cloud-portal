@@ -63,6 +63,8 @@ model Project {
   visitLogs            VisitLog[]
   loaderHistory        LoaderHistory[]
   completions          Completion[]
+  documents            ProjectDocument[]
+  externalLink         ExternalLink?
 }
 
 model ProjectAccess {
@@ -155,4 +157,30 @@ model Completion {
   type        String
   generatedAt DateTime @default(now())
   status      String   @default("Ready")
+}
+
+/// Linked External-only UPRN set (Spaces XLOOKUP later — persist in DB for now)
+model ExternalLink {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName  String
+  flagCol   String   @default("External")
+  uprns     Json
+  linkedAt  DateTime @default(now())
+}
+
+/// Local disk files under uploads/projects/{id}/ — TODO: Spaces cloud-portal-vault / LON1
+model ProjectDocument {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  storedName String
+  type       String
+  size       Int
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+
+  @@index([projectId])
 }
