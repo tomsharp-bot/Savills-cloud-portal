@@ -1,11 +1,11 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { canEditSiteComments, canOmitAsset, canSeeProject } from "../lib/access.js";
 import { userAccessIds } from "../middleware/auth.js";
 
 export const stockRouter = Router();
 
-stockRouter.patch("/projects/:id/assets/:assetId", async (req, res) => {
+stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Response) => {
   const user = req.user!;
   const accessIds = await userAccessIds(user.id);
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });

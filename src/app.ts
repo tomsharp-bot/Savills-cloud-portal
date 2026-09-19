@@ -37,7 +37,7 @@ export function createApp() {
   app.use(express.static(publicDir));
   app.use(loadUser);
 
-  app.use((req, res, next) => {
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.locals.currentUser = req.user || null;
     res.locals.roleLabel = req.user ? roleLabel(req.user.role) : "";
     res.locals.isAdmin = isAdmin(req.user);
@@ -46,7 +46,7 @@ export function createApp() {
     next();
   });
 
-  app.get("/health", async (_req, res) => {
+  app.get("/health", async (_req: express.Request, res: express.Response) => {
     let db = "unknown";
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -58,7 +58,7 @@ export function createApp() {
   });
 
   app.use(authRouter);
-  app.get("/", (req, res) => {
+  app.get("/", (req: express.Request, res: express.Response) => {
     res.redirect(req.user ? "/projects" : "/login");
   });
 

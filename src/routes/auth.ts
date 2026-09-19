@@ -1,11 +1,11 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/passwords.js";
 import { reapplyAllExternalLinks } from "../lib/external.js";
 
 export const authRouter = Router();
 
-authRouter.get("/login", (req, res) => {
+authRouter.get("/login", (req: Request, res: Response) => {
   if (req.user) {
     res.redirect("/projects");
     return;
@@ -13,7 +13,7 @@ authRouter.get("/login", (req, res) => {
   res.render("login", { error: "", username: "phil.m" });
 });
 
-authRouter.post("/login", async (req, res) => {
+authRouter.post("/login", async (req: Request, res: Response) => {
   const username = String(req.body.username || "").trim();
   const password = String(req.body.password || "");
   const ul = username.toLowerCase();
@@ -49,7 +49,7 @@ authRouter.post("/login", async (req, res) => {
   res.redirect("/projects");
 });
 
-authRouter.post("/logout", (req, res) => {
+authRouter.post("/logout", (req: Request, res: Response) => {
   req.session = null;
   res.redirect("/login");
 });

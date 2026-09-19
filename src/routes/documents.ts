@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { canManageDocuments, canSeeDocuments, canSeeProject } from "../lib/access.js";
@@ -9,7 +9,7 @@ import { ALLOWED_DOC_EXTS, extOf, projectFilePath, removeProjectFile, safeOrigin
 export const documentsRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-documentsRouter.post("/projects/:id/documents", upload.single("file"), async (req, res) => {
+documentsRouter.post("/projects/:id/documents", upload.single("file"), async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canManageDocuments(user)) {
     res.status(403).send("Admin only.");
@@ -46,7 +46,7 @@ documentsRouter.post("/projects/:id/documents", upload.single("file"), async (re
   res.redirect(`/projects/${project.id}?tab=documents&notice=` + encodeURIComponent("Uploaded " + name));
 });
 
-documentsRouter.get("/projects/:id/documents/:docId/:action", async (req, res) => {
+documentsRouter.get("/projects/:id/documents/:docId/:action", async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canSeeDocuments(user)) {
     res.status(403).send("Not available.");
@@ -68,12 +68,12 @@ documentsRouter.get("/projects/:id/documents/:docId/:action", async (req, res) =
   const dest = projectFilePath(project.id, doc.storedName);
   const disposition = req.params.action === "download" ? "attachment" : "inline";
   res.setHeader("Content-Disposition", `${disposition}; filename="${doc.name.replace(/"/g, "")}"`);
-  res.sendFile(dest, (err) => {
+  res.sendFile(dest, (err?: Error) => {
     if (err && !res.headersSent) res.status(404).send("File missing on disk. TODO: fetch from Spaces cloud-portal-vault.");
   });
 });
 
-documentsRouter.post("/projects/:id/documents/:docId/delete", async (req, res) => {
+documentsRouter.post("/projects/:id/documents/:docId/delete", async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canManageDocuments(user)) {
     res.status(403).send("Admin only.");

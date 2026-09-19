@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import type { AssetKind } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
@@ -26,7 +26,7 @@ function stockRefreshKind(raw: unknown): AssetKind {
   return t === "auto" ? "dwelling" : t;
 }
 
-loaderRouter.post("/projects/:id/loader", upload.single("file"), async (req, res) => {
+loaderRouter.post("/projects/:id/loader", upload.single("file"), async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canUseLoader(user)) {
     res.status(403).send("Admin only.");
@@ -78,7 +78,7 @@ loaderRouter.post("/projects/:id/loader", upload.single("file"), async (req, res
   );
 });
 
-loaderRouter.post("/projects/:id/loader/demo", async (req, res) => {
+loaderRouter.post("/projects/:id/loader/demo", async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canUseLoader(user)) {
     res.status(403).send("Admin only.");
@@ -115,7 +115,7 @@ loaderRouter.post("/projects/:id/loader/demo", async (req, res) => {
   );
 });
 
-loaderRouter.post("/projects/:id/stock-refresh", upload.single("file"), async (req, res) => {
+loaderRouter.post("/projects/:id/stock-refresh", upload.single("file"), async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canUseLoader(user)) {
     res.status(403).send("Admin only.");
@@ -172,7 +172,7 @@ loaderRouter.post("/projects/:id/stock-refresh", upload.single("file"), async (r
   );
 });
 
-loaderRouter.post("/projects/:id/external", upload.single("file"), async (req, res) => {
+loaderRouter.post("/projects/:id/external", upload.single("file"), async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canUseLoader(user)) {
     res.status(403).send("Admin only.");
@@ -212,7 +212,7 @@ loaderRouter.post("/projects/:id/external", upload.single("file"), async (req, r
   );
 });
 
-loaderRouter.post("/projects/:id/external/clear", async (req, res) => {
+loaderRouter.post("/projects/:id/external/clear", async (req: Request, res: Response) => {
   const user = req.user!;
   if (!canUseLoader(user)) {
     res.status(403).send("Admin only.");

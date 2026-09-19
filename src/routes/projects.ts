@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import type { ProjectStage } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { canSeeProject, clientForcedTab, includedTypeLabels, isAdmin, isClient, PROJECT_TABS } from "../lib/access.js";
@@ -28,7 +28,7 @@ function anyTypeOn(types: Record<string, boolean>): boolean {
   return Object.values(types).some(Boolean);
 }
 
-projectsRouter.get("/", async (req, res) => {
+projectsRouter.get("/", async (req: Request, res: Response) => {
   const user = req.user!;
   const accessIds = await userAccessIds(user.id);
   const all = await prisma.project.findMany({ orderBy: { createdAt: "asc" } });
@@ -48,7 +48,7 @@ projectsRouter.get("/", async (req, res) => {
   });
 });
 
-projectsRouter.post("/", async (req, res) => {
+projectsRouter.post("/", async (req: Request, res: Response) => {
   const user = req.user!;
   if (!isAdmin(user)) {
     res.status(403).send("Admin only.");
@@ -75,7 +75,7 @@ projectsRouter.post("/", async (req, res) => {
   res.redirect("/projects?notice=" + encodeURIComponent("Created " + name));
 });
 
-projectsRouter.post("/:id/edit", async (req, res) => {
+projectsRouter.post("/:id/edit", async (req: Request, res: Response) => {
   if (!isAdmin(req.user!)) {
     res.status(403).send("Admin only.");
     return;
@@ -100,7 +100,7 @@ projectsRouter.post("/:id/edit", async (req, res) => {
   res.redirect("/projects?notice=" + encodeURIComponent("Updated " + name));
 });
 
-projectsRouter.post("/:id/copy", async (req, res) => {
+projectsRouter.post("/:id/copy", async (req: Request, res: Response) => {
   if (!isAdmin(req.user!)) {
     res.status(403).send("Admin only.");
     return;
@@ -133,7 +133,7 @@ projectsRouter.post("/:id/copy", async (req, res) => {
   res.redirect("/projects?notice=" + encodeURIComponent("Copied to " + name));
 });
 
-projectsRouter.post("/:id/delete", async (req, res) => {
+projectsRouter.post("/:id/delete", async (req: Request, res: Response) => {
   if (!isAdmin(req.user!)) {
     res.status(403).send("Admin only.");
     return;
@@ -147,7 +147,7 @@ projectsRouter.post("/:id/delete", async (req, res) => {
   res.redirect("/projects?notice=" + encodeURIComponent("Deleted " + src.name));
 });
 
-projectsRouter.post("/:id/stage", async (req, res) => {
+projectsRouter.post("/:id/stage", async (req: Request, res: Response) => {
   if (!isAdmin(req.user!)) {
     res.status(403).send("Admin only.");
     return;
@@ -161,7 +161,7 @@ projectsRouter.post("/:id/stage", async (req, res) => {
   res.redirect("/projects");
 });
 
-projectsRouter.get("/:id", async (req, res) => {
+projectsRouter.get("/:id", async (req: Request, res: Response) => {
   const user = req.user!;
   const accessIds = await userAccessIds(user.id);
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });

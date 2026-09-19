@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword, tempPassword } from "../lib/passwords.js";
 import { uniqueInitials } from "../lib/initials.js";
@@ -7,7 +7,7 @@ import { requireAdmin } from "../middleware/auth.js";
 export const personnelRouter = Router();
 personnelRouter.use(requireAdmin);
 
-personnelRouter.get("/", async (req, res) => {
+personnelRouter.get("/", async (req: Request, res: Response) => {
   const [surveyors, clients, admins, projects] = await Promise.all([
     prisma.user.findMany({
       where: { role: "surveyor" },
@@ -45,7 +45,7 @@ async function usernameTaken(username: string, exceptId?: string): Promise<boole
   return !!hit;
 }
 
-personnelRouter.post("/surveyors", async (req, res) => {
+personnelRouter.post("/surveyors", async (req: Request, res: Response) => {
   const name = String(req.body.name || "").trim();
   const username = String(req.body.username || "").trim();
   const agency = String(req.body.agency || "").trim();
@@ -77,7 +77,7 @@ personnelRouter.post("/surveyors", async (req, res) => {
   res.redirect("/personnel?notice=" + encodeURIComponent(`Added ${name} as ${initials} · temp password ${pw}.`));
 });
 
-personnelRouter.post("/clients", async (req, res) => {
+personnelRouter.post("/clients", async (req: Request, res: Response) => {
   const company = String(req.body.company || "").trim();
   const person = String(req.body.person || "").trim();
   const clientRole = String(req.body.clientRole || "Client Contact");
@@ -105,7 +105,7 @@ personnelRouter.post("/clients", async (req, res) => {
   res.redirect("/personnel?notice=" + encodeURIComponent(`Added client ${person} · temp password ${pw}.`));
 });
 
-personnelRouter.post("/admins", async (req, res) => {
+personnelRouter.post("/admins", async (req: Request, res: Response) => {
   const name = String(req.body.name || "").trim();
   const email = String(req.body.email || "").trim();
   if (!name || !email) {
@@ -131,7 +131,7 @@ personnelRouter.post("/admins", async (req, res) => {
   res.redirect("/personnel?notice=" + encodeURIComponent(`Added admin ${name} · temp password ${pw}.`));
 });
 
-personnelRouter.post("/:id/access", async (req, res) => {
+personnelRouter.post("/:id/access", async (req: Request, res: Response) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user || user.role === "admin") {
     res.redirect("/personnel?error=" + encodeURIComponent("Cannot set project ticks for this account."));
@@ -155,7 +155,7 @@ personnelRouter.post("/:id/access", async (req, res) => {
   res.redirect("/personnel");
 });
 
-personnelRouter.post("/:id/initials", async (req, res) => {
+personnelRouter.post("/:id/initials", async (req: Request, res: Response) => {
   const val = String(req.body.initials || "")
     .trim()
     .toUpperCase();
@@ -170,7 +170,7 @@ personnelRouter.post("/:id/initials", async (req, res) => {
   res.json({ ok: true, initials: val });
 });
 
-personnelRouter.post("/:id/agency", async (req, res) => {
+personnelRouter.post("/:id/agency", async (req: Request, res: Response) => {
   await prisma.user.update({
     where: { id: req.params.id },
     data: { agency: String(req.body.agency || "").trim() },
@@ -178,13 +178,13 @@ personnelRouter.post("/:id/agency", async (req, res) => {
   res.json({ ok: true });
 });
 
-personnelRouter.post("/:id/freeze", async (req, res) => {
+personnelRouter.post("/:id/freeze", async (req: Request, res: Response) => {
   const frozen = req.body.frozen === "true" || req.body.frozen === "on" || req.body.frozen === true;
   await prisma.user.update({ where: { id: req.params.id }, data: { frozen } });
   res.json({ ok: true, frozen });
 });
 
-personnelRouter.post("/:id/reset-password", async (req, res) => {
+personnelRouter.post("/:id/reset-password", async (req: Request, res: Response) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) {
     res.redirect("/personnel?error=" + encodeURIComponent("Account not found."));
@@ -198,7 +198,7 @@ personnelRouter.post("/:id/reset-password", async (req, res) => {
   res.redirect("/personnel?notice=" + encodeURIComponent(`Reset temp password for ${user.name}: ${pw}`));
 });
 
-personnelRouter.post("/:id/delete", async (req, res) => {
+personnelRouter.post("/:id/delete", async (req: Request, res: Response) => {
   if (req.user?.id === req.params.id) {
     res.redirect("/personnel?error=" + encodeURIComponent("You cannot remove the account you are logged in as."));
     return;
