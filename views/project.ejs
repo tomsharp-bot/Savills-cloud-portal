@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= project.name %> — Savills Cloud Portal</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<div id="screen-app">
+  <%- include("partials/topbar") %>
+  <div class="main">
+    <section>
+      <div class="toolbar">
+        <div>
+          <div class="crumb"><a class="linkish dark" href="/projects">← All projects</a></div>
+          <h2 class="page-title"><%= project.name %></h2>
+          <p class="page-sub">Project Manager: <%= project.projectManager %> · <%= project.stage === 'current' ? 'Current' : project.stage === 'upcoming' ? 'Upcoming' : 'Archive' %></p>
+        </div>
+        <span class="badge">Live data</span>
+      </div>
+      <% if (notice) { %><p class="flash flash-ok"><%= notice %></p><% } %>
+      <% if (error) { %><p class="flash flash-err"><%= error %></p><% } %>
+
+      <div class="project-layout">
+        <nav class="sidebar">
+          <% const tabs = [
+            ["summary","Summary", true],
+            ["dwellings","Dwellings", true],
+            ["blocks","Blocks", true],
+            ["garages","Garages", true],
+            ["hierarchy","Hierarchy", true],
+            ["documents","Project Documents", true],
+            ["loader","Data Loader", isAdmin],
+            ["completions","Completions", false]
+          ]; %>
+          <% tabs.forEach(([key, label, field]) => { %>
+            <% if (field && isClient) return; %>
+            <% if (key === "loader" && !isAdmin) return; %>
+            <a class="tab <%= tab === key ? 'active' : '' %>" href="/projects/<%= project.id %>?tab=<%= key %>"><%= label %></a>
+          <% }) %>
+        </nav>
+        <div class="panel">
+          <% if (tab === "summary") { %>
+            <h3 style="margin:0 0 4px;color:var(--navy)">Summary</h3>
+            <p style="margin:0;color:var(--muted);font-size:.9rem">Tiles follow the survey types switched on for this project.</p>
+            <p class="summary-types"><%= typesLine.length ? ("Included: " + typesLine.join(" · ")) : "No survey types selected for this project." %></p>
+            <div class="stats">
+              <% summary.forEach(col => { %>
+                <div class="stat-col <%= col.hidden ? 'hidden' : '' %>">
+                  <% col.tiles.forEach(t => { %>
+                    <div class="stat"><div class="label"><%= t.label %></div><div class="value"><%= t.value %></div></div>
+                  <% }) %>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+
+          <% if (tab === "dwellings") { %>
+            <%- include("partials/stock-table", { kind: "dwelling", rows: dwellings, project }) %>
+          <% } %>
+          <% if (tab === "blocks") { %>
+            <%- include("partials/stock-table", { kind: "block", rows: blocks, project }) %>
+          <% } %>
+          <% if (tab === "garages") { %>
+            <%- include("partials/stock-table", { kind: "garage", rows: garages, project }) %>
+          <% } %>
+
+          <% if (tab === "hierarchy") { %>
+            <h3 style="margin:0;color:var(--navy)">Hierarchy</h3>
+            <div class="placeholder-box">Project structure / hierarchy (placeholder).</div>
+          <% } %>
+
+          <% if (tab === "documents") { %>
+            <h3 style="margin:0 0 4px;color:var(--navy)">Project Documents</h3>
+            <p style="margin:0;color:var(--muted);font-size:.9rem">Excel, Word and PDF. Surveyors can open/download; only Admins can upload or delete.</p>
+            <div class="placeholder-box">
+              Document store is stubbed this slice.<br/>
+              TODO: upload to DigitalOcean Spaces bucket <strong>cloud-portal-vault</strong> (LON1).
+            </div>
+          <% } %>
+
+          <% if (tab === "loader" && isAdmin) { %>
+            <h3 style="margin:0 0 4px;color:var(--navy)">Data Loader</h3>
+            <p style="margin:0;color:var(--muted);font-size:.9rem">Drop the daily Excel — use the <strong>Asset Visits</strong> sheet (or Data). UPRN is the match key. With <strong>Auto</strong>, rows route to Dwellings / Blocks / Garages from Survey Design / Archetype / type fields. Each Apply <strong>appends</strong> to the Visit Log (never replaces).</p>
+            <form id="loader-form" method="post" action="/projects/<%= project.id %>/loader" enctype="multipart/form-data">
+              <div class="loader-drop" id="loader-drop" tabindex="0">
+                <strong>Drag Excel here</strong>
+                <p>or click to choose · .xlsx / .xls / .csv</p>
+                <input type="file" id="loader-file" name="file" accept=".xlsx,.xls,.csv" hidden />
+              </div>
+              <div class="stock-tools">
+                <label for="loader-target">Load into</label>
+                <select id="loader-target" name="target">
+                  <option value="dwellings">Dwellings</option>
+                  <option value="blocks">Blocks</option>
+                  <option value="garages">Garages</option>
+                  <option value="auto" selected>Auto (Dwellings / Blocks / Garages)</option>
+                </select>
+                <button type="submit" class="btn btn-primary" id="btn-loader-apply" disabled>Apply to stock</button>
+              </div>
+            </form>
+            <form method="post" action="/projects/<%= project.id %>/loader/demo" class="stock-tools">
+              <input type="hidden" name="target" value="auto" />
+              <button type="submit" class="btn btn-ghost">Load demo visits</button>
+            </form>
+            <div class="loader-map">
+              <table>
+                <thead><tr><th>Your Excel column (example)</th><th>Portal field</th></tr></thead>
+                <tbody>
+                  <tr><td>UPRN</td><td>UPRN (match key)</td></tr>
+                  <tr><td>Combined Address</td><td>Number / Street / Postcode (parsed)</td></tr>
+                  <tr><td>Survey Date</td><td>Visit Date → Visit 1 / 2 / 3 (first 3, oldest first)</td></tr>
+                  <tr><td>Access Type</td><td>Drives Asset Status (see rules)</td></tr>
+                  <tr><td>Created By</td><td>Surveyor · Surveyed By (initials match)</td></tr>
+                  <tr><td>Visit Type</td><td>Presence ends “No Visit” default</td></tr>
+                  <tr><td>Data Source / Next Survey / Created On / Survey Design</td><td>Kept on Visit Log</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="loader-rules">
+              <h4 style="margin:12px 0 6px;color:var(--navy);font-size:.95rem">Asset Status &amp; visit rules</h4>
+              <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:.88rem;line-height:1.45">
+                <li>Default Asset Status = <strong>No Visit</strong> until a Visit Type appears in the upload.</li>
+                <li>Access Type <strong>No Answer</strong> or <strong>None</strong> → Asset Status <strong>No Access</strong>; Survey Date &amp; Surveyed By stay blank.</li>
+                <li>Access Type <strong>Failed Appointment</strong> (any visit number) → Asset Status <strong>Appt Made Not Kept</strong>; Survey Date &amp; Surveyed By stay blank.</li>
+                <li>Access Type <strong>Refused Access</strong> or <strong>Not Convenient</strong> → Asset Status <strong>Access Refused</strong>; Visit Date is stored in the Visit 1/2/3 chain; Survey Date &amp; Surveyed By stay blank.</li>
+                <li>Access Type <strong>Void</strong> → Asset Status <strong>Void</strong>; Visit Date added to the visit chain; Survey Date &amp; Surveyed By stay blank.</li>
+                <li>Access Type <strong>Successful</strong> → Asset Status <strong>Full Survey</strong>; Survey Date = Visit Date of that Successful row; Surveyed By = surveyor initials from Created By (Personnel match); Full Surveys Completed ticks +1.</li>
+                <li>Many visits allowed in the file; portal shows only the <strong>first three</strong> dates, oldest → Visit 1, next → Visit 2, next → Visit 3.</li>
+              </ul>
+            </div>
+            <p class="loader-log" id="loader-log">Choose an Excel/CSV or use “Load demo visits”.</p>
+            <div class="loader-history-wrap">
+              <table>
+                <thead><tr><th>When</th><th>File</th><th>Target</th><th>Result</th></tr></thead>
+                <tbody>
+                  <% if (!loaderHistory.length) { %>
+                    <tr><td colspan="4" class="empty">Load history will appear here.</td></tr>
+                  <% } else { %>
+                    <% loaderHistory.forEach(h => { %>
+                      <tr>
+                        <td><%= formatDocDate(h.when) %></td>
+                        <td><%= h.file %></td>
+                        <td><%= h.target %></td>
+                        <td><%= h.result %></td>
+                      </tr>
+                    <% }) %>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="stock-refresh-box">
+              <h4>Refresh stocklist</h4>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">
+                TODO this slice: mid-job stocklist refresh (add / keep-removed / omit-from-counts). Endpoint stubbed at <code>POST /projects/:id/stock-refresh</code>.
+              </p>
+            </div>
+
+            <div class="external-link-box">
+              <h4 style="margin:16px 0 6px;color:var(--navy);font-size:.95rem">External-only list</h4>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">
+                TODO: link an Excel with UPRN + External flag, store on Spaces bucket <strong>cloud-portal-vault</strong> (LON1), re-lookup on admin login (XLOOKUP-like).
+                Schema already has an <code>external</code> column on stock; Ext-Only status is applied when External = Yes.
+              </p>
+            </div>
+
+            <div class="visit-log-wrap">
+              <div class="visit-log-head">
+                <h4>Cumulative Visit Log</h4>
+                <p class="visit-log-count"><%= visitLogs.length %> visit<%= visitLogs.length === 1 ? "" : "s" %> logged</p>
+              </div>
+              <div class="visit-log-tools">
+                <input type="search" id="visit-log-filter" placeholder="Filter visit log…" />
+              </div>
+              <div class="visit-log-table-wrap">
+                <table class="visit-log-table" id="visit-log-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th><th>UPRN</th><th>Combined Address</th><th>Visit Type</th><th>Data Source</th>
+                      <th>Survey Date</th><th>Next Survey</th><th>Access Type</th><th>Created By</th><th>Created On</th><th>Survey Design</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (!visitLogs.length) { %>
+                      <tr><td colspan="11" class="empty">No visits logged yet. Apply a file or load demo rows.</td></tr>
+                    <% } else { %>
+                      <% visitLogs.forEach(v => { %>
+                        <tr>
+                          <td><%= v.sourceId %></td>
+                          <td><%= v.uprn %></td>
+                          <td title="<%= v.combinedAddress %>"><%= v.combinedAddress %></td>
+                          <td><%= v.visitType %></td>
+                          <td><%= v.dataSource %></td>
+                          <td><%= v.surveyDate %></td>
+                          <td><%= v.nextSurvey %></td>
+                          <td><%= v.accessType %></td>
+                          <td><%= v.createdBy %></td>
+                          <td><%= v.createdOn %></td>
+                          <td><%= v.surveyDesign %></td>
+                        </tr>
+                      <% }) %>
+                    <% } %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <% } %>
+
+          <% if (tab === "completions") { %>
+            <h3 style="margin:0 0 4px;color:var(--navy)">Completions</h3>
+            <p style="margin:0;color:var(--muted);font-size:.9rem">Completion reports and exports for this project. Clients can view and download only.</p>
+            <div style="overflow-x:auto">
+              <table class="completions-table">
+                <thead>
+                  <tr><th>Report</th><th>Type</th><th>Generated</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  <% if (!completions.length) { %>
+                    <tr><td colspan="5" class="empty">No completion reports yet.</td></tr>
+                  <% } else { %>
+                    <% completions.forEach(c => { %>
+                      <tr>
+                        <td><%= c.name %></td>
+                        <td><%= c.type %></td>
+                        <td><%= formatDocDate(c.generatedAt) %></td>
+                        <td><%= c.status %></td>
+                        <td>
+                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/completions/<%= c.id %>/view" target="_blank">View</a>
+                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/completions/<%= c.id %>/download">Download</a>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+</body>
+</html>

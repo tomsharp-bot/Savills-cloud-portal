@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Savills Cloud Portal — Log in</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<div id="screen-login">
+  <div class="login-card">
+    <div class="login-logo"><%- include("partials/logo") %></div>
+    <div style="margin-bottom:12px"><span class="badge">Live slice</span></div>
+    <h1>Savills Cloud Portal</h1>
+    <p class="sub">Please log in</p>
+    <form method="post" action="/login">
+      <label for="user">Username</label>
+      <input id="user" name="username" type="text" value="<%= username || 'phil.m' %>" autocomplete="username" />
+      <label for="pass">Password</label>
+      <input id="pass" name="password" type="password" value="" autocomplete="current-password" />
+      <p class="login-error"><%= error || "" %></p>
+      <button class="btn btn-primary" type="submit" style="width:100%">Log in</button>
+    </form>
+    <p class="login-note">Demo accounts:<br/>
+      <strong>phil.m</strong> / PhilMoon2468 — Admin<br/>
+      <strong>peter.m</strong> / PeterMay2468 — Surveyor<br/>
+      <strong>alex.s</strong> / AlexSurveyor2468 — Surveyor<br/>
+      <strong>client.j</strong> / ClientJones2468 — Client</p>
+  </div>
+</div>
+</body>
+</html>

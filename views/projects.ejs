@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projects — Savills Cloud Portal</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<div id="screen-app">
+  <%- include("partials/topbar") %>
+  <div class="main">
+    <section>
+      <div class="toolbar">
+        <div>
+          <h2 class="page-title">Projects</h2>
+          <p class="page-sub">Current = live for surveyors. Upcoming = office build only (surveyors/clients cannot see). Archive = completed.</p>
+        </div>
+        <span class="badge">Postgres</span>
+      </div>
+      <% if (notice) { %><p class="flash flash-ok"><%= notice %></p><% } %>
+      <% if (error) { %><p class="flash flash-err"><%= error %></p><% } %>
+
+      <% if (isAdmin) { %>
+      <div class="project-actions">
+        <button type="button" class="btn btn-primary" id="btn-create">Create New Project</button>
+        <form class="inline-form" id="form-copy" method="post" action="#">
+          <button type="submit" class="btn btn-ghost" id="btn-copy">Copy Project</button>
+        </form>
+        <form class="inline-form" id="form-delete" method="post" action="#">
+          <button type="submit" class="btn btn-danger" id="btn-delete">Delete Project</button>
+        </form>
+      </div>
+      <% } %>
+
+      <div class="projects-boards">
+        <% const boardMeta = [
+          { key: "current", title: "Current Projects", gridClass: "project-grid project-grid-current" },
+          { key: "upcoming", title: "Upcoming Projects", gridClass: "project-grid", adminOnly: true },
+          { key: "archive", title: "Projects Archive", gridClass: "project-grid" }
+        ]; %>
+        <% boardMeta.forEach(board => { %>
+          <% if (!(board.adminOnly && !isAdmin)) { %>
+          <div class="project-board">
+            <h3 class="section-title"><%= board.title %></h3>
+            <div class="<%= board.gridClass %>">
+              <% const items = boards[board.key]; %>
+              <% if (!items.length) { %>
+                <p class="empty">No projects in this section yet.</p>
+              <% } else { %>
+                <% items.forEach(p => { %>
+                  <div class="project-card <%= selectedId === p.id ? 'selected' : '' %>" data-id="<%= p.id %>">
+                    <a class="open" href="/projects/<%= p.id %>">
+                      <span class="stage-tag stage-<%= p.stage %>"><%= p.stage === 'current' ? 'Current' : p.stage === 'upcoming' ? 'Upcoming' : 'Archive' %></span>
+                      <h3><%= p.name %></h3>
+                      <p class="pm">Project Manager: <%= p.projectManager %></p>
+                    </a>
+                    <div class="row-actions">
+                      <% if (isAdmin) { %>
+                        <button type="button" class="btn btn-ghost btn-sm" data-edit='<%- JSON.stringify({
+                          id: p.id, name: p.name, projectManager: p.projectManager, stage: p.stage,
+                          typeConditionOnly: p.typeConditionOnly, typeConditionEpc: p.typeConditionEpc,
+                          typeBlocks: p.typeBlocks, typeGarages: p.typeGarages, typeCommercial: p.typeCommercial,
+                          typeOther: p.typeOther, typeValidations: p.typeValidations
+                        }) %>'>Edit Project</button>
+                      <% } %>
+                      <a class="btn btn-ghost btn-sm" href="/projects?selected=<%= p.id %>">Select</a>
+                      <% if (isAdmin && p.stage === "upcoming") { %>
+                        <form class="inline-form" method="post" action="/projects/<%= p.id %>/stage">
+                          <input type="hidden" name="stage" value="current" />
+                          <button class="btn btn-ghost btn-sm" type="submit">Go live</button>
+                        </form>
+                      <% } %>
+                      <% if (isAdmin && p.stage === "current") { %>
+                        <form class="inline-form" method="post" action="/projects/<%= p.id %>/stage">
+                          <input type="hidden" name="stage" value="archive" />
+                          <button class="btn btn-ghost btn-sm" type="submit">Archive</button>
+                        </form>
+                      <% } %>
+                      <% if (isAdmin && p.stage === "archive") { %>
+                        <form class="inline-form" method="post" action="/projects/<%= p.id %>/stage">
+                          <input type="hidden" name="stage" value="current" />
+                          <button class="btn btn-ghost btn-sm" type="submit">Restore</button>
+                        </form>
+                      <% } %>
+                    </div>
+                  </div>
+                <% }) %>
+              <% } %>
+            </div>
+          </div>
+          <% } %>
+        <% }) %>
+      </div>
+    </section>
+  </div>
+</div>
+
+<% if (isAdmin) { %>
+<div id="modal-create" class="modal-back hidden">
+  <div class="modal">
+    <h3>Create New Project</h3>
+    <form method="post" action="/projects">
+      <label for="create-name">Project name</label>
+      <input id="create-name" name="name" type="text" placeholder="e.g. Cornwall CC Ph3" />
+      <label for="create-pm">Project Manager</label>
+      <input id="create-pm" name="projectManager" type="text" value="Greg K" />
+      <label for="create-stage">Start in</label>
+      <select id="create-stage" name="stage">
+        <option value="upcoming">Upcoming (surveyors cannot see)</option>
+        <option value="current">Current (live)</option>
+      </select>
+      <%- include("partials/type-ticks", { title: "Survey types in this project", types: {
+        typeConditionOnly: true, typeConditionEpc: false, typeBlocks: true, typeGarages: true,
+        typeCommercial: false, typeOther: false, typeValidations: false
+      } }) %>
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" data-close="modal-create">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-edit" class="modal-back hidden">
+  <div class="modal">
+    <h3>Edit Project</h3>
+    <form method="post" id="edit-form" action="/projects/x/edit">
+      <label for="edit-name">Project name</label>
+      <input id="edit-name" name="name" type="text" />
+      <label for="edit-pm">Project Manager</label>
+      <input id="edit-pm" name="projectManager" type="text" />
+      <label for="edit-stage">Stage</label>
+      <select id="edit-stage" name="stage">
+        <option value="upcoming">Upcoming (surveyors cannot see)</option>
+        <option value="current">Current (live)</option>
+        <option value="archive">Archive (completed)</option>
+      </select>
+      <%- include("partials/type-ticks", { title: "Survey types / needs for this project", types: {
+        typeConditionOnly: false, typeConditionEpc: false, typeBlocks: false, typeGarages: false,
+        typeCommercial: false, typeOther: false, typeValidations: false
+      } }) %>
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" data-close="modal-edit">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+<script src="/js/app.js"></script>
+</body>
+</html>

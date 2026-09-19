@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  surveyor
+  client
+}
+
+enum ProjectStage {
+  current
+  upcoming
+  archive
+}
+
+enum AssetKind {
+  dwelling
+  block
+  garage
+}
+
+model User {
+  id                String   @id @default(cuid())
+  username          String   @unique
+  passwordHash      String
+  role              Role
+  name              String
+  email             String?
+  initials          String?
+  agency            String?
+  company           String?
+  clientRole        String?
+  frozen            Boolean  @default(false)
+  lastTempPassword  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  access            ProjectAccess[]
+}
+
+model Project {
+  id                   String       @id @default(cuid())
+  name                 String       @unique
+  projectManager       String
+  stage                ProjectStage @default(upcoming)
+  typeConditionOnly    Boolean      @default(true)
+  typeConditionEpc     Boolean      @default(false)
+  typeBlocks           Boolean      @default(true)
+  typeGarages          Boolean      @default(true)
+  typeCommercial       Boolean      @default(false)
+  typeOther            Boolean      @default(false)
+  typeValidations      Boolean      @default(false)
+  projectTargetPercent Int          @default(75)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  access               ProjectAccess[]
+  assets               Asset[]
+  visitLogs            VisitLog[]
+  loaderHistory        LoaderHistory[]
+  completions          Completion[]
+}
+
+model ProjectAccess {
+  userId    String
+  projectId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+}
+
+model Asset {
+  id           String    @id @default(cuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind         AssetKind
+  uprn         String
+  assetStatus  String    @default("No Visit")
+  surveyDate   String    @default("")
+  surveyedBy   String    @default("")
+  visit1       String    @default("")
+  visit2       String    @default("")
+  visit3       String    @default("")
+  number       String    @default("")
+  block        String    @default("")
+  street       String    @default("")
+  area         String    @default("")
+  city         String    @default("")
+  postcode     String    @default("")
+  archetype    String    @default("")
+  yearBuilt    String    @default("")
+  patch        String    @default("")
+  surveyor     String    @default("")
+  surveyType   String    @default("")
+  siteComments String    @default("")
+  external     String    @default("")
+  omitAsset    Boolean   @default(false)
+  stockMissing Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([projectId, kind, uprn])
+  @@index([projectId, kind])
+  @@index([projectId, uprn])
+}
+
+model VisitLog {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceId        String   @default("")
+  uprn            String
+  combinedAddress String   @default("")
+  visitType       String   @default("")
+  dataSource      String   @default("")
+  surveyDate      String   @default("")
+  nextSurvey      String   @default("")
+  accessType      String   @default("")
+  createdBy       String   @default("")
+  createdOn       String   @default("")
+  surveyDesign    String   @default("")
+  visitDate       String   @default("")
+  number          String   @default("")
+  block           String   @default("")
+  addressLine1    String   @default("")
+  addressLine5    String   @default("")
+  postcode        String   @default("")
+  archetype       String   @default("")
+  loadedFrom      String   @default("")
+  loadedAt        DateTime @default(now())
+
+  @@index([projectId, uprn])
+}
+
+model LoaderHistory {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  when      DateTime @default(now())
+  file      String
+  target    String
+  result    String
+}
+
+model Completion {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  type        String
+  generatedAt DateTime @default(now())
+  status      String   @default("Ready")
+}

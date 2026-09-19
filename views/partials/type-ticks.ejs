@@ -1,0 +1,12 @@
+<div class="types-box">
+  <p class="types-title"><%= title %></p>
+  <div class="types-grid">
+    <label><input type="checkbox" name="types" value="typeConditionOnly" <%= types.typeConditionOnly ? "checked" : "" %> /> Condition Only</label>
+    <label><input type="checkbox" name="types" value="typeConditionEpc" <%= types.typeConditionEpc ? "checked" : "" %> /> Condition + EPC</label>
+    <label><input type="checkbox" name="types" value="typeBlocks" <%= types.typeBlocks ? "checked" : "" %> /> Blocks</label>
+    <label><input type="checkbox" name="types" value="typeGarages" <%= types.typeGarages ? "checked" : "" %> /> Garages</label>
+    <label><input type="checkbox" name="types" value="typeCommercial" <%= types.typeCommercial ? "checked" : "" %> /> Commercial Units</label>
+    <label><input type="checkbox" name="types" value="typeOther" <%= types.typeOther ? "checked" : "" %> /> Other</label>
+    <label><input type="checkbox" name="types" value="typeValidations" <%= types.typeValidations ? "checked" : "" %> /> Validations</label>
+  </div>
+</div>

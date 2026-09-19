@@ -1,0 +1,11 @@
+<header class="topbar">
+  <strong>Savills Cloud Portal</strong>
+  <div class="right">
+    <a class="linkish" href="/projects">Projects</a>
+    <% if (isAdmin) { %><a class="linkish" href="/personnel">Personnel</a><% } %>
+    <span><%= user.name %> <span class="role-pill"><%= roleLabel %></span></span>
+    <form class="inline-form" method="post" action="/logout">
+      <button type="submit" class="linkish">Log out</button>
+    </form>
+  </div>
+</header>
