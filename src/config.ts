@@ -1,4 +1,8 @@
 import "dotenv/config";
+import { applyDatabaseUrlFromEnv } from "./dbUrl.js";
+
+// Heal DATABASE_URL (DO bind placeholder / missing scheme) before anything reads it.
+applyDatabaseUrlFromEnv();
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;

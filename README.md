@@ -28,7 +28,7 @@ cp .env.example .env
 # For local work you can set NODE_ENV=development in .env
 npm install
 docker compose up -d
-npx prisma migrate deploy
+npm run prisma:migrate
 npm run seed
 npm run dev
 ```
@@ -74,7 +74,9 @@ App Platform spec lives at **`.do/app.yaml`**. Region: **London (`lon`)**. Do no
 2. Or import `.do/app.yaml` if the panel offers a spec file.
 3. Confirm commands:
    - **Build:** `npm ci && npx prisma generate && npm run build`
-   - **Run:** `npx prisma migrate deploy && npm start`
+   - **Run:** `node scripts/ensure-database-url.js npx prisma migrate deploy && npm start`
+     (`npm start` also runs the same healer before the Node process.)
+     If App Platform still has the old run command, change it in the UI to the line above.
 4. HTTP port **3000** (the app also honours `PORT` from App Platform and binds `0.0.0.0`).
 5. Health check path: **`/health`** (JSON `{"ok":true,...}` — HTTP 200 when the process is up).
 
@@ -84,7 +86,7 @@ Set these in **App Settings → App-Level / web component Environment Variables*
 
 | Variable | Required | Example / notes |
 |----------|----------|-----------------|
-| `DATABASE_URL` | **Yes** | Managed Postgres URL. Attach the database in the UI *or* paste the URL. |
+| `DATABASE_URL` | **Yes** | Real `postgresql://` / `postgres://` URI from **Managed Database → Connection Details**. Do **not** paste a literal `${db.DATABASE_URL}` placeholder. If the value is a placeholder or missing a scheme, the app will try `DB_HOST`/`PGHOST`, `DB_PORT`/`PGPORT`, `DB_USER`/`PGUSER`, `DB_PASSWORD`/`PGPASSWORD`, `DB_NAME`/`PGDATABASE` (sslmode=require) and otherwise exit 1 before Prisma connects. |
 | `SESSION_SECRET` | **Yes** | Long random string (not the local example). |
 | `NODE_ENV` | **Yes** | `production` |
 | `PORT` | No | App Platform sets this. Default in code is `3000`. |
@@ -98,7 +100,7 @@ Never commit real keys. The spec file only declares the names.
 
 ### 4. First deploy
 
-1. Deploy. Run command applies **`prisma migrate deploy`** (schema only — **does not seed**).
+1. Deploy. Run command heals `DATABASE_URL` if needed, then applies **`prisma migrate deploy`** (schema only — **does not seed**).
 2. Seed **once**, not on every deploy. After the first successful deploy, open the app’s **console** (or a one-off job) and run:
    ```bash
    npm run seed
@@ -120,7 +122,8 @@ Never commit real keys. The spec file only declares the names.
 - Docker Compose for local Postgres
 
 ```
-src/            Express app, Asset Status / loader / refresh
+src/            Express app, Asset Status / loader / refresh (dbUrl.ts heals DATABASE_URL)
+scripts/        ensure-database-url.js — run before Prisma migrate / start
 views/          Server-rendered pages (mock CSS)
 public/         CSS + UI JS
 prisma/         Schema, migrations, seed
