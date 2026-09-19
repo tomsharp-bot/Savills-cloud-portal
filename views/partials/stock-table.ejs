@@ -1,0 +1,88 @@
+<%
+  const isDwellings = kind === "dwelling";
+  const cols = isDwellings
+    ? ["uprn","assetStatus","surveyDate","surveyedBy","visit1","visit2","visit3","number","block","street","area","city","postcode","archetype","yearBuilt","patch","surveyor","surveyType","agency","siteComments","external","omitAsset"]
+    : ["uprn","assetStatus","surveyDate","surveyedBy","number","block","street","area","city","postcode","archetype","yearBuilt","patch","surveyor","surveyType","agency","siteComments","external","omitAsset"];
+  const labels = {
+    uprn:"UPRN", assetStatus:"Asset Status", surveyDate:"Survey Date", surveyedBy:"Surveyed By",
+    visit1:"Visit 1 Date", visit2:"Visit 2 Date", visit3:"Visit 3 Date",
+    number:"Number", block:"Block", street:"Street", area:"Area", city:"City", postcode:"Postcode",
+    archetype:"Archetype", yearBuilt:"Year Built", patch:"Patch", surveyor:"Surveyor",
+    surveyType:"Survey Type", agency:"Agency", siteComments:"Site Comments", external:"External", omitAsset:"Omit Asset"
+  };
+  const selectCols = new Set(["assetStatus","surveyDate","surveyedBy","visit1","visit2","visit3","archetype","yearBuilt","patch","surveyor","surveyType","agency","external"]);
+  const title = kind === "dwelling" ? "Dwellings" : kind === "block" ? "Blocks" : "Garages";
+  const canComment = isAdmin || isSurveyor;
+%>
+<div class="stock-tab-head">
+  <h3><%= title %></h3>
+  <p class="stock-count" data-stock-count="<%= kind %>"><%= rows.length %> of <%= rows.length %> Assets Displayed</p>
+</div>
+<p style="margin:0;color:var(--muted);font-size:.9rem">Site Comments editable by surveyor · all other columns locked. Per-column filters below headers.</p>
+<div class="stock-tools">
+  <span class="docs-hint">Refresh from Excel is stubbed this slice — use Data Loader for visits. <!-- TODO: mid-job stocklist refresh --></span>
+</div>
+<div style="overflow-x:auto">
+  <table data-stock="<%= kind %>" data-project="<%= project.id %>">
+    <thead>
+      <tr class="stock-head">
+        <% cols.forEach(c => { %><th><%= labels[c] %></th><% }) %>
+      </tr>
+      <tr class="col-filter-row" data-stock-filters="<%= kind %>">
+        <% cols.forEach(c => { %>
+          <th>
+            <% if (c === "omitAsset") { %>
+              <select data-filter="omitAsset">
+                <option value="">All</option>
+                <option value="included">Included</option>
+                <option value="omitted">Omitted</option>
+              </select>
+            <% } else if (selectCols.has(c)) { %>
+              <select data-filter="<%= c %>">
+                <option value="">All</option>
+                <% const vals = [...new Set(rows.map(r => String(r[c] || "")))].sort(); %>
+                <% vals.forEach(v => { %><option value="<%= v %>"><%= v || "(blank)" %></option><% }) %>
+              </select>
+            <% } else { %>
+              <input type="text" data-filter="<%= c %>" placeholder="Filter" />
+            <% } %>
+          </th>
+        <% }) %>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (!rows.length) { %>
+        <tr><td colspan="<%= cols.length %>" class="empty">No assets in this tab yet.</td></tr>
+      <% } else { %>
+        <% rows.forEach(r => { %>
+          <tr class="<%= r.omitAsset ? 'row-omitted' : '' %> <%= r.stockMissing ? 'row-stock-missing' : '' %>"
+              data-asset="<%= r.id %>"
+              data-omit="<%= r.omitAsset ? '1' : '0' %>">
+            <% cols.forEach(c => { %>
+              <% if (c === "siteComments") { %>
+                <td>
+                  <input class="comment-input" data-comment="<%= r.id %>" value="<%= r.siteComments %>" <%= canComment ? "" : "disabled" %> />
+                </td>
+              <% } else if (c === "omitAsset") { %>
+                <td class="omit-cell">
+                  <% if (isAdmin) { %>
+                    <label><input type="checkbox" data-omit="<%= r.id %>" <%= r.omitAsset ? "checked" : "" %> /> <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %></label>
+                  <% } else { %>
+                    <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %>
+                  <% } %>
+                </td>
+              <% } else if (c === "assetStatus") { %>
+                <td>
+                  <%= r.assetStatus %>
+                  <% if (r.stockMissing) { %><span class="stock-missing-tag">Not on latest stocklist</span><% } %>
+                </td>
+              <% } else { %>
+                <td class="locked" data-col="<%= c %>"><%= r[c] || "" %></td>
+              <% } %>
+            <% }) %>
+          </tr>
+        <% }) %>
+      <% } %>
+    </tbody>
+  </table>
+</div>

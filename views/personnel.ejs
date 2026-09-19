@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Personnel — Savills Cloud Portal</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<div id="screen-app">
+  <%- include("partials/topbar") %>
+  <div class="main">
+    <section>
+      <div class="toolbar">
+        <div>
+          <h2 class="page-title">Personnel</h2>
+          <p class="page-sub">Surveyors, Clients, then Admins. Surveyor initials link stock rows (Surveyed By / Surveyor) to Agency. Clients get company, project ticks, freeze and remove.</p>
+        </div>
+        <span class="badge">Postgres</span>
+      </div>
+      <% if (notice) { %><p class="flash flash-ok"><%= notice %></p><% } %>
+      <% if (error) { %><p class="flash flash-err"><%= error %></p><% } %>
+
+      <div class="personnel-section">
+        <h3>A. Surveyors</h3>
+        <p class="sec-sub">Field surveyors. Initials + agency drive the stock Agency column. Project access ticks. No Admin flag here.</p>
+        <form class="admin-add" method="post" action="/personnel/surveyors">
+          <div><label for="new-name">Name</label><br/><input id="new-name" name="name" type="text" placeholder="John Smith" /></div>
+          <div><label for="new-user">Username</label><br/><input id="new-user" name="username" type="text" placeholder="john.smith" /></div>
+          <div><label for="new-agency">Agency</label><br/><input id="new-agency" name="agency" type="text" placeholder="e.g. Savills / Acme Surveys" /></div>
+          <button type="submit" class="btn btn-primary">Add surveyor</button>
+        </form>
+        <div class="personnel-table-wrap">
+          <table class="personnel-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th class="col-initials">Initials</th>
+                <th class="col-user">Username</th>
+                <th class="col-agency">Agency</th>
+                <th class="col-pw">Temp password</th>
+                <% projects.forEach(p => { %><th class="col-tick"><%= p.name %></th><% }) %>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% surveyors.forEach(s => { %>
+                <% const granted = new Set(s.access.map(a => a.projectId)); %>
+                <tr>
+                  <td><%= s.name %></td>
+                  <td class="col-initials"><input class="initials-input" type="text" data-initials="<%= s.id %>" value="<%= s.initials || '' %>" /></td>
+                  <td class="col-user"><%= s.username %></td>
+                  <td class="col-agency"><input class="agency-input" type="text" data-agency="<%= s.id %>" value="<%= s.agency || '' %>" /></td>
+                  <td class="col-pw">
+                    <span class="temp-pw"><%= s.lastTempPassword || "—" %></span>
+                    <form class="inline-form" method="post" action="/personnel/<%= s.id %>/reset-password">
+                      <button class="btn btn-ghost btn-sm" type="submit">Reset temp PW</button>
+                    </form>
+                  </td>
+                  <% projects.forEach(p => { %>
+                    <td class="col-tick">
+                      <input type="checkbox" data-access="<%= s.id %>" data-project="<%= p.id %>" <%= granted.has(p.id) ? "checked" : "" %> />
+                    </td>
+                  <% }) %>
+                  <td class="col-actions">
+                    <form class="inline-form" method="post" action="/personnel/<%= s.id %>/delete" onsubmit="return confirm('Wipe <%= s.name %> off the system completely?');">
+                      <button class="btn btn-danger btn-sm" type="submit">Remove completely</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="personnel-section">
+        <h3>B. Clients</h3>
+        <p class="sec-sub">Client contacts. Company, person, role, username, project visibility ticks. Freeze blocks login; Remove wipes the account.</p>
+        <form class="admin-add" method="post" action="/personnel/clients">
+          <div><label for="new-client-company">Company</label><br/><input id="new-client-company" name="company" type="text" placeholder="e.g. Cornwall CC" /></div>
+          <div><label for="new-client-person">Person</label><br/><input id="new-client-person" name="person" type="text" placeholder="Jordan Jones" /></div>
+          <div><label for="new-client-role">Role</label><br/>
+            <select id="new-client-role" name="clientRole">
+              <option>Client Contact</option>
+              <option>Client Manager</option>
+            </select>
+          </div>
+          <div><label for="new-client-user">Username</label><br/><input id="new-client-user" name="username" type="text" placeholder="client.j" /></div>
+          <button type="submit" class="btn btn-primary">Add client</button>
+        </form>
+        <div class="personnel-table-wrap">
+          <table class="personnel-table">
+            <thead>
+              <tr>
+                <th class="col-company">Company</th>
+                <th>Person</th>
+                <th class="col-role">Role</th>
+                <th class="col-user">Username</th>
+                <% projects.forEach(p => { %><th class="col-tick"><%= p.name %></th><% }) %>
+                <th class="col-freeze">Freeze Access</th>
+                <th class="col-pw">Temp password</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% clients.forEach(c => { %>
+                <% const granted = new Set(c.access.map(a => a.projectId)); %>
+                <tr>
+                  <td class="col-company"><%= c.company %></td>
+                  <td><%= c.name %><% if (c.frozen) { %><span class="frozen-tag">Frozen</span><% } %></td>
+                  <td class="col-role"><%= c.clientRole %></td>
+                  <td class="col-user"><%= c.username %></td>
+                  <% projects.forEach(p => { %>
+                    <td class="col-tick">
+                      <input type="checkbox" data-access="<%= c.id %>" data-project="<%= p.id %>" <%= granted.has(p.id) ? "checked" : "" %> />
+                    </td>
+                  <% }) %>
+                  <td class="col-freeze">
+                    <input type="checkbox" data-freeze="<%= c.id %>" <%= c.frozen ? "checked" : "" %> />
+                  </td>
+                  <td class="col-pw">
+                    <span class="temp-pw"><%= c.lastTempPassword || "—" %></span>
+                    <form class="inline-form" method="post" action="/personnel/<%= c.id %>/reset-password">
+                      <button class="btn btn-ghost btn-sm" type="submit">Reset temp PW</button>
+                    </form>
+                  </td>
+                  <td class="col-actions">
+                    <form class="inline-form" method="post" action="/personnel/<%= c.id %>/delete" onsubmit="return confirm('Remove access for <%= c.name %>?');">
+                      <button class="btn btn-danger btn-sm" type="submit">Remove Access</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="personnel-section">
+        <h3>C. Admins</h3>
+        <p class="sec-sub">Portal administrators. Name, email and temp password only — no project ticks.</p>
+        <form class="admin-add" method="post" action="/personnel/admins">
+          <div><label for="new-admin-name">Name</label><br/><input id="new-admin-name" name="name" type="text" placeholder="Jane Admin" /></div>
+          <div><label for="new-admin-email">Email</label><br/><input id="new-admin-email" name="email" type="email" placeholder="jane.a@savills.com" /></div>
+          <button type="submit" class="btn btn-primary">Add admin</button>
+        </form>
+        <div class="personnel-table-wrap">
+          <table class="personnel-table">
+            <thead>
+              <tr><th>Name</th><th class="col-email">Email</th><th class="col-pw">Password (temp)</th><th class="col-actions"></th></tr>
+            </thead>
+            <tbody>
+              <% admins.forEach(a => { %>
+                <tr>
+                  <td><%= a.name %></td>
+                  <td class="col-email"><%= a.email %></td>
+                  <td class="col-pw">
+                    <span class="temp-pw"><%= a.lastTempPassword || "—" %></span>
+                    <form class="inline-form" method="post" action="/personnel/<%= a.id %>/reset-password">
+                      <button class="btn btn-ghost btn-sm" type="submit">Reset temp PW</button>
+                    </form>
+                  </td>
+                  <td class="col-actions">
+                    <form class="inline-form" method="post" action="/personnel/<%= a.id %>/delete" onsubmit="return confirm('Remove admin <%= a.name %>?');">
+                      <button class="btn btn-danger btn-sm" type="submit">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+</body>
+</html>
