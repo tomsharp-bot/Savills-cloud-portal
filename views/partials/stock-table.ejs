@@ -1,18 +1,11 @@
 <%
-  const isDwellings = kind === "dwelling";
-  const cols = isDwellings
-    ? ["uprn","assetStatus","surveyDate","surveyedBy","visit1","visit2","visit3","number","block","street","area","city","postcode","archetype","yearBuilt","patch","surveyor","surveyType","agency","siteComments","external","omitAsset"]
-    : ["uprn","assetStatus","surveyDate","surveyedBy","number","block","street","area","city","postcode","archetype","yearBuilt","patch","surveyor","surveyType","agency","siteComments","external","omitAsset"];
-  const labels = {
-    uprn:"UPRN", assetStatus:"Asset Status", surveyDate:"Survey Date", surveyedBy:"Surveyed By",
-    visit1:"Visit 1 Date", visit2:"Visit 2 Date", visit3:"Visit 3 Date",
-    number:"Number", block:"Block", street:"Street", area:"Area", city:"City", postcode:"Postcode",
-    archetype:"Archetype", yearBuilt:"Year Built", patch:"Patch", surveyor:"Surveyor",
-    surveyType:"Survey Type", agency:"Agency", siteComments:"Site Comments", external:"External", omitAsset:"Omit Asset"
-  };
-  const selectCols = new Set(["assetStatus","surveyDate","surveyedBy","visit1","visit2","visit3","archetype","yearBuilt","patch","surveyor","surveyType","agency","external"]);
+  const cols = stockColsByKind[kind];
+  const labels = stockLabels;
+  const selectCols = stockSelectCols;
+  const dateCols = stockDateCols;
   const title = kind === "dwelling" ? "Dwellings" : kind === "block" ? "Blocks" : "Garages";
   const canComment = isAdmin || isSurveyor;
+  const displayVal = (row, col) => dateCols.has(col) ? formatStockDate(row[col]) : String(row[col] || "");
 %>
 <div class="stock-tab-head">
   <h3><%= title %></h3>
@@ -20,10 +13,16 @@
 </div>
 <p style="margin:0;color:var(--muted);font-size:.9rem">Site Comments editable by surveyor · all other columns locked. Per-column filters below headers.</p>
 <div class="stock-tools">
-  <span class="docs-hint">Use Data Loader → Refresh stocklist for mid-job Excel/CSV updates.</span>
+  <% if (!isClient) { %>
+    <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=<%= kind %>">Export this tab</a>
+    <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=all">Export all stock</a>
+  <% } %>
+  <% if (isAdmin) { %>
+    <button type="button" class="btn btn-danger btn-sm" data-clear-stock>Clear entire stocklist</button>
+  <% } %>
 </div>
-<div style="overflow-x:auto">
-  <table data-stock="<%= kind %>" data-project="<%= project.id %>">
+<div class="stock-table-wrap">
+  <table class="stock-table" data-stock="<%= kind %>" data-project="<%= project.id %>">
     <thead>
       <tr class="stock-head">
         <% cols.forEach(c => { %><th><%= labels[c] %></th><% }) %>
@@ -40,7 +39,7 @@
             <% } else if (selectCols.has(c)) { %>
               <select data-filter="<%= c %>">
                 <option value="">All</option>
-                <% const vals = [...new Set(rows.map(r => String(r[c] || "")))].sort(); %>
+                <% const vals = [...new Set(rows.map(r => displayVal(r, c)))].sort(); %>
                 <% vals.forEach(v => { %><option value="<%= v %>"><%= v || "(blank)" %></option><% }) %>
               </select>
             <% } else { %>
@@ -77,7 +76,7 @@
                   <% if (r.stockMissing) { %><span class="stock-missing-tag">Not on latest stocklist</span><% } %>
                 </td>
               <% } else { %>
-                <td class="locked" data-col="<%= c %>"><%= r[c] || "" %></td>
+                <td class="locked" data-col="<%= c %>"><%= displayVal(r, c) %></td>
               <% } %>
             <% }) %>
           </tr>

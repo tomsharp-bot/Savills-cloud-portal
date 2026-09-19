@@ -14,6 +14,10 @@ export type AddressPatch = {
   city?: string;
   postcode?: string;
   archetype?: string;
+  yearBuilt?: string;
+  patch?: string;
+  surveyor?: string;
+  surveyType?: string;
 };
 
 export type RefreshAsset = {
@@ -44,6 +48,10 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   let postcode = cellVal(raw, "Post Code") || cellVal(raw, "Postcode");
   let area = cellVal(raw, "Area");
   const archetype = cellVal(raw, "Archetype");
+  const yearBuilt = cellVal(raw, "Year Built");
+  const patchName = cellVal(raw, "Patch");
+  const surveyor = cellVal(raw, "Surveyor");
+  const surveyType = cellVal(raw, "Survey Type");
   const combined = String(cellVal(raw, "Combined Address") || "").trim();
   if (combined && (!street || !postcode)) {
     const parts = combined
@@ -66,6 +74,10 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   if (postcode !== "" && postcode != null) patch.postcode = String(postcode);
   if (area !== "" && area != null) patch.area = String(area);
   if (archetype !== "" && archetype != null) patch.archetype = String(archetype);
+  if (yearBuilt !== "" && yearBuilt != null) patch.yearBuilt = String(yearBuilt);
+  if (patchName !== "" && patchName != null) patch.patch = String(patchName);
+  if (surveyor !== "" && surveyor != null) patch.surveyor = String(surveyor);
+  if (surveyType !== "" && surveyType != null) patch.surveyType = String(surveyType);
   return patch;
 }
 

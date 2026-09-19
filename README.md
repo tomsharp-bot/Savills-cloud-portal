@@ -11,12 +11,14 @@ HHSRS Reporter is a **separate product**. Do not merge it here.
 ## What this app does
 
 - Cookie-session login (`admin` | `surveyor` | `client`)
-- Projects on **Current / Upcoming / Archive** boards
+- Projects on **Current / Upcoming / Archive** boards (archive board shows the 5 most recent; **See Full Archive** lists all)
+- Create/Edit **Project Target** as a count or percent — shown on Summary
 - Survey-type ticks drive **Summary** KPI columns
 - **Personnel** (surveyors, clients, admins)
 - Stock tabs **Dwellings / Blocks / Garages** (Site Comments, Omit Asset, External, “X of Y Assets Displayed”)
 - **Data Loader**: visit Excel/CSV, Asset Status rules, Visit Log, Auto-route D/B/G
-- **Mid-job stocklist refresh** (add / keep-removed / omit-from-counts)
+- **Upload or refresh stocklist** (first upload on an empty project loads the full list; later files add/remove mid-job)
+- **Export stocklist** XLSX (same grid columns) and admin **Clear entire stocklist** (two-step confirm)
 - **External-only list** (persist UPRN set, re-apply on admin login)
 - **Documents** (local disk now; Spaces later)
 - **Completions** view/download stubs

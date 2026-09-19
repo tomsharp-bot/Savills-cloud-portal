@@ -19,6 +19,10 @@
       document.getElementById("edit-name").value = p.name;
       document.getElementById("edit-pm").value = p.projectManager || "";
       document.getElementById("edit-stage").value = p.stage;
+      const targetValue = document.getElementById("edit-target-value");
+      const targetUnit = document.getElementById("edit-target-unit");
+      if (targetValue) targetValue.value = p.projectTargetValue != null ? p.projectTargetValue : 75;
+      if (targetUnit) targetUnit.value = p.projectTargetUnit || "percent";
       editForm.querySelectorAll('input[name="types"]').forEach((cb) => {
         cb.checked = !!p[cb.value];
       });
@@ -215,6 +219,54 @@
   document.querySelectorAll("input[data-agency]").forEach((inp) => {
     inp.addEventListener("change", () => {
       postJson("/personnel/" + inp.dataset.agency + "/agency", { agency: inp.value });
+    });
+  });
+
+  const clearModal = document.getElementById("modal-clear-stock");
+  const clearStep1 = document.getElementById("clear-step-1");
+  const clearStep2 = document.getElementById("clear-step-2");
+  const clearTyped = document.getElementById("clear-stock-typed");
+  function resetClearModal() {
+    if (clearStep1) clearStep1.classList.remove("hidden");
+    if (clearStep2) clearStep2.classList.add("hidden");
+    if (clearTyped) clearTyped.value = "";
+    const wipe = document.getElementById("clear-stock-wipe-log");
+    if (wipe) wipe.checked = false;
+  }
+  document.querySelectorAll("[data-clear-stock]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      resetClearModal();
+      show(clearModal);
+    });
+  });
+  const clearNext = document.getElementById("clear-stock-next");
+  if (clearNext) {
+    clearNext.addEventListener("click", () => {
+      if (clearStep1) clearStep1.classList.add("hidden");
+      if (clearStep2) clearStep2.classList.remove("hidden");
+      if (clearTyped) clearTyped.focus();
+    });
+  }
+  const clearConfirm = document.getElementById("clear-stock-confirm");
+  if (clearConfirm) {
+    clearConfirm.addEventListener("click", () => {
+      const typed = clearTyped ? clearTyped.value.trim() : "";
+      if (typed !== "CLEAR") {
+        alert("Type CLEAR to confirm.");
+        return;
+      }
+      const form = document.getElementById("form-clear-stock");
+      const confirmField = document.getElementById("clear-stock-confirm-field");
+      const wipeField = document.getElementById("clear-stock-wipe-field");
+      const wipe = document.getElementById("clear-stock-wipe-log");
+      if (confirmField) confirmField.value = "CLEAR";
+      if (wipeField) wipeField.value = wipe && wipe.checked ? "true" : "";
+      if (form) form.submit();
+    });
+  }
+  document.querySelectorAll("[data-close]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.getAttribute("data-close") === "modal-clear-stock") resetClearModal();
     });
   });
 })();

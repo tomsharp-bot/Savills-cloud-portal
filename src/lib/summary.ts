@@ -1,4 +1,5 @@
 import type { Asset, Project } from "@prisma/client";
+import { formatProjectTarget } from "./project-target.js";
 
 export type KpiStack = {
   key: string;
@@ -35,7 +36,7 @@ export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
       hidden: !showDwellings,
       tiles: [
         { label: "Total Dwellings", value: String(dwellings.length) },
-        { label: "Project Target", value: `${project.projectTargetPercent}%` },
+        { label: "Project Target", value: formatProjectTarget(project) },
         { label: "Full Surveys Completed", value: String(full) },
         { label: "Full Surveys Remaining", value: String(remaining) },
         { label: "External-only Completed", value: String(ext) },

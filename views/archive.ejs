@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projects Archive — Savills Cloud Portal</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<div id="screen-app">
+  <%- include("partials/topbar") %>
+  <div class="main">
+    <section>
+      <div class="toolbar">
+        <div>
+          <div class="crumb"><a class="linkish dark" href="/projects">← All projects</a></div>
+          <h2 class="page-title">Projects Archive</h2>
+          <p class="page-sub">All archived projects. Search by name or project manager. Click a column heading to sort.</p>
+        </div>
+        <span class="badge"><%= projects.length %> archived</span>
+      </div>
+      <% if (notice) { %><p class="flash flash-ok"><%= notice %></p><% } %>
+      <% if (error) { %><p class="flash flash-err"><%= error %></p><% } %>
+
+      <form class="filters archive-filters" method="get" action="/projects/archive">
+        <label for="archive-q">Search
+          <input id="archive-q" type="search" name="q" value="<%= q %>" placeholder="Project or manager" />
+        </label>
+        <input type="hidden" name="sort" value="<%= sortKey %>" />
+        <input type="hidden" name="dir" value="<%= dir %>" />
+        <button type="submit" class="btn btn-primary btn-sm">Search</button>
+        <% if (q) { %><a class="btn btn-ghost btn-sm" href="/projects/archive">Clear</a><% } %>
+      </form>
+
+      <div class="archive-table-wrap">
+        <table class="archive-table" id="archive-table">
+          <thead>
+            <tr>
+              <% const cols = [
+                { key: "name", label: "Project" },
+                { key: "projectManager", label: "Project Manager" },
+                { key: "updatedAt", label: "Last updated" }
+              ]; %>
+              <% cols.forEach(c => { %>
+                <% const nextDir = sortKey === c.key && dir === "asc" ? "desc" : "asc"; %>
+                <th>
+                  <a class="sort-link <%= sortKey === c.key ? 'active' : '' %>" href="/projects/archive?q=<%= encodeURIComponent(q) %>&sort=<%= c.key %>&dir=<%= nextDir %>">
+                    <%= c.label %><% if (sortKey === c.key) { %> <%= dir === "asc" ? "↑" : "↓" %><% } %>
+                  </a>
+                </th>
+              <% }) %>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!projects.length) { %>
+              <tr><td colspan="4" class="empty">No archived projects<%= q ? " match this search" : "" %>.</td></tr>
+            <% } else { %>
+              <% projects.forEach(p => { %>
+                <tr>
+                  <td><a class="linkish dark" href="/projects/<%= p.id %>"><%= p.name %></a></td>
+                  <td><%= p.projectManager %></td>
+                  <td><%= formatDocDate(p.updatedAt) %></td>
+                  <td>
+                    <a class="btn btn-ghost btn-sm" href="/projects/<%= p.id %>">Open</a>
+                    <% if (isAdmin) { %>
+                      <form class="inline-form" method="post" action="/projects/<%= p.id %>/stage">
+                        <input type="hidden" name="stage" value="current" />
+                        <button class="btn btn-ghost btn-sm" type="submit">Restore</button>
+                      </form>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+</body>
+</html>
