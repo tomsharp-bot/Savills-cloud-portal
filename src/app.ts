@@ -74,8 +74,11 @@ export function createApp(options: CreateAppOptions = {}) {
   app.locals.basePath = basePath;
   app.locals.baseUrl = url;
 
-  app.use(express.urlencoded({ extended: true }));
-  app.use(express.json());
+  // JSON / urlencoded parsers skip multipart. Keep these well above form-field
+  // size so they cannot 413 a request before multer's per-photo check.
+  // Photo uploads (4 × 40MB) are parsed only by multer on the HHSRS route.
+  app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+  app.use(express.json({ limit: "2mb" }));
   app.use(
     cookieSession({
       name: "scp_session",

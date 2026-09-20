@@ -14,7 +14,7 @@ A public **HHSRS site reporting** form lives on this same app at **root paths** 
 - New issue / review / submit: `/HHSRS-site-form/new` and following steps
 - Admin list (signed-in admin, portal session): `/projectprogress/hhsrs-submissions`
 
-Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site-form` (or `http://localhost:3000/HHSRS-site-form` locally). No login for surveyors in v1. Photos store on disk under `uploads/hhsrs-site-form/{submissionId}/` until Spaces is wired.
+Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site-form` (or `http://localhost:3000/HHSRS-site-form` locally). No login for surveyors in v1. Photos store on disk under `uploads/hhsrs-site-form/{submissionId}/` until Spaces is wired. Up to **4 photos**, **each photo up to 40MB** (JPEG, PNG, WebP, HEIC/HEIF). The browser compresses JPEG/PNG/WebP before upload when it can.
 
 ## What this app does
 

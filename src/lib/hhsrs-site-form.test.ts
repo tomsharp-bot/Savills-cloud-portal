@@ -3,7 +3,15 @@ import assert from "node:assert/strict";
 import { HHSRS_CATEGORIES, isHhsrsCategory, isHhsrsRating } from "./hhsrs-categories.js";
 import {
   emptyHhsrsValues,
+  HHSRS_MAX_FILE_BYTES,
+  HHSRS_MAX_FILE_MB,
+  HHSRS_MAX_PHOTOS,
+  HHSRS_MAX_REQUEST_BYTES,
+  hhsrsMulterLimits,
+  hhsrsPhotoHint,
+  hhsrsPhotoSizeError,
   hhsrsUrl,
+  isAllowedImageName,
   keepRequestedPhotos,
   listKeepPhotoNames,
   readHhsrsValues,
@@ -105,8 +113,26 @@ describe("validatePhotos", () => {
     const ok = { originalname: "a.jpg", mimetype: "image/jpeg", size: 1000 };
     assert.equal(validatePhotos([ok, ok], 2), undefined);
     assert.match(String(validatePhotos([ok], 4)), /up to 4/);
-    assert.match(String(validatePhotos([{ ...ok, size: 9 * 1024 * 1024 }], 0)), /8MB/);
+    assert.equal(validatePhotos([{ ...ok, size: HHSRS_MAX_FILE_BYTES }], 0), undefined);
+    assert.match(String(validatePhotos([{ ...ok, size: HHSRS_MAX_FILE_BYTES + 1 }], 0)), /40MB/);
     assert.match(String(validatePhotos([{ originalname: "x.gif", mimetype: "image/gif", size: 10 }], 0)), /JPEG/);
+    assert.equal(
+      validatePhotos([{ originalname: "IMG_1234.HEIC", mimetype: "image/heic", size: 12 * 1024 * 1024 }], 0),
+      undefined
+    );
+    assert.equal(isAllowedImageName("shot.heif", "image/heif"), true);
+    assert.equal(isAllowedImageName("shot.webp", "image/webp"), true);
+  });
+
+  it("exposes a 40MB per-file limit and a 4-photo request budget", () => {
+    assert.equal(HHSRS_MAX_FILE_MB, 40);
+    assert.equal(HHSRS_MAX_PHOTOS, 4);
+    assert.equal(HHSRS_MAX_FILE_BYTES, 40 * 1024 * 1024);
+    assert.ok(HHSRS_MAX_REQUEST_BYTES >= HHSRS_MAX_PHOTOS * HHSRS_MAX_FILE_BYTES);
+    assert.equal(hhsrsMulterLimits.fileSize, HHSRS_MAX_FILE_BYTES);
+    assert.equal(hhsrsMulterLimits.files, HHSRS_MAX_PHOTOS);
+    assert.match(hhsrsPhotoSizeError(), /each photo up to 40MB/i);
+    assert.match(hhsrsPhotoHint(), /each photo up to 40MB/i);
   });
 
   it("keeps only requested draft photos", () => {
