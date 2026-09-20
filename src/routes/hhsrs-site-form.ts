@@ -2,6 +2,7 @@ import path from "node:path";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
+import { isProduction } from "../config.js";
 import { HHSRS_CATEGORIES, HHSRS_RATINGS } from "../lib/hhsrs-categories.js";
 import {
   deleteDraft,
@@ -54,27 +55,36 @@ function uploadPhotos(req: Request, res: Response, next: NextFunction): void {
   });
 }
 
+const DEV_DEMO_PROJECT = { id: "hhsrs-demo-current", name: "Demo current project (local)" };
+
+function withDevDemo(projects: { id: string; name: string }[]): { id: string; name: string }[] {
+  if (isProduction || projects.length) return projects;
+  return [DEV_DEMO_PROJECT];
+}
+
 async function loadActiveProjects(): Promise<{ id: string; name: string }[]> {
   try {
-    return await prisma.project.findMany({
+    const rows = await prisma.project.findMany({
       where: { stage: "current" },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     });
+    return withDevDemo(rows);
   } catch {
-    return [];
+    return withDevDemo([]);
   }
 }
 
 async function findActiveProject(projectId: string): Promise<{ id: string; name: string } | null> {
   if (!projectId) return null;
+  if (!isProduction && projectId === DEV_DEMO_PROJECT.id) return DEV_DEMO_PROJECT;
   try {
     return await prisma.project.findFirst({
       where: { id: projectId, stage: "current" },
       select: { id: true, name: true },
     });
   } catch {
-    return null;
+    return !isProduction && projectId === DEV_DEMO_PROJECT.id ? DEV_DEMO_PROJECT : null;
   }
 }
 
@@ -188,6 +198,15 @@ hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Resp
     createdAt: existing?.createdAt || new Date().toISOString(),
   };
   await writeDraft(draft);
+  res.redirect(hhsrsUrl(`/review?draft=${encodeURIComponent(draft.id)}`));
+});
+
+hhsrsSiteFormRouter.get("/review", async (req: Request, res: Response) => {
+  const draft = await readDraft(String(req.query.draft || "").trim());
+  if (!draft) {
+    res.redirect(hhsrsUrl("/new"));
+    return;
+  }
   res.render("hhsrs-site-form/review", {
     title: "Review issue — Savills HHSRS Site Reporting",
     draft,

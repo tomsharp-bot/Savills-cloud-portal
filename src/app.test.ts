@@ -185,6 +185,7 @@ describe("HHSRS site form at domain-root paths", () => {
     const form = await request(app, "GET", "/HHSRS-site-form/new");
     assert.equal(form.status, 200);
     assert.match(form.body, /name="projectId"/);
+    assert.match(form.body, /Demo current project \(local\)/);
     assert.match(form.body, /name="surveyDate"/);
     assert.match(form.body, /HHSRS category/);
     assert.match(form.body, /Client call reference \(if required\)/);
@@ -197,6 +198,39 @@ describe("HHSRS site form at domain-root paths", () => {
     const res = await request(app, "GET", "/hhsrs-site-form");
     assert.equal(res.status, 200);
     assert.match(res.body, /Savills HHSRS Site Reporting/);
+  });
+
+  it("shows a local demo project and can open the review page", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const form = await request(app, "GET", "/HHSRS-site-form/new");
+    assert.match(form.body, /Demo current project \(local\)/);
+
+    const body = [
+      "projectId=hhsrs-demo-current",
+      "surveyDate=2026-09-20",
+      "uprn=100123",
+      "fullAddress=1+High+Street",
+      "postcode=EX1+1AA",
+      "surveyorName=Alex+Surveyor",
+      "category=" + encodeURIComponent("Damp & Mould Growth"),
+      "rating=High",
+      "comment=" + encodeURIComponent("Visible mould in bathroom."),
+      "clientCallReference=",
+      "otherDetails=",
+    ].join("&");
+    const reviewPost = await request(app, "POST", "/HHSRS-site-form/review", { body });
+    assert.equal(reviewPost.status, 302);
+    assert.match(reviewPost.location, /^\/HHSRS-site-form\/review\?draft=/);
+    assert.doesNotMatch(reviewPost.location, /projectprogress/);
+
+    const review = await request(app, "GET", reviewPost.location);
+    assert.equal(review.status, 200);
+    assert.match(review.body, /Review issue/);
+    assert.match(review.body, /Damp &amp; Mould Growth/);
+    assert.match(review.body, /Visible mould in bathroom/);
+    assert.match(review.body, />Submit</);
+    assert.match(review.body, />Edit</);
+    assert.match(review.body, />Cancel</);
   });
 
   it("returns validation errors on Review without saving", async () => {
