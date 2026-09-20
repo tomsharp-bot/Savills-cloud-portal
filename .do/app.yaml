@@ -30,6 +30,9 @@ services:
       - key: NODE_ENV
         value: production
         scope: RUN_AND_BUILD_TIME
+      - key: BASE_PATH
+        value: /projectprogress
+        scope: RUN_TIME
       - key: DATABASE_URL
         type: SECRET
         scope: RUN_AND_BUILD_TIME

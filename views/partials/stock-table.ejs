@@ -15,8 +15,8 @@
 <p style="margin:0;color:var(--muted);font-size:.9rem"><% if (isAdmin && kind === "dwelling") { %>Site Comments editable by surveyor. Resident, letter and X fields are Admin-only. Per-column filters below headers.<% } else { %>Site Comments editable by surveyor · all other columns locked. Per-column filters below headers.<% } %></p>
 <div class="stock-tools">
   <% if (!isClient) { %>
-    <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=<%= kind %>">Export this tab</a>
-    <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=all">Export all stock</a>
+    <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/stock/export?scope=' + kind) %>">Export this tab</a>
+    <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/stock/export?scope=all') %>">Export all stock</a>
   <% } %>
   <% if (isAdmin) { %>
     <button type="button" class="btn btn-danger btn-sm" data-clear-stock>Clear entire stocklist</button>
