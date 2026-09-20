@@ -130,11 +130,14 @@ describe("createApp with BASE_PATH=/projectprogress", () => {
     assert.equal(rootCss.status, 404);
   });
 
-  it("redirects /projectprogress to /projectprogress/login when signed out", async () => {
+  it("redirects /projectprogress and /projectprogress/ to login when signed out", async () => {
     const app = createApp({ basePath: "/projectprogress" });
-    const res = await request(app, "GET", "/projectprogress");
-    assert.equal(res.status, 302);
-    assert.equal(res.location, "/projectprogress/login");
+    const bare = await request(app, "GET", "/projectprogress");
+    assert.equal(bare.status, 302);
+    assert.equal(bare.location, "/projectprogress/login");
+    const slash = await request(app, "GET", "/projectprogress/");
+    assert.equal(slash.status, 302);
+    assert.equal(slash.location, "/projectprogress/login");
   });
 
   it("sends unauthenticated /projectprogress/projects to /projectprogress/login", async () => {

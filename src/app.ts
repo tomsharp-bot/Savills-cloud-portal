@@ -72,20 +72,9 @@ export function createApp(options: CreateAppOptions = {}) {
   app.locals.basePath = basePath;
   app.locals.baseUrl = url;
 
-  // DigitalOcean health checks hit the container at /health even when the
-  // public site is mounted under BASE_PATH.
-  app.get("/health", healthHandler);
-
-  if (basePath) {
-    app.get("/", (_req: express.Request, res: express.Response) => {
-      res.status(302).location(basePath).type("html").send(portalLandingHtml(basePath));
-    });
-  }
-
-  const portal = express.Router();
-  portal.use(express.urlencoded({ extended: true }));
-  portal.use(express.json());
-  portal.use(
+  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json());
+  app.use(
     cookieSession({
       name: "scp_session",
       keys: [config.sessionSecret],
@@ -96,10 +85,8 @@ export function createApp(options: CreateAppOptions = {}) {
       path: cookiePath,
     })
   );
-  portal.use(express.static(publicDir));
-  portal.use(loadUser);
-
-  portal.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  app.use(loadUser);
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.locals.currentUser = req.user || null;
     res.locals.roleLabel = req.user ? roleLabel(req.user.role) : "";
     res.locals.isAdmin = isAdmin(req.user);
@@ -111,6 +98,22 @@ export function createApp(options: CreateAppOptions = {}) {
     next();
   });
 
+  // DigitalOcean health checks hit the container at /health even when the
+  // public site is mounted under BASE_PATH.
+  app.get("/health", healthHandler);
+
+  if (basePath) {
+    app.get("/", (_req: express.Request, res: express.Response) => {
+      res.status(302).location(basePath).type("html").send(portalLandingHtml(basePath));
+    });
+    // Avoid Express's default 301 /projectprogress → /projectprogress/
+    app.get(basePath, (req: express.Request, res: express.Response) => {
+      res.redirect(req.user ? "/projects" : "/login");
+    });
+  }
+
+  const portal = express.Router();
+  portal.use(express.static(publicDir));
   portal.get("/health", healthHandler);
   portal.use(authRouter);
   portal.get("/", (req: express.Request, res: express.Response) => {
