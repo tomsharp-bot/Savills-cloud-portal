@@ -1,5 +1,6 @@
 import type { AssetKind } from "@prisma/client";
 import { cellVal, surveyTypeForKind } from "./asset-status.js";
+import { formatStockDate } from "./dates.js";
 import type { RawRow } from "./excel.js";
 import { prisma } from "./prisma.js";
 
@@ -18,6 +19,14 @@ export type AddressPatch = {
   patch?: string;
   surveyor?: string;
   surveyType?: string;
+  residentName?: string;
+  residentNumber?: string;
+  residentEmail?: string;
+  letterDate1?: string;
+  letterDate2?: string;
+  x1?: string;
+  x2?: string;
+  x3?: string;
 };
 
 export type RefreshAsset = {
@@ -39,6 +48,42 @@ export type RefreshPlan = {
 export function extractUprn(row: RawRow): string {
   return String(cellVal(row, "UPRN") || cellVal(row, "uprn") || "").trim();
 }
+
+function normHeader(s: string): string {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-./]+/g, "");
+}
+
+/** Flexible header match: exact (case-insensitive) then normalised aliases. */
+export function cellValAliases(row: RawRow, aliases: string[]): unknown {
+  for (const alias of aliases) {
+    const exact = cellVal(row, alias);
+    if (exact !== "" && exact != null) return exact;
+  }
+  const want = new Set(aliases.map(normHeader));
+  for (const k of Object.keys(row || {})) {
+    if (!want.has(normHeader(k))) continue;
+    const v = row[k];
+    if (v !== "" && v != null) return v;
+  }
+  return "";
+}
+
+const ADMIN_STOCK_ALIASES: Record<
+  "residentName" | "residentNumber" | "residentEmail" | "letterDate1" | "letterDate2" | "x1" | "x2" | "x3",
+  string[]
+> = {
+  residentName: ["Resident Name", "Tenant Name", "Occupier Name"],
+  residentNumber: ["Resident Number", "Resident Tel", "Resident Phone", "Resident Telephone", "Contact Number"],
+  residentEmail: ["Resident Email", "Resident E-mail", "Resident Email Address", "Email Address"],
+  letterDate1: ["Letter Date 1", "Letter Date1", "Letter 1 Date", "Letter1 Date"],
+  letterDate2: ["Letter Date 2", "Letter Date2", "Letter 2 Date", "Letter2 Date"],
+  x1: ["X1", "X 1"],
+  x2: ["X2", "X 2"],
+  x3: ["X3", "X 3"],
+};
 
 export function mapStockAddress(raw: RawRow): AddressPatch {
   let number = cellVal(raw, "Number");
@@ -78,6 +123,23 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   if (patchName !== "" && patchName != null) patch.patch = String(patchName);
   if (surveyor !== "" && surveyor != null) patch.surveyor = String(surveyor);
   if (surveyType !== "" && surveyType != null) patch.surveyType = String(surveyType);
+
+  const residentName = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentName);
+  const residentNumber = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentNumber);
+  const residentEmail = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentEmail);
+  const letterDate1 = cellValAliases(raw, ADMIN_STOCK_ALIASES.letterDate1);
+  const letterDate2 = cellValAliases(raw, ADMIN_STOCK_ALIASES.letterDate2);
+  const x1 = cellValAliases(raw, ADMIN_STOCK_ALIASES.x1);
+  const x2 = cellValAliases(raw, ADMIN_STOCK_ALIASES.x2);
+  const x3 = cellValAliases(raw, ADMIN_STOCK_ALIASES.x3);
+  if (residentName !== "" && residentName != null) patch.residentName = String(residentName);
+  if (residentNumber !== "" && residentNumber != null) patch.residentNumber = String(residentNumber);
+  if (residentEmail !== "" && residentEmail != null) patch.residentEmail = String(residentEmail);
+  if (letterDate1 !== "" && letterDate1 != null) patch.letterDate1 = formatStockDate(letterDate1);
+  if (letterDate2 !== "" && letterDate2 != null) patch.letterDate2 = formatStockDate(letterDate2);
+  if (x1 !== "" && x1 != null) patch.x1 = String(x1);
+  if (x2 !== "" && x2 != null) patch.x2 = String(x2);
+  if (x3 !== "" && x3 != null) patch.x3 = String(x3);
   return patch;
 }
 

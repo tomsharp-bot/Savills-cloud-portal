@@ -92,6 +92,15 @@
       }
     });
   });
+  document.querySelectorAll("input[data-admin-field]").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const table = inp.closest("table");
+      const projectId = table && table.dataset.project;
+      const body = {};
+      body[inp.dataset.adminField] = inp.value;
+      patchAsset(projectId, inp.dataset.asset, body);
+    });
+  });
 
   function applyStockFilters(table) {
     const kind = table.dataset.stock;
@@ -112,13 +121,16 @@
           if (q === "included" && omitted) ok = false;
           return;
         }
+        const fieldInp = tr.querySelector('[data-admin-field="' + key + '"]');
         const cell = tr.querySelector('[data-col="' + key + '"]');
         const comment = tr.querySelector("[data-comment]");
-        const text = cell
-          ? cell.textContent
-          : comment
-            ? comment.value
-            : tr.textContent;
+        const text = fieldInp
+          ? fieldInp.value
+          : cell
+            ? cell.textContent
+            : comment
+              ? comment.value
+              : tr.textContent;
         if (!String(text || "").toLowerCase().includes(q)) ok = false;
       });
       tr.style.display = ok ? "" : "none";

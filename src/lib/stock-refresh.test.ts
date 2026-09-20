@@ -41,6 +41,44 @@ describe("Stocklist refresh plan", () => {
     assert.equal(plan.matched[0].address.surveyor, "AS");
   });
 
+  it("maps resident, letter and X columns when present (flexible headers)", () => {
+    const existing = [row({ uprn: "A" })];
+    const plan = planStocklistRefresh(
+      existing,
+      [
+        {
+          UPRN: "A",
+          "resident name": "Sam Lee",
+          "Resident_Number": "01234 567890",
+          "Resident E-mail": "sam@example.com",
+          "Letter Date1": "15/02/2026",
+          "letter-date-2": "01/03/26",
+          X1: "flag",
+          "X 2": "note",
+          x3: "z",
+        },
+      ],
+      false
+    );
+    const a = plan.matched[0].address;
+    assert.equal(a.residentName, "Sam Lee");
+    assert.equal(a.residentNumber, "01234 567890");
+    assert.equal(a.residentEmail, "sam@example.com");
+    assert.equal(a.letterDate1, "15/02/26");
+    assert.equal(a.letterDate2, "01/03/26");
+    assert.equal(a.x1, "flag");
+    assert.equal(a.x2, "note");
+    assert.equal(a.x3, "z");
+  });
+
+  it("leaves resident fields off the patch when those columns are missing", () => {
+    const existing = [row({ uprn: "A" })];
+    const plan = planStocklistRefresh(existing, [{ UPRN: "A", Street: "High St" }], false);
+    assert.equal(plan.matched[0].address.residentName, undefined);
+    assert.equal(plan.matched[0].address.letterDate1, undefined);
+    assert.equal(plan.matched[0].address.x1, undefined);
+  });
+
   it("errors when no UPRN values are present", () => {
     const plan = planStocklistRefresh([row({ uprn: "A" })], [{ Street: "Nope" }], true);
     assert.equal(plan.error, "No UPRN column / values found in file");

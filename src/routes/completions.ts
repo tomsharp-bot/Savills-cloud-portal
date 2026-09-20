@@ -1,12 +1,16 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { canSeeProject } from "../lib/access.js";
+import { canSeeCompletions, canSeeProject } from "../lib/access.js";
 import { userAccessIds } from "../middleware/auth.js";
 
 export const completionsRouter = Router();
 
 completionsRouter.get("/projects/:id/completions/:compId/:action", async (req: Request, res: Response) => {
   const user = req.user!;
+  if (!canSeeCompletions(user)) {
+    res.status(403).send("Completions are not available.");
+    return;
+  }
   const accessIds = await userAccessIds(user.id);
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
   if (!project || !canSeeProject(user, project, accessIds)) {

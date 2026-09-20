@@ -1,7 +1,16 @@
 import { Router, type Request, type Response } from "express";
 import type { ProjectStage } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { canSeeProject, clientForcedTab, includedTypeLabels, isAdmin, isClient, PROJECT_TABS } from "../lib/access.js";
+import {
+  canSeeProject,
+  canSeeProjectTab,
+  defaultProjectTab,
+  includedTypeLabels,
+  isAdmin,
+  isClient,
+  isProjectTab,
+  isSurveyor,
+} from "../lib/access.js";
 import { buildSummary } from "../lib/summary.js";
 import { userAccessIds } from "../middleware/auth.js";
 import { formatDocDate, formatStockDate } from "../lib/dates.js";
@@ -9,7 +18,7 @@ import { formatBytes } from "../lib/documents.js";
 import { reapplyExternalLink } from "../lib/external.js";
 import { parseProjectTarget } from "../lib/project-target.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
-import { STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
+import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 
 export const projectsRouter = Router();
 
@@ -210,10 +219,21 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     res.status(404).send("Project not found.");
     return;
   }
-  const requested = String(req.query.tab || (isClient(user) ? "completions" : "summary"));
-  let tab = clientForcedTab(user, PROJECT_TABS.includes(requested as (typeof PROJECT_TABS)[number]) ? requested : "summary");
-  if (tab === "loader" && !isAdmin(user)) tab = "summary";
-  if (tab === "documents" && isClient(user)) tab = "completions";
+  const requested = String(req.query.tab || "");
+  const fallback = defaultProjectTab(user);
+  const tab = isProjectTab(requested) ? requested : fallback;
+  if (!canSeeProjectTab(user, tab)) {
+    if (isClient(user)) {
+      res.redirect(`/projects/${project.id}?tab=completions`);
+      return;
+    }
+    if (isSurveyor(user) && tab === "completions") {
+      res.status(403).send("Completions are not available.");
+      return;
+    }
+    res.redirect(`/projects/${project.id}?tab=${fallback}`);
+    return;
+  }
 
   if (isAdmin(user)) {
     try {
@@ -306,10 +326,11 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     stockSelectCols: STOCK_SELECT_COLS,
     stockDateCols: STOCK_DATE_COLS,
     stockColsByKind: {
-      dwelling: stockColumns("dwelling"),
-      block: stockColumns("block"),
-      garage: stockColumns("garage"),
+      dwelling: stockColumns("dwelling", { includeAdminOnly: isAdmin(user) }),
+      block: stockColumns("block", { includeAdminOnly: isAdmin(user) }),
+      garage: stockColumns("garage", { includeAdminOnly: isAdmin(user) }),
     },
+    adminEditCols: isAdmin(user) ? [...ADMIN_EDIT_STOCK_COLS] : [],
     notice: req.query.notice || "",
     error: req.query.error || "",
   });

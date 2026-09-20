@@ -5,13 +5,14 @@
   const dateCols = stockDateCols;
   const title = kind === "dwelling" ? "Dwellings" : kind === "block" ? "Blocks" : "Garages";
   const canComment = isAdmin || isSurveyor;
+  const editCols = new Set(typeof adminEditCols !== "undefined" ? adminEditCols : []);
   const displayVal = (row, col) => dateCols.has(col) ? formatStockDate(row[col]) : String(row[col] || "");
 %>
 <div class="stock-tab-head">
   <h3><%= title %></h3>
   <p class="stock-count" data-stock-count="<%= kind %>"><%= rows.length %> of <%= rows.length %> Assets Displayed</p>
 </div>
-<p style="margin:0;color:var(--muted);font-size:.9rem">Site Comments editable by surveyor · all other columns locked. Per-column filters below headers.</p>
+<p style="margin:0;color:var(--muted);font-size:.9rem"><% if (isAdmin && kind === "dwelling") { %>Site Comments editable by surveyor. Resident, letter and X fields are Admin-only. Per-column filters below headers.<% } else { %>Site Comments editable by surveyor · all other columns locked. Per-column filters below headers.<% } %></p>
 <div class="stock-tools">
   <% if (!isClient) { %>
     <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=<%= kind %>">Export this tab</a>
@@ -69,6 +70,10 @@
                   <% } else { %>
                     <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %>
                   <% } %>
+                </td>
+              <% } else if (editCols.has(c) && isAdmin) { %>
+                <td data-col="<%= c %>">
+                  <input class="comment-input" data-admin-field="<%= c %>" data-asset="<%= r.id %>" value="<%= displayVal(r, c) %>" placeholder="<%= dateCols.has(c) ? 'DD/MM/YY' : '' %>" />
                 </td>
               <% } else if (c === "assetStatus") { %>
                 <td>

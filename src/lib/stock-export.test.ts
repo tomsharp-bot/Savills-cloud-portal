@@ -30,6 +30,14 @@ function asset(partial: Partial<Asset> & { agency?: string } = {}): Asset & { ag
     surveyType: "Condition Only",
     siteComments: "",
     external: "",
+    residentName: "Jane Roe",
+    residentNumber: "07700 900123",
+    residentEmail: "jane@example.com",
+    letterDate1: "04/01/2026",
+    letterDate2: "",
+    x1: "A",
+    x2: "",
+    x3: "",
     omitAsset: false,
     stockMissing: false,
     createdAt: new Date(),
@@ -50,6 +58,18 @@ describe("Stocklist export", () => {
     assert.equal(row["Patch"], "Patch 1");
     assert.equal(row["Surveyor"], "PM");
     assert.equal(row["Agency"], "Savills");
+    assert.equal(row["Resident Name"], "Jane Roe");
+    assert.equal(row["Resident Email"], "jane@example.com");
+    assert.equal(row["Letter Date 1"], "04/01/26");
+    assert.equal(row["X1"], "A");
+  });
+
+  it("omits Admin-only columns from a surveyor export", () => {
+    const row = assetToExportRow(asset(), "dwelling", { includeAdminOnly: false });
+    assert.equal(row["Resident Name"], undefined);
+    assert.equal(row["Omit Asset"], undefined);
+    assert.equal(row["UPRN"], "1001");
+    assert.equal(row["Street"], "Moor Cross");
   });
 
   it("writes Dwellings / Blocks / Garages sheets for an all-tabs workbook", () => {

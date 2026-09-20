@@ -13,22 +13,31 @@ export function stockExportCell(asset: ExportAsset, col: string): string {
   return v == null ? "" : String(v);
 }
 
-export function assetToExportRow(asset: ExportAsset, kind: AssetKind): Record<string, string> {
+export type StockExportOpts = {
+  includeAdminOnly?: boolean;
+};
+
+export function assetToExportRow(
+  asset: ExportAsset,
+  kind: AssetKind,
+  opts: StockExportOpts = {}
+): Record<string, string> {
   const row: Record<string, string> = {};
-  for (const col of stockColumns(kind)) {
+  for (const col of stockColumns(kind, opts)) {
     row[STOCK_LABELS[col] || col] = stockExportCell(asset, col);
   }
   return row;
 }
 
 export function buildStockWorkbook(
-  groups: { kind: AssetKind; rows: ExportAsset[] }[]
+  groups: { kind: AssetKind; rows: ExportAsset[] }[],
+  opts: StockExportOpts = {}
 ): Buffer {
   const wb = XLSX.utils.book_new();
   for (const group of groups) {
-    const cols = stockColumns(group.kind);
+    const cols = stockColumns(group.kind, opts);
     const headers = cols.map((c) => STOCK_LABELS[c] || c);
-    const data = group.rows.map((r) => assetToExportRow(r, group.kind));
+    const data = group.rows.map((r) => assetToExportRow(r, group.kind, opts));
     const ws = XLSX.utils.json_to_sheet(data, { header: headers });
     XLSX.utils.book_append_sheet(wb, ws, stockTabTitle(group.kind));
   }
