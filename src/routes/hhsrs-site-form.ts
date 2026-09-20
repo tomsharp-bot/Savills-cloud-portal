@@ -9,8 +9,12 @@ import {
   draftPhotoPath,
   emptyHhsrsValues,
   HHSRS_MAX_FILE_BYTES,
+  HHSRS_MAX_FILE_MB,
   HHSRS_MAX_PHOTOS,
   HHSRS_SITE_FORM_PATH,
+  hhsrsMulterLimits,
+  hhsrsPhotoHint,
+  hhsrsPhotoSizeError,
   hhsrsUrl,
   keepRequestedPhotos,
   listKeepPhotoNames,
@@ -33,7 +37,7 @@ export const hhsrsSiteFormRouter = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: HHSRS_MAX_FILE_BYTES, files: HHSRS_MAX_PHOTOS },
+  limits: hhsrsMulterLimits,
 });
 
 const assetsDir = path.join(process.cwd(), "public", "hhsrs-site-form");
@@ -46,7 +50,7 @@ function uploadPhotos(req: Request, res: Response, next: NextFunction): void {
       const code = typeof err === "object" && err && "code" in err ? String((err as { code: string }).code) : "";
       (req as Request & { hhsrsUploadError?: string }).hhsrsUploadError =
         code === "LIMIT_FILE_SIZE"
-          ? "Each photo must be 8MB or smaller."
+          ? hhsrsPhotoSizeError()
           : code === "LIMIT_UNEXPECTED_FILE" || code === "LIMIT_FILE_COUNT"
             ? `You can attach up to ${HHSRS_MAX_PHOTOS} photos.`
             : "Could not upload photos.";
@@ -116,6 +120,9 @@ function renderForm(
     projects: opts.projects,
     formError: opts.formError || "",
     maxPhotos: HHSRS_MAX_PHOTOS,
+    maxFileMb: HHSRS_MAX_FILE_MB,
+    maxFileBytes: HHSRS_MAX_FILE_BYTES,
+    photoHint: hhsrsPhotoHint(),
   });
 }
 

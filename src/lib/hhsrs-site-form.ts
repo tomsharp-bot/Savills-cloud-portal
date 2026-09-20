@@ -5,8 +5,40 @@ import { isHhsrsCategory, isHhsrsRating } from "./hhsrs-categories.js";
 
 export const HHSRS_SITE_FORM_PATH = "/HHSRS-site-form";
 export const HHSRS_MAX_PHOTOS = 4;
-export const HHSRS_MAX_FILE_BYTES = 8 * 1024 * 1024;
+/** Per-photo cap. 40MB covers typical iPhone HEIC / high-res JPEG. */
+export const HHSRS_MAX_FILE_MB = 40;
+export const HHSRS_MAX_FILE_BYTES = HHSRS_MAX_FILE_MB * 1024 * 1024;
+/** Extra room for text fields so 4 large photos are not rejected as "fields too big". */
+export const HHSRS_FORM_FIELD_BYTES = 2 * 1024 * 1024;
+/** Whole multipart request: 4 photos + form fields. Used for multer / docs. */
+export const HHSRS_MAX_REQUEST_BYTES =
+  HHSRS_MAX_PHOTOS * HHSRS_MAX_FILE_BYTES + HHSRS_FORM_FIELD_BYTES;
 export const HHSRS_ALLOWED_EXTS = ["jpg", "jpeg", "png", "webp", "heic", "heif"] as const;
+export const HHSRS_ALLOWED_MIMES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+] as const;
+
+export const hhsrsMulterLimits = {
+  fileSize: HHSRS_MAX_FILE_BYTES,
+  files: HHSRS_MAX_PHOTOS,
+  fields: 40,
+  fieldSize: HHSRS_FORM_FIELD_BYTES,
+  parts: HHSRS_MAX_PHOTOS + 40,
+} as const;
+
+export function hhsrsPhotoSizeError(): string {
+  return `Each photo must be ${HHSRS_MAX_FILE_MB}MB or smaller (each photo up to ${HHSRS_MAX_FILE_MB}MB).`;
+}
+
+export function hhsrsPhotoHint(): string {
+  return `JPEG, PNG, WebP or HEIC. Each photo up to ${HHSRS_MAX_FILE_MB}MB.`;
+}
+
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type HhsrsPhoto = {
@@ -99,13 +131,7 @@ export function isAllowedImageName(name: string, mime = ""): boolean {
   const ext = extOf(name);
   if ((HHSRS_ALLOWED_EXTS as readonly string[]).includes(ext)) return true;
   const type = String(mime || "").toLowerCase();
-  return (
-    type === "image/jpeg" ||
-    type === "image/png" ||
-    type === "image/webp" ||
-    type === "image/heic" ||
-    type === "image/heif"
-  );
+  return (HHSRS_ALLOWED_MIMES as readonly string[]).includes(type);
 }
 
 export function imageExt(name: string, mime = ""): string {
@@ -114,7 +140,7 @@ export function imageExt(name: string, mime = ""): string {
     return ext === "jpeg" ? "jpg" : ext;
   }
   const type = String(mime || "").toLowerCase();
-  if (type === "image/jpeg") return "jpg";
+  if (type === "image/jpeg" || type === "image/jpg") return "jpg";
   if (type === "image/png") return "png";
   if (type === "image/webp") return "webp";
   if (type === "image/heic") return "heic";
@@ -167,7 +193,7 @@ export function validatePhotos(
   }
   for (const file of incoming) {
     if (file.size > HHSRS_MAX_FILE_BYTES) {
-      return "Each photo must be 8MB or smaller.";
+      return hhsrsPhotoSizeError();
     }
     if (!isAllowedImageName(file.originalname, file.mimetype)) {
       return "Photos must be JPEG, PNG, WebP or HEIC.";

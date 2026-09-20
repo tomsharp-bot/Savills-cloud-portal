@@ -23,7 +23,7 @@
         </ul>
       </div>
     <% } %>
-    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate>
+    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>">
       <% if (draft) { %><input type="hidden" name="draftId" value="<%= draft.id %>" /><% } %>
 
       <label for="projectId">Project *</label>
@@ -85,7 +85,8 @@
 
       <fieldset class="hhsrs-photos">
         <legend>Photos <span class="optional">(optional, max <%= maxPhotos %>)</span></legend>
-        <p class="hhsrs-hint">JPEG, PNG, WebP or HEIC. 8MB each.</p>
+        <p class="hhsrs-hint"><%= photoHint %></p>
+        <p id="photo-status" class="hhsrs-hint" hidden></p>
         <% if (errors.photos) { %><p class="field-error"><%= errors.photos %></p><% } %>
         <div id="existing-photos" class="photo-grid">
           <% if (draft && draft.photos.length) { %>
