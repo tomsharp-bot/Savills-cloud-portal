@@ -23,21 +23,27 @@ function request(
   app: Express,
   method: string,
   url: string,
-  opts: { body?: string; contentType?: string } = {}
+  opts: { body?: string | Buffer; contentType?: string } = {}
 ): Promise<Hit> {
   return new Promise((resolve, reject) => {
     const server = app.listen(0, "127.0.0.1", () => {
       const { port } = server.address() as AddressInfo;
+      const payload = opts.body;
+      const contentLength = payload
+        ? Buffer.isBuffer(payload)
+          ? payload.length
+          : Buffer.byteLength(payload)
+        : 0;
       const req = http.request(
         {
           host: "127.0.0.1",
           port,
           path: url,
           method,
-          headers: opts.body
+          headers: payload
             ? {
                 "content-type": opts.contentType || "application/x-www-form-urlencoded",
-                "content-length": Buffer.byteLength(opts.body),
+                "content-length": contentLength,
               }
             : undefined,
         },
@@ -59,9 +65,62 @@ function request(
         server.close();
         reject(err);
       });
-      req.end(opts.body);
+      req.end(payload);
     });
   });
+}
+
+function hhsrsReviewFields(): Record<string, string> {
+  return {
+    projectId: "hhsrs-demo-current",
+    surveyDate: "2026-09-20",
+    uprn: "100123",
+    fullAddress: "1 High Street",
+    postcode: "EX1 1AA",
+    surveyorName: "Alex Surveyor",
+    category: "Damp & Mould Growth",
+    rating: "High",
+    comment: "Visible mould in bathroom.",
+    clientCallReference: "",
+    otherDetails: "",
+  };
+}
+
+function multipartForm(
+  fields: Record<string, string>,
+  files: { field: string; filename: string; type: string; data: Buffer }[] = []
+): { body: Buffer; contentType: string } {
+  const boundary = "----hhsrsTestBoundary7MA4YWxkTrZu0gW";
+  const parts: Buffer[] = [];
+  for (const [name, value] of Object.entries(fields)) {
+    parts.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`
+      )
+    );
+  }
+  for (const file of files) {
+    parts.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${file.field}"; filename="${file.filename}"\r\nContent-Type: ${file.type}\r\n\r\n`
+      )
+    );
+    parts.push(file.data);
+    parts.push(Buffer.from("\r\n"));
+  }
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  return {
+    body: Buffer.concat(parts),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  };
+}
+
+function fakeJpeg(bytes: number): Buffer {
+  const buf = Buffer.alloc(bytes, 0x41);
+  buf[0] = 0xff;
+  buf[1] = 0xd8;
+  buf[2] = 0xff;
+  return buf;
 }
 
 before(async () => {
@@ -191,6 +250,51 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /Client call reference \(if required\)/);
     assert.match(form.body, /Any other details/);
     assert.match(form.body, /action="\/HHSRS-site-form\/review"/);
+    assert.match(form.body, /each photo up to 40MB/i);
+    assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
+    assert.match(form.body, /data-max-file-mb="40"/);
+    assert.match(form.body, /id="clear-form"/);
+    assert.match(form.body, /hhsrs-btn-secondary/);
+    assert.match(form.body, /type="button"[^>]*>Clear Form</);
+    const reviewIdx = form.body.indexOf(">Review<");
+    const clearIdx = form.body.indexOf(">Clear Form<");
+    assert.ok(reviewIdx !== -1 && clearIdx > reviewIdx, "Clear Form sits under Review on the new-issue form");
+    assert.match(css.body, /\.hhsrs-btn-secondary/);
+
+    const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
+    assert.equal(js.status, 200);
+    assert.match(js.body, /Clear the form\? This cannot be undone\./);
+    assert.match(js.body, /Europe\/London/);
+  });
+
+  it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const okUpload = multipartForm(hhsrsReviewFields(), [
+      { field: "photos", filename: "iphone.jpg", type: "image/jpeg", data: fakeJpeg(9 * 1024 * 1024) },
+    ]);
+    const accepted = await request(app, "POST", "/HHSRS-site-form/review", okUpload);
+    assert.equal(accepted.status, 302);
+    assert.match(accepted.location, /^\/HHSRS-site-form\/review\?draft=/);
+    assert.doesNotMatch(accepted.body, /8MB/);
+
+    const heic = multipartForm(hhsrsReviewFields(), [
+      { field: "photos", filename: "IMG_1234.HEIC", type: "image/heic", data: fakeJpeg(1024) },
+    ]);
+    const heicRes = await request(app, "POST", "/HHSRS-site-form/review", heic);
+    assert.equal(heicRes.status, 302);
+
+    const tooBig = multipartForm(hhsrsReviewFields(), [
+      {
+        field: "photos",
+        filename: "huge.jpg",
+        type: "image/jpeg",
+        data: fakeJpeg(40 * 1024 * 1024 + 64),
+      },
+    ]);
+    const rejected = await request(app, "POST", "/HHSRS-site-form/review", tooBig);
+    assert.equal(rejected.status, 200);
+    assert.match(rejected.body, /each photo up to 40MB/i);
+    assert.doesNotMatch(rejected.body, /8MB or smaller/);
   });
 
   it("also serves the landing page at lowercase /hhsrs-site-form", async () => {
@@ -231,6 +335,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);
     assert.match(review.body, />Cancel</);
+    assert.doesNotMatch(review.body, /Clear Form/);
   });
 
   it("returns validation errors on Review without saving", async () => {

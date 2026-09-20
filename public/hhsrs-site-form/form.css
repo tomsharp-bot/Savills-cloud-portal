@@ -68,6 +68,13 @@ body.hhsrs-body {
 }
 .hhsrs-btn-primary { background: var(--yellow); color: var(--navy); }
 .hhsrs-btn-primary:hover { filter: brightness(0.97); }
+.hhsrs-btn-primary:disabled { opacity: 0.65; cursor: wait; }
+.hhsrs-btn-secondary {
+  background: #fff;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.hhsrs-btn-secondary:hover { background: #eef2f5; color: var(--text); }
 .hhsrs-btn-ghost { background: #fff; color: var(--blue); border: 1px solid var(--border); }
 .hhsrs-btn-danger { background: #fff; color: var(--danger); border: 1px solid #e2b4b4; }
 .hhsrs-form label {

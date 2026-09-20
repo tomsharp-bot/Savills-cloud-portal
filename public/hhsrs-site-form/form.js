@@ -1,8 +1,17 @@
 (function () {
+  var form = document.getElementById("hhsrs-form");
   var input = document.getElementById("photos");
   var newGrid = document.getElementById("new-photos");
   var existing = document.getElementById("existing-photos");
-  var max = 4;
+  var statusEl = document.getElementById("photo-status");
+  var max = form ? parseInt(form.getAttribute("data-max-photos") || "4", 10) : 4;
+  var maxBytes = form
+    ? parseInt(form.getAttribute("data-max-file-bytes") || String(40 * 1024 * 1024), 10)
+    : 40 * 1024 * 1024;
+  var maxMb = form ? parseInt(form.getAttribute("data-max-file-mb") || "40", 10) : 40;
+  var MAX_EDGE = 2048;
+  var JPEG_QUALITY = 0.82;
+  var SKIP_UNDER_BYTES = 2 * 1024 * 1024;
   if (!input || !newGrid) return;
 
   function existingCount() {
@@ -17,6 +26,17 @@
 
   function currentFiles() {
     return Array.prototype.slice.call(input.files || []);
+  }
+
+  function setStatus(text) {
+    if (!statusEl) return;
+    if (!text) {
+      statusEl.hidden = true;
+      statusEl.textContent = "";
+      return;
+    }
+    statusEl.hidden = false;
+    statusEl.textContent = text;
   }
 
   function renderNew() {
@@ -47,11 +67,87 @@
     });
   }
 
+  function loadImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("decode"));
+      };
+      img.src = url;
+    });
+  }
+
+  function compressFile(file) {
+    var type = String(file.type || "").toLowerCase();
+    var canTry =
+      type === "image/jpeg" ||
+      type === "image/jpg" ||
+      type === "image/png" ||
+      type === "image/webp" ||
+      type === "image/heic" ||
+      type === "image/heif" ||
+      /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || "");
+    if (!canTry) return Promise.resolve(file);
+
+    return loadImage(file)
+      .then(function (img) {
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        if (!w || !h) return file;
+        var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+        if (file.size <= SKIP_UNDER_BYTES && scale === 1 && (type === "image/jpeg" || type === "image/jpg")) {
+          return file;
+        }
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        var ctx = canvas.getContext("2d");
+        if (!ctx) return file;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        return new Promise(function (resolve) {
+          canvas.toBlob(
+            function (blob) {
+              if (!blob || blob.size >= file.size) {
+                resolve(file);
+                return;
+              }
+              var base = String(file.name || "photo").replace(/\.[a-z0-9]+$/i, "");
+              resolve(new File([blob], base + ".jpg", { type: "image/jpeg", lastModified: Date.now() }));
+            },
+            "image/jpeg",
+            JPEG_QUALITY
+          );
+        });
+      })
+      .catch(function () {
+        return file;
+      });
+  }
+
+  function oversizedName(files) {
+    for (var i = 0; i < files.length; i++) {
+      if (files[i].size > maxBytes) return files[i].name || "photo";
+    }
+    return "";
+  }
+
   input.addEventListener("change", function () {
     var room = Math.max(0, max - existingCount());
     var picked = currentFiles().slice(0, room);
     syncFiles(picked);
     renderNew();
+    var big = oversizedName(picked);
+    if (big) {
+      setStatus(big + " is over " + maxMb + "MB. Each photo up to " + maxMb + "MB. It will be compressed on Review if possible.");
+    } else {
+      setStatus("");
+    }
   });
 
   if (existing) {
@@ -60,6 +156,100 @@
       if (!btn) return;
       var card = btn.closest("[data-existing]");
       if (card) card.remove();
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      if (form.getAttribute("data-photos-ready") === "1") return;
+      var files = currentFiles();
+      if (!files.length) return;
+      e.preventDefault();
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Preparing photos…";
+      }
+      setStatus("Compressing photos for upload…");
+      Promise.all(files.map(compressFile))
+        .then(function (next) {
+          syncFiles(next);
+          renderNew();
+          var big = oversizedName(next);
+          if (big) {
+            setStatus(big + " is still over " + maxMb + "MB (each photo up to " + maxMb + "MB). Choose a smaller photo.");
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = "Review";
+            }
+            return;
+          }
+          setStatus("");
+          form.setAttribute("data-photos-ready", "1");
+          if (typeof form.requestSubmit === "function") form.requestSubmit();
+          else form.submit();
+        })
+        .catch(function () {
+          form.setAttribute("data-photos-ready", "1");
+          if (typeof form.requestSubmit === "function") form.requestSubmit();
+          else form.submit();
+        });
+    });
+  }
+
+  var clearBtn = document.getElementById("clear-form");
+  var FIELD_IDS = [
+    "projectId",
+    "uprn",
+    "fullAddress",
+    "postcode",
+    "surveyorName",
+    "category",
+    "rating",
+    "comment",
+    "clientCallReference",
+    "otherDetails",
+  ];
+
+  function todayLondonDate() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  }
+
+  function resetFormToDefaults() {
+    FIELD_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.value = "";
+      el.classList.remove("is-invalid");
+    });
+    var dateEl = document.getElementById("surveyDate");
+    if (dateEl) {
+      dateEl.value = todayLondonDate();
+      dateEl.classList.remove("is-invalid");
+    }
+    syncFiles([]);
+    renderNew();
+    if (existing) existing.innerHTML = "";
+    setStatus("");
+    if (form) form.removeAttribute("data-photos-ready");
+    var submit = form && form.querySelector('button[type="submit"]');
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Review";
+    }
+    var banner = document.querySelector(".hhsrs-errors");
+    if (banner) banner.remove();
+    if (form) {
+      form.querySelectorAll(".field-error").forEach(function (p) {
+        p.remove();
+      });
+    }
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function () {
+      if (!confirm("Clear the form? This cannot be undone.")) return;
+      resetFormToDefaults();
     });
   }
 })();
