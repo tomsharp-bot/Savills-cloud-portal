@@ -191,7 +191,7 @@
 
             <div class="stock-refresh-box">
               <h4>Upload or refresh stocklist</h4>
-              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a stock Excel/CSV with a <strong>UPRN</strong> column. The first upload on an empty project loads the full list. Later uploads add new UPRNs and mark removed ones mid-job (they stay as “Not on latest stocklist”). Compares against the selected target tab above (Auto → Dwellings). New rows start as Asset Status “No Visit”. If a removed row is already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved. Use <strong>Export stocklist</strong> to download the current grids, edit Patch / Surveyor, and re-upload here. On Dwellings, Resident Name / Number / Email, Letter Date 1 / 2 and X1–X3 are imported when those columns are in the file (header names can vary slightly).</p>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a stock Excel/CSV with a <strong>UPRN</strong> column. The first upload on an empty project loads the full list. Later uploads add new UPRNs and mark removed ones mid-job (they stay as “Not on latest stocklist”). Compares against the selected target tab above (Auto → Dwellings). New rows start as Asset Status “No Visit”. If a removed row is already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved. Use <strong>Export stocklist</strong> to download the current grids, edit Patch / Surveyor, and re-upload here. On Dwellings, Resident Name / Number / Email, Letter Date 1 / 2 and X1–X3 are imported when those columns are in the file (header names can vary slightly). Use <strong>Remove assets not on latest stocklist</strong> to permanently delete those marked rows (you choose whether completed Full Survey / Ext-Only rows go too).</p>
               <form class="stock-tools" method="post" action="/projects/<%= project.id %>/stock-refresh" enctype="multipart/form-data">
                 <input type="file" id="stock-refresh-file" name="file" accept=".xlsx,.xls,.csv" required />
                 <input type="hidden" name="target" id="stock-refresh-target" value="auto" />
@@ -200,6 +200,7 @@
               </form>
               <div class="stock-tools">
                 <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=all">Export stocklist</a>
+                <button type="button" class="btn btn-danger btn-sm" data-purge-missing>Remove assets not on latest stocklist</button>
                 <button type="button" class="btn btn-danger btn-sm" data-clear-stock>Clear entire stocklist</button>
               </div>
               <% if (flashRefresh) { %>
@@ -342,6 +343,32 @@
       <div class="actions">
         <button type="button" class="btn btn-ghost" data-close="modal-clear-stock">Cancel</button>
         <button type="button" class="btn btn-danger" id="clear-stock-confirm">Clear stocklist</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="modal-purge-missing" class="modal-back hidden">
+  <div class="modal">
+    <h3>Remove assets not on latest stocklist</h3>
+    <div id="purge-step-1">
+      <p>Are you sure you want to remove assets marked “Not on latest stocklist”? This permanently deletes those dwellings, blocks and garages from this project. Summary counts will update. Completed Full Survey / Ext-Only rows stay unless you say otherwise on the next step.</p>
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" data-close="modal-purge-missing">Cancel</button>
+        <button type="button" class="btn btn-danger" id="purge-missing-next">Continue</button>
+      </div>
+    </div>
+    <div id="purge-step-2" class="hidden">
+      <p><strong>Purge completed dwellings not on latest stocklist too?</strong></p>
+      <p>The same rule applies to Blocks and Garages that are already surveyed (Full Survey / Ext-Only).</p>
+      <label class="chk"><input type="radio" name="purge-completed-choice" value="no" checked /> No — keep completed rows</label>
+      <label class="chk"><input type="radio" name="purge-completed-choice" value="yes" /> Yes — also delete completed rows</label>
+      <form id="form-purge-missing" method="post" action="/projects/<%= project.id %>/stock/purge-missing">
+        <input type="hidden" name="confirm" id="purge-missing-confirm-field" value="" />
+        <input type="hidden" name="includeCompleted" id="purge-missing-completed-field" value="" />
+      </form>
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" data-close="modal-purge-missing">Cancel</button>
+        <button type="button" class="btn btn-danger" id="purge-missing-confirm">Remove assets</button>
       </div>
     </div>
   </div>
