@@ -279,6 +279,42 @@
   document.querySelectorAll("[data-close]").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.getAttribute("data-close") === "modal-clear-stock") resetClearModal();
+      if (btn.getAttribute("data-close") === "modal-purge-missing") resetPurgeModal();
     });
   });
+
+  const purgeModal = document.getElementById("modal-purge-missing");
+  const purgeStep1 = document.getElementById("purge-step-1");
+  const purgeStep2 = document.getElementById("purge-step-2");
+  function resetPurgeModal() {
+    if (purgeStep1) purgeStep1.classList.remove("hidden");
+    if (purgeStep2) purgeStep2.classList.add("hidden");
+    const noChoice = document.querySelector('input[name="purge-completed-choice"][value="no"]');
+    if (noChoice) noChoice.checked = true;
+  }
+  document.querySelectorAll("[data-purge-missing]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      resetPurgeModal();
+      show(purgeModal);
+    });
+  });
+  const purgeNext = document.getElementById("purge-missing-next");
+  if (purgeNext) {
+    purgeNext.addEventListener("click", () => {
+      if (purgeStep1) purgeStep1.classList.add("hidden");
+      if (purgeStep2) purgeStep2.classList.remove("hidden");
+    });
+  }
+  const purgeConfirm = document.getElementById("purge-missing-confirm");
+  if (purgeConfirm) {
+    purgeConfirm.addEventListener("click", () => {
+      const form = document.getElementById("form-purge-missing");
+      const confirmField = document.getElementById("purge-missing-confirm-field");
+      const completedField = document.getElementById("purge-missing-completed-field");
+      const yesChoice = document.querySelector('input[name="purge-completed-choice"][value="yes"]');
+      if (confirmField) confirmField.value = "REMOVE";
+      if (completedField) completedField.value = yesChoice && yesChoice.checked ? "true" : "";
+      if (form) form.submit();
+    });
+  }
 })();

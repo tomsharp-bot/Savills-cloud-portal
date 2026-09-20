@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { canClearStock, canEditSiteComments, canExportStock, canOmitAsset, canSeeProject, isAdmin } from "../lib/access.js";
+import { canClearStock, canEditSiteComments, canExportStock, canOmitAsset, canPurgeMissingStock, canSeeProject, isAdmin } from "../lib/access.js";
+import { applyMissingStockPurge, formatPurgeNotice } from "../lib/stock-purge.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS } from "../lib/stock-columns.js";
 import { formatStockDate } from "../lib/dates.js";
 import { userAccessIds } from "../middleware/auth.js";
@@ -96,6 +97,43 @@ stockRouter.post("/projects/:id/stock/clear", async (req: Request, res: Response
   );
 });
 
+stockRouter.post("/projects/:id/stock/purge-missing", async (req: Request, res: Response) => {
+  const user = req.user!;
+  if (!canPurgeMissingStock(user)) {
+    res.status(403).send("Admin only.");
+    return;
+  }
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.redirect("/projects?error=" + encodeURIComponent("Project not found"));
+    return;
+  }
+  const confirm = String(req.body.confirm || "").trim();
+  if (confirm !== "REMOVE") {
+    res.redirect(
+      `/projects/${project.id}?tab=loader&error=` +
+        encodeURIComponent("Assets not removed — confirm the purge first.")
+    );
+    return;
+  }
+  const includeCompleted =
+    req.body.includeCompleted === "true" ||
+    req.body.includeCompleted === "on" ||
+    req.body.includeCompleted === "yes";
+  const result = await applyMissingStockPurge({ projectId: project.id, includeCompleted });
+  const notice = formatPurgeNotice(result);
+  await prisma.loaderHistory.create({
+    data: {
+      projectId: project.id,
+      file: "—",
+      target: "stock purge missing",
+      result:
+        `Purged ${result.deleted} marked row(s)` +
+        (includeCompleted ? " including completed." : ` · kept ${result.keptCompleted} completed.`),
+    },
+  });
+  res.redirect(`/projects/${project.id}?tab=summary&notice=` + encodeURIComponent(notice));
+});
 
 stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Response) => {
   const user = req.user!;

@@ -57,6 +57,10 @@ export function canClearStock(user: AuthedUser): boolean {
   return isAdmin(user);
 }
 
+export function canPurgeMissingStock(user: AuthedUser): boolean {
+  return isAdmin(user);
+}
+
 export function canSeeDocuments(user: AuthedUser): boolean {
   return isAdmin(user) || isSurveyor(user);
 }

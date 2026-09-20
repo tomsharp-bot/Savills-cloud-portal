@@ -143,7 +143,7 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   return patch;
 }
 
-function alreadySurveyed(status: string): boolean {
+export function isSurveyedStatus(status: string): boolean {
   return SURVEYED_STATUSES.has(String(status || ""));
 }
 
@@ -236,7 +236,7 @@ export async function applyStocklistRefresh(opts: {
   for (const uprn of plan.removed) {
     const row = existing.find((r) => String(r.uprn) === uprn);
     if (!row) continue;
-    const surveyed = alreadySurveyed(row.assetStatus);
+    const surveyed = isSurveyedStatus(row.assetStatus);
     await prisma.asset.update({
       where: { id: row.id },
       data: {
