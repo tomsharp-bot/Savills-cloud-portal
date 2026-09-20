@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/passwords.js";
 import { reapplyAllExternalLinks } from "../lib/external.js";
+import { loginBlockedForMissingAccess, NO_SITE_ACCESS_ERROR } from "../lib/login-access.js";
 
 export const authRouter = Router();
 
@@ -35,6 +36,14 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       username,
     });
     return;
+  }
+
+  if (user.role === "client" || user.role === "surveyor") {
+    const accessCount = await prisma.projectAccess.count({ where: { userId: user.id } });
+    if (loginBlockedForMissingAccess(user.role, accessCount)) {
+      res.status(403).render("login", { error: NO_SITE_ACCESS_ERROR, username });
+      return;
+    }
   }
 
   req.session = req.session || {};
