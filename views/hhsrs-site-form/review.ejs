@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <%- include("partials/head") %>
+</head>
+<body class="hhsrs-body">
+  <header class="hhsrs-top">
+    <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
+    <a class="hhsrs-home" href="<%= hhsrsUrl('/') %>">Savills HHSRS Site Reporting</a>
+  </header>
+  <main class="hhsrs-shell hhsrs-form-shell">
+    <h1>Review issue</h1>
+    <p class="hhsrs-lead">Check the details below. Nothing is saved until you tap Submit.</p>
+    <dl class="hhsrs-review">
+      <div><dt>Project</dt><dd><%= draft.projectName %></dd></div>
+      <div><dt>Survey date</dt><dd><%= draft.surveyDate %></dd></div>
+      <div><dt>UPRN</dt><dd><%= draft.uprn %></dd></div>
+      <div><dt>Full address</dt><dd><%= draft.fullAddress %></dd></div>
+      <div><dt>Postcode</dt><dd><%= draft.postcode %></dd></div>
+      <div><dt>Surveyor name</dt><dd><%= draft.surveyorName %></dd></div>
+      <div><dt>HHSRS category</dt><dd><%= draft.category %></dd></div>
+      <div><dt>Rating</dt><dd><%= draft.rating %></dd></div>
+      <div><dt>Comment</dt><dd class="prewrap"><%= draft.comment %></dd></div>
+      <div><dt>Client call reference (if required)</dt><dd><%= draft.clientCallReference || "—" %></dd></div>
+      <div><dt>Any other details</dt><dd class="prewrap"><%= draft.otherDetails || "—" %></dd></div>
+    </dl>
+    <h2 class="hhsrs-sub">Photos</h2>
+    <% if (!draft.photos.length) { %>
+      <p class="hhsrs-hint">No photos attached.</p>
+    <% } else { %>
+      <div class="photo-grid">
+        <% draft.photos.forEach((p) => { %>
+          <figure class="photo-card">
+            <img src="<%= hhsrsUrl('/draft/' + draft.id + '/photo/' + encodeURIComponent(p.storedName)) %>" alt="<%= p.originalName %>" />
+            <figcaption><%= p.originalName %></figcaption>
+          </figure>
+        <% }) %>
+      </div>
+    <% } %>
+    <div class="hhsrs-actions">
+      <form method="post" action="<%= hhsrsUrl('/submit') %>">
+        <input type="hidden" name="draftId" value="<%= draft.id %>" />
+        <button class="hhsrs-btn hhsrs-btn-primary" type="submit">Submit</button>
+      </form>
+      <form method="post" action="<%= hhsrsUrl('/edit') %>">
+        <input type="hidden" name="draftId" value="<%= draft.id %>" />
+        <button class="hhsrs-btn hhsrs-btn-ghost" type="submit">Edit</button>
+      </form>
+      <form id="cancel-form" method="post" action="<%= hhsrsUrl('/cancel') %>">
+        <input type="hidden" name="draftId" value="<%= draft.id %>" />
+        <button class="hhsrs-btn hhsrs-btn-danger" type="submit">Cancel</button>
+      </form>
+    </div>
+  </main>
+  <script>
+    document.getElementById("cancel-form").addEventListener("submit", function (e) {
+      if (!confirm("Discard this issue and return to the start?")) e.preventDefault();
+    });
+  </script>
+</body>
+</html>

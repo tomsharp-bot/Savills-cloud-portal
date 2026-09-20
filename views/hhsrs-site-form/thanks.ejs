@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <%- include("partials/head") %>
+</head>
+<body class="hhsrs-body">
+  <header class="hhsrs-top">
+    <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
+    <p class="hhsrs-brand">Savills</p>
+  </header>
+  <main class="hhsrs-shell">
+    <h1>Thank you</h1>
+    <p class="hhsrs-lead">The issue has been submitted<%= submissionId ? " (ref " + submissionId + ")" : "" %>.</p>
+    <a class="hhsrs-btn hhsrs-btn-primary" href="<%= hhsrsUrl('/new') %>">Submit another issue</a>
+    <a class="hhsrs-btn hhsrs-btn-ghost" href="<%= hhsrsUrl('/') %>">Back to start</a>
+  </main>
+</body>
+</html>

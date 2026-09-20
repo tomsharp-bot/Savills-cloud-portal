@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HHSRS site reports — Savills Cloud Portal</title>
+  <%- include("partials/head-css") %>
+</head>
+<body>
+<div id="screen-app">
+  <%- include("partials/topbar") %>
+  <div class="main">
+    <section>
+      <div class="toolbar">
+        <div>
+          <h2 class="page-title">HHSRS site reports</h2>
+          <p class="page-sub">Issues submitted from the public site form. Photos stay on local disk until Spaces is wired.</p>
+        </div>
+      </div>
+      <% if (!rows.length) { %>
+        <p class="empty">No site reports yet.</p>
+      <% } else { %>
+        <div class="archive-table-wrap">
+          <table class="archive-table">
+            <thead>
+              <tr>
+                <th>Submitted</th>
+                <th>Project</th>
+                <th>Survey date</th>
+                <th>UPRN</th>
+                <th>Address</th>
+                <th>Category</th>
+                <th>Rating</th>
+                <th>Surveyor</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% rows.forEach((row) => { %>
+                <tr>
+                  <td><%= formatDocDate(row.createdAt) %></td>
+                  <td><%= row.projectName %></td>
+                  <td><%= row.surveyDate %></td>
+                  <td><%= row.uprn %></td>
+                  <td><%= row.fullAddress %></td>
+                  <td><%= row.category %></td>
+                  <td><%= row.rating %></td>
+                  <td><%= row.surveyorName %></td>
+                  <td><a class="linkish dark" href="<%= baseUrl('/hhsrs-submissions/' + row.id) %>">Open</a></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+  </div>
+</div>
+<%- include("partials/app-scripts") %>
+</body>
+</html>

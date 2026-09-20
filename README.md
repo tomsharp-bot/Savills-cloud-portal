@@ -6,7 +6,15 @@ Intended domain: **savillscloudportal.co.uk**
 
 Excel stays an import/export feed — Postgres is the live store.
 
-HHSRS Reporter is a **separate product**. Do not merge it here.
+HHSRS Reporter (Carly’s scoring app) is a **separate product**. Do not merge it here.
+
+A public **HHSRS site reporting** form lives on this same app at **root paths** (not under `/projectprogress`):
+
+- Landing: `/HHSRS-site-form`
+- New issue / review / submit: `/HHSRS-site-form/new` and following steps
+- Admin list (signed-in admin, portal session): `/projectprogress/hhsrs-submissions`
+
+Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site-form` (or `http://localhost:3000/HHSRS-site-form` locally). No login for surveyors in v1. Photos store on disk under `uploads/hhsrs-site-form/{submissionId}/` until Spaces is wired.
 
 ## What this app does
 
@@ -22,6 +30,7 @@ HHSRS Reporter is a **separate product**. Do not merge it here.
 - **External-only list** (persist UPRN set, re-apply on admin login)
 - **Documents** (local disk now; Spaces later)
 - **Completions** view/download stubs
+- **HHSRS site reporting** (public phone form at `/HHSRS-site-form`; admin list under the portal)
 
 ## Local setup
 
@@ -35,9 +44,9 @@ npm run seed
 npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000 (portal) and http://localhost:3000/HHSRS-site-form (site reporting form).
 
-Leave `BASE_PATH` empty (or `/`) locally so routes stay at `/login`, `/projects`, etc. To preview the production prefix: `BASE_PATH=/projectprogress npm run dev` and open http://localhost:3000/projectprogress.
+Leave `BASE_PATH` empty (or `/`) locally so portal routes stay at `/login`, `/projects`, etc. To preview the production prefix: `BASE_PATH=/projectprogress npm run dev` — portal at http://localhost:3000/projectprogress, HHSRS form still at http://localhost:3000/HHSRS-site-form.
 
 If Postgres is already on port 5432, create a database and point `DATABASE_URL` at it.
 
@@ -126,6 +135,7 @@ Tom’s assistant should set this on the **web** component (or app-level env):
 4. Confirm:
    - `https://<app-host>/health` → JSON `{"ok":true,...}` (DigitalOcean health check — keep this path).
    - `https://<app-host>/projectprogress` → login or projects.
+   - `https://<app-host>/HHSRS-site-form` → Savills HHSRS Site Reporting (public; not under `/projectprogress`).
    - `https://<app-host>/` → short “Savills Cloud Portal” link / redirect to `/projectprogress`.
 
 `.do/app.yaml` already declares `BASE_PATH=/projectprogress`. If the live app was created before that line existed, add the variable in the UI — importing the spec later will also set it.
