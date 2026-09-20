@@ -23,6 +23,14 @@ export const STOCK_LABELS: Record<string, string> = {
   siteComments: "Site Comments",
   external: "External",
   omitAsset: "Omit Asset",
+  residentName: "Resident Name",
+  residentNumber: "Resident Number",
+  residentEmail: "Resident Email",
+  letterDate1: "Letter Date 1",
+  letterDate2: "Letter Date 2",
+  x1: "X1",
+  x2: "X2",
+  x3: "X3",
 };
 
 const CORE_COLS = [
@@ -52,7 +60,25 @@ const ADDRESS_COLS = [
 
 const VISIT_COLS = ["visit1", "visit2", "visit3"] as const;
 
-export const STOCK_DATE_COLS = new Set(["surveyDate", "visit1", "visit2", "visit3"]);
+/** Dwellings tab only — Admin-only resident / letter / X fields. */
+export const DWELLING_ADMIN_COLS = [
+  "residentName",
+  "residentNumber",
+  "residentEmail",
+  "letterDate1",
+  "letterDate2",
+  "x1",
+  "x2",
+  "x3",
+] as const;
+
+/** Hidden from Surveyor and Client on every stock tab. */
+export const ADMIN_ONLY_STOCK_COLS = new Set<string>(["omitAsset", ...DWELLING_ADMIN_COLS]);
+
+/** Admin-editable text/date fields (Omit Asset stays a checkbox). */
+export const ADMIN_EDIT_STOCK_COLS = new Set<string>(DWELLING_ADMIN_COLS);
+
+export const STOCK_DATE_COLS = new Set(["surveyDate", "visit1", "visit2", "visit3", "letterDate1", "letterDate2"]);
 
 export const STOCK_SELECT_COLS = new Set([
   "assetStatus",
@@ -68,13 +94,23 @@ export const STOCK_SELECT_COLS = new Set([
   "surveyType",
   "agency",
   "external",
+  "letterDate1",
+  "letterDate2",
 ]);
 
-export function stockColumns(kind: AssetKind): string[] {
-  if (kind === "dwelling") {
-    return [...CORE_COLS, ...VISIT_COLS, ...ADDRESS_COLS];
-  }
-  return [...CORE_COLS, ...ADDRESS_COLS];
+export type StockColumnOpts = {
+  /** Default true: include Omit Asset and dwelling resident/letter/X columns. */
+  includeAdminOnly?: boolean;
+};
+
+export function stockColumns(kind: AssetKind, opts: StockColumnOpts = {}): string[] {
+  const includeAdminOnly = opts.includeAdminOnly !== false;
+  const cols =
+    kind === "dwelling"
+      ? [...CORE_COLS, ...VISIT_COLS, ...ADDRESS_COLS, ...DWELLING_ADMIN_COLS]
+      : [...CORE_COLS, ...ADDRESS_COLS];
+  if (includeAdminOnly) return cols;
+  return cols.filter((c) => !ADMIN_ONLY_STOCK_COLS.has(c));
 }
 
 export function stockTabTitle(kind: AssetKind): string {

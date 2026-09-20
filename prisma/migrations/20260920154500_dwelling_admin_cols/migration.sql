@@ -1,0 +1,9 @@
+-- Admin-only dwelling stocklist fields (safe defaults; existing rows stay valid)
+ALTER TABLE "Asset" ADD COLUMN "residentName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Asset" ADD COLUMN "residentNumber" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Asset" ADD COLUMN "residentEmail" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Asset" ADD COLUMN "letterDate1" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Asset" ADD COLUMN "letterDate2" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Asset" ADD COLUMN "x1" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Asset" ADD COLUMN "x2" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Asset" ADD COLUMN "x3" TEXT NOT NULL DEFAULT '';

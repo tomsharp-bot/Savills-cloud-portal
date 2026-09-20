@@ -93,6 +93,32 @@ export type ProjectTab = (typeof PROJECT_TABS)[number];
 
 export const FIELD_TABS = new Set(["summary", "dwellings", "blocks", "garages", "hierarchy", "documents", "loader"]);
 
+export function isProjectTab(tab: string): tab is ProjectTab {
+  return (PROJECT_TABS as readonly string[]).includes(tab);
+}
+
+export function defaultProjectTab(user: AuthedUser): ProjectTab {
+  return isClient(user) ? "completions" : "summary";
+}
+
+export function canSeeCompletions(user: AuthedUser): boolean {
+  return isAdmin(user) || isClient(user);
+}
+
+export function canSeeProjectTab(user: AuthedUser, tab: string): boolean {
+  if (!isProjectTab(tab)) return false;
+  if (isClient(user)) return tab === "completions";
+  if (isSurveyor(user)) {
+    if (tab === "completions" || tab === "loader") return false;
+    return true;
+  }
+  return true;
+}
+
+export function visibleProjectTabs(user: AuthedUser): ProjectTab[] {
+  return PROJECT_TABS.filter((tab) => canSeeProjectTab(user, tab));
+}
+
 export const TYPE_LABELS: Record<string, string> = {
   typeConditionOnly: "Condition Only",
   typeConditionEpc: "Condition + EPC",

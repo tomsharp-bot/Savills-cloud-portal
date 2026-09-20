@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { canClearStock, canEditSiteComments, canExportStock, canOmitAsset, canSeeProject } from "../lib/access.js";
+import { canClearStock, canEditSiteComments, canExportStock, canOmitAsset, canSeeProject, isAdmin } from "../lib/access.js";
+import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS } from "../lib/stock-columns.js";
+import { formatStockDate } from "../lib/dates.js";
 import { userAccessIds } from "../middleware/auth.js";
 import { buildStockWorkbook, parseExportScope, stockExportFilename } from "../lib/stock-export.js";
 
@@ -47,7 +49,7 @@ stockRouter.get("/projects/:id/stock/export", async (req: Request, res: Response
     kind,
     rows: withAgency.filter((a) => a.kind === kind),
   }));
-  const buf = buildStockWorkbook(groups);
+  const buf = buildStockWorkbook(groups, { includeAdminOnly: isAdmin(user) });
   const filename = stockExportFilename(project.name, scope);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -111,7 +113,7 @@ stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Res
     return;
   }
 
-  const data: { siteComments?: string; omitAsset?: boolean } = {};
+  const data: Record<string, string | boolean> = {};
   if (typeof req.body.siteComments === "string") {
     if (!canEditSiteComments(user)) {
       res.status(403).json({ error: "Surveyor or admin only." });
@@ -125,6 +127,19 @@ stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Res
       return;
     }
     data.omitAsset = req.body.omitAsset === true || req.body.omitAsset === "true";
+  }
+  for (const col of ADMIN_EDIT_STOCK_COLS) {
+    if (typeof req.body[col] !== "string") continue;
+    if (!isAdmin(user)) {
+      res.status(403).json({ error: "Admin only." });
+      return;
+    }
+    if (asset.kind !== "dwelling") {
+      res.status(400).json({ error: "Those fields are only on Dwellings." });
+      return;
+    }
+    const raw = req.body[col];
+    data[col] = STOCK_DATE_COLS.has(col) ? formatStockDate(raw) : raw;
   }
   const updated = await prisma.asset.update({ where: { id: asset.id }, data });
   res.json({ ok: true, asset: updated });
