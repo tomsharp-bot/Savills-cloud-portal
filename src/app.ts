@@ -11,6 +11,8 @@ import { stockRouter } from "./routes/stock.js";
 import { loaderRouter } from "./routes/loader.js";
 import { completionsRouter } from "./routes/completions.js";
 import { documentsRouter } from "./routes/documents.js";
+import { hhsrsSiteFormRouter } from "./routes/hhsrs-site-form.js";
+import { hhsrsSubmissionsRouter } from "./routes/hhsrs-submissions.js";
 import { isAdmin, roleLabel } from "./lib/access.js";
 import { prisma } from "./lib/prisma.js";
 
@@ -102,6 +104,12 @@ export function createApp(options: CreateAppOptions = {}) {
   // public site is mounted under BASE_PATH.
   app.get("/health", healthHandler);
 
+  // HHSRS site form is a public root app — not under /projectprogress.
+  app.use("/HHSRS-site-form", hhsrsSiteFormRouter);
+  app.get("/hhsrs-site-form", (_req: express.Request, res: express.Response) => {
+    res.redirect("/HHSRS-site-form");
+  });
+
   if (basePath) {
     app.get("/", (_req: express.Request, res: express.Response) => {
       res.status(302).location(basePath).type("html").send(portalLandingHtml(basePath));
@@ -127,6 +135,7 @@ export function createApp(options: CreateAppOptions = {}) {
   portal.use(loaderRouter);
   portal.use(completionsRouter);
   portal.use(documentsRouter);
+  portal.use("/hhsrs-submissions", hhsrsSubmissionsRouter);
 
   if (basePath) {
     app.use(basePath, portal);

@@ -71,6 +71,7 @@ model Project {
   completions          Completion[]
   documents            ProjectDocument[]
   externalLink         ExternalLink?
+  hhsrsSiteSubmissions HhsrsSiteSubmission[]
 }
 
 model ProjectAccess {
@@ -196,5 +197,29 @@ model ProjectDocument {
   uploadedBy String
   uploadedAt DateTime @default(now())
 
+  @@index([projectId])
+}
+
+/// Site-raised HHSRS issue (surveyor phone form). Photos on local disk for now.
+/// TODO: Spaces cloud-portal-vault / LON1
+model HhsrsSiteSubmission {
+  id                   String   @id @default(cuid())
+  projectId            String?
+  project              Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectName          String
+  surveyDate           String
+  uprn                 String
+  fullAddress          String
+  postcode             String
+  surveyorName         String
+  category             String
+  rating               String
+  comment              String
+  clientCallReference  String   @default("")
+  otherDetails         String   @default("")
+  photoPaths           Json
+  createdAt            DateTime @default(now())
+
+  @@index([createdAt])
   @@index([projectId])
 }

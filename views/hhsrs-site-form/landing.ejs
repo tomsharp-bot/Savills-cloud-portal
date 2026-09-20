@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <%- include("partials/head") %>
+</head>
+<body class="hhsrs-body">
+  <header class="hhsrs-top">
+    <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
+    <p class="hhsrs-brand">Savills</p>
+  </header>
+  <main class="hhsrs-shell">
+    <h1>Savills HHSRS Site Reporting</h1>
+    <p class="hhsrs-lead">Raise a new site issue from your phone. No login required.</p>
+    <a class="hhsrs-btn hhsrs-btn-primary" href="<%= hhsrsUrl('/new') %>">Click Here For New Issue Form</a>
+  </main>
+</body>
+</html>

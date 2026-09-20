@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HHSRS site report — Savills Cloud Portal</title>
+  <%- include("partials/head-css") %>
+</head>
+<body>
+<div id="screen-app">
+  <%- include("partials/topbar") %>
+  <div class="main">
+    <section>
+      <p class="crumb"><a class="linkish dark" href="<%= baseUrl('/hhsrs-submissions') %>">HHSRS site reports</a></p>
+      <h2 class="page-title"><%= row.projectName %></h2>
+      <p class="page-sub">Submitted <%= formatDocDate(row.createdAt) %> · Rating <%= row.rating %></p>
+      <dl class="stats" style="display:block">
+        <p><strong>Survey date:</strong> <%= row.surveyDate %></p>
+        <p><strong>UPRN:</strong> <%= row.uprn %></p>
+        <p><strong>Address:</strong> <%= row.fullAddress %>, <%= row.postcode %></p>
+        <p><strong>Surveyor:</strong> <%= row.surveyorName %></p>
+        <p><strong>Category:</strong> <%= row.category %></p>
+        <p><strong>Comment:</strong><br/><%= row.comment %></p>
+        <p><strong>Client call reference (if required):</strong> <%= row.clientCallReference || "—" %></p>
+        <p><strong>Any other details:</strong><br/><%= row.otherDetails || "—" %></p>
+      </dl>
+      <h3 class="section-title">Photos</h3>
+      <% if (!photos.length) { %>
+        <p class="empty">No photos.</p>
+      <% } else { %>
+        <div class="docs-toolbar" style="flex-wrap:wrap">
+          <% photos.forEach((p) => { const name = String(p).split("/").pop(); %>
+            <a href="<%= baseUrl('/hhsrs-submissions/' + row.id + '/photos/' + encodeURIComponent(name)) %>" target="_blank" rel="noreferrer">
+              <img src="<%= baseUrl('/hhsrs-submissions/' + row.id + '/photos/' + encodeURIComponent(name)) %>" alt="<%= name %>" style="width:160px;height:160px;object-fit:cover;border-radius:10px;border:1px solid #d5dde5" />
+            </a>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+  </div>
+</div>
+<%- include("partials/app-scripts") %>
+</body>
+</html>

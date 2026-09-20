@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <%- include("partials/head") %>
+</head>
+<body class="hhsrs-body">
+  <header class="hhsrs-top">
+    <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
+    <a class="hhsrs-home" href="<%= hhsrsUrl('/') %>">Savills HHSRS Site Reporting</a>
+  </header>
+  <main class="hhsrs-shell hhsrs-form-shell">
+    <h1>New issue</h1>
+    <p class="hhsrs-lead">All fields marked * are required. Photos are optional (up to <%= maxPhotos %>).</p>
+    <% const errList = Object.values(errors).filter(Boolean); %>
+    <% if (formError || errList.length) { %>
+      <div class="hhsrs-errors" role="alert">
+        <p>Please fix the following:</p>
+        <ul>
+          <% if (formError) { %><li><%= formError %></li><% } %>
+          <% errList.filter((e) => e !== formError).forEach((e) => { %>
+            <li><%= e %></li>
+          <% }) %>
+        </ul>
+      </div>
+    <% } %>
+    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate>
+      <% if (draft) { %><input type="hidden" name="draftId" value="<%= draft.id %>" /><% } %>
+
+      <label for="projectId">Project *</label>
+      <select id="projectId" name="projectId" required class="<%= errors.projectId ? 'is-invalid' : '' %>">
+        <option value=""><%= projects.length ? "Select an active project" : "No active projects found" %></option>
+        <% projects.forEach((p) => { %>
+          <option value="<%= p.id %>" <%= values.projectId === p.id ? "selected" : "" %>><%= p.name %></option>
+        <% }) %>
+      </select>
+      <% if (errors.projectId) { %><p class="field-error"><%= errors.projectId %></p><% } %>
+
+      <label for="surveyDate">Survey date *</label>
+      <input id="surveyDate" name="surveyDate" type="date" required value="<%= values.surveyDate %>" class="<%= errors.surveyDate ? 'is-invalid' : '' %>" />
+      <% if (errors.surveyDate) { %><p class="field-error"><%= errors.surveyDate %></p><% } %>
+
+      <label for="uprn">UPRN *</label>
+      <input id="uprn" name="uprn" type="text" required autocomplete="off" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" />
+      <% if (errors.uprn) { %><p class="field-error"><%= errors.uprn %></p><% } %>
+
+      <label for="fullAddress">Full address *</label>
+      <input id="fullAddress" name="fullAddress" type="text" required autocomplete="street-address" value="<%= values.fullAddress %>" class="<%= errors.fullAddress ? 'is-invalid' : '' %>" />
+      <% if (errors.fullAddress) { %><p class="field-error"><%= errors.fullAddress %></p><% } %>
+
+      <label for="postcode">Postcode *</label>
+      <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" value="<%= values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" />
+      <% if (errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
+
+      <label for="surveyorName">Surveyor name *</label>
+      <input id="surveyorName" name="surveyorName" type="text" required autocomplete="name" value="<%= values.surveyorName %>" class="<%= errors.surveyorName ? 'is-invalid' : '' %>" />
+      <% if (errors.surveyorName) { %><p class="field-error"><%= errors.surveyorName %></p><% } %>
+
+      <label for="category">HHSRS category *</label>
+      <select id="category" name="category" required class="<%= errors.category ? 'is-invalid' : '' %>">
+        <option value="">Select a category</option>
+        <% categories.forEach((c) => { %>
+          <option value="<%= c %>" <%= values.category === c ? "selected" : "" %>><%= c %></option>
+        <% }) %>
+      </select>
+      <% if (errors.category) { %><p class="field-error"><%= errors.category %></p><% } %>
+
+      <label for="rating">Rating *</label>
+      <select id="rating" name="rating" required class="<%= errors.rating ? 'is-invalid' : '' %>">
+        <option value="">Select a rating</option>
+        <% ratings.forEach((r) => { %>
+          <option value="<%= r %>" <%= values.rating === r ? "selected" : "" %>><%= r %></option>
+        <% }) %>
+      </select>
+      <% if (errors.rating) { %><p class="field-error"><%= errors.rating %></p><% } %>
+
+      <label for="comment">Comment *</label>
+      <textarea id="comment" name="comment" required rows="5" class="<%= errors.comment ? 'is-invalid' : '' %>"><%= values.comment %></textarea>
+      <% if (errors.comment) { %><p class="field-error"><%= errors.comment %></p><% } %>
+
+      <label for="clientCallReference">Client call reference (if required)</label>
+      <input id="clientCallReference" name="clientCallReference" type="text" value="<%= values.clientCallReference %>" />
+
+      <label for="otherDetails">Any other details</label>
+      <textarea id="otherDetails" name="otherDetails" rows="4"><%= values.otherDetails %></textarea>
+
+      <fieldset class="hhsrs-photos">
+        <legend>Photos <span class="optional">(optional, max <%= maxPhotos %>)</span></legend>
+        <p class="hhsrs-hint">JPEG, PNG, WebP or HEIC. 8MB each.</p>
+        <% if (errors.photos) { %><p class="field-error"><%= errors.photos %></p><% } %>
+        <div id="existing-photos" class="photo-grid">
+          <% if (draft && draft.photos.length) { %>
+            <% draft.photos.forEach((p) => { %>
+              <figure class="photo-card" data-existing>
+                <img src="<%= hhsrsUrl('/draft/' + draft.id + '/photo/' + encodeURIComponent(p.storedName)) %>" alt="<%= p.originalName %>" />
+                <figcaption><%= p.originalName %></figcaption>
+                <input type="hidden" name="keepPhotos" value="<%= p.storedName %>" />
+                <button type="button" class="hhsrs-btn hhsrs-btn-ghost photo-remove">Remove</button>
+              </figure>
+            <% }) %>
+          <% } %>
+        </div>
+        <div id="new-photos" class="photo-grid"></div>
+        <label class="hhsrs-file-btn" for="photos">Add photos</label>
+        <input id="photos" name="photos" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple />
+      </fieldset>
+
+      <button class="hhsrs-btn hhsrs-btn-primary" type="submit">Review</button>
+    </form>
+  </main>
+  <script src="<%= hhsrsUrl('/assets/form.js') %>"></script>
+</body>
+</html>

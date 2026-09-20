@@ -8,4 +8,6 @@ tmp/
 uploads/tmp/
 uploads/projects/*
 !uploads/projects/.gitkeep
+uploads/hhsrs-site-form/*
+!uploads/hhsrs-site-form/.gitkeep
 .prisma/

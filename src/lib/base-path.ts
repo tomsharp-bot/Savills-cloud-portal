@@ -19,6 +19,19 @@ export function configuredBasePath(
   return normalizeBasePath(env.BASE_PATH || env.APP_BASE_PATH);
 }
 
+/**
+ * Public apps mounted at the domain root even when the Mark Up portal
+ * lives under BASE_PATH=/projectprogress.
+ */
+export const ROOT_APP_PREFIXES = ["/HHSRS-site-form", "/hhsrs-site-form"] as const;
+
+export function isRootAppPath(href: string): boolean {
+  const path = href.startsWith("/") ? href : `/${href}`;
+  return ROOT_APP_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`)
+  );
+}
+
 /** Prefix an in-app path. `baseUrl('/login')` → `/projectprogress/login` when set. */
 export function baseUrl(href: string, basePath = ""): string {
   if (!href) return basePath || "/";
@@ -26,6 +39,7 @@ export function baseUrl(href: string, basePath = ""): string {
     return href;
   }
   const path = href.startsWith("/") ? href : `/${href}`;
+  if (isRootAppPath(path)) return path;
   if (!basePath) return path;
   if (path === "/") return basePath;
   if (path === basePath || path.startsWith(`${basePath}/`) || path.startsWith(`${basePath}?`)) {

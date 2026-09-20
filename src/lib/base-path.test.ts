@@ -55,6 +55,14 @@ describe("baseUrl", () => {
     assert.equal(baseUrl("https://example.com/login", base), "https://example.com/login");
     assert.equal(baseUrl("//cdn.example/x", base), "//cdn.example/x");
   });
+
+  it("leaves HHSRS site-form root paths unprefixed", () => {
+    const base = "/projectprogress";
+    assert.equal(baseUrl("/HHSRS-site-form", base), "/HHSRS-site-form");
+    assert.equal(baseUrl("/HHSRS-site-form/new", base), "/HHSRS-site-form/new");
+    assert.equal(baseUrl("/hhsrs-site-form", base), "/hhsrs-site-form");
+    assert.equal(baseUrl("/login", base), "/projectprogress/login");
+  });
 });
 
 describe("prefixRedirectUrl", () => {
@@ -65,5 +73,7 @@ describe("prefixRedirectUrl", () => {
     assert.equal(prefixRedirectUrl("https://savillscloudportal.co.uk/x", "/projectprogress"), "https://savillscloudportal.co.uk/x");
     assert.equal(prefixRedirectUrl("next", "/projectprogress"), "next");
     assert.equal(prefixRedirectUrl("", "/projectprogress"), "/projectprogress");
+    assert.equal(prefixRedirectUrl("/HHSRS-site-form", "/projectprogress"), "/HHSRS-site-form");
+    assert.equal(prefixRedirectUrl("/HHSRS-site-form/thanks?id=1", "/projectprogress"), "/HHSRS-site-form/thanks?id=1");
   });
 });
