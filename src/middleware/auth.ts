@@ -1,6 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { isAdmin, type AuthedUser } from "../lib/access.js";
+import { baseUrl } from "../lib/base-path.js";
+import { config } from "../config.js";
+
+function loginPath(res: Response): string {
+  const prefix = typeof res.locals.basePath === "string" ? res.locals.basePath : config.basePath;
+  return baseUrl("/login", prefix);
+}
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -41,7 +48,7 @@ export async function loadUser(req: Request, _res: Response, next: NextFunction)
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   if (!req.user) {
     if (req.accepts("html") && !req.path.startsWith("/api")) {
-      res.redirect("/login");
+      res.redirect(loginPath(res));
       return;
     }
     res.status(401).json({ error: "Sign in required" });
@@ -52,7 +59,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!req.user) {
-    res.redirect("/login");
+    res.redirect(loginPath(res));
     return;
   }
   if (!isAdmin(req.user)) {

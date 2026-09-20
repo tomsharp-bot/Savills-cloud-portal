@@ -37,6 +37,8 @@ npm run dev
 
 Open http://localhost:3000
 
+Leave `BASE_PATH` empty (or `/`) locally so routes stay at `/login`, `/projects`, etc. To preview the production prefix: `BASE_PATH=/projectprogress npm run dev` and open http://localhost:3000/projectprogress.
+
 If Postgres is already on port 5432, create a database and point `DATABASE_URL` at it.
 
 ### Demo logins (seeded)
@@ -80,7 +82,7 @@ App Platform spec lives at **`.do/app.yaml`**. Region: **London (`lon`)**. Do no
      (`npm start` also runs the same healer before the Node process.)
      If App Platform still has the old run command, change it in the UI to the line above.
 4. HTTP port **3000** (the app also honours `PORT` from App Platform and binds `0.0.0.0`).
-5. Health check path: **`/health`** (JSON `{"ok":true,...}` — HTTP 200 when the process is up).
+5. Health check path: **`/health`** (JSON `{"ok":true,...}` — HTTP 200 when the process is up). This stays at the **container root** even when `BASE_PATH` is set. `${BASE_PATH}/health` also works.
 
 ### 3. Environment variables Tom must set
 
@@ -91,6 +93,7 @@ Set these in **App Settings → App-Level / web component Environment Variables*
 | `DATABASE_URL` | **Yes** | Real `postgresql://` / `postgres://` URI from **Managed Database → Connection Details**. Do **not** paste a literal `${db.DATABASE_URL}` placeholder. If the value is a placeholder or missing a scheme, the app will try `DB_HOST`/`PGHOST`, `DB_PORT`/`PGPORT`, `DB_USER`/`PGUSER`, `DB_PASSWORD`/`PGPASSWORD`, `DB_NAME`/`PGDATABASE` (sslmode=require) and otherwise exit 1 before Prisma connects. |
 | `SESSION_SECRET` | **Yes** | Long random string (not the local example). |
 | `NODE_ENV` | **Yes** | `production` |
+| `BASE_PATH` | **Yes (production)** | `/projectprogress` — serves the portal at `https://savillscloudportal.co.uk/projectprogress` (and `/projectprogress/login`, etc.). Local default is empty / `/`. Alias: `APP_BASE_PATH`. |
 | `PORT` | No | App Platform sets this. Default in code is `3000`. |
 | `SPACES_BUCKET` | No | `cloud-portal-vault` |
 | `SPACES_REGION` | No | `lon1` |
@@ -108,7 +111,24 @@ Never commit real keys. The spec file only declares the names.
    npm run seed
    ```
    That creates demo users/projects. **Do not** add `npm run seed` to the Run command.
-3. Expected URL: `https://savills-cloud-portal-<hash>.ondigitalocean.app` (App Platform shows the exact host). Later point **savillscloudportal.co.uk** at this app and enable HTTPS.
+3. Expected URL: `https://savills-cloud-portal-<hash>.ondigitalocean.app/projectprogress` once `BASE_PATH=/projectprogress` is set (App Platform shows the exact host). Root `/` on the app redirects to `/projectprogress`. Later point **savillscloudportal.co.uk** at this app and enable HTTPS — users open `https://savillscloudportal.co.uk/projectprogress`.
+
+### Setting `BASE_PATH` on DigitalOcean App Platform
+
+Tom’s assistant should set this on the **web** component (or app-level env):
+
+1. App Platform → the **savills-cloud-portal** app → **Settings** → **App-Level Environment Variables** (or the **web** component’s Environment Variables).
+2. **Add variable**
+   - **Name:** `BASE_PATH`
+   - **Value:** `/projectprogress`
+   - **Scope:** Run time (not a secret).
+3. Save and let the app redeploy (or trigger **Deploy**).
+4. Confirm:
+   - `https://<app-host>/health` → JSON `{"ok":true,...}` (DigitalOcean health check — keep this path).
+   - `https://<app-host>/projectprogress` → login or projects.
+   - `https://<app-host>/` → short “Savills Cloud Portal” link / redirect to `/projectprogress`.
+
+`.do/app.yaml` already declares `BASE_PATH=/projectprogress`. If the live app was created before that line existed, add the variable in the UI — importing the spec later will also set it.
 
 ### 5. After go-live
 

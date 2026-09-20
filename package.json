@@ -11,7 +11,7 @@
     "build": "tsc && mkdir -p dist/views dist/public && cp -r views/. dist/views/ && cp -r public/. dist/public/",
     "start": "node scripts/ensure-database-url.js node dist/index.js",
     "seed": "tsx prisma/seed.ts",
-    "test": "tsx --test src/lib/*.test.ts src/dbUrl.test.ts",
+    "test": "tsx --test src/lib/*.test.ts src/dbUrl.test.ts src/app.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "node scripts/ensure-database-url.js npx prisma migrate deploy",
     "postinstall": "prisma generate"

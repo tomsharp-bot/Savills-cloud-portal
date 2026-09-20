@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title><%= project.name %> — Savills Cloud Portal</title>
-  <link rel="stylesheet" href="/css/app.css" />
+  <%- include("partials/head-css") %>
 </head>
 <body>
 <div id="screen-app">
@@ -13,7 +13,7 @@
     <section>
       <div class="toolbar">
         <div>
-          <div class="crumb"><a class="linkish dark" href="/projects">← All projects</a></div>
+          <div class="crumb"><a class="linkish dark" href="<%= baseUrl('/projects') %>">← All projects</a></div>
           <h2 class="page-title"><%= project.name %></h2>
           <p class="page-sub">Project Manager: <%= project.projectManager %> · <%= project.stage === 'current' ? 'Current' : project.stage === 'upcoming' ? 'Upcoming' : 'Archive' %></p>
         </div>
@@ -39,7 +39,7 @@
             <% if (isSurveyor && key === "completions") return; %>
             <% if (field && isClient) return; %>
             <% if (key === "loader" && !isAdmin) return; %>
-            <a class="tab <%= tab === key ? 'active' : '' %>" href="/projects/<%= project.id %>?tab=<%= key %>"><%= label %></a>
+            <a class="tab <%= tab === key ? 'active' : '' %>" href="<%= baseUrl('/projects/' + project.id + '?tab=' + key) %>"><%= label %></a>
           <% }) %>
         </nav>
         <div class="panel">
@@ -77,7 +77,7 @@
             <h3 style="margin:0 0 4px;color:var(--navy)">Project Documents</h3>
             <p style="margin:0;color:var(--muted);font-size:.9rem">Excel, Word and PDF. Surveyors can open/download; only Admins can upload or delete.</p>
             <% if (isAdmin) { %>
-            <form class="docs-toolbar" method="post" action="/projects/<%= project.id %>/documents" enctype="multipart/form-data">
+            <form class="docs-toolbar" method="post" action="<%= baseUrl('/projects/' + project.id + '/documents') %>" enctype="multipart/form-data">
               <input type="file" name="file" accept=".xlsx,.xls,.doc,.docx,.pdf" required />
               <button type="submit" class="btn btn-primary btn-sm">Upload</button>
             </form>
@@ -102,10 +102,10 @@
                         <td><%= d.uploadedBy %></td>
                         <td><%= formatDocDate(d.uploadedAt) %></td>
                         <td>
-                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/documents/<%= d.id %>/view" target="_blank">View</a>
-                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/documents/<%= d.id %>/download">Download</a>
+                          <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/documents/' + d.id + '/view') %>" target="_blank">View</a>
+                          <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/documents/' + d.id + '/download') %>">Download</a>
                           <% if (isAdmin) { %>
-                          <form class="inline-form" method="post" action="/projects/<%= project.id %>/documents/<%= d.id %>/delete" onsubmit="return confirm('Delete <%= d.name %>?');">
+                          <form class="inline-form" method="post" action="<%= baseUrl('/projects/' + project.id + '/documents/' + d.id + '/delete') %>" onsubmit="return confirm('Delete <%= d.name %>?');">
                             <button class="btn btn-danger btn-sm" type="submit">Delete</button>
                           </form>
                           <% } %>
@@ -121,7 +121,7 @@
           <% if (tab === "loader" && isAdmin) { %>
             <h3 style="margin:0 0 4px;color:var(--navy)">Data Loader</h3>
             <p style="margin:0;color:var(--muted);font-size:.9rem">Drop the daily Excel — use the <strong>Asset Visits</strong> sheet (or Data). UPRN is the match key. With <strong>Auto</strong>, rows route to Dwellings / Blocks / Garages from Survey Design / Archetype / type fields. Each Apply <strong>appends</strong> to the Visit Log (never replaces).</p>
-            <form id="loader-form" method="post" action="/projects/<%= project.id %>/loader" enctype="multipart/form-data">
+            <form id="loader-form" method="post" action="<%= baseUrl('/projects/' + project.id + '/loader') %>" enctype="multipart/form-data">
               <div class="loader-drop" id="loader-drop" tabindex="0">
                 <strong>Drag Excel here</strong>
                 <p>or click to choose · .xlsx / .xls / .csv</p>
@@ -138,7 +138,7 @@
                 <button type="submit" class="btn btn-primary" id="btn-loader-apply" disabled>Apply to stock</button>
               </div>
             </form>
-            <form method="post" action="/projects/<%= project.id %>/loader/demo" class="stock-tools">
+            <form method="post" action="<%= baseUrl('/projects/' + project.id + '/loader/demo') %>" class="stock-tools">
               <input type="hidden" name="target" value="auto" />
               <button type="submit" class="btn btn-ghost">Load demo visits</button>
             </form>
@@ -192,14 +192,14 @@
             <div class="stock-refresh-box">
               <h4>Upload or refresh stocklist</h4>
               <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a stock Excel/CSV with a <strong>UPRN</strong> column. The first upload on an empty project loads the full list. Later uploads add new UPRNs and mark removed ones mid-job (they stay as “Not on latest stocklist”). Compares against the selected target tab above (Auto → Dwellings). New rows start as Asset Status “No Visit”. If a removed row is already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved. Use <strong>Export stocklist</strong> to download the current grids, edit Patch / Surveyor, and re-upload here. On Dwellings, Resident Name / Number / Email, Letter Date 1 / 2 and X1–X3 are imported when those columns are in the file (header names can vary slightly). Use <strong>Remove assets not on latest stocklist</strong> to permanently delete those marked rows (you choose whether completed Full Survey / Ext-Only rows go too).</p>
-              <form class="stock-tools" method="post" action="/projects/<%= project.id %>/stock-refresh" enctype="multipart/form-data">
+              <form class="stock-tools" method="post" action="<%= baseUrl('/projects/' + project.id + '/stock-refresh') %>" enctype="multipart/form-data">
                 <input type="file" id="stock-refresh-file" name="file" accept=".xlsx,.xls,.csv" required />
                 <input type="hidden" name="target" id="stock-refresh-target" value="auto" />
                 <label class="chk" for="stock-refresh-omit-removed"><input type="checkbox" id="stock-refresh-omit-removed" name="omitRemoved" value="true" checked /> Also omit removed assets from counts</label>
                 <button type="submit" class="btn btn-primary" id="btn-stock-refresh-apply">Apply stocklist</button>
               </form>
               <div class="stock-tools">
-                <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/stock/export?scope=all">Export stocklist</a>
+                <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/stock/export?scope=all') %>">Export stocklist</a>
                 <button type="button" class="btn btn-danger btn-sm" data-purge-missing>Remove assets not on latest stocklist</button>
                 <button type="button" class="btn btn-danger btn-sm" data-clear-stock>Clear entire stocklist</button>
               </div>
@@ -226,13 +226,13 @@
             <div class="external-link-box">
               <h4 style="margin:16px 0 6px;color:var(--navy);font-size:.95rem">External-only list</h4>
               <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Link an Excel/CSV with UPRN + an External flag column (Yes / True / Y / 1). Matching UPRNs get <strong>External = Yes</strong> and Asset Status <strong>Ext-Only</strong>; visit dates stay put. The linked UPRN set is stored in Postgres and re-applied when an admin logs in or opens this project. TODO: pull the file from Spaces bucket <strong>cloud-portal-vault</strong> (LON1).</p>
-              <form class="stock-tools" method="post" action="/projects/<%= project.id %>/external" enctype="multipart/form-data">
+              <form class="stock-tools" method="post" action="<%= baseUrl('/projects/' + project.id + '/external') %>" enctype="multipart/form-data">
                 <input type="file" name="file" accept=".xlsx,.xls,.csv" required />
                 <label for="external-flag-col">Flag column</label>
                 <input id="external-flag-col" name="flagCol" type="text" value="<%= externalLink ? externalLink.flagCol : 'External' %>" placeholder="e.g. External" style="width:120px" />
                 <button type="submit" class="btn btn-primary">Link &amp; apply External list</button>
               </form>
-              <form method="post" action="/projects/<%= project.id %>/external/clear" class="stock-tools">
+              <form method="post" action="<%= baseUrl('/projects/' + project.id + '/external/clear') %>" class="stock-tools">
                 <button type="submit" class="btn btn-ghost">Clear link</button>
               </form>
               <p class="loader-log">
@@ -305,8 +305,8 @@
                         <td><%= formatDocDate(c.generatedAt) %></td>
                         <td><%= c.status %></td>
                         <td>
-                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/completions/<%= c.id %>/view" target="_blank">View</a>
-                          <a class="btn btn-ghost btn-sm" href="/projects/<%= project.id %>/completions/<%= c.id %>/download">Download</a>
+                          <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/completions/' + c.id + '/view') %>" target="_blank">View</a>
+                          <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/completions/' + c.id + '/download') %>">Download</a>
                         </td>
                       </tr>
                     <% }) %>
@@ -336,7 +336,7 @@
       <label for="clear-stock-typed">Confirm</label>
       <input id="clear-stock-typed" type="text" autocomplete="off" placeholder="CLEAR" />
       <label class="chk"><input type="checkbox" id="clear-stock-wipe-log" /> Also delete visit log</label>
-      <form id="form-clear-stock" method="post" action="/projects/<%= project.id %>/stock/clear">
+      <form id="form-clear-stock" method="post" action="<%= baseUrl('/projects/' + project.id + '/stock/clear') %>">
         <input type="hidden" name="confirm" id="clear-stock-confirm-field" value="" />
         <input type="hidden" name="wipeVisitLog" id="clear-stock-wipe-field" value="" />
       </form>
@@ -362,7 +362,7 @@
       <p>The same rule applies to Blocks and Garages that are already surveyed (Full Survey / Ext-Only).</p>
       <label class="chk"><input type="radio" name="purge-completed-choice" value="no" checked /> No — keep completed rows</label>
       <label class="chk"><input type="radio" name="purge-completed-choice" value="yes" /> Yes — also delete completed rows</label>
-      <form id="form-purge-missing" method="post" action="/projects/<%= project.id %>/stock/purge-missing">
+      <form id="form-purge-missing" method="post" action="<%= baseUrl('/projects/' + project.id + '/stock/purge-missing') %>">
         <input type="hidden" name="confirm" id="purge-missing-confirm-field" value="" />
         <input type="hidden" name="includeCompleted" id="purge-missing-completed-field" value="" />
       </form>
@@ -374,6 +374,6 @@
   </div>
 </div>
 <% } %>
-<script src="/js/app.js"></script>
+<%- include("partials/app-scripts") %>
 </body>
 </html>

@@ -6,5 +6,6 @@ applyDatabaseUrlFromEnv();
 
 const app = createApp();
 app.listen(config.port, "0.0.0.0", () => {
-  console.log(`Savills Cloud Portal listening on 0.0.0.0:${config.port}`);
+  const prefix = config.basePath || "/";
+  console.log(`Savills Cloud Portal listening on 0.0.0.0:${config.port} (base path ${prefix})`);
 });

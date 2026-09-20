@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { applyDatabaseUrlFromEnv } from "./dbUrl.js";
+import { configuredBasePath } from "./lib/base-path.js";
 
 // Heal DATABASE_URL (DO bind placeholder / missing scheme) before anything reads it.
 applyDatabaseUrlFromEnv();
@@ -18,6 +19,8 @@ export const config = {
   databaseUrl: required("DATABASE_URL"),
   sessionSecret: required("SESSION_SECRET", "dev-only-change-me"),
   uploadDir: process.env.UPLOAD_DIR || "uploads",
+  /** Public mount prefix. Empty locally; `/projectprogress` on DigitalOcean. */
+  basePath: configuredBasePath(),
   spaces: {
     endpoint: process.env.SPACES_ENDPOINT || "",
     region: process.env.SPACES_REGION || "lon1",

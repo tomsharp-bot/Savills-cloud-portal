@@ -1,4 +1,10 @@
 (function () {
+  function appUrl(path) {
+    var base = typeof window.APP_BASE_PATH === "string" ? window.APP_BASE_PATH : "";
+    if (!path) return base || "/";
+    if (path.charAt(0) !== "/") path = "/" + path;
+    return base + path;
+  }
   function show(el) { if (el) el.classList.remove("hidden"); }
   function hide(el) { if (el) el.classList.add("hidden"); }
 
@@ -15,7 +21,7 @@
   document.querySelectorAll("[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const p = JSON.parse(btn.getAttribute("data-edit"));
-      editForm.action = "/projects/" + p.id + "/edit";
+      editForm.action = appUrl("/projects/" + p.id + "/edit");
       document.getElementById("edit-name").value = p.name;
       document.getElementById("edit-pm").value = p.projectManager || "";
       document.getElementById("edit-stage").value = p.stage;
@@ -41,7 +47,7 @@
         alert("Select a project first (Select on a card).");
         return;
       }
-      copyForm.action = "/projects/" + selected + "/copy";
+      copyForm.action = appUrl("/projects/" + selected + "/copy");
     });
   }
   if (deleteForm) {
@@ -55,12 +61,12 @@
         e.preventDefault();
         return;
       }
-      deleteForm.action = "/projects/" + selected + "/delete";
+      deleteForm.action = appUrl("/projects/" + selected + "/delete");
     });
   }
 
   async function patchAsset(projectId, assetId, body) {
-    const res = await fetch("/projects/" + projectId + "/assets/" + assetId, {
+    const res = await fetch(appUrl("/projects/" + projectId + "/assets/" + assetId), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -207,7 +213,7 @@
   }
   document.querySelectorAll("input[data-access]").forEach((cb) => {
     cb.addEventListener("change", () => {
-      postJson("/personnel/" + cb.dataset.access + "/access", {
+      postJson(appUrl("/personnel/" + cb.dataset.access + "/access"), {
         projectId: cb.dataset.project,
         granted: cb.checked,
       });
@@ -215,12 +221,12 @@
   });
   document.querySelectorAll("input[data-freeze]").forEach((cb) => {
     cb.addEventListener("change", () => {
-      postJson("/personnel/" + cb.dataset.freeze + "/freeze", { frozen: cb.checked });
+      postJson(appUrl("/personnel/" + cb.dataset.freeze + "/freeze"), { frozen: cb.checked });
     });
   });
   document.querySelectorAll("input[data-initials]").forEach((inp) => {
     inp.addEventListener("change", async () => {
-      const res = await postJson("/personnel/" + inp.dataset.initials + "/initials", { initials: inp.value });
+      const res = await postJson(appUrl("/personnel/" + inp.dataset.initials + "/initials"), { initials: inp.value });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         alert(data.error || "Could not save initials");
@@ -230,7 +236,7 @@
   });
   document.querySelectorAll("input[data-agency]").forEach((inp) => {
     inp.addEventListener("change", () => {
-      postJson("/personnel/" + inp.dataset.agency + "/agency", { agency: inp.value });
+      postJson(appUrl("/personnel/" + inp.dataset.agency + "/agency"), { agency: inp.value });
     });
   });
 

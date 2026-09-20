@@ -2,6 +2,7 @@ import path from "node:path";
 import express from "express";
 import cookieSession from "cookie-session";
 import { config, isProduction } from "./config.js";
+import { baseUrl, normalizeBasePath, prefixRedirectUrl } from "./lib/base-path.js";
 import { loadUser, requireAuth } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
 import { projectsRouter } from "./routes/projects.js";
@@ -16,15 +17,75 @@ import { prisma } from "./lib/prisma.js";
 const viewsDir = path.join(process.cwd(), "views");
 const publicDir = path.join(process.cwd(), "public");
 
-export function createApp() {
+export type CreateAppOptions = {
+  /** Override config.basePath (used in tests). */
+  basePath?: string;
+};
+
+function wrapRedirect(res: express.Response, basePath: string): void {
+  const original = res.redirect.bind(res);
+  res.redirect = ((arg1: string | number, arg2?: string | number) => {
+    if (typeof arg1 === "number") {
+      return original(arg1, prefixRedirectUrl(String(arg2 ?? "/"), basePath));
+    }
+    if (typeof arg2 === "number") {
+      return original(arg2, prefixRedirectUrl(String(arg1), basePath));
+    }
+    return original(prefixRedirectUrl(String(arg1), basePath));
+  }) as typeof res.redirect;
+}
+
+async function healthHandler(_req: express.Request, res: express.Response): Promise<void> {
+  let db = "unknown";
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    db = "up";
+  } catch {
+    db = "down";
+  }
+  res.status(200).json({ ok: true, service: "savills-cloud-portal", db });
+}
+
+function portalLandingHtml(href: string): string {
+  return `<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <title>Savills Cloud Portal</title>
+</head>
+<body>
+  <p><a href="${href}">Savills Cloud Portal</a></p>
+</body>
+</html>`;
+}
+
+export function createApp(options: CreateAppOptions = {}) {
+  const basePath =
+    options.basePath !== undefined ? normalizeBasePath(options.basePath) : config.basePath;
+  const cookiePath = basePath || "/";
+  const url = (href: string) => baseUrl(href, basePath);
+
   const app = express();
   app.set("trust proxy", 1);
   app.set("view engine", "ejs");
   app.set("views", viewsDir);
+  app.locals.basePath = basePath;
+  app.locals.baseUrl = url;
 
-  app.use(express.urlencoded({ extended: true }));
-  app.use(express.json());
-  app.use(
+  // DigitalOcean health checks hit the container at /health even when the
+  // public site is mounted under BASE_PATH.
+  app.get("/health", healthHandler);
+
+  if (basePath) {
+    app.get("/", (_req: express.Request, res: express.Response) => {
+      res.status(302).location(basePath).type("html").send(portalLandingHtml(basePath));
+    });
+  }
+
+  const portal = express.Router();
+  portal.use(express.urlencoded({ extended: true }));
+  portal.use(express.json());
+  portal.use(
     cookieSession({
       name: "scp_session",
       keys: [config.sessionSecret],
@@ -32,43 +93,43 @@ export function createApp() {
       httpOnly: true,
       sameSite: "lax",
       secure: isProduction,
+      path: cookiePath,
     })
   );
-  app.use(express.static(publicDir));
-  app.use(loadUser);
+  portal.use(express.static(publicDir));
+  portal.use(loadUser);
 
-  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  portal.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.locals.currentUser = req.user || null;
     res.locals.roleLabel = req.user ? roleLabel(req.user.role) : "";
     res.locals.isAdmin = isAdmin(req.user);
     res.locals.isClient = req.user?.role === "client";
     res.locals.isSurveyor = req.user?.role === "surveyor";
+    res.locals.basePath = basePath;
+    res.locals.baseUrl = url;
+    wrapRedirect(res, basePath);
     next();
   });
 
-  app.get("/health", async (_req: express.Request, res: express.Response) => {
-    let db = "unknown";
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      db = "up";
-    } catch {
-      db = "down";
-    }
-    res.status(200).json({ ok: true, service: "savills-cloud-portal", db });
-  });
-
-  app.use(authRouter);
-  app.get("/", (req: express.Request, res: express.Response) => {
+  portal.get("/health", healthHandler);
+  portal.use(authRouter);
+  portal.get("/", (req: express.Request, res: express.Response) => {
     res.redirect(req.user ? "/projects" : "/login");
   });
 
-  app.use(requireAuth);
-  app.use("/projects", projectsRouter);
-  app.use("/personnel", personnelRouter);
-  app.use(stockRouter);
-  app.use(loaderRouter);
-  app.use(completionsRouter);
-  app.use(documentsRouter);
+  portal.use(requireAuth);
+  portal.use("/projects", projectsRouter);
+  portal.use("/personnel", personnelRouter);
+  portal.use(stockRouter);
+  portal.use(loaderRouter);
+  portal.use(completionsRouter);
+  portal.use(documentsRouter);
+
+  if (basePath) {
+    app.use(basePath, portal);
+  } else {
+    app.use(portal);
+  }
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error(err);
