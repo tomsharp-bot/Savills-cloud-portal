@@ -196,4 +196,60 @@
         });
     });
   }
+
+  var clearBtn = document.getElementById("clear-form");
+  var FIELD_IDS = [
+    "projectId",
+    "uprn",
+    "fullAddress",
+    "postcode",
+    "surveyorName",
+    "category",
+    "rating",
+    "comment",
+    "clientCallReference",
+    "otherDetails",
+  ];
+
+  function todayLondonDate() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  }
+
+  function resetFormToDefaults() {
+    FIELD_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.value = "";
+      el.classList.remove("is-invalid");
+    });
+    var dateEl = document.getElementById("surveyDate");
+    if (dateEl) {
+      dateEl.value = todayLondonDate();
+      dateEl.classList.remove("is-invalid");
+    }
+    syncFiles([]);
+    renderNew();
+    if (existing) existing.innerHTML = "";
+    setStatus("");
+    if (form) form.removeAttribute("data-photos-ready");
+    var submit = form && form.querySelector('button[type="submit"]');
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Review";
+    }
+    var banner = document.querySelector(".hhsrs-errors");
+    if (banner) banner.remove();
+    if (form) {
+      form.querySelectorAll(".field-error").forEach(function (p) {
+        p.remove();
+      });
+    }
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function () {
+      if (!confirm("Clear the form? This cannot be undone.")) return;
+      resetFormToDefaults();
+    });
+  }
 })();

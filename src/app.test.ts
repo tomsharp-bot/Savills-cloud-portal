@@ -253,6 +253,18 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /each photo up to 40MB/i);
     assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
     assert.match(form.body, /data-max-file-mb="40"/);
+    assert.match(form.body, /id="clear-form"/);
+    assert.match(form.body, /hhsrs-btn-secondary/);
+    assert.match(form.body, /type="button"[^>]*>Clear Form</);
+    const reviewIdx = form.body.indexOf(">Review<");
+    const clearIdx = form.body.indexOf(">Clear Form<");
+    assert.ok(reviewIdx !== -1 && clearIdx > reviewIdx, "Clear Form sits under Review on the new-issue form");
+    assert.match(css.body, /\.hhsrs-btn-secondary/);
+
+    const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
+    assert.equal(js.status, 200);
+    assert.match(js.body, /Clear the form\? This cannot be undone\./);
+    assert.match(js.body, /Europe\/London/);
   });
 
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
@@ -323,6 +335,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);
     assert.match(review.body, />Cancel</);
+    assert.doesNotMatch(review.body, /Clear Form/);
   });
 
   it("returns validation errors on Review without saving", async () => {
