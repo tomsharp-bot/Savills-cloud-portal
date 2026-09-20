@@ -192,11 +192,11 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /action="\/HHSRS-site-form\/review"/);
   });
 
-  it("redirects lowercase /hhsrs-site-form to the canonical root path", async () => {
+  it("also serves the landing page at lowercase /hhsrs-site-form", async () => {
     const app = createApp({ basePath: "/projectprogress" });
     const res = await request(app, "GET", "/hhsrs-site-form");
-    assert.equal(res.status, 302);
-    assert.equal(res.location, "/HHSRS-site-form");
+    assert.equal(res.status, 200);
+    assert.match(res.body, /Savills HHSRS Site Reporting/);
   });
 
   it("returns validation errors on Review without saving", async () => {

@@ -106,9 +106,6 @@ export function createApp(options: CreateAppOptions = {}) {
 
   // HHSRS site form is a public root app — not under /projectprogress.
   app.use("/HHSRS-site-form", hhsrsSiteFormRouter);
-  app.get("/hhsrs-site-form", (_req: express.Request, res: express.Response) => {
-    res.redirect("/HHSRS-site-form");
-  });
 
   if (basePath) {
     app.get("/", (_req: express.Request, res: express.Response) => {

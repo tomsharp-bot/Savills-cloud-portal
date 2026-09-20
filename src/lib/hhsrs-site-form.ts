@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { config } from "../config.js";
 import { isHhsrsCategory, isHhsrsRating } from "./hhsrs-categories.js";
 
 export const HHSRS_SITE_FORM_PATH = "/HHSRS-site-form";
@@ -178,7 +177,8 @@ export function validatePhotos(
 }
 
 export function hhsrsUploadRoot(): string {
-  return path.join(process.cwd(), config.uploadDir, "hhsrs-site-form");
+  const uploadDir = process.env.UPLOAD_DIR || "uploads";
+  return path.join(process.cwd(), uploadDir, "hhsrs-site-form");
 }
 
 export function draftDir(draftId: string): string {
