@@ -31,6 +31,14 @@ describe("Asset Status rules", () => {
   it("maps Refused Access / Not Convenient to Access Refused", () => {
     assert.equal(statusFromVisit("Refused Access", "SCS").assetStatus, "Access Refused");
     assert.equal(statusFromVisit("Not Convenient", "SCS").assetStatus, "Access Refused");
+    assert.equal(statusFromVisit("Access Refused", "SCS").assetStatus, "Access Refused");
+  });
+
+  it("maps the stock-grid labels when they arrive as Access Type", () => {
+    assert.equal(statusFromVisit("No Access", "SCS").assetStatus, "No Access");
+    assert.equal(statusFromVisit("Appt Made Not Kept", "SCS").assetStatus, "Appt Made Not Kept");
+    assert.equal(statusFromVisit("Appointment not kept", "SCS").assetStatus, "Appt Made Not Kept");
+    assert.equal(statusFromVisit("Access Refused", "RdSAP").assetStatus, "Access Refused");
   });
 
   it("maps Void and Successful", () => {

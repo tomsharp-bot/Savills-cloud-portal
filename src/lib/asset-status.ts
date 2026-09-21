@@ -61,13 +61,21 @@ export function statusFromVisit(accessType: unknown, visitType: unknown): Status
     return { assetStatus: "No Visit", setSurveyFields: false };
   }
   const at = normalizeAccessType(accessType);
-  if (at === "no answer" || at === "none" || at === "") {
+  if (at === "no answer" || at === "none" || at === "" || at === "no access") {
     return { assetStatus: "No Access", setSurveyFields: false };
   }
-  if (at === "failed appointment" || at.startsWith("failed appt") || at.includes("failed appointment")) {
+  if (
+    at === "failed appointment" ||
+    at.startsWith("failed appt") ||
+    at.includes("failed appointment") ||
+    at === "appt made not kept" ||
+    at === "appointment made not kept" ||
+    at === "appointment not kept" ||
+    at === "appt not kept"
+  ) {
     return { assetStatus: "Appt Made Not Kept", setSurveyFields: false };
   }
-  if (at === "refused access" || at === "not convenient") {
+  if (at === "refused access" || at === "not convenient" || at === "access refused") {
     return { assetStatus: "Access Refused", setSurveyFields: false };
   }
   if (at === "void") {
@@ -143,6 +151,21 @@ export function inferStockKind(raw: Record<string, unknown> | null | undefined):
   if (/garage/.test(blob)) return "garage";
   if (/\bblocks?\b|communal|maisonette block|low-rise block|walk-up/.test(blob)) return "block";
   return "dwelling";
+}
+
+/** Completed stock statuses, including the labels sometimes stored before they were canonical. */
+export function isFullSurveyStatus(status: unknown): boolean {
+  const s = String(status ?? "").trim();
+  return s === "Full Survey" || s === "Full Surveys";
+}
+
+export function isExtOnlyStatus(status: unknown): boolean {
+  const s = String(status ?? "").trim();
+  return s === "Ext-Only" || s === "External Only";
+}
+
+export function isCompletedAssetStatus(status: unknown): boolean {
+  return isFullSurveyStatus(status) || isExtOnlyStatus(status);
 }
 
 export function surveyTypeForKind(kind: AssetKind): string {

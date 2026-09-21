@@ -95,6 +95,8 @@
       if (ok && tr) {
         tr.classList.toggle("row-omitted", inp.checked);
         tr.dataset.omit = inp.checked ? "1" : "0";
+        const omitCell = tr.querySelector('[data-col="omitAsset"]');
+        if (omitCell) omitCell.setAttribute("data-value", inp.checked ? "omitted" : "included");
       }
     });
   });
@@ -110,16 +112,16 @@
 
   function stockFilterCellText(tr, key) {
     if (key === "omitAsset") return tr.dataset.omit === "1" ? "omitted" : "included";
+    if (key === "siteComments") {
+      const comment = tr.querySelector("[data-comment]");
+      if (comment) return comment.value || "";
+    }
     const fieldInp = tr.querySelector('[data-admin-field="' + key + '"]');
     if (fieldInp) return fieldInp.value || "";
     const cell = tr.querySelector('[data-col="' + key + '"]');
     if (cell) {
       if (cell.getAttribute("data-value") != null) return cell.getAttribute("data-value") || "";
       return cell.textContent || "";
-    }
-    if (key === "siteComments") {
-      const comment = tr.querySelector("[data-comment]");
-      if (comment) return comment.value || "";
     }
     return "";
   }
@@ -141,7 +143,9 @@
       filters.forEach((f) => {
         if (!f.q) return;
         const text = String(stockFilterCellText(tr, f.key) || "").trim().toLowerCase();
-        if (f.exact) {
+        if (f.exact && f.q === "__blank__") {
+          if (text !== "") ok = false;
+        } else if (f.exact) {
           if (text !== f.q) ok = false;
         } else if (!text.includes(f.q)) {
           ok = false;

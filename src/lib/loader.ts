@@ -1,6 +1,7 @@
 import type { AssetKind, Prisma, User } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { cellVal, inferStockKind, statusFromVisitLogs, surveyTypeForKind } from "./asset-status.js";
+import { inferStockKind, statusFromVisitLogs, surveyTypeForKind } from "./asset-status.js";
+import { cellValAliases } from "./stock-refresh.js";
 import { formatVisitDateDisplay, visitDateSortKey } from "./dates.js";
 import { baseInitials } from "./initials.js";
 import type { RawRow } from "./excel.js";
@@ -41,29 +42,35 @@ function initialsFromCreatedBy(
   return ini;
 }
 
-function normalizeVisit(raw: RawRow, loadedFrom: string) {
+function visitCell(raw: RawRow, aliases: string[]): string {
+  return str(cellValAliases(raw, aliases));
+}
+
+export function normalizeVisit(raw: RawRow, loadedFrom: string) {
   const visitDate =
-    formatVisitDateDisplay(cellVal(raw, "Visit Date")) || formatVisitDateDisplay(cellVal(raw, "Survey Date")) || "";
-  const surveyDate = formatVisitDateDisplay(cellVal(raw, "Survey Date")) || visitDate;
+    formatVisitDateDisplay(cellValAliases(raw, ["Visit Date"])) ||
+    formatVisitDateDisplay(cellValAliases(raw, ["Survey Date"])) ||
+    "";
+  const surveyDate = formatVisitDateDisplay(cellValAliases(raw, ["Survey Date"])) || visitDate;
   return {
-    sourceId: str(cellVal(raw, "ID")),
-    uprn: str(cellVal(raw, "UPRN")),
-    combinedAddress: str(cellVal(raw, "Combined Address")),
-    visitType: str(cellVal(raw, "Visit Type")),
-    dataSource: str(cellVal(raw, "Data Source")),
+    sourceId: visitCell(raw, ["ID"]),
+    uprn: visitCell(raw, ["UPRN"]),
+    combinedAddress: visitCell(raw, ["Combined Address"]),
+    visitType: visitCell(raw, ["Visit Type"]),
+    dataSource: visitCell(raw, ["Data Source"]),
     surveyDate,
-    nextSurvey: formatVisitDateDisplay(cellVal(raw, "Next Survey")),
-    accessType: str(cellVal(raw, "Access Type")),
-    createdBy: str(cellVal(raw, "Created By")),
-    createdOn: formatVisitDateDisplay(cellVal(raw, "Created On")),
-    surveyDesign: str(cellVal(raw, "Survey Design")),
+    nextSurvey: formatVisitDateDisplay(cellValAliases(raw, ["Next Survey"])),
+    accessType: visitCell(raw, ["Access Type"]),
+    createdBy: visitCell(raw, ["Created By"]),
+    createdOn: formatVisitDateDisplay(cellValAliases(raw, ["Created On"])),
+    surveyDesign: visitCell(raw, ["Survey Design"]),
     visitDate,
-    number: str(cellVal(raw, "Number")),
-    block: str(cellVal(raw, "Block")),
-    addressLine1: str(cellVal(raw, "Address Line 1")),
-    addressLine5: str(cellVal(raw, "Address Line 5")),
-    postcode: str(cellVal(raw, "Post Code") || cellVal(raw, "Postcode")),
-    archetype: str(cellVal(raw, "Archetype")),
+    number: visitCell(raw, ["Number"]),
+    block: visitCell(raw, ["Block"]),
+    addressLine1: visitCell(raw, ["Address Line 1", "Street"]),
+    addressLine5: visitCell(raw, ["Address Line 5", "City"]),
+    postcode: visitCell(raw, ["Post Code", "Postcode"]),
+    archetype: visitCell(raw, ["Archetype"]),
     loadedFrom,
   };
 }
