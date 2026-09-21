@@ -108,36 +108,44 @@
     });
   });
 
+  function stockFilterCellText(tr, key) {
+    if (key === "omitAsset") return tr.dataset.omit === "1" ? "omitted" : "included";
+    const fieldInp = tr.querySelector('[data-admin-field="' + key + '"]');
+    if (fieldInp) return fieldInp.value || "";
+    const cell = tr.querySelector('[data-col="' + key + '"]');
+    if (cell) {
+      if (cell.getAttribute("data-value") != null) return cell.getAttribute("data-value") || "";
+      return cell.textContent || "";
+    }
+    if (key === "siteComments") {
+      const comment = tr.querySelector("[data-comment]");
+      if (comment) return comment.value || "";
+    }
+    return "";
+  }
+
   function applyStockFilters(table) {
     const kind = table.dataset.stock;
-    const filters = {};
+    const filters = [];
     document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
-      filters[el.dataset.filter] = (el.value || "").trim().toLowerCase();
+      filters.push({
+        key: el.dataset.filter,
+        q: (el.value || "").trim().toLowerCase(),
+        exact: el.tagName === "SELECT",
+      });
     });
     const rows = [...table.tBodies[0].rows].filter((r) => r.dataset.asset);
     let shown = 0;
     rows.forEach((tr) => {
       let ok = true;
-      Object.keys(filters).forEach((key) => {
-        const q = filters[key];
-        if (!q) return;
-        if (key === "omitAsset") {
-          const omitted = tr.dataset.omit === "1";
-          if (q === "omitted" && !omitted) ok = false;
-          if (q === "included" && omitted) ok = false;
-          return;
+      filters.forEach((f) => {
+        if (!f.q) return;
+        const text = String(stockFilterCellText(tr, f.key) || "").trim().toLowerCase();
+        if (f.exact) {
+          if (text !== f.q) ok = false;
+        } else if (!text.includes(f.q)) {
+          ok = false;
         }
-        const fieldInp = tr.querySelector('[data-admin-field="' + key + '"]');
-        const cell = tr.querySelector('[data-col="' + key + '"]');
-        const comment = tr.querySelector("[data-comment]");
-        const text = fieldInp
-          ? fieldInp.value
-          : cell
-            ? cell.textContent
-            : comment
-              ? comment.value
-              : tr.textContent;
-        if (!String(text || "").toLowerCase().includes(q)) ok = false;
       });
       tr.style.display = ok ? "" : "none";
       if (ok) shown += 1;

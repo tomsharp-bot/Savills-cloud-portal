@@ -1,6 +1,6 @@
 import type { AssetKind, Prisma, User } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { cellVal, inferStockKind, statusFromVisit, surveyTypeForKind } from "./asset-status.js";
+import { cellVal, inferStockKind, statusFromVisitLogs, surveyTypeForKind } from "./asset-status.js";
 import { formatVisitDateDisplay, visitDateSortKey } from "./dates.js";
 import { baseInitials } from "./initials.js";
 import type { RawRow } from "./excel.js";
@@ -153,6 +153,16 @@ export async function applyVisitRows(opts: {
     } else {
       kind = opts.target;
     }
+    const existingExact = await prisma.asset.findUnique({
+      where: { projectId_kind_uprn: { projectId: opts.projectId, kind, uprn } },
+    });
+    let existing = existingExact;
+    if (!existing && opts.target === "auto") {
+      existing = await prisma.asset.findFirst({
+        where: { projectId: opts.projectId, uprn },
+      });
+      if (existing) kind = existing.kind;
+    }
     byTab[kind] += 1;
 
     const latest = visits[visits.length - 1];
@@ -174,16 +184,10 @@ export async function applyVisitRows(opts: {
       if (d && !uniqDates.includes(d)) uniqDates.push(d);
     }
 
+    const st = statusFromVisitLogs(visits);
     const withType = visits.filter((v) => v.visitType);
     const lastTyped = withType[withType.length - 1];
-    const st = lastTyped
-      ? statusFromVisit(lastTyped.accessType, lastTyped.visitType)
-      : { assetStatus: "No Visit" as const, setSurveyFields: false };
     const initials = lastTyped ? initialsFromCreatedBy(lastTyped.createdBy, surveyors) : "";
-
-    const existing = await prisma.asset.findUnique({
-      where: { projectId_kind_uprn: { projectId: opts.projectId, kind, uprn } },
-    });
 
     const siteComments = existing?.siteComments ?? "";
     const external = existing?.external ?? "";

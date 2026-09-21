@@ -40,7 +40,9 @@
             <% } else if (selectCols.has(c)) { %>
               <select data-filter="<%= c %>">
                 <option value="">All</option>
-                <% const vals = [...new Set(rows.map(r => displayVal(r, c)))].sort(); %>
+                <% const vals = c === "assetStatus"
+                  ? (typeof assetStatusOptions !== "undefined" ? assetStatusOptions : [...new Set(rows.map(r => displayVal(r, c)))].sort())
+                  : [...new Set(rows.map(r => displayVal(r, c)))].sort(); %>
                 <% vals.forEach(v => { %><option value="<%= v %>"><%= v || "(blank)" %></option><% }) %>
               </select>
             <% } else { %>
@@ -76,7 +78,7 @@
                   <input class="comment-input" data-admin-field="<%= c %>" data-asset="<%= r.id %>" value="<%= displayVal(r, c) %>" placeholder="<%= dateCols.has(c) ? 'DD/MM/YY' : '' %>" />
                 </td>
               <% } else if (c === "assetStatus") { %>
-                <td>
+                <td data-col="assetStatus" data-value="<%= r.assetStatus %>">
                   <%= r.assetStatus %>
                   <% if (r.stockMissing) { %><span class="stock-missing-tag">Not on latest stocklist</span><% } %>
                 </td>
