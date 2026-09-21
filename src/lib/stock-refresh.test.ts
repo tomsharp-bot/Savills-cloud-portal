@@ -38,6 +38,41 @@ describe("Stocklist refresh plan", () => {
     assert.equal(plan.matched[0].address.street, "High St");
   });
 
+  it("maps underscored headers onto the right stock fields", () => {
+    const plan = planStocklistRefresh(
+      [],
+      [
+        {
+          UPRN: "1",
+          Address_Line_1: "High St",
+          Address_Line_5: "Bude",
+          Post_Code: "EX23 8JZ",
+          Year_Built: "1962",
+          Survey_Type: "Condition Only",
+          Block: "Harbour Court",
+          Archetype: "House",
+          Street: "  Should not win  ",
+        },
+      ],
+      false
+    );
+    const added = plan.added[0];
+    assert.equal(added.kind, "dwelling");
+    assert.equal(added.address.street, "High St");
+    assert.equal(added.address.city, "Bude");
+    assert.equal(added.address.postcode, "EX23 8JZ");
+    assert.equal(added.address.yearBuilt, "1962");
+    assert.equal(added.address.surveyType, "Condition Only");
+    assert.equal(added.address.block, "Harbour Court");
+    assert.equal(added.address.number, undefined);
+  });
+
+  it("trims padded stock values so filters can match them", () => {
+    const plan = planStocklistRefresh([], [{ UPRN: "1", Street: "  High St  ", Surveyor: " AS " }], false);
+    assert.equal(plan.added[0].address.street, "High St");
+    assert.equal(plan.added[0].address.surveyor, "AS");
+  });
+
   it("maps Patch and Surveyor from a stocklist export so they can be re-uploaded", () => {
     const existing = [row({ uprn: "A" })];
     const plan = planStocklistRefresh(

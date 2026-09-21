@@ -1,11 +1,10 @@
 import type { AssetKind } from "@prisma/client";
-import { cellVal, inferStockKind, surveyTypeForKind } from "./asset-status.js";
+import { cellVal, inferStockKind, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
 import { formatStockDate } from "./dates.js";
 import type { RawRow } from "./excel.js";
 import { prisma } from "./prisma.js";
 
 export const OMITTED_SURVEYED_NOTE = "Omitted but already surveyed";
-export const SURVEYED_STATUSES = new Set(["Full Survey", "Ext-Only", "Full Surveys", "External Only"]);
 
 export type StockRefreshTarget = "auto" | AssetKind;
 
@@ -89,7 +88,7 @@ export function formatStockRefreshResult(opts: {
 }
 
 export function extractUprn(row: RawRow): string {
-  return String(cellVal(row, "UPRN") || cellVal(row, "uprn") || "").trim();
+  return String(cellValAliases(row, ["UPRN"]) || "").trim();
 }
 
 function normHeader(s: string): string {
@@ -99,17 +98,17 @@ function normHeader(s: string): string {
     .replace(/[\s_\-./]+/g, "");
 }
 
-/** Flexible header match: exact (case-insensitive) then normalised aliases. */
+/** Flexible header match: earlier aliases win, including underscore / spacing variants. */
 export function cellValAliases(row: RawRow, aliases: string[]): unknown {
   for (const alias of aliases) {
     const exact = cellVal(row, alias);
     if (exact !== "" && exact != null) return exact;
-  }
-  const want = new Set(aliases.map(normHeader));
-  for (const k of Object.keys(row || {})) {
-    if (!want.has(normHeader(k))) continue;
-    const v = row[k];
-    if (v !== "" && v != null) return v;
+    const want = normHeader(alias);
+    for (const k of Object.keys(row || {})) {
+      if (normHeader(k) !== want) continue;
+      const v = row[k];
+      if (v !== "" && v != null) return v;
+    }
   }
   return "";
 }
@@ -128,19 +127,25 @@ const ADMIN_STOCK_ALIASES: Record<
   x3: ["X3", "X 3"],
 };
 
+function trimmedCell(raw: RawRow, aliases: string[]): string {
+  const v = cellValAliases(raw, aliases);
+  if (v == null) return "";
+  return String(v).trim();
+}
+
 export function mapStockAddress(raw: RawRow): AddressPatch {
-  let number = cellVal(raw, "Number");
-  let block = cellVal(raw, "Block");
-  let street = cellVal(raw, "Address Line 1") || cellVal(raw, "Street");
-  let city = cellVal(raw, "Address Line 5") || cellVal(raw, "City");
-  let postcode = cellVal(raw, "Post Code") || cellVal(raw, "Postcode");
-  let area = cellVal(raw, "Area");
-  const archetype = cellVal(raw, "Archetype");
-  const yearBuilt = cellVal(raw, "Year Built");
-  const patchName = cellVal(raw, "Patch");
-  const surveyor = cellVal(raw, "Surveyor");
-  const surveyType = cellVal(raw, "Survey Type");
-  const combined = String(cellVal(raw, "Combined Address") || "").trim();
+  let number = trimmedCell(raw, ["Number"]);
+  let block = trimmedCell(raw, ["Block"]);
+  let street = trimmedCell(raw, ["Address Line 1", "Street"]);
+  let city = trimmedCell(raw, ["Address Line 5", "City"]);
+  let postcode = trimmedCell(raw, ["Post Code", "Postcode"]);
+  let area = trimmedCell(raw, ["Area"]);
+  const archetype = trimmedCell(raw, ["Archetype"]);
+  const yearBuilt = trimmedCell(raw, ["Year Built"]);
+  const patchName = trimmedCell(raw, ["Patch"]);
+  const surveyor = trimmedCell(raw, ["Surveyor"]);
+  const surveyType = trimmedCell(raw, ["Survey Type"]);
+  const combined = trimmedCell(raw, ["Combined Address"]);
   if (combined && (!street || !postcode)) {
     const parts = combined
       .split(",")
@@ -155,17 +160,17 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
     }
   }
   const patch: AddressPatch = {};
-  if (number !== "" && number != null) patch.number = String(number);
-  if (block !== "" && block != null) patch.block = String(block);
-  if (street !== "" && street != null) patch.street = String(street);
-  if (city !== "" && city != null) patch.city = String(city);
-  if (postcode !== "" && postcode != null) patch.postcode = String(postcode);
-  if (area !== "" && area != null) patch.area = String(area);
-  if (archetype !== "" && archetype != null) patch.archetype = String(archetype);
-  if (yearBuilt !== "" && yearBuilt != null) patch.yearBuilt = String(yearBuilt);
-  if (patchName !== "" && patchName != null) patch.patch = String(patchName);
-  if (surveyor !== "" && surveyor != null) patch.surveyor = String(surveyor);
-  if (surveyType !== "" && surveyType != null) patch.surveyType = String(surveyType);
+  if (number) patch.number = number;
+  if (block) patch.block = block;
+  if (street) patch.street = street;
+  if (city) patch.city = city;
+  if (postcode) patch.postcode = postcode;
+  if (area) patch.area = area;
+  if (archetype) patch.archetype = archetype;
+  if (yearBuilt) patch.yearBuilt = yearBuilt;
+  if (patchName) patch.patch = patchName;
+  if (surveyor) patch.surveyor = surveyor;
+  if (surveyType) patch.surveyType = surveyType;
 
   const residentName = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentName);
   const residentNumber = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentNumber);
@@ -175,19 +180,27 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   const x1 = cellValAliases(raw, ADMIN_STOCK_ALIASES.x1);
   const x2 = cellValAliases(raw, ADMIN_STOCK_ALIASES.x2);
   const x3 = cellValAliases(raw, ADMIN_STOCK_ALIASES.x3);
-  if (residentName !== "" && residentName != null) patch.residentName = String(residentName);
-  if (residentNumber !== "" && residentNumber != null) patch.residentNumber = String(residentNumber);
-  if (residentEmail !== "" && residentEmail != null) patch.residentEmail = String(residentEmail);
-  if (letterDate1 !== "" && letterDate1 != null) patch.letterDate1 = formatStockDate(letterDate1);
-  if (letterDate2 !== "" && letterDate2 != null) patch.letterDate2 = formatStockDate(letterDate2);
-  if (x1 !== "" && x1 != null) patch.x1 = String(x1);
-  if (x2 !== "" && x2 != null) patch.x2 = String(x2);
-  if (x3 !== "" && x3 != null) patch.x3 = String(x3);
+  const residentNameText = String(residentName ?? "").trim();
+  const residentNumberText = String(residentNumber ?? "").trim();
+  const residentEmailText = String(residentEmail ?? "").trim();
+  const letter1 = letterDate1 !== "" && letterDate1 != null ? formatStockDate(letterDate1).trim() : "";
+  const letter2 = letterDate2 !== "" && letterDate2 != null ? formatStockDate(letterDate2).trim() : "";
+  const x1Text = String(x1 ?? "").trim();
+  const x2Text = String(x2 ?? "").trim();
+  const x3Text = String(x3 ?? "").trim();
+  if (residentNameText) patch.residentName = residentNameText;
+  if (residentNumberText) patch.residentNumber = residentNumberText;
+  if (residentEmailText) patch.residentEmail = residentEmailText;
+  if (letter1) patch.letterDate1 = letter1;
+  if (letter2) patch.letterDate2 = letter2;
+  if (x1Text) patch.x1 = x1Text;
+  if (x2Text) patch.x2 = x2Text;
+  if (x3Text) patch.x3 = x3Text;
   return patch;
 }
 
 export function isSurveyedStatus(status: string): boolean {
-  return SURVEYED_STATUSES.has(String(status || ""));
+  return isCompletedAssetStatus(status);
 }
 
 export function appendSurveyedNote(comments: string): string {

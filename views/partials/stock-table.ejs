@@ -41,9 +41,11 @@
               <select data-filter="<%= c %>">
                 <option value="">All</option>
                 <% const vals = c === "assetStatus"
-                  ? (typeof assetStatusOptions !== "undefined" ? assetStatusOptions : [...new Set(rows.map(r => displayVal(r, c)))].sort())
-                  : [...new Set(rows.map(r => displayVal(r, c)))].sort(); %>
-                <% vals.forEach(v => { %><option value="<%= v %>"><%= v || "(blank)" %></option><% }) %>
+                  ? (typeof assetStatusOptions !== "undefined" ? assetStatusOptions : [...new Set(rows.map(r => String(displayVal(r, c) ?? "").trim()))].sort())
+                  : [...new Set(rows.map(r => String(displayVal(r, c) ?? "").trim()))].sort(); %>
+                <% vals.forEach(v => { const shown = String(v ?? "").trim(); %>
+                  <option value="<%= shown ? shown : '__blank__' %>"><%= shown || "(blank)" %></option>
+                <% }) %>
               </select>
             <% } else { %>
               <input type="text" data-filter="<%= c %>" placeholder="Filter" />
@@ -62,11 +64,11 @@
               data-omit="<%= r.omitAsset ? '1' : '0' %>">
             <% cols.forEach(c => { %>
               <% if (c === "siteComments") { %>
-                <td>
+                <td data-col="siteComments">
                   <input class="comment-input" data-comment="<%= r.id %>" value="<%= r.siteComments %>" <%= canComment ? "" : "disabled" %> />
                 </td>
               <% } else if (c === "omitAsset") { %>
-                <td class="omit-cell">
+                <td class="omit-cell" data-col="omitAsset" data-value="<%= r.omitAsset ? 'omitted' : 'included' %>">
                   <% if (isAdmin) { %>
                     <label><input type="checkbox" data-omit="<%= r.id %>" <%= r.omitAsset ? "checked" : "" %> /> <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %></label>
                   <% } else { %>

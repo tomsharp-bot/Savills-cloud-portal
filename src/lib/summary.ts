@@ -1,4 +1,5 @@
 import type { Asset, Project } from "@prisma/client";
+import { isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
 import { formatProjectTarget } from "./project-target.js";
 
 export type KpiStack = {
@@ -12,7 +13,7 @@ function counted(assets: Asset[]) {
 }
 
 function completed(assets: Asset[]) {
-  return counted(assets).filter((a) => a.assetStatus === "Full Survey" || a.assetStatus === "Ext-Only");
+  return counted(assets).filter((a) => isFullSurveyStatus(a.assetStatus) || isExtOnlyStatus(a.assetStatus));
 }
 
 export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
@@ -22,10 +23,14 @@ export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
   const showDwellings = !!(project.typeConditionOnly || project.typeConditionEpc);
 
   const dwellCounted = counted(dwellings);
-  const full = dwellCounted.filter((a) => a.assetStatus === "Full Survey").length;
-  const ext = dwellCounted.filter((a) => a.assetStatus === "Ext-Only").length;
+  const blockCounted = counted(blocks);
+  const garageCounted = counted(garages);
+  const full = dwellCounted.filter((a) => isFullSurveyStatus(a.assetStatus)).length;
+  const ext = dwellCounted.filter((a) => isExtOnlyStatus(a.assetStatus)).length;
   const remaining = Math.max(0, dwellCounted.length - full - ext);
-  const extPending = dwellCounted.filter((a) => String(a.external).toLowerCase() === "yes" && a.assetStatus !== "Ext-Only").length;
+  const extPending = dwellCounted.filter(
+    (a) => String(a.external).trim().toLowerCase() === "yes" && !isExtOnlyStatus(a.assetStatus)
+  ).length;
 
   const blockDone = completed(blocks).length;
   const garageDone = completed(garages).length;
@@ -35,7 +40,7 @@ export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
       key: "dwellings",
       hidden: !showDwellings,
       tiles: [
-        { label: "Total Dwellings", value: String(dwellings.length) },
+        { label: "Total Dwellings", value: String(dwellCounted.length) },
         { label: "Project Target", value: formatProjectTarget(project) },
         { label: "Full Surveys Completed", value: String(full) },
         { label: "Full Surveys Remaining", value: String(remaining) },
@@ -47,18 +52,18 @@ export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
       key: "blocks",
       hidden: !project.typeBlocks,
       tiles: [
-        { label: "Total Blocks", value: String(blocks.length) },
+        { label: "Total Blocks", value: String(blockCounted.length) },
         { label: "Blocks Completed", value: String(blockDone) },
-        { label: "Blocks Remaining", value: String(Math.max(0, counted(blocks).length - blockDone)) },
+        { label: "Blocks Remaining", value: String(Math.max(0, blockCounted.length - blockDone)) },
       ],
     },
     {
       key: "garages",
       hidden: !project.typeGarages,
       tiles: [
-        { label: "Total Garages", value: String(garages.length) },
+        { label: "Total Garages", value: String(garageCounted.length) },
         { label: "Garages Completed", value: String(garageDone) },
-        { label: "Garages Remaining", value: String(Math.max(0, counted(garages).length - garageDone)) },
+        { label: "Garages Remaining", value: String(Math.max(0, garageCounted.length - garageDone)) },
       ],
     },
     {

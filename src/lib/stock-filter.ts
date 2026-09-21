@@ -1,12 +1,18 @@
-import { STOCK_SELECT_COLS } from "./stock-columns.js";
+import { formatStockDate } from "./dates.js";
+import { STOCK_DATE_COLS, STOCK_SELECT_COLS } from "./stock-columns.js";
 
 export type StockFilterRow = Record<string, unknown>;
+
+/** Select value for an empty cell. A blank option value would mean "All". */
+export const BLANK_FILTER = "__blank__";
 
 /** Named-field lookup so Asset Status never falls through to Survey Type or Site Comments. */
 export function stockFilterCellText(row: StockFilterRow, column: string): string {
   if (column === "omitAsset") return row.omitAsset ? "omitted" : "included";
   if (Object.prototype.hasOwnProperty.call(row, column) && row[column] != null) {
-    return String(row[column]).trim();
+    const raw = row[column];
+    if (STOCK_DATE_COLS.has(column)) return formatStockDate(raw).trim();
+    return String(raw).trim();
   }
   return "";
 }
@@ -20,7 +26,10 @@ export function stockRowMatchesFilters(
     const q = String(raw ?? "").trim().toLowerCase();
     if (!q) continue;
     const text = stockFilterCellText(row, key).toLowerCase();
-    if (selectCols.has(key) || key === "omitAsset") {
+    const exact = selectCols.has(key) || key === "omitAsset";
+    if (exact && q === BLANK_FILTER) {
+      if (text !== "") return false;
+    } else if (exact) {
       if (text !== q) return false;
     } else if (!text.includes(q)) {
       return false;
