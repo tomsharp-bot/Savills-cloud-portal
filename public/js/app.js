@@ -324,17 +324,41 @@
     });
   }
 
+  function copyFallback(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (err) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    if (!ok) window.prompt("Copy this temporary password:", text);
+  }
+
+  function markCopied(btn) {
+    var old = btn.getAttribute("data-copy-label") || btn.textContent;
+    btn.setAttribute("data-copy-label", old);
+    btn.textContent = "Copied";
+    setTimeout(function () { btn.textContent = old; }, 1500);
+  }
+
   document.querySelectorAll("[data-copy]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       const text = btn.getAttribute("data-copy") || "";
-      try {
-        await navigator.clipboard.writeText(text);
-        const old = btn.textContent;
-        btn.textContent = "Copied";
-        setTimeout(() => { btn.textContent = old; }, 1500);
-      } catch {
-        window.prompt("Copy this temporary password:", text);
-      }
+      var done = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(text)
+        : Promise.reject(new Error("no clipboard"));
+      done.then(function () { markCopied(btn); }).catch(function () {
+        copyFallback(text);
+        markCopied(btn);
+      });
     });
   });
 
