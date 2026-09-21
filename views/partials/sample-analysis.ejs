@@ -1,0 +1,241 @@
+<%
+function fmt(n) { return Number(n || 0).toLocaleString("en-GB"); }
+function hi(n) { return Number(n) ? "hi" : ""; }
+const canEdit = !!sample.canEdit;
+%>
+<div id="sample-analysis" class="sa" data-project="<%= project.id %>" data-can-edit="<%= canEdit ? '1' : '0' %>">
+  <div class="sa-head">
+    <div>
+      <h3 class="sa-title"><%= project.name %> — Sample Analysis</h3>
+      <p class="sa-sub">Patch progress vs <%= sample.targetLabel %> target · surveyor assignment · whole-project snapshot</p>
+    </div>
+    <div class="target-pill" title="Project target"><span>Target</span> <%= sample.targetLabel %></div>
+  </div>
+
+  <p class="sa-note">Surv. initials on a patch fill the Surveyor column on Dwellings, Blocks and Garages for assets in that patch. Omit Asset rows stay on the stock list and are left out of these counts.</p>
+  <p class="perm-note">Area Name, Surv. initials, Start Date and Target End Date are Admin-editable. Surveyors see them read-only.</p>
+  <% if (canEdit) { %>
+    <p id="surv-status" class="status-line empty">Edit a Surv. cell to assign that surveyor on the patch.</p>
+  <% } else { %>
+    <p id="surv-status" class="status-line empty">View only. An Admin can edit area names, surveyor initials and dates.</p>
+  <% } %>
+
+  <div class="sa-panel">
+    <h3>Patch progress</h3>
+    <% if (!sample.patches.length) { %>
+      <p class="empty">No patches yet. Rows appear when Dwellings, Blocks or Garages have a Patch value.</p>
+    <% } else { %>
+    <div class="sa-table-wrap">
+      <table class="sa-patch">
+        <thead>
+          <tr class="group">
+            <th class="meta" colspan="3">Patch</th>
+            <th class="g-dwell" colspan="9">Dwellings</th>
+            <th class="g-block" colspan="3">Blocks</th>
+            <th class="g-gar" colspan="3">Garage</th>
+          </tr>
+          <tr class="cols">
+            <th class="meta">Patch</th>
+            <th class="meta">Area<br>name</th>
+            <th class="meta">Surv.</th>
+            <th class="g-dwell num">Area<br>Total</th>
+            <th class="g-dwell num">Area<br>Target</th>
+            <th class="g-dwell num">Full Surveys<br>Done</th>
+            <th class="g-dwell num">To Do</th>
+            <th class="g-dwell num">%<br>Done</th>
+            <th class="sub-visited num">Visited<br>YES</th>
+            <th class="sub-visited num">Visited<br>NO</th>
+            <th class="sub-external num">External<br>Only Done</th>
+            <th class="sub-external num">External<br>Only To Do</th>
+            <th class="g-block num">Area<br>Total</th>
+            <th class="g-block num">Done</th>
+            <th class="g-block num">To Do</th>
+            <th class="g-gar num">Area<br>Total</th>
+            <th class="g-gar num">Done</th>
+            <th class="g-gar num">To Do</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% sample.patches.forEach(function (row) { %>
+          <tr data-patch="<%= row.patch %>">
+            <td><%= row.patch %></td>
+            <td class="area-cell">
+              <% if (canEdit) { %>
+                <input class="area-input" type="text" maxlength="120" value="<%= row.areaName %>" data-sa-patch="<%= row.patch %>" data-sa-field="areaName" aria-label="Area name for <%= row.patch %>" />
+              <% } else { %>
+                <%= row.areaName || "—" %>
+              <% } %>
+            </td>
+            <td class="surv-cell">
+              <% if (canEdit) { %>
+                <input class="surv-input <%= row.surveyorInitials ? 'has-value' : '' %>" type="text" maxlength="12" value="<%= row.surveyorInitials %>" placeholder="TBC" autocomplete="off" spellcheck="false" data-sa-patch="<%= row.patch %>" data-sa-field="surveyorInitials" aria-label="Surveyor initials for <%= row.patch %>" />
+              <% } else { %>
+                <span class="init"><%= row.surveyorInitials || "TBC" %></span>
+              <% } %>
+            </td>
+            <td class="num g-dwell"><%= fmt(row.dwellings.total) %></td>
+            <td class="num g-dwell"><%= fmt(row.dwellings.target) %></td>
+            <td class="num g-dwell <%= hi(row.dwellings.fullDone) %>"><%= fmt(row.dwellings.fullDone) %></td>
+            <td class="num g-dwell"><%= fmt(row.dwellings.toDo) %></td>
+            <td class="num g-dwell"><%= row.dwellings.pctDone %></td>
+            <td class="num col-visited <%= hi(row.dwellings.visitedYes) %>"><%= fmt(row.dwellings.visitedYes) %></td>
+            <td class="num col-visited"><%= fmt(row.dwellings.visitedNo) %></td>
+            <td class="num col-external <%= hi(row.dwellings.extDone) %>"><%= fmt(row.dwellings.extDone) %></td>
+            <td class="num col-external"><%= fmt(row.dwellings.extToDo) %></td>
+            <td class="num g-block"><%= fmt(row.blocks.total) %></td>
+            <td class="num g-block <%= hi(row.blocks.done) %>"><%= fmt(row.blocks.done) %></td>
+            <td class="num g-block"><%= fmt(row.blocks.toDo) %></td>
+            <td class="num g-gar"><%= fmt(row.garages.total) %></td>
+            <td class="num g-gar <%= hi(row.garages.done) %>"><%= fmt(row.garages.done) %></td>
+            <td class="num g-gar"><%= fmt(row.garages.toDo) %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+        <% if (sample.patchTotals) { const t = sample.patchTotals; %>
+        <tfoot>
+          <tr>
+            <td colspan="3">TOTALS</td>
+            <td class="num g-dwell"><%= fmt(t.dwellings.total) %></td>
+            <td class="num g-dwell"><%= fmt(t.dwellings.target) %></td>
+            <td class="num g-dwell <%= hi(t.dwellings.fullDone) %>"><%= fmt(t.dwellings.fullDone) %></td>
+            <td class="num g-dwell"><%= fmt(t.dwellings.toDo) %></td>
+            <td class="num g-dwell"><%= t.dwellings.pctDone %></td>
+            <td class="num col-visited <%= hi(t.dwellings.visitedYes) %>"><%= fmt(t.dwellings.visitedYes) %></td>
+            <td class="num col-visited"><%= fmt(t.dwellings.visitedNo) %></td>
+            <td class="num col-external <%= hi(t.dwellings.extDone) %>"><%= fmt(t.dwellings.extDone) %></td>
+            <td class="num col-external"><%= fmt(t.dwellings.extToDo) %></td>
+            <td class="num g-block"><%= fmt(t.blocks.total) %></td>
+            <td class="num g-block <%= hi(t.blocks.done) %>"><%= fmt(t.blocks.done) %></td>
+            <td class="num g-block"><%= fmt(t.blocks.toDo) %></td>
+            <td class="num g-gar"><%= fmt(t.garages.total) %></td>
+            <td class="num g-gar <%= hi(t.garages.done) %>"><%= fmt(t.garages.done) %></td>
+            <td class="num g-gar"><%= fmt(t.garages.toDo) %></td>
+          </tr>
+        </tfoot>
+        <% } %>
+      </table>
+    </div>
+    <% } %>
+  </div>
+
+  <div class="sa-lower">
+    <div class="sa-panel">
+      <h3>Surveyor Breakdown</h3>
+      <p class="sa-note"><%= sample.usedProjectPersonnel ? "People allocated to this project." : "No one is allocated on Personnel yet, so this lists surveyors already on the stock." %></p>
+      <% if (!sample.surveyors.length) { %>
+        <p class="empty">No surveyors to show yet.</p>
+      <% } else { %>
+      <div class="sa-surv-wrap">
+        <table class="sa-surv">
+          <thead>
+            <tr>
+              <th rowspan="2">Surveyor</th>
+              <th rowspan="2">Initials</th>
+              <th class="sb-group-dwell" colspan="3">Dwellings</th>
+              <th class="sb-group-ext" colspan="2">Externals</th>
+              <th class="sb-group-visited" colspan="2">Visited</th>
+              <th class="sb-group-blocks" colspan="2">Blocks</th>
+            </tr>
+            <tr>
+              <th class="sb-dwell-target num">Target</th>
+              <th class="sb-dwell-done num">Done</th>
+              <th class="sb-dwell-todo num">To Do</th>
+              <th class="sb-ext-done num">Done</th>
+              <th class="sb-ext-todo num">To Do</th>
+              <th class="sb-visited num">YES</th>
+              <th class="sb-visited num">NO</th>
+              <th class="sb-block-done num">Done</th>
+              <th class="sb-block-todo num">To Do</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% sample.surveyors.forEach(function (row) { %>
+            <tr class="<%= row.active ? 'active-surv' : '' %>">
+              <td><%= row.name %></td>
+              <td class="init"><%= row.initials %></td>
+              <td class="num"><%= fmt(row.dwellingsTarget) %></td>
+              <td class="num <%= hi(row.dwellingsDone) %>"><%= fmt(row.dwellingsDone) %></td>
+              <td class="num"><%= fmt(row.dwellingsToDo) %></td>
+              <td class="num <%= hi(row.extDone) %>"><%= fmt(row.extDone) %></td>
+              <td class="num"><%= fmt(row.extToDo) %></td>
+              <td class="num <%= hi(row.visitedYes) %>"><%= fmt(row.visitedYes) %></td>
+              <td class="num"><%= fmt(row.visitedNo) %></td>
+              <td class="num <%= hi(row.blocksDone) %>"><%= fmt(row.blocksDone) %></td>
+              <td class="num"><%= fmt(row.blocksToDo) %></td>
+            </tr>
+            <% }) %>
+            <% if (sample.surveyorTotals) { const t = sample.surveyorTotals; %>
+            <tr class="surv-total">
+              <td>Total</td>
+              <td class="init"></td>
+              <td class="num"><%= fmt(t.dwellingsTarget) %></td>
+              <td class="num"><%= fmt(t.dwellingsDone) %></td>
+              <td class="num"><%= fmt(t.dwellingsToDo) %></td>
+              <td class="num"><%= fmt(t.extDone) %></td>
+              <td class="num"><%= fmt(t.extToDo) %></td>
+              <td class="num"><%= fmt(t.visitedYes) %></td>
+              <td class="num"><%= fmt(t.visitedNo) %></td>
+              <td class="num"><%= fmt(t.blocksDone) %></td>
+              <td class="num"><%= fmt(t.blocksToDo) %></td>
+            </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+      <% } %>
+    </div>
+
+    <div class="sa-panel sa-job">
+      <h3>Whole Project Overview</h3>
+      <% const d = sample.overview.dwellings; const b = sample.overview.blocks; const g = sample.overview.garages; %>
+      <div class="job-section">Dwellings</div>
+      <div class="job-grid">
+        <div class="job-item"><div class="label">Total Dwellings</div><div class="value"><%= fmt(d.total) %></div></div>
+        <div class="job-item"><div class="label">Omitted</div><div class="value"><%= fmt(d.omitted) %></div></div>
+        <div class="job-item"><div class="label">Viable</div><div class="value"><%= fmt(d.viable) %></div></div>
+        <div class="job-item"><div class="label">Project Target</div><div class="value"><%= d.projectTarget %></div></div>
+        <div class="job-item"><div class="label">Completed</div><div class="value"><%= fmt(d.completed) %></div></div>
+        <div class="job-item"><div class="label">Remaining</div><div class="value"><%= fmt(d.remaining) %></div></div>
+        <div class="job-item"><div class="label">% Project Done</div><div class="value"><%= d.pctProjectDone %></div></div>
+        <div class="job-item"><div class="label">Access Rate</div><div class="value"><%= d.accessRate %></div></div>
+        <div class="job-item"><div class="label">Ext-Only Done</div><div class="value"><%= fmt(d.extDone) %></div></div>
+        <div class="job-item"><div class="label">Ext-Only To Do</div><div class="value"><%= fmt(d.extToDo) %></div></div>
+      </div>
+      <div class="job-section">Blocks</div>
+      <div class="job-grid">
+        <div class="job-item"><div class="label">Total Blocks</div><div class="value"><%= fmt(b.total) %></div></div>
+        <div class="job-item"><div class="label">Viable</div><div class="value"><%= fmt(b.viable) %></div></div>
+        <div class="job-item"><div class="label">Completed</div><div class="value"><%= fmt(b.completed) %></div></div>
+        <div class="job-item"><div class="label">Remaining</div><div class="value"><%= fmt(b.remaining) %></div></div>
+      </div>
+      <div class="job-section">Garages</div>
+      <div class="job-grid">
+        <div class="job-item"><div class="label">Total Garages</div><div class="value"><%= fmt(g.total) %></div></div>
+        <div class="job-item"><div class="label">Completed</div><div class="value"><%= fmt(g.completed) %></div></div>
+        <div class="job-item"><div class="label">Remaining</div><div class="value"><%= fmt(g.remaining) %></div></div>
+      </div>
+      <div class="job-section">Schedule</div>
+      <div class="job-grid">
+        <div class="job-item">
+          <div class="label">Start Date</div>
+          <% if (canEdit) { %>
+            <input type="date" id="job-start-date" value="<%= project.sampleStartDate || '' %>" data-sa-date="sampleStartDate" aria-label="Start Date" />
+          <% } else { %>
+            <div class="value"><%= project.sampleStartDate ? project.sampleStartDate.split("-").reverse().join("/") : "—" %></div>
+          <% } %>
+        </div>
+        <div class="job-item">
+          <div class="label">Target End Date</div>
+          <% if (canEdit) { %>
+            <input type="date" id="job-target-end-date" value="<%= project.sampleTargetEndDate || '' %>" data-sa-date="sampleTargetEndDate" aria-label="Target End Date" />
+          <% } else { %>
+            <div class="value"><%= project.sampleTargetEndDate ? project.sampleTargetEndDate.split("-").reverse().join("/") : "—" %></div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="sa-footer">% Project Done: Full Surveys Done (not external-only) ÷ dwellings that have a patch. Omit Asset rows stay in stock but are left out of the counts.</p>
+  <p class="sa-access">Access rate: Full Surveys Done ÷ dwellings that have had any visit (no answer, successful, failed appointment, access refused, and so on).</p>
+</div>

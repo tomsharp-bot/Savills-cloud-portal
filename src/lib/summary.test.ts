@@ -18,6 +18,8 @@ function project(): Project {
     typeValidations: false,
     projectTargetValue: 75,
     projectTargetUnit: "percent",
+    sampleStartDate: "",
+    sampleTargetEndDate: "",
     createdAt: new Date(),
     updatedAt: new Date(),
   };

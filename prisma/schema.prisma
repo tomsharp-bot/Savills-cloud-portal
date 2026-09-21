@@ -62,16 +62,34 @@ model Project {
   typeValidations      Boolean           @default(false)
   projectTargetValue   Int               @default(75)
   projectTargetUnit    ProjectTargetUnit @default(percent)
+  sampleStartDate      String            @default("")
+  sampleTargetEndDate  String            @default("")
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
   access               ProjectAccess[]
   assets               Asset[]
+  patchSamples         PatchSample[]
   visitLogs            VisitLog[]
   loaderHistory        LoaderHistory[]
   completions          Completion[]
   documents            ProjectDocument[]
   externalLink         ExternalLink?
   hhsrsSiteSubmissions HhsrsSiteSubmission[]
+}
+
+/// Admin-edited Sample Analysis labels for one stock patch on a project.
+model PatchSample {
+  id               String   @id @default(cuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  patch            String
+  areaName         String   @default("")
+  surveyorInitials String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([projectId, patch])
+  @@index([projectId])
 }
 
 model ProjectAccess {

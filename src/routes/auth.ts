@@ -11,7 +11,7 @@ authRouter.get("/login", (req: Request, res: Response) => {
     res.redirect("/projects");
     return;
   }
-  res.render("login", { error: "", username: "phil.m" });
+  res.render("login", { error: "", username: "" });
 });
 
 authRouter.post("/login", async (req: Request, res: Response) => {

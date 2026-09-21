@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AuthedUser } from "./access.js";
 import {
+  canEditSampleAnalysis,
   canSeeCompletions,
   canSeeProjectTab,
   defaultProjectTab,
@@ -29,6 +30,7 @@ describe("Project tab visibility", () => {
     assert.deepEqual(visibleProjectTabs(client), ["completions"]);
     assert.equal(defaultProjectTab(client), "completions");
     assert.equal(canSeeProjectTab(client, "summary"), false);
+    assert.equal(canSeeProjectTab(client, "sample-analysis"), false);
     assert.equal(canSeeProjectTab(client, "dwellings"), false);
     assert.equal(canSeeProjectTab(client, "documents"), false);
     assert.equal(canSeeProjectTab(client, "loader"), false);
@@ -41,7 +43,11 @@ describe("Project tab visibility", () => {
     assert.equal(canSeeCompletions(surveyor), false);
     assert.equal(canSeeProjectTab(surveyor, "dwellings"), true);
     assert.equal(canSeeProjectTab(surveyor, "summary"), true);
+    assert.equal(canSeeProjectTab(surveyor, "sample-analysis"), true);
+    assert.equal(canEditSampleAnalysis(surveyor), false);
     assert.equal(canSeeProjectTab(surveyor, "documents"), true);
+    const surveyorTabs = visibleProjectTabs(surveyor);
+    assert.equal(surveyorTabs[surveyorTabs.indexOf("summary") + 1], "sample-analysis");
     assert.equal(canSeeProjectTab(surveyor, "loader"), false);
     assert.ok(!visibleProjectTabs(surveyor).includes("completions"));
   });
@@ -52,6 +58,10 @@ describe("Project tab visibility", () => {
     assert.equal(canSeeProjectTab(admin, "completions"), true);
     assert.equal(canSeeProjectTab(admin, "loader"), true);
     assert.equal(canSeeProjectTab(admin, "dwellings"), true);
+    assert.equal(canSeeProjectTab(admin, "sample-analysis"), true);
+    assert.equal(canEditSampleAnalysis(admin), true);
     assert.ok(visibleProjectTabs(admin).includes("completions"));
+    const adminTabs = visibleProjectTabs(admin);
+    assert.equal(adminTabs[adminTabs.indexOf("summary") + 1], "sample-analysis");
   });
 });

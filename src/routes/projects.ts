@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import type { ProjectStage } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import {
+  canEditSampleAnalysis,
   canSeeProject,
   canSeeProjectTab,
   defaultProjectTab,
@@ -19,6 +20,7 @@ import { reapplyExternalLink } from "../lib/external.js";
 import { parseProjectTarget } from "../lib/project-target.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
 import { assetStatusFilterOptions } from "../lib/asset-status.js";
+import { buildSampleAnalysis } from "../lib/sample-analysis.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 
 export const projectsRouter = Router();
@@ -179,6 +181,8 @@ projectsRouter.post("/:id/copy", async (req: Request, res: Response) => {
       typeValidations: src.typeValidations,
       projectTargetValue: src.projectTargetValue,
       projectTargetUnit: src.projectTargetUnit,
+      sampleStartDate: src.sampleStartDate,
+      sampleTargetEndDate: src.sampleTargetEndDate,
     },
   });
   res.redirect("/projects?notice=" + encodeURIComponent("Copied to " + name));
@@ -250,7 +254,7 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
   });
   const surveyors = await prisma.user.findMany({
     where: { role: "surveyor" },
-    select: { initials: true, agency: true },
+    select: { id: true, name: true, initials: true, agency: true },
   });
   const agencyByInitials = new Map(
     surveyors.filter((s) => s.initials).map((s) => [s.initials!.toUpperCase(), s.agency || ""])
@@ -270,6 +274,28 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
   });
 
   const summary = buildSummary(project, assets);
+  let sample: ReturnType<typeof buildSampleAnalysis> & { canEdit: boolean } | null = null;
+  if (tab === "sample-analysis") {
+    const [patchMeta, accessRows] = await Promise.all([
+      prisma.patchSample.findMany({ where: { projectId: project.id } }),
+      prisma.projectAccess.findMany({
+        where: { projectId: project.id },
+        select: { userId: true },
+      }),
+    ]);
+    const allocatedIds = new Set(accessRows.map((row) => row.userId));
+    sample = {
+      ...buildSampleAnalysis({
+        assets,
+        projectTargetValue: project.projectTargetValue,
+        projectTargetUnit: project.projectTargetUnit,
+        patchMeta,
+        allocatedSurveyors: surveyors.filter((person) => allocatedIds.has(person.id)),
+        knownSurveyors: surveyors,
+      }),
+      canEdit: canEditSampleAnalysis(user),
+    };
+  }
   const completions = await prisma.completion.findMany({
     where: { projectId: project.id },
     orderBy: { generatedAt: "desc" },
@@ -333,7 +359,116 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
       garage: stockColumns("garage", { includeAdminOnly: isAdmin(user) }),
     },
     adminEditCols: isAdmin(user) ? [...ADMIN_EDIT_STOCK_COLS] : [],
+    sample,
     notice: req.query.notice || "",
     error: req.query.error || "",
   });
+});
+
+function cleanAreaName(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+function cleanInitials(raw: unknown): string {
+  return String(raw ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 12);
+}
+
+function cleanIsoDate(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (s === "") return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [year, month, day] = s.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return s;
+}
+
+async function loadEditableProject(req: Request, res: Response) {
+  if (!canEditSampleAnalysis(req.user!)) {
+    res.status(403).json({ error: "Admin only." });
+    return null;
+  }
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ error: "Project not found." });
+    return null;
+  }
+  return project;
+}
+
+projectsRouter.post("/:id/sample-analysis/patch", async (req: Request, res: Response) => {
+  const project = await loadEditableProject(req, res);
+  if (!project) return;
+  const patch = String(req.body.patch || "").trim().slice(0, 80);
+  if (!patch) {
+    res.status(400).json({ error: "Enter a patch." });
+    return;
+  }
+  const hasArea = Object.prototype.hasOwnProperty.call(req.body, "areaName");
+  const hasInitials = Object.prototype.hasOwnProperty.call(req.body, "surveyorInitials");
+  if (!hasArea && !hasInitials) {
+    res.status(400).json({ error: "Nothing to save." });
+    return;
+  }
+  const existing = await prisma.patchSample.findUnique({
+    where: { projectId_patch: { projectId: project.id, patch } },
+  });
+  const areaName = hasArea ? cleanAreaName(req.body.areaName) : existing?.areaName || "";
+  const surveyorInitials = hasInitials ? cleanInitials(req.body.surveyorInitials) : existing?.surveyorInitials || "";
+  await prisma.patchSample.upsert({
+    where: { projectId_patch: { projectId: project.id, patch } },
+    create: { projectId: project.id, patch, areaName, surveyorInitials },
+    update: { areaName, surveyorInitials },
+  });
+  let updatedAssets = 0;
+  if (hasInitials) {
+    const rows = await prisma.asset.findMany({
+      where: { projectId: project.id, omitAsset: false },
+      select: { id: true, patch: true },
+    });
+    const ids = rows.filter((row) => row.patch.trim() === patch).map((row) => row.id);
+    if (ids.length) {
+      const updated = await prisma.asset.updateMany({
+        where: { id: { in: ids } },
+        data: { surveyor: surveyorInitials },
+      });
+      updatedAssets = updated.count;
+    }
+  }
+  res.json({ ok: true, patch, areaName, surveyorInitials, updatedAssets });
+});
+
+projectsRouter.post("/:id/sample-analysis/schedule", async (req: Request, res: Response) => {
+  const project = await loadEditableProject(req, res);
+  if (!project) return;
+  const data: { sampleStartDate?: string; sampleTargetEndDate?: string } = {};
+  if (Object.prototype.hasOwnProperty.call(req.body, "sampleStartDate")) {
+    const start = cleanIsoDate(req.body.sampleStartDate);
+    if (start == null) {
+      res.status(400).json({ error: "Start Date must be a real date." });
+      return;
+    }
+    data.sampleStartDate = start;
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body, "sampleTargetEndDate")) {
+    const end = cleanIsoDate(req.body.sampleTargetEndDate);
+    if (end == null) {
+      res.status(400).json({ error: "Target End Date must be a real date." });
+      return;
+    }
+    data.sampleTargetEndDate = end;
+  }
+  if (!Object.keys(data).length) {
+    res.status(400).json({ error: "Nothing to save." });
+    return;
+  }
+  await prisma.project.update({ where: { id: project.id }, data });
+  res.json({ ok: true, ...data });
 });

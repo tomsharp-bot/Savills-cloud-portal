@@ -378,7 +378,10 @@ describe("Account password and Personnel temp reset", () => {
     const login = await request(app, "GET", "/login");
     assert.equal(login.status, 200);
     assert.match(login.body, /name="password"/);
-    assert.match(login.body, /PhilMoon2468/);
+    assert.match(login.body, /Log in/);
+    assert.doesNotMatch(login.body, /PhilMoon2468/);
+    assert.doesNotMatch(login.body, /Demo accounts/);
+    assert.doesNotMatch(login.body, /phil\.m/);
 
     const account = await request(app, "GET", "/account/password");
     assert.equal(account.status, 302);

@@ -73,6 +73,10 @@ export function canManagePersonnel(user: AuthedUser): boolean {
   return isAdmin(user);
 }
 
+export function canEditSampleAnalysis(user: AuthedUser): boolean {
+  return isAdmin(user);
+}
+
 export function canSeeUpcoming(user: AuthedUser): boolean {
   return isAdmin(user);
 }
@@ -84,6 +88,7 @@ export function clientForcedTab(user: AuthedUser, tab: string): string {
 
 export const PROJECT_TABS = [
   "summary",
+  "sample-analysis",
   "dwellings",
   "blocks",
   "garages",
@@ -95,7 +100,16 @@ export const PROJECT_TABS = [
 
 export type ProjectTab = (typeof PROJECT_TABS)[number];
 
-export const FIELD_TABS = new Set(["summary", "dwellings", "blocks", "garages", "hierarchy", "documents", "loader"]);
+export const FIELD_TABS = new Set([
+  "summary",
+  "sample-analysis",
+  "dwellings",
+  "blocks",
+  "garages",
+  "hierarchy",
+  "documents",
+  "loader",
+]);
 
 export function isProjectTab(tab: string): tab is ProjectTab {
   return (PROJECT_TABS as readonly string[]).includes(tab);

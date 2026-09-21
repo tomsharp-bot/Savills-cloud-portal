@@ -26,6 +26,7 @@
         <nav class="sidebar">
           <% const tabs = [
             ["summary","Summary", true],
+            ["sample-analysis","Sample Analysis", true],
             ["dwellings","Dwellings", true],
             ["blocks","Blocks", true],
             ["garages","Garages", true],
@@ -42,7 +43,7 @@
             <a class="tab <%= tab === key ? 'active' : '' %>" href="<%= baseUrl('/projects/' + project.id + '?tab=' + key) %>"><%= label %></a>
           <% }) %>
         </nav>
-        <div class="panel">
+        <div class="panel <%= tab === 'sample-analysis' ? 'panel-sample' : '' %>">
           <% if (tab === "summary") { %>
             <h3 style="margin:0 0 4px;color:var(--navy)">Summary</h3>
             <p style="margin:0;color:var(--muted);font-size:.9rem">Tiles follow the survey types switched on for this project.</p>
@@ -56,6 +57,10 @@
                 </div>
               <% }) %>
             </div>
+          <% } %>
+
+          <% if (tab === "sample-analysis" && sample) { %>
+            <%- include("partials/sample-analysis", { project, sample }) %>
           <% } %>
 
           <% if (tab === "dwellings") { %>

@@ -374,6 +374,70 @@
     });
   });
 
+  const sampleRoot = document.getElementById("sample-analysis");
+  if (sampleRoot && sampleRoot.dataset.canEdit === "1") {
+    const projectId = sampleRoot.dataset.project;
+    const statusEl = document.getElementById("surv-status");
+    function showSampleStatus(message) {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.classList.remove("empty");
+    }
+    function reloadSample(message) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "sample-analysis");
+      url.searchParams.set("notice", message);
+      window.location.assign(url.toString());
+    }
+    async function saveSample(path, body) {
+      const res = await fetch(appUrl("/projects/" + projectId + path), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Could not save");
+        return null;
+      }
+      return data;
+    }
+    sampleRoot.querySelectorAll(".surv-input").forEach((inp) => {
+      inp.addEventListener("input", () => {
+        inp.value = inp.value.toUpperCase();
+        inp.classList.toggle("has-value", inp.value.trim() !== "");
+      });
+    });
+    sampleRoot.querySelectorAll("[data-sa-field]").forEach((inp) => {
+      inp.addEventListener("change", async () => {
+        const field = inp.getAttribute("data-sa-field");
+        const patch = inp.getAttribute("data-sa-patch");
+        const body = { patch: patch };
+        body[field] = inp.value;
+        const data = await saveSample("/sample-analysis/patch", body);
+        if (!data) return;
+        if (field === "surveyorInitials") {
+          const who = data.surveyorInitials || "blank";
+          reloadSample(
+            "Set Surveyor = " + who + " on " + data.updatedAssets + " stock row(s) for " + data.patch + "."
+          );
+        } else {
+          showSampleStatus("Saved area name for " + data.patch + ".");
+        }
+      });
+    });
+    sampleRoot.querySelectorAll("[data-sa-date]").forEach((inp) => {
+      inp.addEventListener("change", async () => {
+        const field = inp.getAttribute("data-sa-date");
+        const body = {};
+        body[field] = inp.value;
+        const data = await saveSample("/sample-analysis/schedule", body);
+        if (!data) return;
+        showSampleStatus(field === "sampleStartDate" ? "Saved Start Date." : "Saved Target End Date.");
+      });
+    });
+  }
+
   const changePwForm = document.getElementById("change-password-form");
   if (changePwForm) {
     changePwForm.addEventListener("submit", (e) => {
