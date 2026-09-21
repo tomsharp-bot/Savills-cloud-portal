@@ -15,6 +15,7 @@
         <div>
           <h2 class="page-title">Personnel</h2>
           <p class="page-sub">Surveyors, Clients, then Admins. Surveyor initials link stock rows (Surveyed By / Surveyor) to Agency. Clients get company, project ticks, freeze and remove.</p>
+          <p class="pw-admin-note">Temp passwords shown here are the last ones issued by an admin. Once a user sets their own password, that secret cannot be revealed — use <strong>Reset temp PW</strong> to issue a new temporary password (copy it from the notice and the row).</p>
         </div>
         <span class="badge">Postgres</span>
       </div>
@@ -51,12 +52,7 @@
                   <td class="col-initials"><input class="initials-input" type="text" data-initials="<%= s.id %>" value="<%= s.initials || '' %>" /></td>
                   <td class="col-user"><%= s.username %></td>
                   <td class="col-agency"><input class="agency-input" type="text" data-agency="<%= s.id %>" value="<%= s.agency || '' %>" /></td>
-                  <td class="col-pw">
-                    <span class="temp-pw"><%= s.lastTempPassword || "—" %></span>
-                    <form class="inline-form" method="post" action="<%= baseUrl('/personnel/' + s.id + '/reset-password') %>">
-                      <button class="btn btn-ghost btn-sm" type="submit">Reset temp PW</button>
-                    </form>
-                  </td>
+                  <%- include("partials/temp-password-cell", { person: s }) %>
                   <% projects.forEach(p => { %>
                     <td class="col-tick">
                       <input type="checkbox" data-access="<%= s.id %>" data-project="<%= p.id %>" <%= granted.has(p.id) ? "checked" : "" %> />
@@ -119,12 +115,7 @@
                   <td class="col-freeze">
                     <input type="checkbox" data-freeze="<%= c.id %>" <%= c.frozen ? "checked" : "" %> />
                   </td>
-                  <td class="col-pw">
-                    <span class="temp-pw"><%= c.lastTempPassword || "—" %></span>
-                    <form class="inline-form" method="post" action="<%= baseUrl('/personnel/' + c.id + '/reset-password') %>">
-                      <button class="btn btn-ghost btn-sm" type="submit">Reset temp PW</button>
-                    </form>
-                  </td>
+                  <%- include("partials/temp-password-cell", { person: c }) %>
                   <td class="col-actions">
                     <form class="inline-form" method="post" action="<%= baseUrl('/personnel/' + c.id + '/delete') %>" onsubmit="return confirm('Remove access for <%= c.name %>?');">
                       <button class="btn btn-danger btn-sm" type="submit">Remove Access</button>
@@ -155,12 +146,7 @@
                 <tr>
                   <td><%= a.name %></td>
                   <td class="col-email"><%= a.email %></td>
-                  <td class="col-pw">
-                    <span class="temp-pw"><%= a.lastTempPassword || "—" %></span>
-                    <form class="inline-form" method="post" action="<%= baseUrl('/personnel/' + a.id + '/reset-password') %>">
-                      <button class="btn btn-ghost btn-sm" type="submit">Reset temp PW</button>
-                    </form>
-                  </td>
+                  <%- include("partials/temp-password-cell", { person: a }) %>
                   <td class="col-actions">
                     <form class="inline-form" method="post" action="<%= baseUrl('/personnel/' + a.id + '/delete') %>" onsubmit="return confirm('Remove admin <%= a.name %>?');">
                       <button class="btn btn-danger btn-sm" type="submit">Remove</button>

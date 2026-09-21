@@ -19,10 +19,11 @@ Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site
 ## What this app does
 
 - Cookie-session login (`admin` | `surveyor` | `client`). Client/surveyor with no Personnel project ticks stay on login (admins always enter).
+- Self-service **Change password** (header link for every signed-in role). Chosen passwords are hashed only — not stored in plaintext.
+- **Personnel** (surveyors, clients, admins). Admins can reset a temporary password, copy it, and see the last admin-issued temp until the user sets their own.
 - Projects on **Current / Upcoming / Archive** boards (archive board shows the 5 most recent; **See Full Archive** lists all)
 - Create/Edit **Project Target** as a count or percent — shown on Summary
 - Survey-type ticks drive **Summary** KPI columns
-- **Personnel** (surveyors, clients, admins)
 - Stock tabs **Dwellings / Blocks / Garages** (Site Comments, Omit Asset, External, “X of Y Assets Displayed”)
 - **Data Loader**: visit Excel/CSV, Asset Status rules, Visit Log, Auto-route D/B/G
 - **Upload or refresh stocklist** (first upload on an empty project loads the full list; later files add/remove mid-job)
@@ -59,7 +60,7 @@ If Postgres is already on port 5432, create a database and point `DATABASE_URL` 
 | Surveyor | `alex.s`   | `AlexSurveyor2468` |
 | Client   | `client.j` | `ClientJones2468`  |
 
-Do **not** weaken these in production seed. Change them only via Personnel after go-live if needed.
+Do **not** weaken these in production seed. After go-live, users change their own password via **Change password** in the header. Admins can issue a new random temporary password from **Personnel**.
 
 ### Tests
 

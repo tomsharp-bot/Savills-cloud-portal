@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { hashPassword, tempPassword } from "../lib/passwords.js";
+import { issueTempPassword } from "../lib/passwords.js";
 import { uniqueInitials } from "../lib/initials.js";
 import { requireAdmin } from "../middleware/auth.js";
 
@@ -62,7 +62,7 @@ personnelRouter.post("/surveyors", async (req: Request, res: Response) => {
     name,
     existing.map((s) => s.initials || "")
   );
-  const pw = tempPassword(name);
+  const { plain: pw, hash } = await issueTempPassword();
   await prisma.user.create({
     data: {
       username,
@@ -70,7 +70,7 @@ personnelRouter.post("/surveyors", async (req: Request, res: Response) => {
       role: "surveyor",
       agency,
       initials,
-      passwordHash: await hashPassword(pw),
+      passwordHash: hash,
       lastTempPassword: pw,
     },
   });
@@ -90,7 +90,7 @@ personnelRouter.post("/clients", async (req: Request, res: Response) => {
     res.redirect("/personnel?error=" + encodeURIComponent("That username is already taken."));
     return;
   }
-  const pw = tempPassword(person);
+  const { plain: pw, hash } = await issueTempPassword();
   await prisma.user.create({
     data: {
       username,
@@ -98,7 +98,7 @@ personnelRouter.post("/clients", async (req: Request, res: Response) => {
       role: "client",
       company,
       clientRole,
-      passwordHash: await hashPassword(pw),
+      passwordHash: hash,
       lastTempPassword: pw,
     },
   });
@@ -117,14 +117,14 @@ personnelRouter.post("/admins", async (req: Request, res: Response) => {
     res.redirect("/personnel?error=" + encodeURIComponent("That email / username is already taken."));
     return;
   }
-  const pw = tempPassword(name);
+  const { plain: pw, hash } = await issueTempPassword();
   await prisma.user.create({
     data: {
       username,
       email,
       name,
       role: "admin",
-      passwordHash: await hashPassword(pw),
+      passwordHash: hash,
       lastTempPassword: pw,
     },
   });
@@ -190,12 +190,15 @@ personnelRouter.post("/:id/reset-password", async (req: Request, res: Response) 
     res.redirect("/personnel?error=" + encodeURIComponent("Account not found."));
     return;
   }
-  const pw = tempPassword(user.name);
+  const { plain: pw, hash } = await issueTempPassword();
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash: await hashPassword(pw), lastTempPassword: pw },
+    data: { passwordHash: hash, lastTempPassword: pw },
   });
-  res.redirect("/personnel?notice=" + encodeURIComponent(`Reset temp password for ${user.name}: ${pw}`));
+  res.redirect(
+    "/personnel?notice=" +
+      encodeURIComponent(`Reset temporary password for ${user.name}: ${pw} — copy it now. It stays listed here until they set their own password.`)
+  );
 });
 
 personnelRouter.post("/:id/delete", async (req: Request, res: Response) => {

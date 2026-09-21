@@ -371,3 +371,47 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.equal(adminList.location, "/projectprogress/login");
   });
 });
+
+describe("Account password and Personnel temp reset", () => {
+  it("keeps login working and sends signed-out users to login from Change password", async () => {
+    const app = createApp({ basePath: "" });
+    const login = await request(app, "GET", "/login");
+    assert.equal(login.status, 200);
+    assert.match(login.body, /name="password"/);
+    assert.match(login.body, /PhilMoon2468/);
+
+    const account = await request(app, "GET", "/account/password");
+    assert.equal(account.status, 302);
+    assert.equal(account.location, "/login");
+
+    const accountRoot = await request(app, "GET", "/account");
+    assert.equal(accountRoot.status, 302);
+    assert.equal(accountRoot.location, "/login");
+
+    const personnel = await request(app, "GET", "/personnel");
+    assert.equal(personnel.status, 302);
+    assert.equal(personnel.location, "/login");
+  });
+
+  it("prefixes Change password under BASE_PATH=/projectprogress", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const account = await request(app, "GET", "/projectprogress/account/password");
+    assert.equal(account.status, 302);
+    assert.equal(account.location, "/projectprogress/login");
+  });
+
+  it("ships Change password in the header and copy/reset helpers on static assets", async () => {
+    const app = createApp({ basePath: "" });
+    const css = await request(app, "GET", "/css/app.css");
+    assert.equal(css.status, 200);
+    assert.match(css.body, /\.account-card/);
+    assert.match(css.body, /\.temp-pw-row/);
+    assert.match(css.body, /\.pw-admin-note/);
+
+    const js = await request(app, "GET", "/js/app.js");
+    assert.equal(js.status, 200);
+    assert.match(js.body, /data-copy/);
+    assert.match(js.body, /change-password-form/);
+    assert.match(js.body, /New password must be at least 10 characters/);
+  });
+});

@@ -5,6 +5,7 @@ import { config, isProduction } from "./config.js";
 import { baseUrl, normalizeBasePath, prefixRedirectUrl } from "./lib/base-path.js";
 import { loadUser, requireAuth } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
+import { accountRouter } from "./routes/account.js";
 import { projectsRouter } from "./routes/projects.js";
 import { personnelRouter } from "./routes/personnel.js";
 import { stockRouter } from "./routes/stock.js";
@@ -129,6 +130,7 @@ export function createApp(options: CreateAppOptions = {}) {
   });
 
   portal.use(requireAuth);
+  portal.use("/account", accountRouter);
   portal.use("/projects", projectsRouter);
   portal.use("/personnel", personnelRouter);
   portal.use(stockRouter);
