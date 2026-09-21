@@ -1,13 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import type { AssetKind } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { canSeeProject, canUseLoader } from "../lib/access.js";
 import { userAccessIds } from "../middleware/auth.js";
 import { parseUprnWorkbook, parseWorkbook } from "../lib/excel.js";
 import { applyVisitRows, type LoaderTarget } from "../lib/loader.js";
 import { DEMO_VISIT_ROWS } from "../lib/demo-visits.js";
-import { applyStocklistRefresh } from "../lib/stock-refresh.js";
+import { applyStocklistRefresh, formatStockRefreshResult } from "../lib/stock-refresh.js";
 import { flaggedUprnsFromRows, persistExternalLink, applyExternalUprnSet } from "../lib/external.js";
 
 export const loaderRouter = Router();
@@ -19,11 +18,6 @@ function parseTarget(raw: unknown): LoaderTarget {
   if (v === "blocks" || v === "block") return "block";
   if (v === "garages" || v === "garage") return "garage";
   return "auto";
-}
-
-function stockRefreshKind(raw: unknown): AssetKind {
-  const t = parseTarget(raw);
-  return t === "auto" ? "dwelling" : t;
 }
 
 loaderRouter.post("/projects/:id/loader", upload.single("file"), async (req: Request, res: Response) => {
@@ -139,20 +133,24 @@ loaderRouter.post("/projects/:id/stock-refresh", upload.single("file"), async (r
     return;
   }
   const alsoOmit = req.body.omitRemoved === "true" || req.body.omitRemoved === "on";
-  const kind = stockRefreshKind(req.body.target);
-  const result = await applyStocklistRefresh({ projectId: project.id, kind, rows, alsoOmit });
+  const target = parseTarget(req.body.target);
+  const result = await applyStocklistRefresh({ projectId: project.id, target, rows, alsoOmit });
   if (result.error) {
     res.redirect(`/projects/${project.id}?tab=loader&error=` + encodeURIComponent(result.error));
     return;
   }
+  const resultText = formatStockRefreshResult({
+    addedByTab: result.addedByTab,
+    removedCount: result.removed.length,
+    movedCount: result.moved,
+    alsoOmit,
+  });
   await prisma.loaderHistory.create({
     data: {
       projectId: project.id,
       file: req.file.originalname,
-      target: `${kind} (stock refresh)`,
-      result:
-        `Added ${result.added.length} · Removed (marked) ${result.removed.length}` +
-        (alsoOmit ? " · omitted from counts" : ""),
+      target: `${target} (stock refresh)`,
+      result: resultText,
     },
   });
   req.session = req.session || {};
@@ -161,14 +159,10 @@ loaderRouter.post("/projects/:id/stock-refresh", upload.single("file"), async (r
     added: result.added,
     removed: result.removed,
     alsoOmit,
-    tab: kind,
+    tab: target,
   };
   res.redirect(
-    `/projects/${project.id}?tab=loader&notice=` +
-      encodeURIComponent(
-        `Stocklist refresh applied to ${kind}: Added ${result.added.length}, Removed (marked) ${result.removed.length}` +
-          (alsoOmit ? " (removed also omitted from counts)." : ".")
-      )
+    `/projects/${project.id}?tab=loader&notice=` + encodeURIComponent(`Stocklist refresh: ${resultText}.`)
   );
 });
 

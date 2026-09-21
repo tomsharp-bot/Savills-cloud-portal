@@ -1,10 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { OMITTED_SURVEYED_NOTE, appendSurveyedNote, planStocklistRefresh, type RefreshAsset } from "./stock-refresh.js";
+import {
+  OMITTED_SURVEYED_NOTE,
+  appendSurveyedNote,
+  formatStockRefreshResult,
+  kindForStockRow,
+  planStocklistRefresh,
+  type RefreshAsset,
+} from "./stock-refresh.js";
 import { flaggedUprnsFromRows, isTruthyFlag } from "./external.js";
 
 function row(partial: Partial<RefreshAsset> & { uprn: string }): RefreshAsset {
   return {
+    kind: "dwelling",
     assetStatus: "No Visit",
     siteComments: "",
     external: "",
@@ -88,6 +96,114 @@ describe("Stocklist refresh plan", () => {
     assert.equal(appendSurveyedNote(""), OMITTED_SURVEYED_NOTE);
     assert.equal(appendSurveyedNote("Letter sent"), `Letter sent · ${OMITTED_SURVEYED_NOTE}`);
     assert.equal(appendSurveyedNote(OMITTED_SURVEYED_NOTE), OMITTED_SURVEYED_NOTE);
+  });
+});
+
+describe("Stocklist Auto routing to Dwellings / Blocks / Garages", () => {
+  it("adds mixed rows onto the tab inferred from Archetype / Asset Type / Survey Design", () => {
+    const plan = planStocklistRefresh(
+      [],
+      [
+        { UPRN: "D1", Archetype: "House", Street: "High St" },
+        { UPRN: "B1", Archetype: "Low-rise block", Street: "Quay St" },
+        { UPRN: "B2", "Survey Design": "MTVH Blocks" },
+        { UPRN: "G1", Archetype: "Garage" },
+        { UPRN: "G2", "Asset Type": "Garage Sites" },
+        { UPRN: "G3", asset_type: "Garages" },
+      ],
+      false,
+      "auto"
+    );
+    assert.deepEqual(
+      plan.added.map((a) => [a.uprn, a.kind]),
+      [
+        ["D1", "dwelling"],
+        ["B1", "block"],
+        ["B2", "block"],
+        ["G1", "garage"],
+        ["G2", "garage"],
+        ["G3", "garage"],
+      ]
+    );
+    assert.equal(plan.reclassified.length, 0);
+  });
+
+  it("routes Survey Type Blocks/Garages from an exported stocklist", () => {
+    const plan = planStocklistRefresh(
+      [],
+      [
+        { UPRN: "1", "Survey Type": "Condition Only" },
+        { UPRN: "2", "Survey Type": "Blocks" },
+        { UPRN: "3", "Survey Type": "Garages" },
+      ],
+      false
+    );
+    assert.deepEqual(
+      plan.added.map((a) => a.kind),
+      ["dwelling", "block", "garage"]
+    );
+  });
+
+  it("does not treat the address Block column as a type hint", () => {
+    const plan = planStocklistRefresh([], [{ UPRN: "D1", Block: "Harbour Court", Archetype: "Flat" }], false);
+    assert.equal(plan.added[0].kind, "dwelling");
+  });
+
+  it("prefers the file’s block/garage classification when the UPRN is already on Dwellings", () => {
+    const existing = [
+      row({ uprn: "B1", kind: "dwelling" }),
+      row({ uprn: "G1", kind: "dwelling" }),
+      row({ uprn: "D1", kind: "dwelling" }),
+    ];
+    const plan = planStocklistRefresh(
+      existing,
+      [
+        { UPRN: "B1", Archetype: "Block" },
+        { UPRN: "G1", "Asset Type": "Garage" },
+        { UPRN: "D1", Archetype: "House" },
+      ],
+      false,
+      "auto"
+    );
+    assert.deepEqual(plan.added, []);
+    assert.deepEqual(
+      plan.reclassified.map((r) => [r.uprn, r.from, r.to]),
+      [
+        ["B1", "dwelling", "block"],
+        ["G1", "dwelling", "garage"],
+      ]
+    );
+    assert.deepEqual(
+      plan.matched.map((m) => [m.uprn, m.kind]),
+      [["D1", "dwelling"]]
+    );
+  });
+
+  it("keeps an explicit Dwellings/Blocks/Garages target on that tab only", () => {
+    const plan = planStocklistRefresh(
+      [row({ uprn: "A", kind: "dwelling" })],
+      [
+        { UPRN: "A", Archetype: "Garage" },
+        { UPRN: "B", Archetype: "Block" },
+      ],
+      false,
+      "dwelling"
+    );
+    assert.equal(plan.matched[0].kind, "dwelling");
+    assert.equal(plan.added[0].kind, "dwelling");
+    assert.equal(plan.reclassified.length, 0);
+  });
+
+  it("formats added counts split D/B/G", () => {
+    assert.equal(
+      formatStockRefreshResult({
+        addedByTab: { dwelling: 3, block: 2, garage: 1 },
+        removedCount: 4,
+      }),
+      "Added 3 dwellings, 2 blocks, 1 garages · Removed (marked) 4"
+    );
+    assert.equal(kindForStockRow({ Archetype: "MTVH Blocks" }), "block");
+    assert.equal(kindForStockRow({ Archetype: "MTVH Blocks" }, "dwelling"), "dwelling");
   });
 });
 
