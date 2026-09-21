@@ -18,6 +18,7 @@ import { formatBytes } from "../lib/documents.js";
 import { reapplyExternalLink } from "../lib/external.js";
 import { parseProjectTarget } from "../lib/project-target.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
+import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 
 export const projectsRouter = Router();
@@ -324,6 +325,7 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     formatBytes,
     stockLabels: STOCK_LABELS,
     stockSelectCols: STOCK_SELECT_COLS,
+    assetStatusOptions: assetStatusFilterOptions(withAgency.map((a) => a.assetStatus)),
     stockDateCols: STOCK_DATE_COLS,
     stockColsByKind: {
       dwelling: stockColumns("dwelling", { includeAdminOnly: isAdmin(user) }),

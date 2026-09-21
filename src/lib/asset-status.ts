@@ -16,7 +16,34 @@ export function normalizeAccessType(raw: unknown): string {
   return String(raw ?? "")
     .trim()
     .toLowerCase()
+    .replace(/[-_]+/g, " ")
     .replace(/\s+/g, " ");
+}
+
+/** Dropdown options: canonical UI labels first, then any extra values already on rows. */
+export function assetStatusFilterOptions(existing: Iterable<string> = []): string[] {
+  const seen = new Set<string>(ASSET_STATUSES);
+  const extra: string[] = [];
+  for (const raw of existing) {
+    const v = String(raw ?? "").trim();
+    if (!v || seen.has(v)) continue;
+    seen.add(v);
+    extra.push(v);
+  }
+  extra.sort((a, b) => a.localeCompare(b));
+  return [...ASSET_STATUSES, ...extra];
+}
+
+function isSuccessfulAccess(at: string): boolean {
+  return (
+    at === "successful" ||
+    at === "success" ||
+    at.startsWith("successful ") ||
+    at === "completed" ||
+    at === "complete" ||
+    at === "full survey" ||
+    at === "full surveys"
+  );
 }
 
 export type StatusResult = {
@@ -46,10 +73,23 @@ export function statusFromVisit(accessType: unknown, visitType: unknown): Status
   if (at === "void") {
     return { assetStatus: "Void", setSurveyFields: false };
   }
-  if (at === "successful") {
+  if (isSuccessfulAccess(at)) {
     return { assetStatus: "Full Survey", setSurveyFields: true };
   }
   return { assetStatus: "No Access", setSurveyFields: false };
+}
+
+export type VisitStatusInput = {
+  visitType?: string | null;
+  accessType?: string | null;
+};
+
+/** Latest typed visit log row drives Asset Status on the stock row. */
+export function statusFromVisitLogs(visits: VisitStatusInput[]): StatusResult {
+  const withType = visits.filter((v) => String(v.visitType ?? "").trim());
+  const lastTyped = withType[withType.length - 1];
+  if (!lastTyped) return { assetStatus: "No Visit", setSurveyFields: false };
+  return statusFromVisit(lastTyped.accessType, lastTyped.visitType);
 }
 
 export function cellVal(row: Record<string, unknown> | null | undefined, key: string): unknown {

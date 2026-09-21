@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inferStockKind, statusFromVisit } from "./asset-status.js";
+import {
+  assetStatusFilterOptions,
+  inferStockKind,
+  statusFromVisit,
+  statusFromVisitLogs,
+} from "./asset-status.js";
 
 describe("Asset Status rules", () => {
   it("defaults to No Visit until Visit Type is present", () => {
@@ -34,6 +39,12 @@ describe("Asset Status rules", () => {
     assert.equal(ok.assetStatus, "Full Survey");
     assert.equal(ok.setSurveyFields, true);
   });
+
+  it("maps Successful aliases to the Full Survey UI label", () => {
+    for (const access of ["Successful", "successful", "Full Survey", "full survey", "Completed", "Success"]) {
+      assert.equal(statusFromVisit(access, "SCS").assetStatus, "Full Survey", access);
+    }
+  });
 });
 
 describe("Auto-route to Dwellings / Blocks / Garages", () => {
@@ -59,5 +70,25 @@ describe("Auto-route to Dwellings / Blocks / Garages", () => {
   it("defaults everything else to dwellings", () => {
     assert.equal(inferStockKind({ Archetype: "House", "Visit Type": "SCS" }), "dwelling");
     assert.equal(inferStockKind({}), "dwelling");
+  });
+});
+
+describe("Asset Status filter options", () => {
+  it("always includes the Full Survey UI label used by Dwellings/Blocks/Garages", () => {
+    const opts = assetStatusFilterOptions(["No Visit", "Successful"]);
+    assert.ok(opts.includes("Full Survey"));
+    assert.equal(opts[opts.indexOf("Full Survey")], "Full Survey");
+    assert.ok(opts.includes("Successful"));
+  });
+});
+
+describe("Visit log → stock row status", () => {
+  it("uses the latest typed visit so a successful import updates the asset", () => {
+    const st = statusFromVisitLogs([
+      { visitType: "RdSAP", accessType: "No Answer" },
+      { visitType: "SCS", accessType: "Successful" },
+    ]);
+    assert.equal(st.assetStatus, "Full Survey");
+    assert.equal(st.setSurveyFields, true);
   });
 });
