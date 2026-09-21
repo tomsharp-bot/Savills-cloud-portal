@@ -323,4 +323,36 @@
       if (form) form.submit();
     });
   }
+
+  document.querySelectorAll("[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.getAttribute("data-copy") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        const old = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => { btn.textContent = old; }, 1500);
+      } catch {
+        window.prompt("Copy this temporary password:", text);
+      }
+    });
+  });
+
+  const changePwForm = document.getElementById("change-password-form");
+  if (changePwForm) {
+    changePwForm.addEventListener("submit", (e) => {
+      const next = changePwForm.querySelector('[name="newPassword"]');
+      const confirm = changePwForm.querySelector('[name="confirmPassword"]');
+      const err = document.getElementById("pw-client-error");
+      const nextVal = next && "value" in next ? String(next.value) : "";
+      const confirmVal = confirm && "value" in confirm ? String(confirm.value) : "";
+      let message = "";
+      if (nextVal.length < 10) message = "New password must be at least 10 characters.";
+      else if (nextVal !== confirmVal) message = "New password and confirmation do not match.";
+      if (message) {
+        e.preventDefault();
+        if (err) err.textContent = message;
+      }
+    });
+  }
 })();
