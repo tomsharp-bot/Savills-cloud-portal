@@ -37,14 +37,23 @@ describe("Asset Status rules", () => {
 });
 
 describe("Auto-route to Dwellings / Blocks / Garages", () => {
-  it("routes Garage / Garage Sites to garages", () => {
+  it("routes Garage / Garages / Garage Sites to garages", () => {
     assert.equal(inferStockKind({ "Survey Design": "MTVH Garage Sites" }), "garage");
     assert.equal(inferStockKind({ Archetype: "Garage" }), "garage");
+    assert.equal(inferStockKind({ "Asset Type": "Garages" }), "garage");
+    assert.equal(inferStockKind({ asset_type: "garage sites" }), "garage");
   });
 
-  it("routes Block(s) / MTVH Blocks to blocks", () => {
+  it("routes Block / Blocks / MTVH Blocks to blocks", () => {
     assert.equal(inferStockKind({ "Survey Design": "MTVH Blocks" }), "block");
     assert.equal(inferStockKind({ Archetype: "Low-rise block" }), "block");
+    assert.equal(inferStockKind({ "Asset Type": "Block" }), "block");
+    assert.equal(inferStockKind({ "Survey Type": "Blocks" }), "block");
+  });
+
+  it("does not treat the address Block column as an asset type", () => {
+    assert.equal(inferStockKind({ Block: "Harbour Court", Archetype: "House" }), "dwelling");
+    assert.equal(inferStockKind({ "Combined Address": "Block A, High Street" }), "dwelling");
   });
 
   it("defaults everything else to dwellings", () => {

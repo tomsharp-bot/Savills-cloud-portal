@@ -26,7 +26,7 @@ Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site
 - Survey-type ticks drive **Summary** KPI columns
 - Stock tabs **Dwellings / Blocks / Garages** (Site Comments, Omit Asset, External, “X of Y Assets Displayed”)
 - **Data Loader**: visit Excel/CSV, Asset Status rules, Visit Log, Auto-route D/B/G
-- **Upload or refresh stocklist** (first upload on an empty project loads the full list; later files add/remove mid-job)
+- **Upload or refresh stocklist** (first upload loads the full list; Auto splits Dwellings / Blocks / Garages from Archetype, Survey Design, Asset Type, Survey Type or similar; later files add/remove mid-job)
 - **Export stocklist** XLSX (same grid columns) and admin **Clear entire stocklist** (two-step confirm)
 - **External-only list** (persist UPRN set, re-apply on admin login)
 - **Documents** (local disk now; Spaces later)

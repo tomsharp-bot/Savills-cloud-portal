@@ -62,22 +62,44 @@ export function cellVal(row: Record<string, unknown> | null | undefined, key: st
   return "";
 }
 
-/** Auto-route: Garage / Garage Sites → garages; Block(s) / MTVH Blocks → blocks; else dwellings. */
+function headerKey(s: string): string {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-./]+/g, "");
+}
+
+/**
+ * Type/archetype columns used to split stock onto Dwellings / Blocks / Garages.
+ * Deliberately excludes address fields such as "Block" (building name) and Combined Address,
+ * so “Block A, High Street” does not route a dwelling onto the Blocks tab.
+ */
+export const STOCK_KIND_HINT_HEADERS = [
+  "Survey Design",
+  "Archetype",
+  "Property Type",
+  "Asset Type",
+  "Stock Type",
+  "Type Of Property",
+  "Visit Type",
+  "Survey Type",
+  "Asset Category",
+  "Property Category",
+  "Unit Type",
+] as const;
+
+/** Auto-route: Garage / Garages / Garage Sites → garage; Block / Blocks / MTVH Blocks → block; else dwelling. */
 export function inferStockKind(raw: Record<string, unknown> | null | undefined): AssetKind {
   if (!raw) return "dwelling";
-  const blob = [
-    cellVal(raw, "Survey Design"),
-    cellVal(raw, "Archetype"),
-    cellVal(raw, "Property Type"),
-    cellVal(raw, "Asset Type"),
-    cellVal(raw, "Stock Type"),
-    cellVal(raw, "Type Of Property"),
-    cellVal(raw, "Visit Type"),
-    cellVal(raw, "Combined Address"),
-    cellVal(raw, "Survey Type"),
-  ]
-    .map((v) => String(v || "").toLowerCase())
-    .join(" | ");
+  const want = new Set(STOCK_KIND_HINT_HEADERS.map(headerKey));
+  const values: string[] = [];
+  for (const k of Object.keys(raw)) {
+    if (!want.has(headerKey(k))) continue;
+    const v = raw[k];
+    if (v == null || v === "") continue;
+    values.push(String(v));
+  }
+  const blob = values.join(" | ").toLowerCase();
   if (/garage/.test(blob)) return "garage";
   if (/\bblocks?\b|communal|maisonette block|low-rise block|walk-up/.test(blob)) return "block";
   return "dwelling";
