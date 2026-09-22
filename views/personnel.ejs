@@ -15,7 +15,7 @@
         <div>
           <h2 class="page-title">Personnel</h2>
           <p class="page-sub">Surveyors, Clients, then Admins. Surveyor initials link stock rows (Surveyed By / Surveyor) to Agency. Clients get company, project ticks, freeze and remove.</p>
-          <p class="pw-admin-note">Temp passwords shown here are the last ones issued by an admin. Once a user sets their own password, that secret cannot be revealed — use <strong>Reset temp PW</strong> to issue a new temporary password (copy it from the notice and the row).</p>
+          <p class="pw-admin-note">Temp passwords shown here are the last ones issued by an admin. Once a user sets their own password, that secret cannot be revealed — use <strong>Reset</strong> to issue a new temporary password (copy it from the notice and the row). Format: <code>word.word.2468</code>.</p>
         </div>
         <span class="badge">Postgres</span>
       </div>
@@ -35,12 +35,12 @@
           <table class="personnel-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th class="col-name">Name</th>
                 <th class="col-initials">Initials</th>
                 <th class="col-user">Username</th>
                 <th class="col-agency">Agency</th>
                 <th class="col-pw">Temp password</th>
-                <% projects.forEach(p => { %><th class="col-tick"><%= p.name %></th><% }) %>
+                <% projects.forEach(p => { %><th class="col-tick" title="<%= p.name %>"><%= p.name %></th><% }) %>
                 <th class="col-actions"></th>
               </tr>
             </thead>
@@ -48,7 +48,7 @@
               <% surveyors.forEach(s => { %>
                 <% const granted = new Set(s.access.map(a => a.projectId)); %>
                 <tr>
-                  <td><%= s.name %></td>
+                  <td class="col-name"><%= s.name %></td>
                   <td class="col-initials"><input class="initials-input" type="text" data-initials="<%= s.id %>" value="<%= s.initials || '' %>" /></td>
                   <td class="col-user"><%= s.username %></td>
                   <td class="col-agency"><input class="agency-input" type="text" data-agency="<%= s.id %>" value="<%= s.agency || '' %>" /></td>
@@ -90,10 +90,10 @@
             <thead>
               <tr>
                 <th class="col-company">Company</th>
-                <th>Person</th>
+                <th class="col-name">Person</th>
                 <th class="col-role">Role</th>
                 <th class="col-user">Username</th>
-                <% projects.forEach(p => { %><th class="col-tick"><%= p.name %></th><% }) %>
+                <% projects.forEach(p => { %><th class="col-tick" title="<%= p.name %>"><%= p.name %></th><% }) %>
                 <th class="col-freeze">Freeze Access</th>
                 <th class="col-pw">Temp password</th>
                 <th class="col-actions"></th>
@@ -104,7 +104,7 @@
                 <% const granted = new Set(c.access.map(a => a.projectId)); %>
                 <tr>
                   <td class="col-company"><%= c.company %></td>
-                  <td><%= c.name %><% if (c.frozen) { %><span class="frozen-tag">Frozen</span><% } %></td>
+                  <td class="col-name"><%= c.name %><% if (c.frozen) { %><span class="frozen-tag">Frozen</span><% } %></td>
                   <td class="col-role"><%= c.clientRole %></td>
                   <td class="col-user"><%= c.username %></td>
                   <% projects.forEach(p => { %>
@@ -139,12 +139,12 @@
         <div class="personnel-table-wrap">
           <table class="personnel-table">
             <thead>
-              <tr><th>Name</th><th class="col-email">Email</th><th class="col-pw">Password (temp)</th><th class="col-actions"></th></tr>
+              <tr><th class="col-name">Name</th><th class="col-email">Email</th><th class="col-pw">Password (temp)</th><th class="col-actions"></th></tr>
             </thead>
             <tbody>
               <% admins.forEach(a => { %>
                 <tr>
-                  <td><%= a.name %></td>
+                  <td class="col-name"><%= a.name %></td>
                   <td class="col-email"><%= a.email %></td>
                   <%- include("partials/temp-password-cell", { person: a }) %>
                   <td class="col-actions">
