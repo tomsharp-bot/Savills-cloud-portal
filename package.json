@@ -11,7 +11,7 @@
     "build": "tsc && mkdir -p dist/views dist/public && cp -r views/. dist/views/ && cp -r public/. dist/public/",
     "start": "node scripts/ensure-database-url.js node dist/index.js",
     "seed": "tsx prisma/seed.ts",
-    "test": "tsx --test src/lib/*.test.ts src/dbUrl.test.ts src/app.test.ts src/hhsrs-reporter.auth.test.ts src/landing.auth.test.ts",
+    "test": "tsx --test src/lib/*.test.ts src/dbUrl.test.ts src/app.test.ts src/hhsrs-reporter.auth.test.ts src/landing.auth.test.ts src/reference-documents.auth.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "node scripts/ensure-database-url.js npx prisma migrate deploy",
     "postinstall": "prisma generate"
@@ -20,6 +20,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1137.0",
     "@prisma/client": "^6.16.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-session": "^2.0.49",

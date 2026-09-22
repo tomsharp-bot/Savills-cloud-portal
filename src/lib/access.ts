@@ -69,6 +69,16 @@ export function canManageDocuments(user: AuthedUser): boolean {
   return isAdmin(user);
 }
 
+/** Shared reference library: every admin and every surveyor. Never clients. */
+export function canSeeReferenceDocuments(user: AuthedUser | null | undefined): boolean {
+  return isAdmin(user) || isSurveyor(user);
+}
+
+/** Upload and delete in the reference library. */
+export function canManageReferenceDocuments(user: AuthedUser | null | undefined): boolean {
+  return isAdmin(user);
+}
+
 export function canManagePersonnel(user: AuthedUser): boolean {
   return isAdmin(user);
 }

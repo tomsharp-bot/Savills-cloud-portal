@@ -21,6 +21,8 @@ import { programmeRouter } from "./routes/programme.js";
 import { isAdmin, roleLabel } from "./lib/access.js";
 import { postLoginPath } from "./lib/landing.js";
 import { photosRouter } from "./routes/photos.js";
+import { referenceDocumentsRouter } from "./routes/reference-documents.js";
+import { surveyorRouter } from "./routes/surveyor.js";
 import { prisma } from "./lib/prisma.js";
 
 const viewsDir = path.join(process.cwd(), "views");
@@ -161,6 +163,8 @@ export function createApp(options: CreateAppOptions = {}) {
   portal.use("/account", accountRouter);
   portal.use("/projects", projectsRouter);
   portal.use("/admin", adminRouter);
+  portal.use("/surveyor", surveyorRouter);
+  portal.use("/reference-documents", referenceDocumentsRouter);
   portal.use("/projects-programme", programmeRouter);
   portal.use("/personnel", personnelRouter);
   portal.use("/photos", photosRouter);

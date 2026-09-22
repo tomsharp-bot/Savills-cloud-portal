@@ -33,7 +33,9 @@ Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site
 - **Documents** (local disk now; Spaces later)
 - **Completions** view/download stubs
 - **HHSRS site reporting** (public phone form at `/HHSRS-site-form`; admin Reporter at `/HHSRSreporter`; intake list under the portal)
-- **Admin landing** at `/admin` after login (HHSRS Reporter at `/HHSRSreporter`, Project Progress, Personnel, Photos / Photo Storage, Projects Programme). Surveyors skip the hub and land on `/projects`. Clients still land on `/projects`.
+- **Admin landing** at `/admin` after login (HHSRS Reporter at `/HHSRSreporter`, Project Progress, Personnel, Photos / Photo Storage, Projects Programme, Reference Documents). Existing admin tiles stay; Reference Documents is an extra tile.
+- **Surveyor landing** at `/surveyor` after login, with two tiles only: Project Progress and Reference Documents. Clients still land on `/projects`.
+- **Reference Documents** at `/reference-documents` for every admin and every surveyor (not clients). Six categories in three columns. Admins drag-and-drop or browse to upload, and can delete. Surveyors open PDF and images in the portal and can download; they do not see upload or delete. Word and Excel can be downloaded. Files go to DigitalOcean Spaces (`cloud-portal-vault`) when `SPACES_ENDPOINT`, `SPACES_KEY`, and `SPACES_SECRET` are set; otherwise they are stored on the server under `uploads/reference-documents/` (that disk does not survive an App Platform redeploy).
 - **Photo Storage** (admin) at `/photos` — project tiles, Photos Pool, Photo Folders, Create Photos Extract, Client Access → Completions. Demo / coloured placeholder thumbs until DigitalOcean Spaces (`cloud-portal-vault`, LON1) credentials are set.
 - **Projects Programme** (admin) at `/projects-programme` — surveyor × week board. With `BASE_PATH=/projectprogress` the live URL is `https://savillscloudportal.co.uk/projectprogress/projects-programme` (hub: `https://savillscloudportal.co.uk/projectprogress/admin`). Bottom tables read Project Progress: current, upcoming, and the 5 most recently archived. Survey-type text starts from each project's survey-type ticks and is stored on edit. The grid itself is one shared board in Postgres.
 
@@ -111,9 +113,9 @@ Set these in **App Settings → App-Level / web component Environment Variables*
 | `PORT` | No | App Platform sets this. Default in code is `3000`. |
 | `SPACES_BUCKET` | No | `cloud-portal-vault` |
 | `SPACES_REGION` | No | `lon1` |
-| `SPACES_ENDPOINT` | No | Spaces endpoint host, when you wire files |
-| `SPACES_KEY` | No | Spaces access key — **leave empty until needed** |
-| `SPACES_SECRET` | No | Spaces secret — **leave empty until needed** |
+| `SPACES_ENDPOINT` | No | Spaces endpoint, e.g. `https://lon1.digitaloceanspaces.com`. Required together with key and secret before Reference Documents (and later Photo Storage) use the bucket instead of local disk. |
+| `SPACES_KEY` | No | Spaces access key — **leave empty until needed**. Do not commit it. |
+| `SPACES_SECRET` | No | Spaces secret — **leave empty until needed**. Do not commit it. |
 
 Never commit real keys. The spec file only declares the names.
 

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { isAdmin, type AuthedUser } from "../lib/access.js";
+import { isAdmin, isSurveyor, type AuthedUser } from "../lib/access.js";
 import { baseUrl } from "../lib/base-path.js";
 import { config } from "../config.js";
 
@@ -64,6 +64,18 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
   }
   if (!isAdmin(req.user)) {
     res.status(403).send("Admin only.");
+    return;
+  }
+  next();
+}
+
+export function requireSurveyor(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.redirect(loginPath(res));
+    return;
+  }
+  if (!isSurveyor(req.user)) {
+    res.status(403).send("Surveyor only.");
     return;
   }
   next();
