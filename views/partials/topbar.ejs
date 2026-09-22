@@ -2,6 +2,7 @@
   <strong>Savills Cloud Portal</strong>
   <div class="right">
     <a class="linkish" href="<%= baseUrl('/projects') %>">Projects</a>
+    <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/admin') %>">Admin</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/personnel') %>">Personnel</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/HHSRSreporter') %>">HHSRS Reporter</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/hhsrs-submissions') %>">HHSRS site reports</a><% } %>

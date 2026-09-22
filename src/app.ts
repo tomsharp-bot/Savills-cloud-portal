@@ -16,6 +16,8 @@ import { hhsrsSiteFormRouter } from "./routes/hhsrs-site-form.js";
 import { hhsrsSubmissionsRouter } from "./routes/hhsrs-submissions.js";
 import { hhsrsReporterRouter } from "./routes/hhsrs-reporter.js";
 import { HHSRS_REPORTER_ALIAS, HHSRS_REPORTER_PATH } from "./lib/hhsrs-reporter.js";
+import { adminRouter } from "./routes/admin.js";
+import { programmeRouter } from "./routes/programme.js";
 import { isAdmin, roleLabel } from "./lib/access.js";
 import { prisma } from "./lib/prisma.js";
 
@@ -156,6 +158,8 @@ export function createApp(options: CreateAppOptions = {}) {
   portal.use(requireAuth);
   portal.use("/account", accountRouter);
   portal.use("/projects", projectsRouter);
+  portal.use("/admin", adminRouter);
+  portal.use("/projects-programme", programmeRouter);
   portal.use("/personnel", personnelRouter);
   portal.use(stockRouter);
   portal.use(loaderRouter);
