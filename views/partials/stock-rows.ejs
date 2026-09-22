@@ -1,12 +1,25 @@
 <%
-  const limit = typeof stockPageSize === "number" && stockPageSize > 0 ? stockPageSize : 100;
+  let limit = 100;
+  if (typeof stockWindowSize === "number" && stockWindowSize > 0) limit = stockWindowSize;
+  else if (typeof stockPageSize === "number" && stockPageSize > 0) limit = stockPageSize;
+  const hardCap = typeof stockWindowMax === "number" && stockWindowMax > 0 ? stockWindowMax : 150;
+  if (limit > hardCap) limit = hardCap;
   const visibleRows = (rows || []).slice(0, limit);
+  const virtual = typeof stockVirtual !== "undefined" && stockVirtual;
+  const offset = typeof stockOffset === "number" && stockOffset > 0 ? stockOffset : 0;
+  const matched = typeof stockMatched === "number" ? stockMatched : visibleRows.length;
+  const rowHeight = typeof stockRowHeight === "number" && stockRowHeight > 0 ? stockRowHeight : 40;
+  const padTop = offset * rowHeight;
+  const padBottom = Math.max(0, matched - offset - visibleRows.length) * rowHeight;
   const dateCols = typeof stockDateCols !== "undefined" ? stockDateCols : new Set();
   const editCols = new Set(typeof adminEditCols !== "undefined" ? adminEditCols : []);
   const canComment = isAdmin || isSurveyor;
   const displayVal = (row, col) => dateCols.has(col) ? formatStockDate(row[col]) : String(row[col] == null ? "" : row[col]);
   const emptyLabel = stockFiltered ? "No assets match these filters." : "No assets in this tab yet.";
 %>
+<% if (virtual && visibleRows.length) { %>
+  <tr class="stock-virtual-pad" data-pad="top" aria-hidden="true"><td colspan="<%= cols.length %>" style="height:<%= padTop %>px;padding:0;border:0;line-height:0"></td></tr>
+<% } %>
 <% if (!visibleRows.length) { %>
   <tr class="stock-empty"><td colspan="<%= cols.length %>" class="empty"><%= emptyLabel %></td></tr>
 <% } else { %>
@@ -50,4 +63,7 @@
       <% }) %>
     </tr>
   <% }) %>
+  <% if (virtual) { %>
+  <tr class="stock-virtual-pad" data-pad="bottom" aria-hidden="true"><td colspan="<%= cols.length %>" style="height:<%= padBottom %>px;padding:0;border:0;line-height:0"></td></tr>
+  <% } %>
 <% } %>

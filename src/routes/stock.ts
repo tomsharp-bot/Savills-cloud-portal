@@ -5,8 +5,8 @@ import { applyMissingStockPurge, formatPurgeNotice } from "../lib/stock-purge.js
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, stockColumns } from "../lib/stock-columns.js";
 import { formatStockDate } from "../lib/dates.js";
 import { applyEpcSurveyType } from "../lib/epc-survey.js";
-import { assembleStockTab } from "../lib/stock-page.js";
-import { loadStockRows } from "../lib/stock-query.js";
+import { loadStockWindow } from "../lib/stock-query.js";
+import { STOCK_ROW_HEIGHT } from "../lib/stock-window.js";
 import { userAccessIds } from "../middleware/auth.js";
 import { buildStockWorkbook, parseExportScope, stockExportFilename } from "../lib/stock-export.js";
 
@@ -176,12 +176,18 @@ stockRouter.get("/projects/:id/stock/page", async (req: Request, res: Response) 
   }
   const includeEpcRequired = !!project.typeConditionEpc;
   const columns = stockColumns(kind, { includeAdminOnly: isAdmin(user), includeEpcRequired });
-  const prepared = await loadStockRows(project.id, kind, includeEpcRequired);
-  const tabModel = assembleStockTab(prepared, columns, req.query as Record<string, unknown>);
+  const tabModel = await loadStockWindow({
+    projectId: project.id,
+    kind,
+    conditionEpc: includeEpcRequired,
+    columns,
+    query: req.query as Record<string, unknown>,
+  });
   const html = await renderStockRows(res, {
     rows: tabModel.page.rows,
     cols: columns,
-    stockPageSize: tabModel.page.pageSize,
+    stockWindowSize: tabModel.page.rows.length || tabModel.page.limit,
+    stockVirtual: false,
     stockFiltered: tabModel.stockFiltered,
     isAdmin: isAdmin(user),
     isSurveyor: user.role === "surveyor",
@@ -192,6 +198,8 @@ stockRouter.get("/projects/:id/stock/page", async (req: Request, res: Response) 
   res.json({
     ok: true,
     html,
+    offset: tabModel.page.offset,
+    limit: tabModel.page.limit,
     page: tabModel.page.page,
     pageCount: tabModel.page.pageCount,
     pageSize: tabModel.page.pageSize,
@@ -202,7 +210,7 @@ stockRouter.get("/projects/:id/stock/page", async (req: Request, res: Response) 
     sort: tabModel.page.sort,
     dir: tabModel.page.dir,
     label: tabModel.label,
-    pagerLabel: tabModel.pagerLabel,
+    rowHeight: STOCK_ROW_HEIGHT,
   });
 });
 
