@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Photo Storage — Savills Cloud Portal</title>
+  <title>Archived Projects — Photo Storage — Savills Cloud Portal</title>
   <%- include("partials/head-css") %>
   <link rel="stylesheet" href="<%= baseUrl('/css/photos.css') %>" />
 </head>
@@ -12,22 +12,26 @@
   <%- include("partials/topbar") %>
   <%- include("partials/admin-hub", { active: "photos" }) %>
   <main class="wrap">
+    <div class="breadcrumb-mini">
+      <a href="<%= baseUrl('/photos') %>">← Back to Current</a>
+      · Photos · Archived
+    </div>
     <div class="head">
       <div>
-        <h1>Photo Storage</h1>
-        <p class="intro">Open a <strong>current project</strong> to browse its Photos Pool and Photo Folders. Archived programmes are kept separate.</p>
+        <h1>Archived Projects</h1>
+        <p class="intro">Completed programmes kept for reference. Open a tile to view its photo area.</p>
       </div>
       <div>
-        <a class="btn btn-gold" href="<%= baseUrl('/photos/archived') %>">Archived Projects →</a>
+        <a class="btn" href="<%= baseUrl('/photos') %>">← Back to Current</a>
       </div>
     </div>
-
+    <div class="archived-banner">These projects are finished on Project Progress. Photos stay available here so you can look back without cluttering Current.</div>
     <div class="section-bar">
-      <h2>Current projects</h2>
-      <span class="meta"><%= tiles.length %> live / current</span>
+      <h2>Completed / archived</h2>
+      <span class="meta"><%= tiles.length %> completed</span>
     </div>
     <% if (!tiles.length) { %>
-      <p class="hint-muted">No current projects on Project Progress yet.</p>
+      <p class="hint-muted">No archived projects yet.</p>
     <% } else { %>
       <div class="grid" role="list">
         <% tiles.forEach(function (t) { %>
@@ -35,7 +39,7 @@
             <div class="tile-accent <%= t.accent %>"></div>
             <div class="tile-body">
               <div class="tile-name"><%= t.name %></div>
-              <div class="tile-lead">Lead: <%= t.leadFirst %></div>
+              <div class="tile-lead"><span class="pill archived">Archived</span> Lead: <%= t.leadFirst %></div>
               <% if (t.surveyTypes) { %><div class="tile-survey"><%= t.surveyTypes %></div><% } %>
               <div class="tile-counts">
                 <span class="pill">Photos Pool: <%= t.poolCount %></span>
@@ -46,7 +50,6 @@
         <% }) %>
       </div>
     <% } %>
-
     <p class="footer-note"><%= spacesHint %></p>
   </main>
 </div>
