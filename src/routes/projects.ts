@@ -23,8 +23,9 @@ import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { buildSampleAnalysis } from "../lib/sample-analysis.js";
 import { buildCurrentProjectTileStats, type ProjectTileStats } from "../lib/project-tile-stats.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
-import { loadStockRows } from "../lib/stock-query.js";
-import { assembleStockTab, stockKindFromTab, STOCK_PAGE_SIZE } from "../lib/stock-page.js";
+import { loadStockWindow } from "../lib/stock-query.js";
+import { stockKindFromTab } from "../lib/stock-page.js";
+import { STOCK_ROW_HEIGHT, STOCK_WINDOW_MAX, STOCK_WINDOW_SIZE } from "../lib/stock-window.js";
 import { listClientAccessFolders } from "../lib/photos.js";
 
 export const projectsRouter = Router();
@@ -368,17 +369,31 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     block: stockColumns("block", { includeAdminOnly: isAdmin(user) }),
     garage: stockColumns("garage", { includeAdminOnly: isAdmin(user) }),
   };
-  let stockRows: Awaited<ReturnType<typeof loadStockRows>> = [];
+  let stockRows: Awaited<ReturnType<typeof loadStockWindow>>["page"]["rows"] = [];
   let stockFilters: Record<string, string> = {};
   let stockFilterOptions: Record<string, string[]> = {};
-  let stockPage = { page: 1, pageCount: 1, pageSize: STOCK_PAGE_SIZE, matched: 0, total: 0, from: 0, to: 0 };
+  let stockPage = {
+    page: 1,
+    pageCount: 1,
+    pageSize: STOCK_WINDOW_SIZE,
+    matched: 0,
+    total: 0,
+    from: 0,
+    to: 0,
+    offset: 0,
+    limit: STOCK_WINDOW_SIZE,
+  };
   let stockSort = "uprn";
   let stockDir: "asc" | "desc" = "asc";
   let stockLabel = "0 of 0 Assets Displayed";
-  let stockPagerText = "Page 1 of 1";
   if (stockKind) {
-    const prepared = await loadStockRows(project.id, stockKind, includeEpcRequired);
-    const tabModel = assembleStockTab(prepared, stockColsByKind[stockKind], req.query as Record<string, unknown>);
+    const tabModel = await loadStockWindow({
+      projectId: project.id,
+      kind: stockKind,
+      conditionEpc: includeEpcRequired,
+      columns: stockColsByKind[stockKind],
+      query: req.query as Record<string, unknown>,
+    });
     stockRows = tabModel.page.rows;
     stockFilters = tabModel.listQuery.filters;
     stockFilterOptions = tabModel.filterOptions;
@@ -386,7 +401,6 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     stockSort = tabModel.page.sort;
     stockDir = tabModel.page.dir;
     stockLabel = tabModel.label;
-    stockPagerText = tabModel.pagerLabel;
   }
 
   res.render("project", {
@@ -404,8 +418,13 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     stockSort,
     stockDir,
     stockLabel,
-    stockPagerLabel: stockPagerText,
-    stockPageSize: STOCK_PAGE_SIZE,
+    stockPageSize: STOCK_WINDOW_SIZE,
+    stockWindowSize: STOCK_WINDOW_SIZE,
+    stockWindowMax: STOCK_WINDOW_MAX,
+    stockOffset: stockPage.offset,
+    stockMatched: stockPage.matched,
+    stockRowHeight: STOCK_ROW_HEIGHT,
+    stockVirtual: true,
     stockFiltered: stockPage.total > 0 && stockPage.matched === 0,
     completions,
     photoFolders,

@@ -101,12 +101,12 @@
     }
     if (inp.matches("input[data-omit]")) {
       const ok = await patchAsset(projectId, inp.dataset.omit, { omitAsset: inp.checked });
-      if (ok) loadStockPage(table, { page: table.dataset.page || "1" });
+      if (ok) loadStockWindow(table, { offset: table.dataset.offset || "0" });
       return;
     }
     if (inp.matches("input[data-epc]")) {
       const ok = await patchAsset(projectId, inp.dataset.epc, { epcRequired: inp.checked });
-      if (ok) loadStockPage(table, { page: table.dataset.page || "1" });
+      if (ok) loadStockWindow(table, { offset: table.dataset.offset || "0" });
     }
   });
 
@@ -118,7 +118,8 @@
     const kind = table.dataset.stock;
     const params = new URLSearchParams();
     params.set("kind", kind);
-    params.set("page", String((overrides && overrides.page) || table.dataset.page || "1"));
+    params.set("offset", String(overrides && overrides.offset != null ? overrides.offset : (table.dataset.offset || "0")));
+    params.set("limit", String(table.dataset.limit || "100"));
     params.set("sort", (overrides && overrides.sort) || table.dataset.sort || "uprn");
     params.set("dir", (overrides && overrides.dir) || table.dataset.dir || "asc");
     document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
@@ -140,21 +141,106 @@
     });
   }
 
+  function formatStockCount(n) {
+    return Number(n || 0).toLocaleString("en-GB");
+  }
+
+  function stockVisibleLabel(table, wrap) {
+    const matched = Number(table.dataset.matched || 0);
+    const total = Number(table.dataset.total || 0);
+    const height = Number(table.dataset.rowHeight) || 40;
+    if (matched === 0) return "0 of " + formatStockCount(total) + " Assets Displayed";
+    const start = Math.floor(Math.max(0, wrap ? wrap.scrollTop : 0) / height);
+    const visible = Math.max(1, wrap ? Math.ceil(wrap.clientHeight / height) : 1);
+    const from = Math.min(matched, start + 1);
+    const to = Math.min(matched, start + visible);
+    const range = formatStockCount(from) + "–" + formatStockCount(to);
+    if (matched !== total) {
+      return "Showing " + range + " of " + formatStockCount(matched) + " Assets (" + formatStockCount(total) + " in this tab)";
+    }
+    return "Showing " + range + " of " + formatStockCount(matched) + " Assets";
+  }
+
+  function paintStockLabel(table) {
+    const kind = table.dataset.stock;
+    const count = document.querySelector('[data-stock-count="' + kind + '"]');
+    const wrap = table.closest(".stock-table-wrap");
+    if (count) count.textContent = stockVisibleLabel(table, wrap);
+  }
+
   function syncStockUrl(table, params) {
     const url = new URL(window.location.href);
     const kind = table.dataset.stock;
     const tab = kind === "block" ? "blocks" : kind === "garage" ? "garages" : "dwellings";
     url.searchParams.set("tab", tab);
     [...url.searchParams.keys()].forEach((key) => {
-      if (key === "page" || key === "sort" || key === "dir" || key.indexOf("f_") === 0) url.searchParams.delete(key);
+      if (key === "page" || key === "offset" || key === "limit" || key === "sort" || key === "dir" || key.indexOf("f_") === 0) {
+        url.searchParams.delete(key);
+      }
     });
     params.forEach((value, key) => {
-      if (key !== "kind") url.searchParams.set(key, value);
+      if (key === "kind" || key === "limit") return;
+      if (key === "offset" && (value === "0" || value === "")) return;
+      url.searchParams.set(key, value);
     });
     history.replaceState(null, "", url);
   }
 
-  async function loadStockPage(table, overrides) {
+  function flushStockEdits(table) {
+    const active = document.activeElement;
+    const tbody = table.tBodies[0];
+    if (!active || !tbody || !tbody.contains(active) || !active.matches) return;
+    if (active.matches("input[data-comment], input[data-admin-field]")) {
+      active.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+
+  function ensurePads(table) {
+    const tbody = table.tBodies[0];
+    if (!tbody) return null;
+    const cols = table.querySelectorAll("thead tr.stock-head th").length || 1;
+    let top = tbody.querySelector('[data-pad="top"]');
+    let bottom = tbody.querySelector('[data-pad="bottom"]');
+    function pad(which) {
+      const tr = document.createElement("tr");
+      tr.className = "stock-virtual-pad";
+      tr.setAttribute("data-pad", which);
+      tr.setAttribute("aria-hidden", "true");
+      const td = document.createElement("td");
+      td.colSpan = cols;
+      tr.appendChild(td);
+      return tr;
+    }
+    if (!top) {
+      top = pad("top");
+      tbody.insertBefore(top, tbody.firstChild);
+    }
+    if (!bottom) {
+      bottom = pad("bottom");
+      tbody.appendChild(bottom);
+    }
+    return { tbody, top, bottom };
+  }
+
+  function applyPads(table, offset, shown, matched) {
+    const pads = ensurePads(table);
+    if (!pads) return pads;
+    const height = Number(table.dataset.rowHeight) || 40;
+    const topPx = Math.max(0, offset) * height;
+    const bottomPx = Math.max(0, matched - offset - shown) * height;
+    const topTd = pads.top.querySelector("td");
+    const bottomTd = pads.bottom.querySelector("td");
+    if (topTd) topTd.style.height = topPx + "px";
+    if (bottomTd) bottomTd.style.height = bottomPx + "px";
+    return pads;
+  }
+
+  function countAssetRows(html) {
+    const matched = String(html || "").match(/data-asset=/g);
+    return matched ? matched.length : 0;
+  }
+
+  async function loadStockWindow(table, overrides) {
     const projectId = table.dataset.project;
     const params = stockQuery(table, overrides);
     const seq = (stockLoads.get(table) || 0) + 1;
@@ -180,33 +266,75 @@
     } finally {
       if (stockLoads.get(table) === seq) table.removeAttribute("aria-busy");
     }
-    const tbody = table.tBodies[0];
-    if (tbody) tbody.innerHTML = data.html || "";
-    table.dataset.page = String(data.page);
+    if (stockLoads.get(table) !== seq) return;
+    flushStockEdits(table);
+    const pads = ensurePads(table);
+    if (!pads) return;
+    let node = pads.top.nextSibling;
+    while (node && node !== pads.bottom) {
+      const next = node.nextSibling;
+      node.parentNode.removeChild(node);
+      node = next;
+    }
+    const empty = !data.html || !countAssetRows(data.html);
+    if (data.html && !empty) pads.bottom.insertAdjacentHTML("beforebegin", data.html);
+    else if (empty) {
+      const cols = table.querySelectorAll("thead tr.stock-head th").length || 1;
+      const tr = document.createElement("tr");
+      tr.className = "stock-empty";
+      const td = document.createElement("td");
+      td.colSpan = cols;
+      td.className = "empty";
+      td.textContent = data.label && String(data.matched) === "0" ? "No assets match these filters." : "No assets in this tab yet.";
+      if (data.html && /No assets/.test(data.html)) {
+        const found = data.html.match(/<td[^>]*>([^<]*)<\/td>/);
+        if (found) td.textContent = found[1];
+      }
+      tr.appendChild(td);
+      pads.bottom.parentNode.insertBefore(tr, pads.bottom);
+    }
+    const shown = table.querySelectorAll("tbody tr[data-asset]").length;
+    table.dataset.offset = String(data.offset || 0);
+    table.dataset.matched = String(data.matched || 0);
+    table.dataset.total = String(data.total || 0);
     table.dataset.sort = data.sort || "uprn";
     table.dataset.dir = data.dir || "asc";
-    const kind = table.dataset.stock;
-    const count = document.querySelector('[data-stock-count="' + kind + '"]');
-    if (count) count.textContent = data.label || "";
-    const pager = document.querySelector('[data-stock-pager="' + kind + '"]');
-    if (pager) {
-      const prev = pager.querySelector("[data-stock-page-prev]");
-      const next = pager.querySelector("[data-stock-page-next]");
-      const label = pager.querySelector("[data-stock-page-label]");
-      if (label) label.textContent = data.pagerLabel || "";
-      if (prev) prev.disabled = data.page <= 1;
-      if (next) next.disabled = data.page >= data.pageCount;
-    }
+    if (data.rowHeight) table.dataset.rowHeight = String(data.rowHeight);
+    applyPads(table, Number(data.offset || 0), shown, Number(data.matched || 0));
+    const wrap = table.closest(".stock-table-wrap");
+    if (overrides && overrides.scrollTop && wrap) wrap.scrollTop = 0;
+    paintStockLabel(table);
     paintSort(table, table.dataset.sort, table.dataset.dir);
     syncStockUrl(table, params);
+    if (wrap) maybeVirtualFetch(table, wrap);
+  }
+
+  function maybeVirtualFetch(table, wrap) {
+    if (table.getAttribute("aria-busy") === "true") return;
+    const matched = Number(table.dataset.matched || 0);
+    if (matched <= 0) return;
+    const height = Number(table.dataset.rowHeight) || 40;
+    const offset = Number(table.dataset.offset || 0);
+    const shown = table.querySelectorAll("tbody tr[data-asset]").length;
+    const start = Math.floor(Math.max(0, wrap.scrollTop) / height);
+    const visible = Math.max(1, Math.ceil(wrap.clientHeight / height) + 1);
+    const viewFrom = Math.max(0, start - 8);
+    const viewTo = Math.min(matched, start + visible + 8);
+    if (shown > 0 && viewFrom >= offset && viewTo <= offset + shown) return;
+    let next = Math.max(0, start - 30);
+    const maxOffset = Math.max(0, matched - 1);
+    if (next > maxOffset) next = maxOffset;
+    if (String(next) === String(offset)) return;
+    loadStockWindow(table, { offset: String(next) });
   }
 
   document.querySelectorAll("table[data-stock]").forEach((table) => {
     const kind = table.dataset.stock;
+    const wrap = table.closest(".stock-table-wrap");
     document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
       markFilterActive(el);
       let timer = 0;
-      const run = () => loadStockPage(table, { page: "1" });
+      const run = () => loadStockWindow(table, { offset: "0", scrollTop: true });
       el.addEventListener("input", () => {
         markFilterActive(el);
         if (el.tagName === "SELECT") return;
@@ -219,6 +347,20 @@
         run();
       });
     });
+    if (!wrap) return;
+    const offset = Number(table.dataset.offset || 0);
+    const height = Number(table.dataset.rowHeight) || 40;
+    if (offset > 0) wrap.scrollTop = offset * height;
+    paintStockLabel(table);
+    let frame = 0;
+    wrap.addEventListener("scroll", () => {
+      paintStockLabel(table);
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        maybeVirtualFetch(table, wrap);
+      });
+    }, { passive: true });
   });
 
   document.querySelectorAll("[data-clear-filters]").forEach((btn) => {
@@ -229,35 +371,17 @@
         markFilterActive(el);
       });
       const table = document.querySelector('table[data-stock="' + kind + '"]');
-      if (table) loadStockPage(table, { page: "1" });
+      if (table) loadStockWindow(table, { offset: "0", scrollTop: true });
     });
   });
 
-  document.querySelectorAll("[data-stock-page-prev]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const pager = btn.closest("[data-stock-pager]");
-      const table = document.querySelector('table[data-stock="' + (pager && pager.getAttribute("data-stock-pager")) + '"]');
-      if (!table || btn.disabled) return;
-      const page = Math.max(1, Number(table.dataset.page || 1) - 1);
-      loadStockPage(table, { page: String(page) });
-    });
-  });
-  document.querySelectorAll("[data-stock-page-next]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const pager = btn.closest("[data-stock-pager]");
-      const table = document.querySelector('table[data-stock="' + (pager && pager.getAttribute("data-stock-pager")) + '"]');
-      if (!table || btn.disabled) return;
-      const page = Number(table.dataset.page || 1) + 1;
-      loadStockPage(table, { page: String(page) });
-    });
-  });
   document.querySelectorAll("table[data-stock] [data-sort-col]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const table = stockTableFrom(btn);
       if (!table) return;
       const col = btn.dataset.sortCol;
       const dir = table.dataset.sort === col && table.dataset.dir !== "desc" ? "desc" : "asc";
-      loadStockPage(table, { page: "1", sort: col, dir: dir });
+      loadStockWindow(table, { offset: "0", scrollTop: true, sort: col, dir: dir });
     });
   });
 

@@ -25,26 +25,20 @@ export function flaggedUprnsFromRows(rows: RawRow[], flagCol: string): string[] 
 }
 
 export async function applyExternalUprnSet(projectId: string, uprns: string[]): Promise<{ matched: number; flagged: number }> {
-  const set = new Set(uprns.map(String));
-  const assets = await prisma.asset.findMany({ where: { projectId } });
+  const unique = [...new Set(uprns.map((value) => String(value ?? "").trim()).filter(Boolean))];
+  if (!unique.length) return { matched: 0, flagged: 0 };
+  // One UPDATE per chunk. Loading every asset to flip a flag OOM'd the small instance on ~44k stock.
   let matched = 0;
-  for (const a of assets) {
-    if (!set.has(String(a.uprn))) continue;
-    await prisma.asset.update({
-      where: { id: a.id },
-      data: {
-        external: "Yes",
-        assetStatus: "Ext-Only",
-        visit1: a.visit1,
-        visit2: a.visit2,
-        visit3: a.visit3,
-        surveyDate: a.surveyDate,
-        surveyedBy: a.surveyedBy,
-      },
+  const size = 2000;
+  for (let i = 0; i < unique.length; i += size) {
+    const chunk = unique.slice(i, i + size);
+    const result = await prisma.asset.updateMany({
+      where: { projectId, uprn: { in: chunk } },
+      data: { external: "Yes", assetStatus: "Ext-Only" },
     });
-    matched += 1;
+    matched += result.count;
   }
-  return { matched, flagged: set.size };
+  return { matched, flagged: unique.length };
 }
 
 export async function persistExternalLink(opts: {

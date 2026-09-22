@@ -7,16 +7,19 @@
   const options = typeof stockFilterOptions !== "undefined" && stockFilterOptions ? stockFilterOptions : {};
   const sort = typeof stockSort !== "undefined" ? stockSort : "uprn";
   const dir = typeof stockDir !== "undefined" ? stockDir : "asc";
-  const pageInfo = typeof stockPage !== "undefined" ? stockPage : { page: 1, pageCount: 1 };
+  const pageInfo = typeof stockPage !== "undefined" ? stockPage : { page: 1, pageCount: 1, matched: 0, total: 0, offset: 0 };
   const countLabel = typeof stockLabel !== "undefined" ? stockLabel : ((rows || []).length + " Assets");
-  const pagerLabel = typeof stockPagerLabel !== "undefined" ? stockPagerLabel : ("Page " + pageInfo.page + " of " + pageInfo.pageCount);
+  const windowSize = typeof stockWindowSize !== "undefined" ? stockWindowSize : 100;
+  const rowHeight = typeof stockRowHeight !== "undefined" ? stockRowHeight : 40;
+  const matchedCount = typeof stockMatched !== "undefined" ? stockMatched : (pageInfo.matched || 0);
+  const offsetCount = typeof stockOffset !== "undefined" ? stockOffset : (pageInfo.offset || 0);
   const filterClass = (value) => String(value || "").trim() ? "filter-active" : "";
 %>
 <div class="stock-tab-head">
   <h3><%= title %></h3>
   <p class="stock-count" data-stock-count="<%= kind %>"><%= countLabel %></p>
 </div>
-<p style="margin:0;color:var(--muted);font-size:.9rem"><% if (isAdmin && kind === "dwelling") { %>Site Comments editable by surveyor. Resident, letter and X fields are Admin-only. Filters apply to the whole tab; one page of rows is shown at a time.<% } else { %>Site Comments editable by surveyor · all other columns locked. Filters apply to the whole tab; one page of rows is shown at a time.<% } %></p>
+<p style="margin:0;color:var(--muted);font-size:.9rem"><% if (isAdmin && kind === "dwelling") { %>Site Comments editable by surveyor. Resident, letter and X fields are Admin-only. Filters and sorting cover every asset in this tab — scroll the list; only the rows in view are drawn.<% } else { %>Site Comments editable by surveyor · all other columns locked. Filters and sorting cover every asset in this tab — scroll the list; only the rows in view are drawn.<% } %></p>
 <div class="stock-tools">
   <button type="button" class="btn btn-ghost btn-sm" data-clear-filters="<%= kind %>">Clear All Filters</button>
   <% if (!isClient) { %>
@@ -29,8 +32,10 @@
 </div>
 <div class="stock-table-wrap">
   <table class="stock-table" data-stock="<%= kind %>" data-project="<%= project.id %>"
-         data-page="<%= pageInfo.page %>" data-sort="<%= sort %>" data-dir="<%= dir %>"
-         data-page-size="<%= typeof stockPageSize !== 'undefined' ? stockPageSize : 100 %>">
+         data-offset="<%= offsetCount %>" data-limit="<%= windowSize %>"
+         data-matched="<%= matchedCount %>" data-total="<%= pageInfo.total || 0 %>"
+         data-row-height="<%= rowHeight %>"
+         data-sort="<%= sort %>" data-dir="<%= dir %>">
     <thead>
       <tr class="stock-head">
         <% cols.forEach(c => { %>
@@ -76,9 +81,4 @@
       <%- include("stock-rows", { cols: cols, rows: rows }) %>
     </tbody>
   </table>
-</div>
-<div class="stock-pager" data-stock-pager="<%= kind %>">
-  <button type="button" class="btn btn-ghost btn-sm" data-stock-page-prev <%= pageInfo.page <= 1 ? "disabled" : "" %>>Previous</button>
-  <span data-stock-page-label><%= pagerLabel %></span>
-  <button type="button" class="btn btn-ghost btn-sm" data-stock-page-next <%= pageInfo.page >= pageInfo.pageCount ? "disabled" : "" %>>Next</button>
 </div>
