@@ -222,10 +222,11 @@ model ProjectDocument {
 
 /// Site-raised HHSRS issue (surveyor phone form). Photos on local disk for now.
 /// TODO: Spaces cloud-portal-vault / LON1
+/// Office review / client-email draft fields are edited in /HHSRSreporter.
 model HhsrsSiteSubmission {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   projectId            String?
-  project              Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project              Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   projectName          String
   surveyDate           String
   uprn                 String
@@ -235,11 +236,32 @@ model HhsrsSiteSubmission {
   category             String
   rating               String
   comment              String
-  clientCallReference  String   @default("")
-  otherDetails         String   @default("")
+  clientCallReference  String    @default("")
+  otherDetails         String    @default("")
   photoPaths           Json
-  createdAt            DateTime @default(now())
+  /// Office workflow: new | in_review | email_ready | email_sent | closed
+  status               String    @default("new")
+  /// Concise client-facing hazard wording (office-edited). Empty → derive from comment.
+  clientDescription    String    @default("")
+  /// Call outcome for templates that need it (Onward etc.): Completed | Attempted | Not yet called | Not required | ""
+  callOutcome          String    @default("")
+  workOrder            String    @default("")
+  suspectedCause       String    @default("")
+  includeCause         Boolean   @default(true)
+  vulnerabilities      String    @default("")
+  escalation           String    @default("")
+  onwardTopic          String    @default("")
+  cat1Confirmed        Boolean   @default(false)
+  internalNotes        String    @default("")
+  emailSubject         String    @default("")
+  emailBody            String    @default("")
+  emailSentAt          DateTime?
+  emailSentBy          String    @default("")
+  lastEditedBy         String    @default("")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([createdAt])
   @@index([projectId])
+  @@index([status])
 }

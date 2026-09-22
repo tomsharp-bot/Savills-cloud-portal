@@ -3,6 +3,7 @@
   <div class="right">
     <a class="linkish" href="<%= baseUrl('/projects') %>">Projects</a>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/personnel') %>">Personnel</a><% } %>
+    <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/HHSRSreporter') %>">HHSRS Reporter</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/hhsrs-submissions') %>">HHSRS site reports</a><% } %>
     <span><%= user.name %> <span class="role-pill"><%= roleLabel %></span></span>
     <a class="linkish" href="<%= baseUrl('/account/password') %>">Change password</a>

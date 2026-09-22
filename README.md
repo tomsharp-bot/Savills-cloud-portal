@@ -6,13 +6,14 @@ Intended domain: **savillscloudportal.co.uk**
 
 Excel stays an import/export feed — Postgres is the live store.
 
-HHSRS Reporter (Carly’s scoring app) is a **separate product**. Do not merge it here.
+HHSRS Reporter (Carly’s scoring app) is a **separate desktop product**. This portal now hosts a multi-user **HHSRS Reporter** at `/HHSRSreporter` for office staff, fed by the public site form.
 
 A public **HHSRS site reporting** form lives on this same app at **root paths** (not under `/projectprogress`):
 
 - Landing: `/HHSRS-site-form`
 - New issue / review / submit: `/HHSRS-site-form/new` and following steps
-- Admin list (signed-in admin, portal session): `/projectprogress/hhsrs-submissions`
+- Admin Reporter (signed-in admin): `/HHSRSreporter` (alias `/HHSRSreporting`)
+- Admin read-only intake list: `/projectprogress/hhsrs-submissions`
 
 Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site-form` (or `http://localhost:3000/HHSRS-site-form` locally). No login for surveyors in v1. Photos store on disk under `uploads/hhsrs-site-form/{submissionId}/` until Spaces is wired. Up to **4 photos**, **each photo up to 40MB** (JPEG, PNG, WebP, HEIC/HEIF). The browser compresses JPEG/PNG/WebP before upload when it can.
 
@@ -31,7 +32,7 @@ Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site
 - **External-only list** (persist UPRN set, re-apply on admin login)
 - **Documents** (local disk now; Spaces later)
 - **Completions** view/download stubs
-- **HHSRS site reporting** (public phone form at `/HHSRS-site-form`; admin list under the portal)
+- **HHSRS site reporting** (public phone form at `/HHSRS-site-form`; admin Reporter at `/HHSRSreporter`; intake list under the portal)
 
 ## Local setup
 

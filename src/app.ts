@@ -14,6 +14,8 @@ import { completionsRouter } from "./routes/completions.js";
 import { documentsRouter } from "./routes/documents.js";
 import { hhsrsSiteFormRouter } from "./routes/hhsrs-site-form.js";
 import { hhsrsSubmissionsRouter } from "./routes/hhsrs-submissions.js";
+import { hhsrsReporterRouter } from "./routes/hhsrs-reporter.js";
+import { HHSRS_REPORTER_ALIAS, HHSRS_REPORTER_PATH } from "./lib/hhsrs-reporter.js";
 import { isAdmin, roleLabel } from "./lib/access.js";
 import { prisma } from "./lib/prisma.js";
 
@@ -65,7 +67,8 @@ function portalLandingHtml(href: string): string {
 export function createApp(options: CreateAppOptions = {}) {
   const basePath =
     options.basePath !== undefined ? normalizeBasePath(options.basePath) : config.basePath;
-  const cookiePath = basePath || "/";
+  // Root-mounted apps (/HHSRS-site-form, /HHSRSreporter) share the portal login cookie.
+  const cookiePath = "/";
   const url = (href: string) => baseUrl(href, basePath);
 
   const app = express();
@@ -92,6 +95,16 @@ export function createApp(options: CreateAppOptions = {}) {
     })
   );
   app.use(loadUser);
+  if (basePath) {
+    // Drop session cookies that were previously scoped only to the portal prefix
+    // so a later Path=/ login cannot leave two scp_session cookies in play.
+    app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const expired = `Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=${basePath}; HttpOnly; SameSite=Lax`;
+      res.append("Set-Cookie", `scp_session=; ${expired}`);
+      res.append("Set-Cookie", `scp_session.sig=; ${expired}`);
+      next();
+    });
+  }
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.locals.currentUser = req.user || null;
     res.locals.roleLabel = req.user ? roleLabel(req.user.role) : "";
@@ -110,6 +123,17 @@ export function createApp(options: CreateAppOptions = {}) {
 
   // HHSRS site form is a public root app — not under /projectprogress.
   app.use("/HHSRS-site-form", hhsrsSiteFormRouter);
+
+  // HHSRS Reporter (admin office tool) also mounts at the domain root so the
+  // path stays /HHSRSreporter even when Mark Up lives under BASE_PATH.
+  app.get(HHSRS_REPORTER_ALIAS, (_req: express.Request, res: express.Response) => {
+    res.redirect(HHSRS_REPORTER_PATH);
+  });
+  app.use(HHSRS_REPORTER_ALIAS, (req: express.Request, res: express.Response) => {
+    const suffix = req.url === "/" ? "" : req.url;
+    res.redirect(`${HHSRS_REPORTER_PATH}${suffix}`);
+  });
+  app.use(HHSRS_REPORTER_PATH, hhsrsReporterRouter);
 
   if (basePath) {
     app.get("/", (_req: express.Request, res: express.Response) => {

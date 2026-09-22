@@ -447,7 +447,7 @@
       ok = false;
     }
     document.body.removeChild(ta);
-    if (!ok) window.prompt("Copy this temporary password:", text);
+    if (!ok) window.prompt("Copy this text:", text);
   }
 
   function markCopied(btn) {
@@ -460,6 +460,22 @@
   document.querySelectorAll("[data-copy]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const text = btn.getAttribute("data-copy") || "";
+      var done = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(text)
+        : Promise.reject(new Error("no clipboard"));
+      done.then(function () { markCopied(btn); }).catch(function () {
+        copyFallback(text);
+        markCopied(btn);
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-copy-from]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sel = btn.getAttribute("data-copy-from") || "";
+      const el = sel ? document.querySelector(sel) : null;
+      const text = el && "value" in el ? String(el.value || "") : "";
+      if (!text) return;
       var done = navigator.clipboard && navigator.clipboard.writeText
         ? navigator.clipboard.writeText(text)
         : Promise.reject(new Error("no clipboard"));

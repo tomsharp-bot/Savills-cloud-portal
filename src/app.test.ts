@@ -372,6 +372,28 @@ describe("HHSRS site form at domain-root paths", () => {
   });
 });
 
+describe("HHSRS Reporter at domain-root paths", () => {
+  it("redirects signed-out users from /HHSRSreporter to portal login", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const res = await request(app, "GET", "/HHSRSreporter");
+    assert.equal(res.status, 302);
+    assert.equal(res.location, "/projectprogress/login");
+  });
+
+  it("redirects /HHSRSreporting to /HHSRSreporter", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const res = await request(app, "GET", "/HHSRSreporting");
+    assert.equal(res.status, 302);
+    assert.equal(res.location, "/HHSRSreporter");
+  });
+
+  it("keeps the Reporter outside the /projectprogress prefix", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const res = await request(app, "GET", "/projectprogress/HHSRSreporter");
+    assert.notEqual(res.status, 200);
+  });
+});
+
 describe("Account password and Personnel temp reset", () => {
   it("keeps login working and sends signed-out users to login from Change password", async () => {
     const app = createApp({ basePath: "" });

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HHSRS case — Savills Cloud Portal</title>
+  <%- include("../partials/head-css") %>
+</head>
+<body>
+<div id="screen-app">
+  <%- include("../partials/topbar") %>
+  <div class="main">
+    <section class="reporter-case">
+      <p class="crumb"><a class="linkish dark" href="<%= reporterBase %>">HHSRS Reporter</a></p>
+      <h2 class="page-title"><%= row.projectName %></h2>
+      <p class="page-sub">
+        Submitted <%= formatDocDate(row.createdAt) %>
+        · Status <%= statusLabel(row.status) %>
+        <% if (row.lastEditedBy) { %> · Last edited by <%= row.lastEditedBy %><% } %>
+      </p>
+      <% if (flashOk) { %><p class="flash flash-ok"><%= flashOk %></p><% } %>
+      <% if (flashErr) { %><p class="flash flash-err"><%= flashErr %></p><% } %>
+
+      <div class="reporter-grid">
+        <div class="panel reporter-panel">
+          <h3 class="section-title">Submission</h3>
+          <dl class="reporter-dl">
+            <div><dt>Survey date</dt><dd><%= row.surveyDate %></dd></div>
+            <div><dt>UPRN</dt><dd><%= row.uprn %></dd></div>
+            <div><dt>Address</dt><dd><%= row.fullAddress %>, <%= row.postcode %></dd></div>
+            <div><dt>Surveyor</dt><dd><%= row.surveyorName %></dd></div>
+            <div><dt>HHSRS category</dt><dd><%= row.category %></dd></div>
+            <div><dt>Surveyor comment</dt><dd class="pre"><%= row.comment %></dd></div>
+            <div><dt>Any other details</dt><dd class="pre"><%= row.otherDetails || "—" %></dd></div>
+          </dl>
+
+          <h3 class="section-title">Photos</h3>
+          <% if (!photos.length) { %>
+            <p class="empty">No photos on this submission. Attach any separate files in Outlook when you send.</p>
+          <% } else { %>
+            <p class="docs-hint">Photos stay on App Platform disk for now. Copy the draft, then attach these files in Outlook.</p>
+            <div class="docs-toolbar" style="flex-wrap:wrap">
+              <% photos.forEach((p) => { const name = String(p).split("/").pop(); %>
+                <a href="<%= reporterBase + '/' + row.id + '/photos/' + encodeURIComponent(name) %>" target="_blank" rel="noreferrer">
+                  <img src="<%= reporterBase + '/' + row.id + '/photos/' + encodeURIComponent(name) %>" alt="<%= name %>" class="reporter-thumb" />
+                </a>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="panel reporter-panel">
+          <h3 class="section-title">Office review</h3>
+          <form method="post" action="<%= reporterBase + '/' + row.id %>" class="reporter-form">
+            <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
+
+            <label for="status">Internal status</label>
+            <select id="status" name="status">
+              <% statuses.forEach((s) => { %>
+                <option value="<%= s %>" <%= row.status === s ? "selected" : "" %>><%= statusLabel(s) %></option>
+              <% }) %>
+            </select>
+
+            <label for="rating">Rating (confirmed)</label>
+            <select id="rating" name="rating" required>
+              <% ratings.forEach((r) => { %>
+                <option value="<%= r %>" <%= row.rating === r ? "selected" : "" %>><%= r %></option>
+              <% }) %>
+            </select>
+
+            <label for="clientDescription">Client description</label>
+            <textarea id="clientDescription" name="clientDescription" rows="4" placeholder="Leave blank to derive wording from the surveyor comment using Reporter rules."><%= row.clientDescription %></textarea>
+            <p class="docs-hint">After you edit and save, the draft uses this text verbatim.</p>
+
+            <label for="clientCallReference">Client call reference</label>
+            <input id="clientCallReference" type="text" name="clientCallReference" value="<%= row.clientCallReference %>" />
+
+            <label for="callOutcome">Call outcome</label>
+            <select id="callOutcome" name="callOutcome">
+              <% callOutcomes.forEach((o) => { %>
+                <option value="<%= o %>" <%= row.callOutcome === o ? "selected" : "" %>><%= o || "—" %></option>
+              <% }) %>
+            </select>
+
+            <label for="workOrder">Work order number</label>
+            <input id="workOrder" type="text" name="workOrder" value="<%= row.workOrder %>" />
+
+            <label for="suspectedCause">Suspected cause</label>
+            <input id="suspectedCause" type="text" name="suspectedCause" value="<%= row.suspectedCause %>" />
+            <input type="hidden" name="includeCause" value="false" />
+            <label class="chk"><input type="checkbox" name="includeCause" value="true" <%= row.includeCause ? "checked" : "" %> /> Include cause in client email</label>
+
+            <label for="vulnerabilities">Resident vulnerabilities</label>
+            <textarea id="vulnerabilities" name="vulnerabilities" rows="2"><%= row.vulnerabilities %></textarea>
+
+            <label for="escalation">Escalation wording (e.g. Significant Severe)</label>
+            <input id="escalation" type="text" name="escalation" value="<%= row.escalation %>" />
+
+            <label for="onwardTopic">Onward subject topic</label>
+            <select id="onwardTopic" name="onwardTopic">
+              <option value="">—</option>
+              <% onwardTopics.forEach((t) => { %>
+                <option value="<%= t %>" <%= row.onwardTopic === t ? "selected" : "" %>><%= t %></option>
+              <% }) %>
+            </select>
+            <label class="chk"><input type="checkbox" name="cat1Confirmed" value="true" <%= row.cat1Confirmed ? "checked" : "" %> /> Category 1 confirmed (required for Onward)</label>
+
+            <label for="internalNotes">Internal notes</label>
+            <textarea id="internalNotes" name="internalNotes" rows="3"><%= row.internalNotes %></textarea>
+
+            <div class="actions reporter-actions">
+              <button type="submit" class="btn btn-primary">Save review</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel reporter-panel reporter-email">
+          <h3 class="section-title">Client email draft</h3>
+          <p class="docs-hint">Copy into Outlook, attach photos, then send. “Mark email as sent” records your confirmation only — it does not send mail.</p>
+          <% if (draftError) { %>
+            <p class="flash flash-err"><%= draftError %></p>
+          <% } %>
+          <% if (draftSubject) { %>
+            <label>Subject</label>
+            <div class="copy-row">
+              <input type="text" id="draft-subject" readonly value="<%= draftSubject %>" />
+              <button type="button" class="btn btn-ghost btn-sm btn-copy" data-copy-from="#draft-subject">Copy</button>
+            </div>
+            <label>Body</label>
+            <div class="copy-row">
+              <textarea id="draft-body" rows="12" readonly><%= draftBody %></textarea>
+              <button type="button" class="btn btn-ghost btn-sm btn-copy" data-copy-from="#draft-body">Copy</button>
+            </div>
+          <% } else if (!draftError) { %>
+            <p class="empty">Save the review fields to prepare a draft.</p>
+          <% } %>
+          <% if (row.emailSentAt) { %>
+            <p class="flash flash-ok">Marked sent <%= formatDocDate(row.emailSentAt) %><% if (row.emailSentBy) { %> by <%= row.emailSentBy %><% } %>.</p>
+          <% } %>
+          <form method="post" action="<%= reporterBase + '/' + row.id + '/mark-sent' %>" class="reporter-actions" onsubmit="return confirm('Confirm you have copied this draft and are ready to send (or have already sent) from Outlook?');">
+            <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
+            <button type="submit" class="btn btn-primary" <%= draftSubject ? "" : "disabled" %>>Mark email as sent</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<%- include("../partials/app-scripts") %>
+</body>
+</html>
