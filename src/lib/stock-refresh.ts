@@ -3,7 +3,7 @@ import { cellVal, isCompletedAssetStatus, surveyTypeForKind } from "./asset-stat
 import { dwellingMisrouteWarning, routeStockRow, type StockRouteTarget } from "./stock-route.js";
 import { epcRequiredFromSurveyType } from "./epc-survey.js";
 import { formatStockDate } from "./dates.js";
-import type { RawRow } from "./excel.js";
+import { uprnText, type RawRow } from "./excel.js";
 import { prisma } from "./prisma.js";
 
 export const OMITTED_SURVEYED_NOTE = "Omitted but already surveyed";
@@ -112,6 +112,8 @@ export type StockRefreshFlash = {
   blankUprn: number;
   duplicateUprn: number;
   fileByTab: Record<AssetKind, number>;
+  /** Non-omitted assets stored for the project after this refresh. Matches Summary → Total assets. */
+  storedAssets?: number;
 };
 
 export function buildStockRefreshFlash(opts: {
@@ -122,6 +124,7 @@ export function buildStockRefreshFlash(opts: {
   alsoOmit: boolean;
   tab: string;
   stats: StockFileStats;
+  storedAssets?: number;
 }): StockRefreshFlash {
   return {
     projectId: opts.projectId,
@@ -137,6 +140,7 @@ export function buildStockRefreshFlash(opts: {
     blankUprn: opts.stats.blankUprn,
     duplicateUprn: opts.stats.duplicateUprn,
     fileByTab: opts.stats.fileByTab,
+    storedAssets: opts.storedAssets,
   };
 }
 
@@ -173,6 +177,7 @@ export function formatStockRefreshResult(opts: {
   fileByTab?: Record<AssetKind, number>;
   sheets?: { name: string; rows: number; headerRow: number }[];
   warnings?: string[];
+  storedAssets?: number;
 }): string {
   const { addedByTab, removedCount, movedCount = 0, alsoOmit } = opts;
   let msg =
@@ -191,6 +196,9 @@ export function formatStockRefreshResult(opts: {
     if (opts.uniqueUprn < opts.fileRows) {
       msg += ". Summary counts one asset per UPRN, so repeated rows are not extra assets";
     }
+  }
+  if (opts.storedAssets != null) {
+    msg += ` · ${opts.storedAssets} non-omitted asset(s) now stored (Summary → Total assets)`;
   }
   if (opts.sheets?.length) {
     msg += ` · Read ${opts.sheets
@@ -214,7 +222,7 @@ export function formatStockRefreshResult(opts: {
 }
 
 export function extractUprn(row: RawRow): string {
-  return String(cellValAliases(row, ["UPRN"]) || "").trim();
+  return uprnText(cellValAliases(row, ["UPRN"]));
 }
 
 function normHeader(s: string): string {
@@ -438,8 +446,25 @@ export type StockRefreshApplyResult = StockFileStats & {
   removed: string[];
   addedByTab: Record<AssetKind, number>;
   moved: number;
+  storedAssets?: number;
   error?: string;
 };
+
+const IMPORT_EXISTING_SELECT = {
+  id: true,
+  kind: true,
+  uprn: true,
+  assetStatus: true,
+  siteComments: true,
+  external: true,
+  omitAsset: true,
+  stockMissing: true,
+  visit1: true,
+  visit2: true,
+  visit3: true,
+  surveyDate: true,
+  surveyedBy: true,
+} as const;
 
 function planStats(plan: RefreshPlan): StockFileStats {
   return {
@@ -474,6 +499,7 @@ export async function applyStocklistRefresh(opts: {
       opts.target === "auto"
         ? { projectId: opts.projectId }
         : { projectId: opts.projectId, kind: opts.target },
+    select: IMPORT_EXISTING_SELECT,
   });
   const plan = planStocklistRefresh(existing, opts.rows, opts.alsoOmit, opts.target);
   const addedByTab = emptyByTab();
@@ -604,11 +630,21 @@ export async function applyStocklistRefresh(opts: {
     );
   }
 
+  let storedAssets: number | undefined;
+  try {
+    storedAssets = await prisma.asset.count({
+      where: { projectId: opts.projectId, omitAsset: false },
+    });
+  } catch {
+    storedAssets = undefined;
+  }
+
   return {
     added: plan.added.map((a) => a.uprn),
     removed: plan.removed,
     addedByTab,
     moved: plan.reclassified.length,
+    storedAssets,
     ...stats,
   };
 }

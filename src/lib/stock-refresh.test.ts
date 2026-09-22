@@ -306,6 +306,21 @@ describe("Stocklist Auto routing to Dwellings / Blocks / Garages", () => {
 });
 
 describe("Large stocklists and partial imports", () => {
+  it("does not collapse a zero-padded UPRN into the same asset as its numeric form", () => {
+    const plan = planStocklistRefresh(
+      [],
+      [{ UPRN: 100000000001 }, { UPRN: "00042" }, { UPRN: "1.00000000001E+11" }],
+      false
+    );
+    assert.equal(plan.uniqueUprn, 2);
+    assert.equal(plan.duplicateUprn, 1);
+    assert.equal(plan.blankUprn, 0);
+    assert.deepEqual(
+      plan.added.map((row) => row.uprn).sort(),
+      ["00042", "100000000001"]
+    );
+  });
+
   it("plans every unique UPRN in a 44k stocklist", () => {
     const rows = Array.from({ length: 44000 }, (_, i) => ({
       UPRN: String(100000 + i),

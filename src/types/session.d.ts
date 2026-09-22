@@ -19,6 +19,7 @@ declare module "cookie-session" {
       blankUprn: number;
       duplicateUprn: number;
       fileByTab: { dwelling: number; block: number; garage: number };
+      storedAssets?: number;
       /** Older sessions stored the full UPRN lists. The page caps whatever is present. */
       added?: string[];
       removed?: string[];

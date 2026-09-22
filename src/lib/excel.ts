@@ -82,15 +82,74 @@ function findUprnHeaderRow(sheet: XLSX.WorkSheet): number {
   return -1;
 }
 
+/**
+ * UPRN as stored text. Safe integers stay digits (not 1.23e+11). A text id
+ * such as "00042" is left unchanged — Number("00042") would drop the zeros.
+ */
+export function uprnText(value: unknown): string {
+  if (value == null || value === "") return "";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    if (Number.isSafeInteger(value)) return String(value);
+    const digits = value.toFixed(0);
+    return digits === "-0" ? "0" : digits;
+  }
+  const text = String(value).trim();
+  if (/^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(text)) {
+    const n = Number(text);
+    if (Number.isSafeInteger(n)) return String(n);
+  }
+  return text;
+}
+
+function uprnFromCell(cell: XLSX.CellObject | undefined): string {
+  if (!cell || cell.v == null || cell.v === "") return "";
+  const formatted = cell.w != null ? String(cell.w).trim() : "";
+  if (formatted && /^\d+$/.test(formatted)) return formatted;
+  return uprnText(cell.v);
+}
+
+/**
+ * `sheet_to_json` with raw values turns a numeric UPRN into a JS number, which
+ * drops leading zeros and can render a long id in scientific notation. Copy the
+ * worksheet's own text for every UPRN-style column back onto the row.
+ */
+function applyUprnCellText(sheet: XLSX.WorkSheet, headerAbs: number, rows: RawRow[]): void {
+  if (!sheet?.["!ref"] || headerAbs < 0 || !rows.length) return;
+  let range: XLSX.Range;
+  try {
+    range = XLSX.utils.decode_range(sheet["!ref"]);
+  } catch {
+    return;
+  }
+  const columns: { c: number; key: string }[] = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const header = sheet[XLSX.utils.encode_cell({ r: headerAbs, c })] as XLSX.CellObject | undefined;
+    if (header?.v == null || header.v === "") continue;
+    const key = String(header.v);
+    if (isUprnHeader(key)) columns.push({ c, key });
+  }
+  for (const { c, key } of columns) {
+    for (let i = 0; i < rows.length; i++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: headerAbs + 1 + i, c })] as XLSX.CellObject | undefined;
+      const text = uprnFromCell(cell);
+      if (text) rows[i][key] = text;
+    }
+  }
+}
+
 function aliasUprn(row: RawRow): RawRow {
   for (const key of Object.keys(row)) {
     if (normHeader(key) !== "uprn") continue;
-    if (row[key] != null && String(row[key]).trim() !== "") return row;
+    if (row[key] != null && String(row[key]).trim() !== "") {
+      row[key] = uprnText(row[key]);
+      return row;
+    }
   }
   for (const key of Object.keys(row)) {
     if (normHeader(key) === "uprn" || !isUprnHeader(key)) continue;
     if (row[key] == null || String(row[key]).trim() === "") continue;
-    row.UPRN = row[key];
+    row.UPRN = uprnText(row[key]);
     break;
   }
   return row;
@@ -108,8 +167,9 @@ export function readStockSheet(sheet: XLSX.WorkSheet): StockSheetRead {
   const headerAbs = findUprnHeaderRow(sheet);
   const opts: XLSX.Sheet2JSONOpts = { defval: "", raw: true };
   if (headerAbs > 0) opts.range = headerAbs;
-  const rows = (XLSX.utils.sheet_to_json(sheet, opts) as RawRow[]).map(aliasUprn);
-  return { rows, headerRow: headerAbs >= 0 ? headerAbs + 1 : 0 };
+  const rows = XLSX.utils.sheet_to_json(sheet, opts) as RawRow[];
+  if (headerAbs >= 0) applyUprnCellText(sheet, headerAbs, rows);
+  return { rows: rows.map(aliasUprn), headerRow: headerAbs >= 0 ? headerAbs + 1 : 0 };
 }
 
 function rowsFromSheet(sheet: XLSX.WorkSheet): RawRow[] {

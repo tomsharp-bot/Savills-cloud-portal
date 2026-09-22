@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import ejs from "ejs";
-import { STOCK_DATE_COLS, stockColumns } from "./stock-columns.js";
+import { STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "./stock-columns.js";
 import { formatStockDate } from "./dates.js";
 import {
   STOCK_PAGE_SIZE,
+  STOCK_SELECT_OPTION_CAP,
+  assembleStockTab,
   buildStockPage,
   clampStockPageSize,
+  collectSelectOptions,
   parseStockListQuery,
   stockPageLabel,
 } from "./stock-page.js";
@@ -84,6 +87,62 @@ describe("Stock paging", () => {
     assert.doesNotMatch(html, /data-asset="id-100"/);
     assert.equal(page.rows.length, nodes.length);
     assert.match(stockPageLabel(page), /Showing 1–100 of 4,000 Assets/);
+  });
+
+  it("turns a high-cardinality column into a text filter instead of one option per asset", () => {
+    const columns = stockColumns("dwelling", { includeAdminOnly: true });
+    const rows = Array.from({ length: 4000 }, (_, i) =>
+      row(String(i), {
+        surveyDate: `2024-01-${String((i % 28) + 1).padStart(2, "0")}`,
+        letterDate1: `NOTE-${i}-END`,
+        archetype: "House",
+      })
+    );
+    const options = collectSelectOptions(rows, columns);
+    assert.ok(options.surveyDate);
+    assert.ok(options.surveyDate.length <= STOCK_SELECT_OPTION_CAP);
+    assert.equal(options.letterDate1, undefined);
+    assert.ok(options.archetype);
+    const tab = assembleStockTab(rows, columns, { f_letterDate1: "NOTE-10-END" });
+    assert.equal(tab.page.matched, 1);
+    assert.equal(tab.page.rows[0].uprn, "10");
+    assert.equal(tab.page.rows.length, 1);
+
+    const template = readFileSync(join(root, "views/partials/stock-table.ejs"), "utf8");
+    const html = ejs.render(
+      template,
+      {
+        kind: "dwelling",
+        stockColsByKind: { dwelling: columns },
+        stockLabels: STOCK_LABELS,
+        stockSelectCols: STOCK_SELECT_COLS,
+        stockFilters: {},
+        stockFilterOptions: options,
+        stockSort: "uprn",
+        stockDir: "asc",
+        stockPage: tab.page,
+        stockLabel: tab.label,
+        stockPagerLabel: tab.pagerLabel,
+        stockPageSize: STOCK_PAGE_SIZE,
+        rows: tab.page.rows,
+        isAdmin: true,
+        isClient: false,
+        isSurveyor: false,
+        project: { id: "p" },
+        baseUrl: (path: string) => path,
+        assetStatusOptions: options.assetStatus || [],
+        formatStockDate,
+        stockDateCols: STOCK_DATE_COLS,
+        adminEditCols: [],
+        stockFiltered: false,
+      },
+      { filename: join(root, "views/partials/stock-table.ejs") }
+    );
+    const optionCount = html.match(/<option\b/g)?.length ?? 0;
+    assert.ok(optionCount < 200, `expected a small filter list, got ${optionCount} options`);
+    assert.match(html, /data-filter="letterDate1"/);
+    assert.doesNotMatch(html, /NOTE-3999-END/);
+    assert.equal((html.match(/data-asset=/g) || []).length, 1);
   });
 
   it("keeps Clear All Filters, active-filter colour, and the Site Comments header", () => {

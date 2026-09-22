@@ -158,6 +158,8 @@ loaderRouter.post("/projects/:id/stock-refresh", stockUpload, async (req: Reques
   }
   req.file.buffer = Buffer.alloc(0);
   const rows = parsed.rows;
+  req.setTimeout(0);
+  res.setTimeout(0);
   const alsoOmit = req.body.omitRemoved === "true" || req.body.omitRemoved === "on";
   const target = parseTarget(req.body.target);
   let result;
@@ -187,6 +189,7 @@ loaderRouter.post("/projects/:id/stock-refresh", stockUpload, async (req: Reques
     fileByTab: result.fileByTab,
     sheets: parsed.sheets,
     warnings: parsed.warnings,
+    storedAssets: result.storedAssets,
   });
   await prisma.loaderHistory.create({
     data: {
@@ -205,6 +208,7 @@ loaderRouter.post("/projects/:id/stock-refresh", stockUpload, async (req: Reques
     alsoOmit,
     tab: target,
     stats: result,
+    storedAssets: result.storedAssets,
   });
   res.redirect(
     `/projects/${project.id}?tab=loader&notice=` + encodeURIComponent(`Stocklist refresh: ${resultText}.`)

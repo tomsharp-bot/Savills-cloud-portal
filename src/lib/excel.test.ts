@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
-import { isUprnHeader, parseStockWorkbook, parseUprnWorkbook, readStockSheet } from "./excel.js";
+import { isUprnHeader, parseStockWorkbook, parseUprnWorkbook, readStockSheet, uprnText } from "./excel.js";
 
 describe("Stocklist workbook sheets", () => {
   it("reads Dwellings as well as Blocks when both sheets have a UPRN column", () => {
@@ -100,6 +100,24 @@ describe("Stocklist workbook sheets", () => {
     assert.match(parsed.warnings.join(" "), /Cover/);
   });
 
+  it("keeps leading zeros and full digits for a numeric UPRN", () => {
+    assert.equal(uprnText("00042"), "00042");
+    assert.equal(uprnText(100000000001), "100000000001");
+    assert.equal(uprnText("1.00000000001E+11"), "100000000001");
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["UPRN", "Asset UPRN", "Archetype"],
+      ["00042", "", "House"],
+      [100000000001, "", "Flat"],
+      ["", 77, "Bungalow"],
+    ]);
+    sheet["A3"].w = "1.00000000001E+11";
+    sheet["B4"].w = "00077";
+    const read = readStockSheet(sheet);
+    assert.equal(read.rows[0].UPRN, "00042");
+    assert.equal(read.rows[1].UPRN, "100000000001");
+    assert.equal(read.rows[2].UPRN, "00077");
+  });
+
   it("parses several thousand stock rows with no early cap", () => {
     const count = 4000;
     const wb = XLSX.utils.book_new();
@@ -115,6 +133,20 @@ describe("Stocklist workbook sheets", () => {
     assert.equal(parsed.rows.length, count);
     assert.equal(String(parsed.rows[0].UPRN), "500000");
     assert.equal(String(parsed.rows[count - 1].UPRN), String(500000 + count - 1));
+  });
+
+  it("parses a 44k-row workbook without stopping early", () => {
+    const count = 44000;
+    const aoa: (string | number)[][] = [["UPRN", "Archetype"]];
+    for (let i = 0; i < count; i++) aoa.push([String(100000 + i), i % 50 === 0 ? "Block" : "House"]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Stock");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const parsed = parseStockWorkbook(buf, "mtvh.xlsx");
+    assert.equal(parsed.rows.length, count);
+    assert.equal(String(parsed.rows[0].UPRN), "100000");
+    assert.equal(String(parsed.rows[count - 1].UPRN), String(100000 + count - 1));
+    assert.equal(parsed.warnings.length, 0);
   });
 
   it("finds a UPRN header below a CSV title line", () => {
