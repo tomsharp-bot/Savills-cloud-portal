@@ -102,7 +102,10 @@ describe("HHSRS Reporter auth and queue", () => {
     const admin = await request(app, "GET", "/HHSRSreporter", { cookie: adminCookie });
     assert.equal(admin.status, 200);
     assert.match(admin.body, /HHSRS Reporter/);
-    assert.match(admin.body, /Shared queue of site-form submissions/);
+    assert.match(admin.body, /Pending Issues/);
+    assert.match(admin.body, /Pending issues/);
+    assert.match(admin.body, /side-tabs/);
+    assert.match(admin.body, /HOUSING · SURVEY REPORTING/);
 
     const surveyorCookie = await login(app, "peter.m", "PeterMay2468", "/projectprogress");
     const surveyor = await request(app, "GET", "/HHSRSreporter", { cookie: surveyorCookie });
@@ -113,6 +116,35 @@ describe("HHSRS Reporter auth and queue", () => {
     const client = await request(app, "GET", "/HHSRSreporter", { cookie: clientCookie });
     assert.equal(client.status, 403);
     assert.match(client.body, /Admin only/);
+  });
+
+  it("opens shell screens for review, main log, and admin", async (t) => {
+    if (!dbReady) {
+      t.skip("Postgres with seeded users is not available");
+      return;
+    }
+    const app = createApp({ basePath: "" });
+    const cookie = await login(app, "phil.m", "PhilMoon2468");
+
+    const blank = await request(app, "GET", "/HHSRSreporter/review", { cookie });
+    assert.equal(blank.status, 200);
+    assert.match(blank.body, /Review and create/);
+    assert.match(blank.body, /Select a project/);
+    assert.match(blank.body, /Mark as actioned/);
+    assert.doesNotMatch(blank.body, /Send pack/);
+    assert.doesNotMatch(blank.body, /Preview PDF/);
+    assert.doesNotMatch(blank.body, /Save draft/);
+
+    const mainLog = await request(app, "GET", "/HHSRSreporter/main-log", { cookie });
+    assert.equal(mainLog.status, 200);
+    assert.match(mainLog.body, /Main Log archive/);
+    assert.match(mainLog.body, /Export CSV/);
+
+    const adminPage = await request(app, "GET", "/HHSRSreporter/admin", { cookie });
+    assert.equal(adminPage.status, 200);
+    assert.match(adminPage.body, /Surveyor site form link/);
+    assert.match(adminPage.body, /https:\/\/savillscloudportal\.co\.uk\/HHSRS-site-form/);
+    assert.match(adminPage.body, /Copy link/);
   });
 
   it("opens a case and generates a Standard draft from the submission", async (t) => {
@@ -139,12 +171,17 @@ describe("HHSRS Reporter auth and queue", () => {
     try {
       const app = createApp({ basePath: "" });
       const cookie = await login(app, "phil.m", "PhilMoon2468");
-      const page = await request(app, "GET", `/HHSRSreporter/${row.id}`, { cookie });
+      const legacy = await request(app, "GET", `/HHSRSreporter/${row.id}`, { cookie });
+      assert.equal(legacy.status, 302);
+      assert.equal(legacy.location, `/HHSRSreporter/review/${row.id}`);
+
+      const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /Client email draft/);
       assert.match(page.body, /The light fitting in the lounge is damaged/);
       assert.match(page.body, /Demo Housing - HHSRS/);
-      assert.match(page.body, /Mark email as sent/);
+      assert.match(page.body, /Mark as actioned/);
+      assert.match(page.body, /btn-copy/);
     } finally {
       await prisma.hhsrsSiteSubmission.delete({ where: { id: row.id } });
     }
@@ -174,11 +211,12 @@ describe("HHSRS Reporter auth and queue", () => {
     try {
       const app = createApp({ basePath: "" });
       const cookie = await login(app, "phil.m", "PhilMoon2468");
-      const page = await request(app, "GET", `/HHSRSreporter/${row.id}`, { cookie });
+      const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /BPHA - HHSRS/);
       assert.match(page.body, /One of our surveyors has visited/);
       assert.match(page.body, /There is mould in the cupboard in the hallway/);
+      assert.match(page.body, /data-extra="calls"/);
     } finally {
       await prisma.hhsrsSiteSubmission.delete({ where: { id: row.id } });
     }

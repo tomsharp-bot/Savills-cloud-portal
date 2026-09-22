@@ -1,0 +1,27 @@
+        </div><!-- /.content-pane -->
+      </div><!-- /.work-panel -->
+    </div><!-- /.app-shell -->
+  </div><!-- /.stage -->
+</div><!-- /#screen-app -->
+<script>
+  window.HHSRS_REPORTER = {
+    base: <%- JSON.stringify(reporterBase) %>,
+    demoProjects: <%- JSON.stringify(typeof demoProjects !== 'undefined' ? demoProjects : null) %>,
+    ratingOptions: <%- JSON.stringify(typeof ratingOptions !== 'undefined' ? ratingOptions : null) %>,
+    initialProject: <%- JSON.stringify(
+      (typeof row !== 'undefined' && row && row.projectName)
+        ? row.projectName
+        : ((typeof matchedProject !== 'undefined' && matchedProject) ? matchedProject.name : '')
+    ) %>,
+    mode: <%- JSON.stringify(typeof mode !== 'undefined' ? mode : activeNav) %>,
+    serverDraft: <%- JSON.stringify({
+      to: typeof draftTo !== 'undefined' ? draftTo : '',
+      cc: typeof draftCc !== 'undefined' ? draftCc : '',
+      subject: typeof draftSubject !== 'undefined' ? draftSubject : '',
+      body: typeof draftBody !== 'undefined' ? draftBody : ''
+    }) %>
+  };
+</script>
+<script src="<%= reporterJsUrl %>" defer></script>
+</body>
+</html>

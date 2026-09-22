@@ -1,0 +1,87 @@
+<%- include("partials/layout-open") %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-section-title">Main Log</h2>
+    <p class="subtitle">Archive of dealt-with HHSRS cases — packs sent, notices filed, and office action complete.</p>
+  </div>
+  <div class="header-meta">
+    <strong>Archive</strong>
+    <%= summary.mainLog %> all-time
+  </div>
+</div>
+
+<section class="actions-row">
+  <a class="btn btn-ghost" href="<%= reporterBase %>">← Back to Pending Issues</a>
+  <a class="btn btn-primary" href="<%= reporterBase %>/review">Go to Review and create</a>
+</section>
+
+<section class="panel" aria-label="Main Log archive">
+  <div class="panel-head dealt-head">
+    <h2>Main Log archive</h2>
+    <span class="count count-dealt"><%= rows.length %> shown · <%= summary.mainLog %> total</span>
+  </div>
+  <form class="filter-bar" method="get" action="<%= reporterBase %>/main-log">
+    <input type="search" name="q" value="<%= filters.q %>" placeholder="Search address, UPRN, project…" aria-label="Search main log" />
+    <select name="project" aria-label="Filter by project">
+      <option value="">All projects</option>
+      <% projectNames.forEach((name) => { %>
+        <option value="<%= name %>" <%= filters.project === name ? "selected" : "" %>><%= name %></option>
+      <% }) %>
+    </select>
+    <select name="rating" aria-label="Filter by rating">
+      <option value="">All ratings</option>
+      <% ratings.forEach((r) => { %>
+        <option value="<%= r %>" <%= filters.rating === r ? "selected" : "" %>><%= r %></option>
+      <% }) %>
+    </select>
+    <button type="submit" class="btn btn-ghost btn-sm">Apply</button>
+  </form>
+  <% if (!rows.length) { %>
+    <p class="empty" style="padding:1rem 1.1rem;">No actioned cases yet.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="landing-table">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Address</th>
+            <th>UPRN</th>
+            <th>Category</th>
+            <th>Rating</th>
+            <th>Actioned</th>
+            <th>By</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach((row) => {
+            const when = row.emailSentAt || row.updatedAt;
+            const pillClass = row.status === "email_sent" ? "sent" : (row.status === "closed" ? "closed" : "ready");
+          %>
+            <tr>
+              <td><span class="project-pill"><%= row.projectName %></span></td>
+              <td><strong><%= row.fullAddress %></strong></td>
+              <td><%= row.uprn %></td>
+              <td><%= row.category %></td>
+              <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
+              <td><%= formatDocDate(when) %></td>
+              <td><%= row.emailSentBy || row.lastEditedBy || "—" %></td>
+              <td><span class="status-pill <%= pillClass %>"><%= actionedStatusLabel(row.status) %></span></td>
+              <td><a class="linkish dark" href="<%= reporterBase %>/review/<%= row.id %>">View pack →</a></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+  <div class="table-foot">
+    <span>Full archive · Filters apply to actioned cases</span>
+    <a class="btn btn-ghost btn-sm" href="<%= reporterBase %>/main-log/export.csv">Export CSV</a>
+  </div>
+</section>
+
+<p class="footer-note">Main Log archive · Live actioned submissions</p>
+
+<%- include("partials/layout-close") %>
