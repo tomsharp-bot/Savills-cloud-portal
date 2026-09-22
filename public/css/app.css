@@ -27,6 +27,40 @@ input[type=text],input[type=password],input[type=search],input[type=email],input
 .topbar .brand:hover{text-decoration:underline}
 a.btn{display:inline-block;text-decoration:none}
 .topbar .right{display:flex;align-items:center;gap:12px;font-size:.9rem;flex-wrap:wrap}
+.topbar details.nav-menu{position:relative}
+.topbar details.nav-menu > summary{
+  list-style:none;
+  cursor:pointer;
+  color:#cde0f5;
+  text-decoration:underline;
+}
+.topbar details.nav-menu > summary::-webkit-details-marker{display:none}
+.topbar details.nav-menu > summary::marker{content:""}
+.topbar details.nav-menu > summary::after{content:" ▾";font-size:.75em;text-decoration:none}
+.topbar details.nav-menu[open] > summary::after{content:" ▴"}
+.topbar .nav-menu-panel{
+  position:absolute;
+  right:0;
+  top:calc(100% + 8px);
+  min-width:180px;
+  background:#fff;
+  color:var(--navy);
+  border:1px solid var(--border);
+  border-radius:10px;
+  box-shadow:0 10px 28px rgba(11,31,51,.18);
+  padding:6px;
+  z-index:40;
+  display:flex;
+  flex-direction:column;
+}
+.topbar .nav-menu-panel a{
+  color:var(--navy);
+  text-decoration:none;
+  padding:8px 10px;
+  border-radius:8px;
+  font-weight:600;
+}
+.topbar .nav-menu-panel a:hover{background:var(--blue-light)}
 .main{flex:1;padding:20px 24px;width:100%;text-align:left}
 .page-title{margin:0 0 6px;font-size:1.5rem;color:var(--navy)}
 .page-sub{margin:0 0 16px;color:var(--muted)}

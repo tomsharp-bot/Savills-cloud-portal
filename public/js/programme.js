@@ -81,6 +81,50 @@
     });
   }
 
+  function canon(name) {
+    return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function adminCanonSet() {
+    var set = {};
+    (DATA.adminNames || []).forEach(function (name) {
+      var key = canon(name);
+      if (key) set[key] = true;
+    });
+    (DATA.admins || []).forEach(function (person) {
+      var key = canon(person && person.name);
+      if (key) set[key] = true;
+    });
+    return set;
+  }
+
+  function isAdminName(name, admins) {
+    return !!(admins || adminCanonSet())[canon(name)];
+  }
+
+  function weeksOccupied(projectName) {
+    var key = canon(projectName);
+    if (!key) return 0;
+    var seen = {};
+    function scan(list) {
+      (list || []).forEach(function (person) {
+        if (!isApplied(person.name)) return;
+        (person.weeks || []).forEach(function (val, wi) {
+          if (canon(val) === key) seen[wi] = true;
+        });
+      });
+    }
+    scan(DATA.rows);
+    scan(DATA.admins);
+    return Object.keys(seen).length;
+  }
+
+  function refreshWeekCounts() {
+    document.querySelectorAll("#projCurrent td.nr-weeks").forEach(function (td) {
+      td.textContent = String(weeksOccupied(td.getAttribute("data-project") || ""));
+    });
+  }
+
   function isAgencyFlag(flag) {
     var f = String(flag || "").trim().toUpperCase();
     return f === "F" || f === "E";
@@ -269,8 +313,11 @@
   }
 
   function rebuildPools() {
+    var admins = adminCanonSet();
     var agency = seedAgency.map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
-    var team = seedTeam.map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
+    var team = seedTeam
+      .filter(function (p) { return !isAdminName(p.name, admins); })
+      .map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
     var seenA = new Set(agency.map(function (p) { return p.name; }));
     var seenT = new Set(team.map(function (p) { return p.name; }));
     function pushInactive(person) {
@@ -278,7 +325,7 @@
       var entry = { flag: person.flag || "", name: person.name, fromGrid: true };
       if (isAgencyFlag(person.flag)) {
         if (!seenA.has(person.name)) { agency.push(entry); seenA.add(person.name); }
-      } else if (!seenT.has(person.name)) {
+      } else if (!isAdminName(person.name, admins) && !seenT.has(person.name)) {
         team.push(entry);
         seenT.add(person.name);
       }
@@ -409,6 +456,7 @@
       if (isApplied(a.name)) appendPersonRow(a, { admin: true, adminIndex: i });
     });
     refreshMeta(rebuildPools());
+    refreshWeekCounts();
   }
 
   function applyTicksToBoard() {
@@ -437,25 +485,31 @@
     });
   }
 
-  function fillProjTable(tbodyId, list) {
+  function fillProjTable(tbodyId, list, opts) {
+    opts = opts || {};
+    var cols = opts.weeks ? 5 : 4;
     var tb = document.querySelector("#" + tbodyId + " tbody");
     if (!tb) return;
     tb.innerHTML = "";
     if (!list || !list.length) {
       var tr = document.createElement("tr");
       tr.className = "empty-sec";
-      tr.innerHTML = '<td colspan="4">None in Project Progress.</td>';
+      tr.innerHTML = '<td colspan="' + cols + '">None in Project Progress.</td>';
       tb.appendChild(tr);
       return;
     }
     list.forEach(function (p) {
       var tr = document.createElement("tr");
       var cls = classForName(p.project);
+      var weeksCell = opts.weeks
+        ? '<td class="num nr-weeks" data-project="' + esc(p.project) + '">' + weeksOccupied(p.project) + "</td>"
+        : "";
       tr.innerHTML =
         '<td><span class="pill ' + cls + '">' + esc(p.project) + "</span></td>" +
         '<td class="num">' + esc(String(p.numbers == null ? "" : p.numbers)) + "</td>" +
         '<td><span class="scope-edit" contenteditable="true" spellcheck="false" data-project-id="' + esc(p.id) + '" title="Starts from Project Progress survey types — click to edit">' + esc(p.surveyTypes || "") + "</span></td>" +
-        '<td class="lead" title="Project manager from Project Progress">' + esc(p.lead || "") + "</td>";
+        '<td class="lead" title="Project manager from Project Progress">' + esc(p.lead || "") + "</td>" +
+        weeksCell;
       tb.appendChild(tr);
     });
     tb.querySelectorAll(".scope-edit").forEach(function (el) {
@@ -469,7 +523,7 @@
   }
 
   var P = DATA.projects || {};
-  fillProjTable("projCurrent", P.current);
+  fillProjTable("projCurrent", P.current, { weeks: true });
   fillProjTable("projUpcoming", P.upcoming);
   fillProjTable("projCompleted", P.completed);
 
@@ -501,6 +555,7 @@
     var span = tbody.querySelector('span.cell[data-store="' + storeIdx + '"][data-wi="' + wi + '"]');
     if (span) paintCell(span, value || "", rec.name, wi);
     scheduleSave();
+    refreshWeekCounts();
   }
 
   function clearDropMarks() {
@@ -620,9 +675,93 @@
     setAssignment(store, wi, ans.trim());
   });
 
-  document.getElementById("btnPdf").addEventListener("click", function () {
-    showToast("Opening print — choose Save as PDF.");
-    setTimeout(function () { window.print(); }, 200);
+  function bhcExportFilename(date) {
+    var dd = String(date.getDate()).padStart(2, "0");
+    var mm = String(date.getMonth() + 1).padStart(2, "0");
+    var yyyy = String(date.getFullYear());
+    return "BHC Programme " + dd + "-" + mm + "-" + yyyy + ".xlsx";
+  }
+
+  function filenameFromDisposition(header, fallback) {
+    if (!header) return fallback;
+    var star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    if (star) {
+      try { return decodeURIComponent(star[1].trim()); } catch (e) { /* use the plain name */ }
+    }
+    var plain = /filename="([^"]+)"/i.exec(header);
+    return plain ? plain[1] : fallback;
+  }
+
+  function scopeText(projectId) {
+    var found = null;
+    document.querySelectorAll("#projCurrent .scope-edit").forEach(function (el) {
+      if (el.getAttribute("data-project-id") === projectId) found = (el.textContent || "").trim();
+    });
+    return found;
+  }
+
+  function exportPayload() {
+    var pools = rebuildPools();
+    function person(row, role) {
+      return {
+        name: row.name,
+        flag: row.flag || "",
+        role: role,
+        active: isApplied(row.name),
+        weeks: (row.weeks || []).slice()
+      };
+    }
+    var current = (DATA.projects && DATA.projects.current) || [];
+    return {
+      weeks: DATA.weeks || [],
+      people: (DATA.rows || []).map(function (row) { return person(row, "surveyor"); })
+        .concat((DATA.admins || []).map(function (row) { return person(row, "admin"); })),
+      agency: (pools.agency || []).map(function (row) { return { name: row.name, flag: row.flag || "" }; }),
+      team: (pools.team || []).map(function (row) { return { name: row.name, flag: row.flag || "" }; }),
+      projects: current.map(function (row) {
+        var edited = scopeText(row.id);
+        return {
+          project: row.project,
+          numbers: row.numbers == null ? "" : String(row.numbers),
+          surveyTypes: edited == null ? (row.surveyTypes || "") : edited,
+          lead: row.lead || ""
+        };
+      })
+    };
+  }
+
+  var btnExcel = document.getElementById("btnExcel");
+  if (btnExcel) btnExcel.addEventListener("click", function () {
+    if (!DATA.exportUrl) {
+      showToast("Could not export the programme.");
+      return;
+    }
+    var fallback = bhcExportFilename(new Date());
+    showToast("Preparing " + fallback + "…");
+    fetch(DATA.exportUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      },
+      body: JSON.stringify(exportPayload())
+    }).then(function (res) {
+      if (!res.ok) throw new Error("export");
+      var filename = filenameFromDisposition(res.headers.get("content-disposition"), fallback);
+      return res.blob().then(function (blob) { return { blob: blob, filename: filename }; });
+    }).then(function (file) {
+      var url = URL.createObjectURL(file.blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = file.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast("Downloaded " + file.filename);
+    }).catch(function () {
+      showToast("Could not export the programme.");
+    });
   });
   document.getElementById("btnRefresh").addEventListener("click", function () {
     applyTicksToBoard();

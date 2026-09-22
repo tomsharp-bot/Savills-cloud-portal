@@ -1,13 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   boardFromClient,
   buildProgrammeTables,
   canonName,
   isHolidayLabel,
   parseSavedBoard,
+  projectWeeksOnGrid,
   resolveProgramme,
   seededSurveyTypes,
+  teamPoolExcludingAdmins,
   type ProgrammeProjectSource,
   type SavedProgrammeBoard,
 } from "./programme.js";
@@ -27,6 +31,18 @@ function project(partial: Partial<ProgrammeProjectSource> & Pick<ProgrammeProjec
     ...partial,
   };
 }
+
+describe("programme page controls", () => {
+  it("exports Excel and shows Nr of Weeks on current projects", () => {
+    const page = readFileSync(join(process.cwd(), "views/projects-programme.ejs"), "utf8");
+    assert.match(page, /id="btnExcel">Export Excel/);
+    assert.match(page, />Nr of Weeks</);
+    assert.doesNotMatch(page, /Export PDF|btnPdf/);
+    const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
+    assert.match(script, /BHC Programme/);
+    assert.match(script, /isAdminName/);
+  });
+});
 
 describe("resolveProgramme", () => {
   it("starts from the offline draft when nothing is saved and Personnel is empty", () => {
@@ -111,6 +127,33 @@ describe("resolveProgramme", () => {
     assert.equal(isHolidayLabel("Onward"), false);
   });
 
+  it("drops Personnel admins from the team pool without hard-coding names", () => {
+    const board = resolveProgramme({
+      admins: [
+        { name: "Greg Kowalski" },
+        { name: "Tom Sharp" },
+        { name: "Carly Morgan" },
+        { name: "Hazel Wilson", frozen: true },
+      ],
+    });
+    assert.deepEqual(
+      board.pools.team_not_live.map((person) => person.name),
+      ["Alan Henderson", "Clive Gray"]
+    );
+    assert.equal(board.pools.agency_not_on_project[0].name, "Bardya Amin");
+    assert.ok(board.rows.some((row) => row.name === "Tom Purnell"));
+    assert.ok(board.admins.some((row) => row.name === "Greg Kowalski"));
+    assert.ok(!board.admins.some((row) => row.name === "Hazel Wilson"));
+    assert.equal(board.usingPersonnelAdmins, true);
+    assert.deepEqual(
+      teamPoolExcludingAdmins(
+        [{ name: "Greg Kowalski" }, { name: "Tom Purnell" }, { name: "Alan Henderson" }],
+        ["Tom Sharp", "greg kowalski"]
+      ).map((person) => person.name),
+      ["Tom Purnell", "Alan Henderson"]
+    );
+  });
+
   it("skips frozen Personnel when adding people", () => {
     const board = resolveProgramme({
       surveyors: [{ name: "Frozen Person", frozen: true }],
@@ -155,6 +198,22 @@ describe("boardFromClient", () => {
     assert.equal(boardFromClient({ surveyors: [], admins: [] }), null);
     assert.equal(boardFromClient(null), null);
     assert.equal(parseSavedBoard({ version: 2 }), null);
+  });
+});
+
+describe("projectWeeksOnGrid", () => {
+  it("counts distinct weeks on the main grid, including admin rows that are on the board", () => {
+    const people = [
+      { weeks: ["Onward", "Onward", ""], active: true },
+      { weeks: ["Onward", "LFHA 2026", ""], active: true },
+      { weeks: ["Onward", "Onward", "Onward"], active: false },
+      { weeks: ["LFHA 2026", "LFHA 2026", "Holiday"], active: true },
+    ];
+    assert.equal(projectWeeksOnGrid("Onward", people), 2);
+    assert.equal(projectWeeksOnGrid("lfha  2026", people), 2);
+    assert.equal(projectWeeksOnGrid("Holiday", people), 1);
+    assert.equal(projectWeeksOnGrid("Missing", people), 0);
+    assert.equal(projectWeeksOnGrid("Onward", [{ weeks: ["Onward"], active: false }]), 0);
   });
 });
 

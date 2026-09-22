@@ -38,5 +38,13 @@ describe("admin hub tiles", () => {
     assert.match(topbar, /baseUrl\(isAdmin \? '\/admin' : '\/projects'\)/);
     assert.match(topbar, /baseUrl\('\/photos'\)/);
     assert.match(topbar, /Photo Storage/);
+    assert.match(topbar, /href="<%= baseUrl\('\/projects'\) %>">Projects/);
+    assert.match(topbar, /<details class="nav-menu">/);
+    assert.match(topbar, /baseUrl\('\/personnel'\)/);
+    const projectsAt = topbar.indexOf(`baseUrl('/projects') %>">Projects`);
+    const menuAt = topbar.indexOf("nav-menu");
+    const personnelAt = topbar.indexOf("baseUrl('/personnel')");
+    assert.ok(projectsAt >= 0 && projectsAt < menuAt && menuAt < personnelAt);
+    assert.doesNotMatch(topbar, /<a class="linkish"[^>]*>Personnel<\/a>/);
   });
 });
