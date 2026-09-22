@@ -56,11 +56,14 @@ describe("baseUrl", () => {
     assert.equal(baseUrl("//cdn.example/x", base), "//cdn.example/x");
   });
 
-  it("leaves HHSRS site-form root paths unprefixed", () => {
+  it("leaves HHSRS site-form and Reporter root paths unprefixed", () => {
     const base = "/projectprogress";
     assert.equal(baseUrl("/HHSRS-site-form", base), "/HHSRS-site-form");
     assert.equal(baseUrl("/HHSRS-site-form/new", base), "/HHSRS-site-form/new");
     assert.equal(baseUrl("/hhsrs-site-form", base), "/hhsrs-site-form");
+    assert.equal(baseUrl("/HHSRSreporter", base), "/HHSRSreporter");
+    assert.equal(baseUrl("/HHSRSreporter/abc", base), "/HHSRSreporter/abc");
+    assert.equal(baseUrl("/HHSRSreporting", base), "/HHSRSreporting");
     assert.equal(baseUrl("/login", base), "/projectprogress/login");
   });
 });
@@ -75,5 +78,6 @@ describe("prefixRedirectUrl", () => {
     assert.equal(prefixRedirectUrl("", "/projectprogress"), "/projectprogress");
     assert.equal(prefixRedirectUrl("/HHSRS-site-form", "/projectprogress"), "/HHSRS-site-form");
     assert.equal(prefixRedirectUrl("/HHSRS-site-form/thanks?id=1", "/projectprogress"), "/HHSRS-site-form/thanks?id=1");
+    assert.equal(prefixRedirectUrl("/HHSRSreporter", "/projectprogress"), "/HHSRSreporter");
   });
 });

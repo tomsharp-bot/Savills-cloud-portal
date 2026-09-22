@@ -23,7 +23,14 @@ export function configuredBasePath(
  * Public apps mounted at the domain root even when the Mark Up portal
  * lives under BASE_PATH=/projectprogress.
  */
-export const ROOT_APP_PREFIXES = ["/HHSRS-site-form", "/hhsrs-site-form"] as const;
+export const ROOT_APP_PREFIXES = [
+  "/HHSRS-site-form",
+  "/hhsrs-site-form",
+  "/HHSRSreporter",
+  "/hhsrsreporter",
+  "/HHSRSreporting",
+  "/hhsrsreporting",
+] as const;
 
 export function isRootAppPath(href: string): boolean {
   const path = href.startsWith("/") ? href : `/${href}`;
