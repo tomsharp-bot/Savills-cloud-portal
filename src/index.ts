@@ -1,8 +1,10 @@
 import { applyDatabaseUrlFromEnv } from "./dbUrl.js";
 import { createApp } from "./app.js";
 import { config } from "./config.js";
+import { logSpacesStartup } from "./lib/spaces.js";
 
 applyDatabaseUrlFromEnv();
+logSpacesStartup();
 
 const app = createApp();
 const server = app.listen(config.port, "0.0.0.0", () => {

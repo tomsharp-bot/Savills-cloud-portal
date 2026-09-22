@@ -1,7 +1,7 @@
 import type { PhotoFolder, PhotoFolderActivity, PhotoPoolItem, Project } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { seededSurveyTypes } from "./programme.js";
-import { spacesObjectKey, spacesStatus } from "./spaces.js";
+import { spacesObjectKey, spacesRequired, spacesStatus, spacesTargetOk } from "./spaces.js";
 
 const DEMO_ROOMS = ["Kitchen", "Bathroom", "Lounge", "Bedroom", "Hall", "Exterior", "Roof", "Boiler"] as const;
 
@@ -568,8 +568,14 @@ function crc32(buf: Buffer): number {
 
 export function spacesHint(): string {
   const s = spacesStatus();
-  if (s.configured) {
+  if (s.configured && spacesTargetOk(s)) {
     return `Spaces connected (${s.bucket} / ${s.region}). Real image bytes can replace placeholders when object keys are set.`;
+  }
+  if (s.configured) {
+    return `Spaces connected (${s.bucket} / ${s.region}). Production file storage must use bucket cloud-portal-vault in lon1.`;
+  }
+  if (spacesRequired()) {
+    return `Spaces is required but not configured. Set SPACES_ENDPOINT, SPACES_KEY, and SPACES_SECRET (bucket ${s.bucket}, region ${s.region}). Uploads fail instead of using local disk.`;
   }
   return `Spaces not configured yet — showing demo placeholders. Set SPACES_ENDPOINT, SPACES_KEY, SPACES_SECRET (bucket ${s.bucket}, region ${s.region}) on App Platform for live photos.`;
 }

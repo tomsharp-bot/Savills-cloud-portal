@@ -35,7 +35,7 @@ Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site
 - **HHSRS site reporting** (public phone form at `/HHSRS-site-form`; admin Reporter at `/HHSRSreporter`; intake list under the portal)
 - **Admin landing** at `/admin` after login (HHSRS Reporter at `/HHSRSreporter`, Project Progress, Personnel, Photos / Photo Storage, Projects Programme, Reference Documents). Existing admin tiles stay; Reference Documents is an extra tile.
 - **Surveyor landing** at `/surveyor` after login, with two tiles only: Project Progress and Reference Documents. Clients still land on `/projects`.
-- **Reference Documents** at `/reference-documents` for every admin and every surveyor (not clients). Six categories in three columns. Admins drag-and-drop or browse to upload, and can delete. Surveyors open PDF and images in the portal and can download; they do not see upload or delete. Word and Excel can be downloaded. Files go to DigitalOcean Spaces (`cloud-portal-vault`) when `SPACES_ENDPOINT`, `SPACES_KEY`, and `SPACES_SECRET` are set; otherwise they are stored on the server under `uploads/reference-documents/` (that disk does not survive an App Platform redeploy).
+- **Reference Documents** at `/reference-documents` for every admin and every surveyor (not clients). Six categories in three columns. Admins drag-and-drop or browse to upload, and can delete. Surveyors open PDF and images in the portal and can download; they do not see upload or delete. Word and Excel can be downloaded. In production, files are stored only in the private DigitalOcean Spaces bucket `cloud-portal-vault` (lon1). Open, download, and delete stream or remove that Spaces object. If Spaces is not fully configured, uploads fail and nothing is written to `uploads/reference-documents/`. Local disk is only for development when `NODE_ENV` is not `production` and `REQUIRE_SPACES` is not set.
 - **Photo Storage** (admin) at `/photos` — project tiles, Photos Pool, Photo Folders, Create Photos Extract, Client Access → Completions. Demo / coloured placeholder thumbs until DigitalOcean Spaces (`cloud-portal-vault`, LON1) credentials are set.
 - **Projects Programme** (admin) at `/projects-programme` — surveyor × week board. With `BASE_PATH=/projectprogress` the live URL is `https://savillscloudportal.co.uk/projectprogress/projects-programme` (hub: `https://savillscloudportal.co.uk/projectprogress/admin`). Bottom tables read Project Progress: current, upcoming, and the 5 most recently archived. Survey-type text starts from each project's survey-type ticks and is stored on edit. The grid itself is one shared board in Postgres.
 
@@ -111,11 +111,12 @@ Set these in **App Settings → App-Level / web component Environment Variables*
 | `NODE_ENV` | **Yes** | `production` |
 | `BASE_PATH` | **Yes (production)** | `/projectprogress` — serves the portal at `https://savillscloudportal.co.uk/projectprogress` (and `/projectprogress/login`, etc.). Local default is empty / `/`. Alias: `APP_BASE_PATH`. |
 | `PORT` | No | App Platform sets this. Default in code is `3000`. |
-| `SPACES_BUCKET` | No | `cloud-portal-vault` |
-| `SPACES_REGION` | No | `lon1` |
-| `SPACES_ENDPOINT` | No | Spaces endpoint, e.g. `https://lon1.digitaloceanspaces.com`. Required together with key and secret before Reference Documents (and later Photo Storage) use the bucket instead of local disk. |
-| `SPACES_KEY` | No | Spaces access key — **leave empty until needed**. Do not commit it. |
-| `SPACES_SECRET` | No | Spaces secret — **leave empty until needed**. Do not commit it. |
+| `SPACES_BUCKET` | **Yes (production)** | `cloud-portal-vault`. Code and `.do/app.yaml` already default to this. Do not point production at another bucket. |
+| `SPACES_REGION` | **Yes (production)** | `lon1` |
+| `SPACES_ENDPOINT` | **Yes (production)** | `https://lon1.digitaloceanspaces.com` (already set in `.do/app.yaml`). |
+| `SPACES_KEY` | **Yes (production)** | Spaces access key. **Set in the App Platform UI as a secret.** Do not commit it. Reference document uploads fail until this is set. |
+| `SPACES_SECRET` | **Yes (production)** | Spaces secret key. **Set in the App Platform UI as a secret.** Do not commit it. |
+| `REQUIRE_SPACES` | No | `true` in `.do/app.yaml`. Production also forces Spaces because `NODE_ENV=production`. Set `true` on any non-production app that must not use local disk. |
 
 Never commit real keys. The spec file only declares the names.
 
@@ -149,7 +150,9 @@ Tom’s assistant should set this on the **web** component (or app-level env):
 
 ### 5. After go-live
 
-- Spaces bucket **`cloud-portal-vault`** (LON1) for Photo Storage / External XLOOKUP — Photo Storage UI is live with demo placeholders until `SPACES_*` env vars are set.
+- Spaces bucket **`cloud-portal-vault`** (LON1, `https://lon1.digitaloceanspaces.com`) is required for Reference Documents. Photo Storage still shows demo placeholders until the same `SPACES_*` vars are set; it does not write reference-document bytes to local disk.
+- After deploy, `GET /health` stays HTTP 200 and includes `spaces.durable`. That is `true` only when endpoint, key, secret, bucket `cloud-portal-vault`, and region `lon1` are all set. The process log says `Spaces ready` or `Spaces NOT ready` without printing the key or secret.
+- Create a Spaces access key for `cloud-portal-vault` in the DigitalOcean control panel (Spaces → Access Keys, or a key limited to that bucket). Paste `SPACES_KEY` and `SPACES_SECRET` into the app’s environment. This repo does not contain those values.
 - Domain DNS / HTTPS still a Tom + DO console step.
 
 ---

@@ -135,6 +135,16 @@ describe("createApp without BASE_PATH (local default)", () => {
     const json = JSON.parse(res.body);
     assert.equal(json.ok, true);
     assert.equal(json.service, "savills-cloud-portal");
+    assert.equal(typeof json.spaces.configured, "boolean");
+    assert.equal(typeof json.spaces.required, "boolean");
+    assert.equal(typeof json.spaces.durable, "boolean");
+    assert.equal(json.spaces.bucket, "cloud-portal-vault");
+    assert.equal(json.spaces.region, "lon1");
+    assert.equal(json.spaces.credentials === "present" || json.spaces.credentials === "missing", true);
+    assert.equal("key" in json.spaces, false);
+    assert.equal("secret" in json.spaces, false);
+    if (process.env.SPACES_SECRET) assert.equal(res.body.includes(process.env.SPACES_SECRET), false);
+    if (process.env.SPACES_KEY) assert.equal(res.body.includes(process.env.SPACES_KEY), false);
   });
 
   it("serves login and static assets at the domain root", async () => {

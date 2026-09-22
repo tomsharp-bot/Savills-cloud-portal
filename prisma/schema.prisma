@@ -336,7 +336,8 @@ model HhsrsSiteSubmission {
 }
 
 /// Shared reference library (admins + surveyors). Not project-scoped and never shown to clients.
-/// spacesKey empty = bytes under uploads/reference-documents/. Set = DigitalOcean Spaces object.
+/// Production bytes live only in Spaces (spacesKey set). An empty spacesKey is local-dev disk
+/// and is not read or written when NODE_ENV=production or REQUIRE_SPACES=true.
 model ReferenceDocument {
   id         String   @id @default(cuid())
   /// general | blocks | hhsrs | rdsap | new-starter | other
