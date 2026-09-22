@@ -466,8 +466,20 @@ describe("Account password and Personnel temp reset", () => {
     const programmeJs = await request(app, "GET", "/js/programme.js");
     assert.equal(programmeJs.status, 200);
     assert.match(programmeJs.body, /projCurrent/);
-    assert.match(programmeJs.body, /Export PDF|btnPdf/);
+    assert.match(programmeJs.body, /btnExcel/);
+    assert.match(programmeJs.body, /BHC Programme/);
+    assert.match(programmeJs.body, /nr-weeks/);
+    assert.match(programmeJs.body, /isAdminName/);
+    assert.doesNotMatch(programmeJs.body, /btnPdf/);
+    assert.doesNotMatch(programmeJs.body, /window\.print/);
     assert.match(programmeJs.body, /survey-types|scopeUrl/);
+
+    const exportExcel = await request(app, "POST", "/projects-programme/export", {
+      body: "{}",
+      contentType: "application/json",
+    });
+    assert.equal(exportExcel.status, 302);
+    assert.equal(exportExcel.location, "/login");
 
     const programmeCss = await request(app, "GET", "/css/programme.css");
     assert.equal(programmeCss.status, 200);

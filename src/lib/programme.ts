@@ -322,6 +322,10 @@ export function resolveProgramme(input: {
     weeks: lookupWeeks(name, cells, seedWeeks),
   }));
   const everyone = [...rows.map((row) => row.name), ...adminRows.map((row) => row.name)];
+  const adminNamesForPool = [
+    ...(input.admins || []).map((person) => person.name),
+    ...adminRows.map((person) => person.name),
+  ];
 
   return {
     weeks: programmeSeed.weeks.slice(),
@@ -332,10 +336,13 @@ export function resolveProgramme(input: {
         flag: normalizeFlag(person.flag),
         name: collapseName(person.name),
       })),
-      team_not_live: programmeSeed.pools.team_not_live.map((person) => ({
-        flag: normalizeFlag(person.flag),
-        name: collapseName(person.name),
-      })),
+      team_not_live: teamPoolExcludingAdmins(
+        programmeSeed.pools.team_not_live.map((person) => ({
+          flag: normalizeFlag(person.flag),
+          name: collapseName(person.name),
+        })),
+        adminNamesForPool
+      ),
     },
     ticks: remapBools(saved?.ticks, everyone),
     applied: remapBools(saved?.applied, everyone),
@@ -392,6 +399,38 @@ function dedupePeople(people: unknown[]): { name: string; flag: string; weeks: s
     out.push({ name, flag: normalizeFlag(person.flag), weeks: padWeeks(weeks) });
   }
   return out;
+}
+
+/** Drop team-pool people whose name matches a Personnel admin. Names are not hard-coded. */
+export function teamPoolExcludingAdmins<T extends { name: string }>(
+  people: readonly T[],
+  adminNames: readonly string[]
+): T[] {
+  const blocked = new Set(adminNames.map((name) => canonName(name)).filter(Boolean));
+  if (!blocked.size) return people.slice();
+  return people.filter((person) => !blocked.has(canonName(person.name)));
+}
+
+/**
+ * Distinct week columns where an on-board person has this project.
+ * People with active === false are off the main grid and do not count.
+ * Missing active means on the board, matching the programme tick default.
+ */
+export function projectWeeksOnGrid(
+  projectName: string,
+  people: readonly { weeks?: readonly string[]; active?: boolean }[]
+): number {
+  const key = canonName(projectName);
+  if (!key) return 0;
+  const hit = new Set<number>();
+  for (const person of people) {
+    if (person.active === false) continue;
+    const weeks = person.weeks || [];
+    for (let i = 0; i < weeks.length; i++) {
+      if (canonName(weeks[i] || "") === key) hit.add(i);
+    }
+  }
+  return hit.size;
 }
 
 export function surveyTypesForSave(seeded: string, text: unknown): { text: string; clear: boolean } | null {

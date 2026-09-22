@@ -12,6 +12,11 @@ import {
   seededSurveyTypes,
   surveyTypesForSave,
 } from "../lib/programme.js";
+import {
+  buildProgrammeWorkbook,
+  parseProgrammeExport,
+  programmeContentDisposition,
+} from "../lib/programme-export.js";
 
 export const programmeRouter = Router();
 programmeRouter.use(requireAdmin);
@@ -55,8 +60,10 @@ programmeRouter.get("/", async (req: Request, res: Response) => {
       completed: tables.completed,
     },
     notes: programmeNotes(resolved.usingPersonnelAdmins),
+    adminNames: admins.map((person) => person.name),
     saveUrl: res.locals.baseUrl("/projects-programme/board"),
     scopeUrl: res.locals.baseUrl("/projects-programme/survey-types"),
+    exportUrl: res.locals.baseUrl("/projects-programme/export"),
   };
 
   res.render("projects-programme", {
@@ -79,6 +86,18 @@ programmeRouter.post("/board", async (req: Request, res: Response) => {
     update: { data: saved, updatedBy: req.user?.id || "" },
   });
   res.json({ ok: true });
+});
+
+programmeRouter.post("/export", async (req: Request, res: Response) => {
+  const parsed = parseProgrammeExport(req.body);
+  if (!parsed) {
+    res.status(400).json({ error: "Export payload was not valid." });
+    return;
+  }
+  const workbook = buildProgrammeWorkbook(parsed);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", programmeContentDisposition(workbook.filename));
+  res.send(workbook.buffer);
 });
 
 programmeRouter.post("/survey-types", async (req: Request, res: Response) => {
