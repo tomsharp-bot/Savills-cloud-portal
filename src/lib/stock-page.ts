@@ -6,6 +6,13 @@ import { filterStockRows, stockFilterCellText, type StockFilterRow } from "./sto
 /** One page of stock rows. The grid never mounts more than this many `<tr>`s. */
 export const STOCK_PAGE_SIZE = 100;
 
+/**
+ * A select with one option per distinct visit or letter date will freeze the
+ * browser once a stocklist is tens of thousands of rows. Above this, that
+ * column is a text filter instead.
+ */
+export const STOCK_SELECT_OPTION_CAP = 80;
+
 export function stockKindFromTab(tab: string): AssetKind | null {
   if (tab === "dwellings" || tab === "dwelling") return "dwelling";
   if (tab === "blocks" || tab === "block") return "block";
@@ -83,10 +90,11 @@ export function sortStockRows<T extends StockFilterRow>(rows: T[], sort: string,
 export function buildStockPage<T extends StockFilterRow>(
   rows: T[],
   query: StockListQuery,
-  columns: readonly string[]
+  columns: readonly string[],
+  exactCols?: Set<string>
 ): StockPage<T> {
   const pageSize = clampStockPageSize(query.pageSize);
-  const filtered = filterStockRows(rows, query.filters);
+  const filtered = filterStockRows(rows, query.filters, exactCols);
   const sort = columns.includes(query.sort) ? query.sort : columns.includes("uprn") ? "uprn" : columns[0] || "uprn";
   const sorted = sortStockRows(filtered, sort, query.dir);
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
@@ -122,7 +130,7 @@ export function stockPagerLabel(page: Pick<StockPage<unknown>, "page" | "pageCou
   return `Page ${page.page} of ${page.pageCount}`;
 }
 
-/** Dropdown values from the whole tab, not the visible page. */
+/** Dropdown values from the whole tab, not the visible page. High-cardinality columns are omitted. */
 export function collectSelectOptions(
   rows: StockFilterRow[],
   columns: readonly string[]
@@ -131,14 +139,24 @@ export function collectSelectOptions(
   for (const col of columns) {
     if (!STOCK_SELECT_COLS.has(col) || col === "epcRequired" || col === "omitAsset") continue;
     if (col === "assetStatus") {
-      out[col] = assetStatusFilterOptions(rows.map((row) => stockFilterCellText(row, col)));
+      const statuses = assetStatusFilterOptions(rows.map((row) => stockFilterCellText(row, col)));
+      if (statuses.length <= STOCK_SELECT_OPTION_CAP) out[col] = statuses;
       continue;
     }
     const vals = [...new Set(rows.map((row) => stockFilterCellText(row, col)))];
+    if (vals.length > STOCK_SELECT_OPTION_CAP) continue;
     vals.sort(compareStockText);
     out[col] = vals;
   }
   return out;
+}
+
+/** Columns that render as a dropdown. Anything else, including a capped select, is a contains-match. */
+export function exactFilterColumns(filterOptions: Record<string, string[]>): Set<string> {
+  const exact = new Set<string>(Object.keys(filterOptions));
+  exact.add("omitAsset");
+  exact.add("epcRequired");
+  return exact;
 }
 
 export function assembleStockTab<T extends StockFilterRow>(
@@ -147,11 +165,12 @@ export function assembleStockTab<T extends StockFilterRow>(
   query: Record<string, unknown>
 ) {
   const listQuery = parseStockListQuery(query, columns);
-  const page = buildStockPage(rows, listQuery, columns);
+  const filterOptions = collectSelectOptions(rows, columns);
+  const page = buildStockPage(rows, listQuery, columns, exactFilterColumns(filterOptions));
   return {
     listQuery,
     page,
-    filterOptions: collectSelectOptions(rows, columns),
+    filterOptions,
     label: stockPageLabel(page),
     pagerLabel: stockPagerLabel(page),
     stockFiltered: page.total > 0 && page.matched === 0,

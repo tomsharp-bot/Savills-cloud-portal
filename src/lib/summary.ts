@@ -1,4 +1,4 @@
-import type { Asset, Project } from "@prisma/client";
+import type { Project } from "@prisma/client";
 import { isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
 import { applyEpcSurveyType, isEpcSurveyType } from "./epc-survey.js";
 import { formatProjectTarget } from "./project-target.js";
@@ -9,15 +9,25 @@ export type KpiStack = {
   tiles: { label: string; value: string }[];
 };
 
-function counted(assets: Asset[]) {
+/** Fields Summary actually counts. Opening a project must not load every address column. */
+export type SummaryAsset = {
+  kind: string;
+  omitAsset?: boolean | null;
+  assetStatus?: string | null;
+  surveyType?: string | null;
+  external?: string | null;
+  epcRequired?: boolean | null;
+};
+
+function counted<T extends SummaryAsset>(assets: T[]) {
   return assets.filter((a) => !a.omitAsset);
 }
 
-function completed(assets: Asset[]) {
+function completed<T extends SummaryAsset>(assets: T[]) {
   return counted(assets).filter((a) => isFullSurveyStatus(a.assetStatus) || isExtOnlyStatus(a.assetStatus));
 }
 
-export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
+export function buildSummary(project: Project, assets: SummaryAsset[]): KpiStack[] {
   const view = assets.map((asset) => applyEpcSurveyType(asset, !!project.typeConditionEpc));
   const dwellings = view.filter((a) => a.kind === "dwelling");
   const blocks = view.filter((a) => a.kind === "block");

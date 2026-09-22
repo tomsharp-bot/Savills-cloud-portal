@@ -277,10 +277,24 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
 
   const stockKind = stockKindFromTab(tab);
   const needsAssets = tab === "summary" || tab === "sample-analysis";
+  // Counts only. A full Asset row per dwelling (address, letters, comments) is what
+  // exhausted the small app instance when Summary opened on ~44k stock.
   const assets = needsAssets
     ? await prisma.asset.findMany({
         where: { projectId: project.id },
-        orderBy: [{ kind: "asc" }, { uprn: "asc" }],
+        select: {
+          kind: true,
+          omitAsset: true,
+          assetStatus: true,
+          surveyType: true,
+          external: true,
+          epcRequired: true,
+          patch: true,
+          surveyor: true,
+          visit1: true,
+          visit2: true,
+          visit3: true,
+        },
       })
     : [];
   const surveyors =

@@ -42,7 +42,8 @@ export function stockRowMatchesFilters(
 
 export function filterStockRows<T extends StockFilterRow>(
   rows: T[],
-  filters: Record<string, string>
+  filters: Record<string, string>,
+  selectCols?: Set<string>
 ): T[] {
-  return rows.filter((row) => stockRowMatchesFilters(row, filters));
+  return rows.filter((row) => stockRowMatchesFilters(row, filters, selectCols));
 }

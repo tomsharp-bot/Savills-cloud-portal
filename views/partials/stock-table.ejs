@@ -57,7 +57,7 @@
                 <option value="YES" <%= current === "YES" ? "selected" : "" %>>YES</option>
                 <option value="__blank__" <%= current === "__blank__" ? "selected" : "" %>>(blank)</option>
               </select>
-            <% } else if (selectCols.has(c)) { %>
+            <% } else if (selectCols.has(c) && Array.isArray(options[c])) { %>
               <select data-filter="<%= c %>" class="<%= filterClass(current) %>">
                 <option value="">All</option>
                 <% const vals = options[c] || (c === "assetStatus" && typeof assetStatusOptions !== "undefined" ? assetStatusOptions : []); %>
