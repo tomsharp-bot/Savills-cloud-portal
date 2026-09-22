@@ -416,6 +416,14 @@ describe("Account password and Personnel temp reset", () => {
     const personnel = await request(app, "GET", "/personnel");
     assert.equal(personnel.status, 302);
     assert.equal(personnel.location, "/login");
+
+    const programme = await request(app, "GET", "/projects-programme");
+    assert.equal(programme.status, 302);
+    assert.equal(programme.location, "/login");
+
+    const adminHub = await request(app, "GET", "/admin");
+    assert.equal(adminHub.status, 302);
+    assert.equal(adminHub.location, "/login");
   });
 
   it("prefixes Change password under BASE_PATH=/projectprogress", async () => {
@@ -423,6 +431,14 @@ describe("Account password and Personnel temp reset", () => {
     const account = await request(app, "GET", "/projectprogress/account/password");
     assert.equal(account.status, 302);
     assert.equal(account.location, "/projectprogress/login");
+
+    const programme = await request(app, "GET", "/projectprogress/projects-programme");
+    assert.equal(programme.status, 302);
+    assert.equal(programme.location, "/projectprogress/login");
+
+    const adminHub = await request(app, "GET", "/projectprogress/admin");
+    assert.equal(adminHub.status, 302);
+    assert.equal(adminHub.location, "/projectprogress/login");
   });
 
   it("ships Change password in the header and copy/reset helpers on static assets", async () => {
@@ -438,5 +454,16 @@ describe("Account password and Personnel temp reset", () => {
     assert.match(js.body, /data-copy/);
     assert.match(js.body, /change-password-form/);
     assert.match(js.body, /New password must be at least 10 characters/);
+
+    const programmeJs = await request(app, "GET", "/js/programme.js");
+    assert.equal(programmeJs.status, 200);
+    assert.match(programmeJs.body, /projCurrent/);
+    assert.match(programmeJs.body, /Export PDF|btnPdf/);
+    assert.match(programmeJs.body, /survey-types|scopeUrl/);
+
+    const programmeCss = await request(app, "GET", "/css/programme.css");
+    assert.equal(programmeCss.status, 200);
+    assert.match(programmeCss.body, /\.proj-cols/);
+    assert.match(programmeCss.body, /c-Holiday/);
   });
 });

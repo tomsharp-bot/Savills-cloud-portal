@@ -75,6 +75,23 @@ model Project {
   documents            ProjectDocument[]
   externalLink         ExternalLink?
   hhsrsSiteSubmissions HhsrsSiteSubmission[]
+  programmeSurveyNote  ProgrammeSurveyNote?
+}
+
+/// Shared Projects Programme grid (one row). Cell text, Active ticks, and row order.
+model ProgrammeBoard {
+  id        String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+  updatedBy String   @default("")
+}
+
+/// Admin edits to the Programme "Survey types" cell. Absent row = seed from Project type ticks.
+model ProgrammeSurveyNote {
+  projectId   String   @id
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  surveyTypes String   @default("")
+  updatedAt   DateTime @updatedAt
 }
 
 /// Admin-edited Sample Analysis labels for one stock patch on a project.
