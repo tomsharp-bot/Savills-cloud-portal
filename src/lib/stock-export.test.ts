@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { Asset } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { assetToExportRow, buildStockWorkbook, stockExportFilename } from "./stock-export.js";
+import { applyEpcSurveyType } from "./epc-survey.js";
 import { stockColumns, STOCK_LABELS } from "./stock-columns.js";
 
 function asset(partial: Partial<Asset> & { agency?: string } = {}): Asset & { agency?: string } {
@@ -39,6 +40,7 @@ function asset(partial: Partial<Asset> & { agency?: string } = {}): Asset & { ag
     x2: "",
     x3: "",
     omitAsset: false,
+    epcRequired: false,
     stockMissing: false,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -62,6 +64,25 @@ describe("Stocklist export", () => {
     assert.equal(row["Resident Email"], "jane@example.com");
     assert.equal(row["Letter Date 1"], "04/01/26");
     assert.equal(row["X1"], "A");
+  });
+
+  it("exports EPC Req. before Survey Type using SCS labels on a Condition + EPC project", () => {
+    const row = assetToExportRow(
+      applyEpcSurveyType(asset({ assetStatus: "Full Survey", epcRequired: true, surveyType: "Condition Only" }), true),
+      "dwelling",
+      { includeEpcRequired: true }
+    );
+    const headers = Object.keys(row);
+    assert.equal(headers.indexOf("EPC Req.") + 1, headers.indexOf("Survey Type"));
+    assert.equal(row["EPC Req."], "YES");
+    assert.equal(row["Survey Type"], "SCS + EPC");
+    const blank = assetToExportRow(
+      applyEpcSurveyType(asset({ assetStatus: "Full Survey", epcRequired: false }), true),
+      "dwelling",
+      { includeEpcRequired: true }
+    );
+    assert.equal(blank["EPC Req."], "");
+    assert.equal(blank["Survey Type"], "SCS only");
   });
 
   it("omits Admin-only columns from a surveyor export", () => {

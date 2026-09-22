@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Asset, Project } from "@prisma/client";
 import { buildSummary } from "./summary.js";
 
-function project(): Project {
+function project(partial: Partial<Project> = {}): Project {
   return {
     id: "p",
     name: "Cornwall",
@@ -22,6 +22,7 @@ function project(): Project {
     sampleTargetEndDate: "",
     createdAt: new Date(),
     updatedAt: new Date(),
+    ...partial,
   };
 }
 
@@ -59,6 +60,7 @@ function asset(partial: Partial<Asset>): Asset {
     x2: "",
     x3: "",
     omitAsset: false,
+    epcRequired: false,
     stockMissing: false,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -66,8 +68,8 @@ function asset(partial: Partial<Asset>): Asset {
   };
 }
 
-function tile(stackKey: string, label: string, assets: Asset[]): string {
-  const stack = buildSummary(project(), assets).find((s) => s.key === stackKey);
+function tile(stackKey: string, label: string, assets: Asset[], proj: Project = project()): string {
+  const stack = buildSummary(proj, assets).find((s) => s.key === stackKey);
   const found = stack?.tiles.find((t) => t.label === label);
   return found?.value || "";
 }
@@ -110,5 +112,26 @@ describe("Summary counts and Omit Asset", () => {
     assert.equal(tile("garages", "Total Garages", assets), "1");
     assert.equal(tile("garages", "Garages Completed", assets), "1");
     assert.equal(tile("garages", "Garages Remaining", assets), "0");
+    assert.equal(tile("dwellings", "Full Surveys Completed: Condition Only", assets), "");
+    assert.equal(tile("dwellings", "Full Surveys Completed: Condition + EPC", assets), "");
+  });
+
+  it("splits full surveys when the project includes Condition + EPC", () => {
+    const proj = project({ typeConditionEpc: true });
+    const assets = [
+      asset({ uprn: "only", assetStatus: "Full Survey", surveyType: "Condition Only", epcRequired: false }),
+      asset({ uprn: "epc", assetStatus: "Full Survey", surveyType: "Condition Only", epcRequired: true }),
+      asset({ uprn: "legacy", assetStatus: "Full Survey", surveyType: "Condition + EPC", epcRequired: false }),
+      asset({ uprn: "open", assetStatus: "No Visit", surveyType: "Condition + EPC", epcRequired: true }),
+      asset({ uprn: "ext", assetStatus: "Ext-Only", external: "Yes", epcRequired: true }),
+      asset({ uprn: "omit", assetStatus: "Full Survey", epcRequired: true, omitAsset: true }),
+    ];
+    assert.equal(tile("dwellings", "Full Surveys Completed", assets, proj), "");
+    assert.equal(tile("dwellings", "Full Surveys Completed: Condition Only", assets, proj), "2");
+    assert.equal(tile("dwellings", "Full Surveys Completed: Condition + EPC", assets, proj), "1");
+    assert.equal(tile("dwellings", "Total Dwellings", assets, proj), "5");
+    assert.equal(tile("dwellings", "External-only Completed", assets, proj), "1");
+    assert.equal(tile("dwellings", "Full Surveys Remaining", assets, proj), "1");
+    assert.equal(tile("dwellings", "External-only Remaining", assets, proj), "0");
   });
 });

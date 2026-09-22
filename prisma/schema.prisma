@@ -123,7 +123,9 @@ model Asset {
   yearBuilt    String    @default("")
   patch        String    @default("")
   surveyor     String    @default("")
-  surveyType   String    @default("")
+  surveyType     String    @default("")
+  /// Admin flag: this dwelling needs an EPC as well as the condition survey.
+  epcRequired    Boolean   @default(false)
   siteComments   String    @default("")
   external       String    @default("")
   residentName   String    @default("")

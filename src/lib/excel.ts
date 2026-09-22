@@ -88,16 +88,30 @@ export function parseCsvText(text: string): RawRow[] {
   return rows;
 }
 
+function sheetHasUprn(sheet: XLSX.WorkSheet | undefined): boolean {
+  if (!sheet) return false;
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][];
+  if (!rows.length) return false;
+  const hdr = rows[0].map((h) => String(h || "").trim().toLowerCase());
+  return hdr.includes("uprn");
+}
+
 function pickUprnSheet(workbook: XLSX.WorkBook): { name: string; sheet: XLSX.WorkSheet } | null {
   if (!workbook?.SheetNames?.length) return null;
-  let name = workbook.SheetNames.find((n) => {
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[n], { header: 1, defval: "" }) as unknown[][];
-    if (!rows.length) return false;
-    const hdr = rows[0].map((h) => String(h || "").trim().toLowerCase());
-    return hdr.includes("uprn");
-  });
-  if (!name) name = workbook.SheetNames[0];
+  const name = workbook.SheetNames.find((n) => sheetHasUprn(workbook.Sheets[n])) || workbook.SheetNames[0];
   return { name, sheet: workbook.Sheets[name] };
+}
+
+/** Every sheet that has a UPRN column, in workbook order. */
+function allUprnSheets(workbook: XLSX.WorkBook): { name: string; sheet: XLSX.WorkSheet }[] {
+  if (!workbook?.SheetNames?.length) return [];
+  const found = workbook.SheetNames.filter((n) => sheetHasUprn(workbook.Sheets[n])).map((name) => ({
+    name,
+    sheet: workbook.Sheets[name],
+  }));
+  if (found.length) return found;
+  const name = workbook.SheetNames[0];
+  return [{ name, sheet: workbook.Sheets[name] }];
 }
 
 export function parseWorkbook(buffer: Buffer, filename: string): RawRow[] {
@@ -111,13 +125,26 @@ export function parseWorkbook(buffer: Buffer, filename: string): RawRow[] {
   return rowsFromSheet(picked.sheet);
 }
 
-/** Stocklist / External list: first sheet with a UPRN column (or first sheet). */
-export function parseUprnWorkbook(buffer: Buffer, filename: string): RawRow[] {
+/**
+ * Stocklist / External list.
+ * `allSheets` reads every sheet with a UPRN column so a Dwellings sheet is not
+ * dropped when Blocks is the first tab in the workbook.
+ */
+export function parseUprnWorkbook(
+  buffer: Buffer,
+  filename: string,
+  opts: { allSheets?: boolean } = {}
+): RawRow[] {
   const name = (filename || "").toLowerCase();
   if (name.endsWith(".csv")) {
     return parseCsvText(buffer.toString("utf8"));
   }
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  if (opts.allSheets) {
+    const sheets = allUprnSheets(wb);
+    if (!sheets.length) throw new Error("No sheet found");
+    return sheets.flatMap((picked) => rowsFromSheet(picked.sheet));
+  }
   const picked = pickUprnSheet(wb);
   if (!picked) throw new Error("No sheet found");
   return rowsFromSheet(picked.sheet);

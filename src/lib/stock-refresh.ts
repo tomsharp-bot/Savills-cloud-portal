@@ -1,5 +1,6 @@
 import type { AssetKind } from "@prisma/client";
 import { cellVal, inferStockKind, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
+import { epcRequiredFromSurveyType } from "./epc-survey.js";
 import { formatStockDate } from "./dates.js";
 import type { RawRow } from "./excel.js";
 import { prisma } from "./prisma.js";
@@ -20,6 +21,7 @@ export type AddressPatch = {
   patch?: string;
   surveyor?: string;
   surveyType?: string;
+  epcRequired?: boolean;
   residentName?: string;
   residentNumber?: string;
   residentEmail?: string;
@@ -140,7 +142,9 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   let city = trimmedCell(raw, ["Address Line 5", "City"]);
   let postcode = trimmedCell(raw, ["Post Code", "Postcode"]);
   let area = trimmedCell(raw, ["Area"]);
-  const archetype = trimmedCell(raw, ["Archetype"]);
+  const archetype =
+    trimmedCell(raw, ["Archetype"]) ||
+    trimmedCell(raw, ["Dwelling Type", "Property Type", "Asset Type", "Building Type", "Unit Type"]);
   const yearBuilt = trimmedCell(raw, ["Year Built"]);
   const patchName = trimmedCell(raw, ["Patch"]);
   const surveyor = trimmedCell(raw, ["Surveyor"]);
@@ -170,7 +174,11 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   if (yearBuilt) patch.yearBuilt = yearBuilt;
   if (patchName) patch.patch = patchName;
   if (surveyor) patch.surveyor = surveyor;
-  if (surveyType) patch.surveyType = surveyType;
+  if (surveyType) {
+    patch.surveyType = surveyType;
+    const epcRequired = epcRequiredFromSurveyType(surveyType);
+    if (epcRequired !== undefined) patch.epcRequired = epcRequired;
+  }
 
   const residentName = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentName);
   const residentNumber = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentNumber);

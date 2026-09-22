@@ -7,6 +7,7 @@ export type ExportAsset = Asset & { agency?: string };
 
 export function stockExportCell(asset: ExportAsset, col: string): string {
   if (col === "omitAsset") return asset.omitAsset ? "Yes" : "";
+  if (col === "epcRequired") return asset.epcRequired ? "YES" : "";
   if (col === "agency") return String(asset.agency || "");
   if (STOCK_DATE_COLS.has(col)) return formatStockDate((asset as Record<string, unknown>)[col]);
   const v = (asset as Record<string, unknown>)[col];
@@ -15,6 +16,7 @@ export function stockExportCell(asset: ExportAsset, col: string): string {
 
 export type StockExportOpts = {
   includeAdminOnly?: boolean;
+  includeEpcRequired?: boolean;
 };
 
 export function assetToExportRow(

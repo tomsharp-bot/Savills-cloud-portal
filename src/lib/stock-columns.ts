@@ -19,6 +19,7 @@ export const STOCK_LABELS: Record<string, string> = {
   patch: "Patch",
   surveyor: "Surveyor",
   surveyType: "Survey Type",
+  epcRequired: "EPC Req.",
   agency: "Agency",
   siteComments: "Site Comments",
   external: "External",
@@ -92,6 +93,7 @@ export const STOCK_SELECT_COLS = new Set([
   "patch",
   "surveyor",
   "surveyType",
+  "epcRequired",
   "agency",
   "external",
   "letterDate1",
@@ -101,14 +103,20 @@ export const STOCK_SELECT_COLS = new Set([
 export type StockColumnOpts = {
   /** Default true: include Omit Asset and dwelling resident/letter/X columns. */
   includeAdminOnly?: boolean;
+  /** Dwellings only, when the project has Condition + EPC switched on. */
+  includeEpcRequired?: boolean;
 };
 
 export function stockColumns(kind: AssetKind, opts: StockColumnOpts = {}): string[] {
   const includeAdminOnly = opts.includeAdminOnly !== false;
-  const cols =
+  let cols: string[] =
     kind === "dwelling"
       ? [...CORE_COLS, ...VISIT_COLS, ...ADDRESS_COLS, ...DWELLING_ADMIN_COLS]
       : [...CORE_COLS, ...ADDRESS_COLS];
+  if (opts.includeEpcRequired && kind === "dwelling") {
+    const at = cols.indexOf("surveyType");
+    cols = [...cols.slice(0, at), "epcRequired", ...cols.slice(at)];
+  }
   if (includeAdminOnly) return cols;
   return cols.filter((c) => !ADMIN_ONLY_STOCK_COLS.has(c));
 }
