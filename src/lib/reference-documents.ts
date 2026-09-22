@@ -2,7 +2,27 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { config } from "../config.js";
 import { extOf, safeOriginalName } from "./documents.js";
-import { deleteSpacesObject, fetchSpacesObject, putSpacesObject, spacesStatus } from "./spaces.js";
+import {
+  deleteSpacesObject,
+  EXPECTED_SPACES_BUCKET,
+  EXPECTED_SPACES_ENDPOINT,
+  EXPECTED_SPACES_REGION,
+  fetchSpacesObject,
+  missingSpacesEnvNames,
+  putSpacesObject,
+  referenceStorageMode,
+  resolveReferenceStorageMode,
+  spacesStatus,
+  spacesTargetOk,
+  type ReferenceStorageMode,
+} from "./spaces.js";
+
+export class ReferenceStorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ReferenceStorageError";
+  }
+}
 
 export const REF_DOC_MAX_BYTES = 20 * 1024 * 1024;
 export const REF_DOC_MAX_FILES = 20;
@@ -156,12 +176,37 @@ export function referenceSpacesKey(category: string, storedName: string): string
   return `reference-documents/${category}/${storedName}`;
 }
 
+/** Shown to admins. Names the env vars; never includes key or secret values. */
+export function referenceStorageBlockMessage(): string {
+  const s = spacesStatus();
+  if (s.configured && !spacesTargetOk(s)) {
+    return (
+      `Reference documents must be stored in DigitalOcean Spaces bucket ${EXPECTED_SPACES_BUCKET} ` +
+      `(${EXPECTED_SPACES_REGION}, ${EXPECTED_SPACES_ENDPOINT}). Current Spaces settings do not match, ` +
+      `so the file was not saved on the server disk.`
+    );
+  }
+  const missing = missingSpacesEnvNames();
+  const missingText = missing.length ? ` Missing ${missing.join(", ")}.` : "";
+  return (
+    `Reference documents are not saved on the server disk. DigitalOcean Spaces is not configured ` +
+    `(bucket ${s.bucket || EXPECTED_SPACES_BUCKET}, region ${s.region || EXPECTED_SPACES_REGION}).` +
+    `${missingText} Set SPACES_ENDPOINT (${EXPECTED_SPACES_ENDPOINT}), SPACES_KEY, and SPACES_SECRET on App Platform.`
+  );
+}
+
 export function referenceStorageNote(): string {
   const s = spacesStatus();
-  if (s.configured) {
-    return `Files are stored in DigitalOcean Spaces (${s.bucket}, ${s.region}).`;
+  const mode = referenceStorageMode();
+  if (mode === "spaces") {
+    return `Files are stored in DigitalOcean Spaces (${s.bucket}, ${s.region}). They are not written to the server disk.`;
   }
-  return `Files are stored on the server until Spaces is configured. Set SPACES_ENDPOINT, SPACES_KEY, and SPACES_SECRET (bucket ${s.bucket || "cloud-portal-vault"}, region ${s.region || "lon1"}) for durable storage.`;
+  if (mode === "blocked") return referenceStorageBlockMessage();
+  return (
+    `Files are stored on the server until Spaces is configured. Set SPACES_ENDPOINT, SPACES_KEY, and SPACES_SECRET ` +
+    `(bucket ${EXPECTED_SPACES_BUCKET}, region ${EXPECTED_SPACES_REGION}) for durable storage. ` +
+    `This disk is not used when NODE_ENV=production or REQUIRE_SPACES=true.`
+  );
 }
 
 export type StoredReference = {
@@ -169,17 +214,28 @@ export type StoredReference = {
   storage: "spaces" | "disk";
 };
 
-export async function storeReferenceBytes(input: {
-  category: string;
-  storedName: string;
-  buffer: Buffer;
-  contentType: string;
-}): Promise<StoredReference> {
+export async function storeReferenceBytes(
+  input: {
+    category: string;
+    storedName: string;
+    buffer: Buffer;
+    contentType: string;
+  },
+  override?: ReferenceStorageMode
+): Promise<StoredReference> {
   const key = referenceSpacesKey(input.category, input.storedName);
-  if (spacesStatus().configured) {
+  const mode = resolveReferenceStorageMode(referenceStorageMode(), override);
+  if (mode === "blocked") {
+    throw new ReferenceStorageError(referenceStorageBlockMessage());
+  }
+  if (mode === "spaces") {
     const ok = await putSpacesObject(key, input.buffer, input.contentType);
-    if (ok) return { spacesKey: key, storage: "spaces" };
-    console.error("Reference document Spaces upload failed; saving on local disk.");
+    if (!ok) {
+      throw new ReferenceStorageError(
+        "Could not store that file in DigitalOcean Spaces. Nothing was saved on the server disk."
+      );
+    }
+    return { spacesKey: key, storage: "spaces" };
   }
   const dir = referenceUploadDir();
   await fs.mkdir(dir, { recursive: true });
@@ -189,14 +245,18 @@ export async function storeReferenceBytes(input: {
 
 export type LoadedReference = { kind: "path"; path: string } | { kind: "bytes"; buffer: Buffer };
 
-export async function loadReferenceFile(doc: {
-  storedName: string;
-  spacesKey: string;
-}): Promise<LoadedReference | null> {
+export async function loadReferenceFile(
+  doc: {
+    storedName: string;
+    spacesKey: string;
+  },
+  override?: ReferenceStorageMode
+): Promise<LoadedReference | null> {
   if (doc.spacesKey) {
     const bytes = await fetchSpacesObject(doc.spacesKey);
-    if (bytes) return { kind: "bytes", buffer: bytes };
+    return bytes ? { kind: "bytes", buffer: bytes } : null;
   }
+  if (resolveReferenceStorageMode(referenceStorageMode(), override) !== "disk") return null;
   try {
     const filePath = referenceFilePath(doc.storedName);
     await fs.access(filePath);
@@ -206,16 +266,21 @@ export async function loadReferenceFile(doc: {
   }
 }
 
-/** Removes Spaces and local copies. False when a configured Spaces delete fails (row should stay). */
+/**
+ * Removes the Spaces object when the row has one.
+ * A local unlink only clears a leftover dev file; it is not the store in production.
+ * False when a Spaces object could not be deleted (the database row should stay).
+ */
 export async function removeReferenceFile(doc: { storedName: string; spacesKey: string }): Promise<boolean> {
-  if (doc.spacesKey && spacesStatus().configured) {
+  if (doc.spacesKey) {
+    if (!spacesStatus().configured) return false;
     const removed = await deleteSpacesObject(doc.spacesKey);
     if (!removed) return false;
   }
   try {
     await fs.unlink(referenceFilePath(doc.storedName));
   } catch {
-    // local copy already gone, or the file only lived in Spaces
+    // leftover local copy already gone, or the file only lived in Spaces
   }
   return true;
 }

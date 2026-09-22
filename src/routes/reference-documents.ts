@@ -17,10 +17,13 @@ import {
   mimeForExt,
   previewKind,
   referenceDisplayName,
+  ReferenceStorageError,
+  referenceStorageBlockMessage,
   referenceStorageNote,
   removeReferenceFile,
   storeReferenceBytes,
 } from "../lib/reference-documents.js";
+import { referenceStorageMode } from "../lib/spaces.js";
 
 export const referenceDocumentsRouter = Router();
 
@@ -137,9 +140,16 @@ referenceDocumentsRouter.post("/:category", (req: Request, res: Response, next: 
     );
     return;
   }
+  if (referenceStorageMode() === "blocked") {
+    res.redirect(
+      `/reference-documents/${category.id}?error=` + encodeURIComponent(referenceStorageBlockMessage())
+    );
+    return;
+  }
 
   const saved: string[] = [];
   const skipped: string[] = [];
+  const storageFailures: string[] = [];
   for (const file of files) {
     const ext = extOf(file.originalname);
     const label = referenceDisplayName(file.originalname, ext || "file");
@@ -173,14 +183,17 @@ referenceDocumentsRouter.post("/:category", (req: Request, res: Response, next: 
       if (stored) {
         await removeReferenceFile({ storedName, spacesKey: stored.spacesKey });
       }
-      skipped.push(label);
+      if (err instanceof ReferenceStorageError) storageFailures.push(err.message);
+      else skipped.push(label);
     }
   }
 
   if (!saved.length) {
-    const why = skipped.length
-      ? "Use PDF, Word, Excel, or an image (PNG or JPEG)."
-      : "Could not save that file.";
+    const why =
+      storageFailures[0] ||
+      (skipped.length
+        ? "Use PDF, Word, Excel, or an image (PNG or JPEG)."
+        : "Could not save that file.");
     res.redirect(`/reference-documents/${category.id}?error=` + encodeURIComponent(why));
     return;
   }
@@ -188,6 +201,9 @@ referenceDocumentsRouter.post("/:category", (req: Request, res: Response, next: 
   let notice = saved.length === 1 ? `Uploaded ${saved[0]}` : `Uploaded ${saved.length} files.`;
   if (skipped.length) {
     notice += ` Skipped ${skipped.join(", ")} (use PDF, Word, Excel, or an image).`;
+  }
+  if (storageFailures.length) {
+    notice += ` ${storageFailures[0]}`;
   }
   res.redirect(`/reference-documents/${category.id}?notice=` + encodeURIComponent(notice));
 });
@@ -222,6 +238,10 @@ referenceDocumentsRouter.get("/:category/:docId/:action", async (req: Request, r
   if (loaded.kind === "bytes") {
     res.setHeader("Content-Length", String(loaded.buffer.length));
     res.send(loaded.buffer);
+    return;
+  }
+  if (referenceStorageMode() !== "disk") {
+    res.status(404).send("File missing.");
     return;
   }
   res.sendFile(loaded.path, (err?: Error) => {

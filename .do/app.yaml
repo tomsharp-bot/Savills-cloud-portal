@@ -49,7 +49,10 @@ services:
         value: lon1
         scope: RUN_TIME
       - key: SPACES_ENDPOINT
-        value: ""
+        value: https://lon1.digitaloceanspaces.com
+        scope: RUN_TIME
+      - key: REQUIRE_SPACES
+        value: "true"
         scope: RUN_TIME
       - key: SPACES_KEY
         type: SECRET

@@ -24,6 +24,7 @@ import { photosRouter } from "./routes/photos.js";
 import { referenceDocumentsRouter } from "./routes/reference-documents.js";
 import { surveyorRouter } from "./routes/surveyor.js";
 import { prisma } from "./lib/prisma.js";
+import { spacesHealth } from "./lib/spaces.js";
 
 const viewsDir = path.join(process.cwd(), "views");
 const publicDir = path.join(process.cwd(), "public");
@@ -54,7 +55,8 @@ async function healthHandler(_req: express.Request, res: express.Response): Prom
   } catch {
     db = "down";
   }
-  res.status(200).json({ ok: true, service: "savills-cloud-portal", db });
+  const spaces = spacesHealth();
+  res.status(200).json({ ok: true, service: "savills-cloud-portal", db, spaces });
 }
 
 function portalLandingHtml(href: string): string {
