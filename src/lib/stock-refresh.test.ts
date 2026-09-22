@@ -4,10 +4,17 @@ import type { Asset, Project } from "@prisma/client";
 import { buildSummary } from "./summary.js";
 import {
   OMITTED_SURVEYED_NOTE,
+  POSTGRES_MAX_BIND_PARAMS,
+  STOCK_FLASH_SAMPLE,
+  STOCK_IMPORT_BATCH,
+  STOCK_IMPORT_COLUMNS,
+  STOCK_UPLOAD_MAX_BYTES,
   appendSurveyedNote,
+  buildStockRefreshFlash,
   formatStockRefreshResult,
   kindForStockRow,
   planStocklistRefresh,
+  stockCreateInput,
   type RefreshAsset,
 } from "./stock-refresh.js";
 import { flaggedUprnsFromRows, isTruthyFlag } from "./external.js";
@@ -295,6 +302,114 @@ describe("Stocklist Auto routing to Dwellings / Blocks / Garages", () => {
     const blocks = summary.find((stack) => stack.key === "blocks");
     assert.equal(dwell?.tiles.find((tile) => tile.label === "Total Dwellings")?.value, "7");
     assert.equal(blocks?.tiles.find((tile) => tile.label === "Total Blocks")?.value, "1");
+  });
+});
+
+describe("Large stocklists and partial imports", () => {
+  it("plans every unique UPRN in a 44k stocklist", () => {
+    const rows = Array.from({ length: 44000 }, (_, i) => ({
+      UPRN: String(100000 + i),
+      Archetype: i % 100 === 0 ? "Block" : i % 80 === 0 ? "Garage" : "House",
+    }));
+    const plan = planStocklistRefresh([], rows, false);
+    assert.equal(plan.error, undefined);
+    assert.equal(plan.fileRows, 44000);
+    assert.equal(plan.uniqueUprn, 44000);
+    assert.equal(plan.blankUprn, 0);
+    assert.equal(plan.duplicateUprn, 0);
+    assert.equal(plan.added.length, 44000);
+    assert.equal(plan.fileByTab.dwelling + plan.fileByTab.block + plan.fileByTab.garage, 44000);
+    assert.ok(plan.fileByTab.dwelling > 40000);
+    assert.ok(plan.fileByTab.block > 0);
+    assert.ok(plan.fileByTab.garage > 0);
+  });
+
+  it("reports duplicate and blank UPRNs so Summary is not compared to the raw row count", () => {
+    const rows: Record<string, unknown>[] = [];
+    for (let i = 0; i < 100; i++) rows.push({ UPRN: String(i % 10), Archetype: i === 0 ? "House" : "Block" });
+    rows.push({ Archetype: "House", Street: "No key" });
+    const plan = planStocklistRefresh([], rows, false);
+    assert.equal(plan.fileRows, 101);
+    assert.equal(plan.uniqueUprn, 10);
+    assert.equal(plan.duplicateUprn, 90);
+    assert.equal(plan.blankUprn, 1);
+    assert.equal(plan.added.length, 10);
+    assert.equal(plan.added.find((row) => row.uprn === "0")?.kind, "dwelling");
+    assert.equal(plan.fileByTab.dwelling, 1);
+    assert.equal(plan.fileByTab.block, 9);
+    const msg = formatStockRefreshResult({
+      addedByTab: plan.fileByTab,
+      removedCount: 0,
+      fileRows: plan.fileRows,
+      uniqueUprn: plan.uniqueUprn,
+      blankUprn: plan.blankUprn,
+      duplicateUprn: plan.duplicateUprn,
+      fileByTab: plan.fileByTab,
+    });
+    assert.match(msg, /90 duplicate UPRN row\(s\) skipped \(first row kept\)/);
+    assert.match(msg, /10 unique UPRN\(s\) from 101 file row\(s\)/);
+    assert.match(msg, /1 blank UPRN row\(s\) skipped/);
+    assert.match(msg, /Summary counts one asset per UPRN/);
+    assert.match(msg, /File has 1 dwellings, 9 blocks, 0 garages/);
+  });
+
+  it("keeps the loader flash small enough for a session cookie", () => {
+    const added = Array.from({ length: 9515 }, (_, i) => String(100000 + i));
+    const flash = buildStockRefreshFlash({
+      projectId: "p",
+      added,
+      removed: [],
+      addedByTab: { dwelling: 9515, block: 0, garage: 0 },
+      alsoOmit: true,
+      tab: "auto",
+      stats: {
+        fileRows: 44000,
+        uniqueUprn: 9515,
+        blankUprn: 0,
+        duplicateUprn: 34485,
+        fileByTab: { dwelling: 9515, block: 0, garage: 0 },
+      },
+    });
+    assert.equal(flash.addedCount, 9515);
+    assert.equal(flash.addedSample.length, STOCK_FLASH_SAMPLE);
+    assert.equal(flash.removedSample.length, 0);
+    assert.ok(!("added" in flash));
+    assert.ok(JSON.stringify(flash).length < 4000);
+  });
+
+  it("keeps each insert batch under Postgres parameter limit and accepts a 64MB workbook", () => {
+    assert.ok(STOCK_IMPORT_BATCH * STOCK_IMPORT_COLUMNS < POSTGRES_MAX_BIND_PARAMS);
+    assert.equal(STOCK_UPLOAD_MAX_BYTES, 64 * 1024 * 1024);
+    const input = stockCreateInput("p", {
+      uprn: "1",
+      kind: "dwelling",
+      address: {
+        number: "1",
+        block: "Harbour",
+        street: "High St",
+        area: "North",
+        city: "Leeds",
+        postcode: "LS1 1AA",
+        archetype: "House",
+        yearBuilt: "1990",
+        patch: "Patch 1",
+        surveyor: "AS",
+        surveyType: "Condition Only",
+        epcRequired: true,
+        residentName: "Sam",
+        residentNumber: "07000",
+        residentEmail: "sam@example.com",
+        letterDate1: "01/02/26",
+        letterDate2: "03/04/26",
+        x1: "a",
+        x2: "b",
+        x3: "c",
+      },
+    });
+    assert.ok(Object.keys(input).length <= STOCK_IMPORT_COLUMNS);
+    assert.equal(input.surveyType, "Condition Only");
+    assert.equal(input.assetStatus, "No Visit");
+    assert.equal(input.epcRequired, true);
   });
 });
 

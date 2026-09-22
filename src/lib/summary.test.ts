@@ -75,6 +75,26 @@ function tile(stackKey: string, label: string, assets: Asset[], proj: Project = 
 }
 
 describe("Summary counts and Omit Asset", () => {
+  it("shows one total for every non-omitted asset, including kinds whose survey type is off", () => {
+    const proj = project({ typeBlocks: false, typeGarages: false, typeConditionOnly: true });
+    const assets = [
+      asset({ uprn: "d", kind: "dwelling" }),
+      asset({ uprn: "b", kind: "block" }),
+      asset({ uprn: "g", kind: "garage" }),
+      asset({ uprn: "o", kind: "dwelling", omitAsset: true }),
+    ];
+    const summary = buildSummary(proj, assets);
+    const all = summary.find((stack) => stack.key === "all");
+    assert.equal(all?.hidden, false);
+    assert.equal(all?.tiles.find((tile) => tile.label === "Total assets")?.value, "3");
+    assert.equal(all?.tiles.find((tile) => tile.label === "Dwellings")?.value, "1");
+    assert.equal(all?.tiles.find((tile) => tile.label === "Blocks")?.value, "1");
+    assert.equal(all?.tiles.find((tile) => tile.label === "Garages")?.value, "1");
+    assert.equal(summary.find((stack) => stack.key === "blocks")?.hidden, true);
+    assert.equal(summary.find((stack) => stack.key === "garages")?.hidden, true);
+    assert.equal(tile("dwellings", "Total Dwellings", assets, proj), "1");
+  });
+
   it("leaves omitted assets out of totals, completed and remaining", () => {
     const assets = [
       asset({ uprn: "open", assetStatus: "No Visit" }),

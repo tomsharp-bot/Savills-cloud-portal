@@ -46,7 +46,19 @@ export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
   const blockDone = completed(blocks).length;
   const garageDone = completed(garages).length;
 
+  const totalAssets = dwellCounted.length + blockCounted.length + garageCounted.length;
+
   return [
+    {
+      key: "all",
+      hidden: false,
+      tiles: [
+        { label: "Total assets", value: String(totalAssets) },
+        { label: "Dwellings", value: String(dwellCounted.length) },
+        { label: "Blocks", value: String(blockCounted.length) },
+        { label: "Garages", value: String(garageCounted.length) },
+      ],
+    },
     {
       key: "dwellings",
       hidden: !showDwellings,
