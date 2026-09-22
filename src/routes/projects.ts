@@ -24,6 +24,7 @@ import { buildSampleAnalysis } from "../lib/sample-analysis.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 import { loadStockRows } from "../lib/stock-query.js";
 import { assembleStockTab, stockKindFromTab, STOCK_PAGE_SIZE } from "../lib/stock-page.js";
+import { listClientAccessFolders } from "../lib/photos.js";
 
 export const projectsRouter = Router();
 
@@ -293,6 +294,7 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     where: { projectId: project.id },
     orderBy: { generatedAt: "desc" },
   });
+  const photoFolders = tab === "completions" ? await listClientAccessFolders(project.id) : [];
   const visitLogs =
     tab === "loader"
       ? await prisma.visitLog.findMany({
@@ -368,6 +370,7 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     stockPageSize: STOCK_PAGE_SIZE,
     stockFiltered: stockPage.total > 0 && stockPage.matched === 0,
     completions,
+    photoFolders,
     visitLogs,
     loaderHistory,
     documents,

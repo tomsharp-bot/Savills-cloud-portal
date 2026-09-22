@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title><%= project.name %> — Savills Cloud Portal</title>
   <%- include("partials/head-css") %>
+  <link rel="stylesheet" href="<%= baseUrl('/css/photos.css') %>" />
 </head>
 <body>
 <div id="screen-app">
@@ -313,6 +314,84 @@
                 </tbody>
               </table>
             </div>
+
+            <div class="photo-completion-block">
+              <h4>Photo Folders <span class="photo-completion-meta">(Client Access)</span></h4>
+              <p style="margin:0 0 10px;color:var(--muted);font-size:.85rem">Folders and zips shared from Photo Storage. Download packs here; Activity shows whether they were downloaded.</p>
+              <div style="overflow-x:auto">
+                <table class="completions-table">
+                  <thead>
+                    <tr><th>Folder / zip</th><th>Contents</th><th>Status</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    <% if (!photoFolders || !photoFolders.length) { %>
+                      <tr><td colspan="4" class="empty">No Photo Folders have Client Access yet.</td></tr>
+                    <% } else { %>
+                      <% photoFolders.forEach(f => { %>
+                        <tr>
+                          <td><%= f.name %></td>
+                          <td><%= f.contentsLabel %></td>
+                          <td>Ready</td>
+                          <td>
+                            <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/photo-folders/' + f.id + '/download') %>">Download</a>
+                            <button type="button" class="btn btn-ghost btn-sm" data-photo-activity="<%= f.id %>" data-photo-name="<%= f.name %>">Activity</button>
+                          </td>
+                        </tr>
+                      <% }) %>
+                    <% } %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="photo-activity-modal" class="modal-back hidden" role="dialog" aria-modal="true" aria-labelledby="photo-activity-title">
+              <div class="modal">
+                <h3 id="photo-activity-title">Activity</h3>
+                <ul id="photo-activity-list" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px"></ul>
+                <div class="actions" style="margin-top:14px">
+                  <button type="button" class="btn btn-ghost" data-close="photo-activity-modal">Close</button>
+                </div>
+              </div>
+            </div>
+            <script type="application/json" id="photo-folder-activity-data"><%- JSON.stringify((photoFolders || []).reduce(function (acc, f) { acc[f.id] = f.activities || []; return acc; }, {})) %></script>
+            <script>
+            (function () {
+              var raw = document.getElementById("photo-folder-activity-data");
+              var map = {};
+              try { map = JSON.parse(raw ? raw.textContent : "{}"); } catch (e) { map = {}; }
+              function esc(s) {
+                return String(s).replace(/[&<>"']/g, function (c) {
+                  return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+                });
+              }
+              document.querySelectorAll("[data-photo-activity]").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                  var id = btn.getAttribute("data-photo-activity");
+                  var name = btn.getAttribute("data-photo-name") || "Activity";
+                  var rows = map[id] || [];
+                  document.getElementById("photo-activity-title").textContent = name;
+                  var ul = document.getElementById("photo-activity-list");
+                  if (!rows.length) {
+                    ul.innerHTML = "<li style='padding:8px;border:1px solid var(--border);border-radius:8px'>No client activity yet.</li>";
+                  } else {
+                    ul.innerHTML = rows.map(function (r) {
+                      var status = r.downloaded ? ("Downloaded " + (r.when || "")) : "Not downloaded yet";
+                      var bg = r.downloaded ? "#e8f5ee" : "#fafbfc";
+                      return "<li style='padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:" + bg + "'>" +
+                        "<div style='font-weight:600;color:var(--navy)'>" + esc(r.who) + "</div>" +
+                        "<div style='font-size:.82rem;color:" + (r.downloaded ? "#2d7a4f" : "var(--muted)") + "'>" + esc(status) + "</div></li>";
+                    }).join("");
+                  }
+                  document.getElementById("photo-activity-modal").classList.remove("hidden");
+                });
+              });
+              document.querySelectorAll('[data-close="photo-activity-modal"]').forEach(function (b) {
+                b.addEventListener("click", function () {
+                  document.getElementById("photo-activity-modal").classList.add("hidden");
+                });
+              });
+            })();
+            </script>
           <% } %>
         </div>
       </div>

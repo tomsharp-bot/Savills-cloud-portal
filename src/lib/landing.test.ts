@@ -36,5 +36,7 @@ describe("admin hub tiles", () => {
   it("sends the header home link to the hub for admins and Project Progress otherwise", () => {
     const topbar = readFileSync(join(root, "views/partials/topbar.ejs"), "utf8");
     assert.match(topbar, /baseUrl\(isAdmin \? '\/admin' : '\/projects'\)/);
+    assert.match(topbar, /baseUrl\('\/photos'\)/);
+    assert.match(topbar, /Photo Storage/);
   });
 });

@@ -76,6 +76,8 @@ model Project {
   externalLink         ExternalLink?
   hhsrsSiteSubmissions HhsrsSiteSubmission[]
   programmeSurveyNote  ProgrammeSurveyNote?
+  photoPoolItems       PhotoPoolItem[]
+  photoFolders         PhotoFolder[]
 }
 
 /// Shared Projects Programme grid (one row). Cell text, Active ticks, and row order.
@@ -209,6 +211,56 @@ model Completion {
   type        String
   generatedAt DateTime @default(now())
   status      String   @default("Ready")
+}
+
+/// Photos Pool row for a project. spacesKey empty = coloured placeholder until Spaces is wired.
+/// TODO: serve real thumbs/bytes from DigitalOcean Spaces bucket cloud-portal-vault (LON1).
+model PhotoPoolItem {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Usually UPRN-room-seq e.g. 2245623-Kitchen-1
+  code      String
+  fileName  String
+  /// Spaces object key when live; empty means demo / placeholder thumb
+  spacesKey String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, code])
+  @@index([projectId])
+}
+
+/// Photo Folders / zip packs. Client Access → Project Progress Completions.
+model PhotoFolder {
+  id           String                @id @default(cuid())
+  projectId    String
+  project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  /// folder | zip
+  kind         String                @default("folder")
+  /// Display size for zip packs (e.g. "320 MB"); folders use photo count instead
+  sizeLabel    String                @default("")
+  clientAccess Boolean               @default(false)
+  /// Photo codes copied from the pool (JSON string[])
+  photoCodes   Json                  @default("[]")
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  activities   PhotoFolderActivity[]
+
+  @@index([projectId])
+  @@index([projectId, clientAccess])
+}
+
+model PhotoFolderActivity {
+  id           String      @id @default(cuid())
+  folderId     String
+  folder       PhotoFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  who          String
+  downloaded   Boolean     @default(false)
+  downloadedAt DateTime?
+  userId       String      @default("")
+
+  @@index([folderId])
 }
 
 /// Linked External-only UPRN set (Spaces XLOOKUP later — persist in DB for now)

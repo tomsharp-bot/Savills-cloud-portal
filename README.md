@@ -33,7 +33,8 @@ Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site
 - **Documents** (local disk now; Spaces later)
 - **Completions** view/download stubs
 - **HHSRS site reporting** (public phone form at `/HHSRS-site-form`; admin Reporter at `/HHSRSreporter`; intake list under the portal)
-- **Admin landing** at `/admin` after login (HHSRS Reporter at `/HHSRSreporter`, Project Progress, Personnel, Photos, Projects Programme). Surveyors skip the hub and land on `/projects`. Clients still land on `/projects`.
+- **Admin landing** at `/admin` after login (HHSRS Reporter at `/HHSRSreporter`, Project Progress, Personnel, Photos / Photo Storage, Projects Programme). Surveyors skip the hub and land on `/projects`. Clients still land on `/projects`.
+- **Photo Storage** (admin) at `/photos` — project tiles, Photos Pool, Photo Folders, Create Photos Extract, Client Access → Completions. Demo / coloured placeholder thumbs until DigitalOcean Spaces (`cloud-portal-vault`, LON1) credentials are set.
 - **Projects Programme** (admin) at `/projects-programme` — surveyor × week board. With `BASE_PATH=/projectprogress` the live URL is `https://savillscloudportal.co.uk/projectprogress/projects-programme` (hub: `https://savillscloudportal.co.uk/projectprogress/admin`). Bottom tables read Project Progress: current, upcoming, and the 5 most recently archived. Survey-type text starts from each project's survey-type ticks and is stored on edit. The grid itself is one shared board in Postgres.
 
 ## Local setup
@@ -146,7 +147,7 @@ Tom’s assistant should set this on the **web** component (or app-level env):
 
 ### 5. After go-live
 
-- Spaces bucket **`cloud-portal-vault`** (LON1) for photos / External XLOOKUP file — not wired yet (local `uploads/projects/{id}/` + DB UPRN set).
+- Spaces bucket **`cloud-portal-vault`** (LON1) for Photo Storage / External XLOOKUP — Photo Storage UI is live with demo placeholders until `SPACES_*` env vars are set.
 - Domain DNS / HTTPS still a Tom + DO console step.
 
 ---

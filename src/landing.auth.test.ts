@@ -136,7 +136,8 @@ describe("post-login landing by role", () => {
 
     const photos = await request(app, "GET", "/projectprogress/photos", { cookie: adminCookie });
     assert.equal(photos.status, 200);
-    assert.match(photos.body, /Shared photo storage is not available/);
+    assert.match(photos.body, /Photo Storage/);
+    assert.match(photos.body, /Current projects/);
     assert.match(photos.body, /href="\/projectprogress\/admin"/);
 
     const surveyorLogin = await login(app, "peter.m", "PeterMay2468");

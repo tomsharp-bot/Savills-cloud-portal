@@ -49,6 +49,9 @@ const garages: SeedAsset[] = [
 
 async function main() {
   await prisma.completion.deleteMany();
+  await prisma.photoFolderActivity.deleteMany();
+  await prisma.photoFolder.deleteMany();
+  await prisma.photoPoolItem.deleteMany();
   await prisma.visitLog.deleteMany();
   await prisma.loaderHistory.deleteMany();
   await prisma.asset.deleteMany();

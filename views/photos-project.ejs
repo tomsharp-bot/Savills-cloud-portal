@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= project.name %> — Photos — Savills Cloud Portal</title>
+  <%- include("partials/head-css") %>
+  <link rel="stylesheet" href="<%= baseUrl('/css/photos.css') %>" />
+</head>
+<body>
+<div id="screen-app" class="photos-page" data-base-path="<%= basePath %>">
+  <%- include("partials/topbar") %>
+  <%- include("partials/admin-hub", { active: "photos" }) %>
+  <main class="wrap">
+    <div class="breadcrumb-mini">
+      <% if (from === "archived") { %>
+        <a href="<%= baseUrl('/photos/archived') %>">← Archived Projects</a>
+      <% } else { %>
+        <a href="<%= baseUrl('/photos') %>">← Current projects</a>
+      <% } %>
+      · <%= project.name %> · Photos
+    </div>
+
+    <div class="project-head">
+      <div>
+        <h2><%= project.name %></h2>
+        <p class="project-lead"><strong>Lead: <%= leadFirst %></strong></p>
+        <p class="intro" style="margin-top:4px"><%= from === "archived" ? "Archived" : "Current" %><% if (surveyTypes) { %> · <%= surveyTypes %><% } %></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-gold" id="btnPreviewClient">Preview client Completions</button>
+        <a class="btn" href="<%= baseUrl(from === 'archived' ? '/photos/archived' : '/photos') %>">← Back</a>
+      </div>
+    </div>
+
+    <div class="extract-card" id="extractCard">
+      <h3>Create Photos Extract</h3>
+      <p class="hint-muted">Paste photo codes (one per line, or comma / space separated). Matching codes are <strong>copied</strong> from the Photos Pool into a new numbered folder under Photo Folders. Missing codes are skipped.</p>
+      <div class="extract-row">
+        <label for="extractCodes" class="visually-hidden">Photo codes</label>
+        <textarea id="extractCodes" placeholder="e.g.&#10;2245623-Kitchen-1&#10;2245623-Bathroom-1&#10;9999999-Kitchen-1" spellcheck="false"></textarea>
+        <div class="extract-actions">
+          <button type="button" class="btn btn-primary" id="btnRunExtract">Create Photos Extract</button>
+          <span class="extract-hint" id="extractHint">Tip: open Photos Pool to see which codes exist for this project.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Project photo areas">
+      <button type="button" class="tab active" role="tab" id="tab-pool" aria-controls="panel-pool" aria-selected="true" data-tab="pool">Photos Pool</button>
+      <button type="button" class="tab" role="tab" id="tab-folders" aria-controls="panel-folders" aria-selected="false" data-tab="folders">Photo Folders</button>
+    </div>
+
+    <div id="panel-pool" class="panel active" role="tabpanel" aria-labelledby="tab-pool">
+      <p class="hint-muted">Coloured placeholders until Spaces serves real thumbs. Photo codes are usually <strong>UPRN-room-seq</strong> (e.g. 2245623-Kitchen-1). Extracts <strong>copy</strong> from here; originals stay in the pool.</p>
+      <div class="pool-toolbar">
+        <div class="pool-search">
+          <label class="visually-hidden" for="poolSearch">Search Photos Pool</label>
+          <input type="search" id="poolSearch" placeholder="Search by UPRN or file name (e.g. 2245623 or Kitchen)…" autocomplete="off" />
+        </div>
+        <div class="pool-actions">
+          <button type="button" class="btn" id="btnSelectImages">Select Images</button>
+          <button type="button" class="btn btn-primary" id="btnDownloadZip" disabled>Download zip</button>
+          <p class="pool-select-hint" id="poolSelectHint" hidden><strong id="poolSelectCount">0</strong> selected</p>
+        </div>
+      </div>
+      <div class="photo-grid" id="photoPool" role="list"></div>
+    </div>
+
+    <div id="panel-folders" class="panel" role="tabpanel" aria-labelledby="tab-folders">
+      <div class="folders-toolbar">
+        <p class="hint-muted" style="margin:0">Batch folders (and zip packs). Tick <strong>Client Access</strong> to show on Client · Completions. Click a folder name to expand its photos.</p>
+      </div>
+      <div class="table-wrap">
+        <table class="folders-table" aria-label="Photo Folders">
+          <thead>
+            <tr>
+              <th scope="col">Folder / zip</th>
+              <th scope="col">Contents</th>
+              <th scope="col">Client Access</th>
+            </tr>
+          </thead>
+          <tbody id="foldersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <aside id="clientStrip" class="client-strip hidden" aria-label="Client Completions preview">
+      <div class="client-strip-head">
+        <h3>Client · Completions <span class="client-strip-label">Preview</span></h3>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnHideClient">Hide</button>
+      </div>
+      <p class="hint-muted" style="color:#6b5320">Zips with Client Access ticked appear here for clients — each with Download and Activity. They also show on Project Progress → Completions.</p>
+      <div class="completions-list" id="completionsList"></div>
+    </aside>
+
+    <p class="footer-note"><%= spacesHint %></p>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="activityModal" role="dialog" aria-modal="true" aria-labelledby="activityTitle" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="activityTitle">Activity</h3>
+      <button type="button" class="modal-close" id="btnCloseModal" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <ul class="activity-list" id="activityList"></ul>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="nameModalTitle">Add name</h3>
+      <button type="button" class="modal-close" id="btnCloseNameModal" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint-muted" style="margin-top:0">New Photo Folder. The sequence number is fixed; type the rest of the name.</p>
+      <label for="folderNameRest" style="display:block;font-weight:600;font-size:.82rem;margin-bottom:6px;color:var(--navy)">Folder name</label>
+      <div class="name-prefix">
+        <span class="prefix" id="folderNamePrefix">3. </span>
+        <input type="text" id="folderNameRest" placeholder="Pictures Batch 3" autocomplete="off" />
+      </div>
+      <p class="err-msg" id="nameErr">Please enter a name.</p>
+      <p class="hint-muted" id="namePreview" style="margin-top:10px;margin-bottom:0"></p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="btnCancelName">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btnConfirmName">Create folder</button>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox-backdrop" id="photoLightbox" role="dialog" aria-modal="true" aria-labelledby="lightboxTitle" hidden>
+  <div class="lightbox">
+    <div class="lightbox-head">
+      <div>
+        <h3 id="lightboxTitle">Photo</h3>
+        <p class="lightbox-sub" id="lightboxSub"></p>
+      </div>
+      <button type="button" class="modal-close" id="btnCloseLightbox" aria-label="Close">×</button>
+    </div>
+    <div class="lightbox-body">
+      <img id="lightboxImg" alt="" />
+    </div>
+    <div class="lightbox-foot">
+      <button type="button" class="btn btn-primary" id="btnLightboxOk">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="doneModal" role="dialog" aria-modal="true" aria-labelledby="doneModalTitle" hidden>
+  <div class="modal success">
+    <div class="modal-head">
+      <h3 id="doneModalTitle">Photo Extract Completed</h3>
+      <button type="button" class="modal-close" id="btnCloseDoneModal" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <ul class="summary-list" id="doneSummary"></ul>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-primary" id="btnDoneOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.__PHOTOS__ = <%- JSON.stringify(bootstrap) %>;
+</script>
+<script src="<%= baseUrl('/js/photos.js') %>"></script>
+</body>
+</html>
