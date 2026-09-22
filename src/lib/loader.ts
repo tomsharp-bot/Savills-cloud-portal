@@ -1,6 +1,7 @@
 import type { AssetKind, Prisma, User } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { inferStockKind, statusFromVisitLogs, surveyTypeForKind } from "./asset-status.js";
+import { statusFromVisitLogs, surveyTypeForKind } from "./asset-status.js";
+import { routeStockRow } from "./stock-route.js";
 import { cellValAliases } from "./stock-refresh.js";
 import { formatVisitDateDisplay, visitDateSortKey } from "./dates.js";
 import { baseInitials } from "./initials.js";
@@ -148,7 +149,7 @@ export async function applyVisitRows(opts: {
     if (opts.target === "auto") {
       kind = "dwelling";
       for (const v of visits) {
-        const inferred = inferStockKind({
+        const inferred = routeStockRow({
           "Survey Design": v.surveyDesign,
           Archetype: v.archetype,
           "Visit Type": v.visitType,

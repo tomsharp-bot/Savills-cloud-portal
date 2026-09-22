@@ -212,6 +212,26 @@ function firstHit(values: string[]): KindHit | null {
 }
 
 /**
+ * Type-column text that is clearly a home (house, flat, bungalow, maisonette, bedsit, room, studio)
+ * and not itself a block or garage label.
+ * Survey Design / Survey Type and the address Block column are ignored, so this stays true
+ * even when Auto routing is wrongly sending those rows to Blocks.
+ */
+export function rowHasNonBlockResidentialType(raw: Record<string, unknown> | null | undefined): boolean {
+  if (!raw) return false;
+  for (const key of Object.keys(raw)) {
+    if (!isTypeHeaderKey(headerKey(key))) continue;
+    const cell = raw[key];
+    if (cell == null || cell === "") continue;
+    const value = normaliseKindText(String(cell));
+    if (!value || isGarageLabel(value)) continue;
+    if (/^blocks?\b/.test(value) || /\bblocks?\s+of\b/.test(value)) continue;
+    if (isResidentialDwellingLabel(value)) return true;
+  }
+  return false;
+}
+
+/**
  * Auto-route.
  * Garage / garage site → garage.
  * Block / Blocks → block.
@@ -232,8 +252,14 @@ export function inferStockKind(raw: Record<string, unknown> | null | undefined):
     else if (PROGRAMME_HEADER_KEYS.has(norm)) programmeValues.push(text);
   }
   const fromType = firstHit(typeValues);
-  const hit = fromType || firstHit(programmeValues);
-  if (hit === "garage" || hit === "block") return hit;
+  if (fromType === "garage" || fromType === "block") return fromType;
+  // A type column that names a home, a commercial unit, or anything we do not
+  // recognise wins over Survey Design / Survey Type. "Cottage" must not become
+  // a block just because every row says "Blocks".
+  if (fromType === "dwelling" || fromType === "commercial") return "dwelling";
+  if (typeValues.some((value) => normaliseKindText(value))) return "dwelling";
+  const fromProgramme = firstHit(programmeValues);
+  if (fromProgramme === "garage" || fromProgramme === "block") return fromProgramme;
   return "dwelling";
 }
 

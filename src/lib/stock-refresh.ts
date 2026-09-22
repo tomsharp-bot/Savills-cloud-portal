@@ -1,5 +1,6 @@
 import type { AssetKind } from "@prisma/client";
-import { cellVal, inferStockKind, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
+import { cellVal, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
+import { dwellingMisrouteWarning, routeStockRow, type StockRouteTarget } from "./stock-route.js";
 import { epcRequiredFromSurveyType } from "./epc-survey.js";
 import { formatStockDate } from "./dates.js";
 import type { RawRow } from "./excel.js";
@@ -7,7 +8,7 @@ import { prisma } from "./prisma.js";
 
 export const OMITTED_SURVEYED_NOTE = "Omitted but already surveyed";
 
-export type StockRefreshTarget = "auto" | AssetKind;
+export type StockRefreshTarget = StockRouteTarget;
 
 export type AddressPatch = {
   number?: string;
@@ -70,8 +71,7 @@ export function emptyByTab(): Record<AssetKind, number> {
 
 /** Explicit Dwellings/Blocks/Garages target keeps that tab; Auto infers per row. */
 export function kindForStockRow(raw: RawRow, target: StockRefreshTarget = "auto"): AssetKind {
-  if (target !== "auto") return target;
-  return inferStockKind(raw);
+  return routeStockRow(raw, target);
 }
 
 export function formatStockRefreshResult(opts: {
@@ -79,6 +79,9 @@ export function formatStockRefreshResult(opts: {
   removedCount: number;
   movedCount?: number;
   alsoOmit?: boolean;
+  rows?: RawRow[];
+  addedUprns?: string[];
+  target?: StockRefreshTarget;
 }): string {
   const { addedByTab, removedCount, movedCount = 0, alsoOmit } = opts;
   let msg =
@@ -86,6 +89,16 @@ export function formatStockRefreshResult(opts: {
     ` · Removed (marked) ${removedCount}`;
   if (movedCount) msg += ` · Moved ${movedCount} onto the file’s tab`;
   if (alsoOmit) msg += " · omitted from counts";
+  const warning =
+    opts.rows && opts.addedUprns
+      ? dwellingMisrouteWarning({
+          rows: opts.rows,
+          addedByTab,
+          addedUprns: opts.addedUprns,
+          target: opts.target,
+        })
+      : null;
+  if (warning) msg += `. ${warning}`;
   return msg;
 }
 
