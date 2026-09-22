@@ -1,7 +1,8 @@
 <header class="topbar">
-  <a class="brand" href="<%= baseUrl(isAdmin ? '/admin' : '/projects') %>">Savills Cloud Portal</a>
+  <a class="brand" href="<%= baseUrl(isAdmin ? '/admin' : (isSurveyor ? '/surveyor' : '/projects')) %>">Savills Cloud Portal</a>
   <div class="right">
     <a class="linkish" href="<%= baseUrl('/projects') %>">Projects</a>
+    <% if (isAdmin || isSurveyor) { %><a class="linkish" href="<%= baseUrl('/reference-documents') %>">Reference Documents</a><% } %>
     <% if (isAdmin) { %>
     <details class="nav-menu">
       <summary>Admin</summary>

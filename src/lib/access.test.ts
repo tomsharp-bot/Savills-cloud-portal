@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import type { AuthedUser } from "./access.js";
 import {
   canEditSampleAnalysis,
+  canManageReferenceDocuments,
   canSeeCompletions,
   canSeeProjectTab,
+  canSeeReferenceDocuments,
   defaultProjectTab,
   visibleProjectTabs,
 } from "./access.js";
@@ -23,6 +25,18 @@ function user(role: AuthedUser["role"]): AuthedUser {
     frozen: false,
   };
 }
+
+describe("Reference documents access", () => {
+  it("lets admins and surveyors in, and keeps clients out", () => {
+    assert.equal(canSeeReferenceDocuments(user("admin")), true);
+    assert.equal(canSeeReferenceDocuments(user("surveyor")), true);
+    assert.equal(canSeeReferenceDocuments(user("client")), false);
+    assert.equal(canSeeReferenceDocuments(null), false);
+    assert.equal(canManageReferenceDocuments(user("admin")), true);
+    assert.equal(canManageReferenceDocuments(user("surveyor")), false);
+    assert.equal(canManageReferenceDocuments(user("client")), false);
+  });
+});
 
 describe("Project tab visibility", () => {
   it("lets clients see only Completions", () => {

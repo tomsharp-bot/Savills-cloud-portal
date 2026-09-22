@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title %> — Savills Cloud Portal</title>
+  <%- include("partials/head-css") %>
+  <link rel="stylesheet" href="<%= baseUrl('/css/programme.css') %>" />
+  <link rel="stylesheet" href="<%= baseUrl('/css/reference-documents.css') %>" />
+</head>
+<body>
+<div id="screen-app" class="refdocs-page programme-page">
+  <%- include("partials/topbar") %>
+  <% if (isAdmin) { %>
+    <%- include("partials/admin-hub", { active: "reference" }) %>
+  <% } else if (isSurveyor) { %>
+    <%- include("partials/surveyor-hub", { active: "reference" }) %>
+  <% } %>
+
+  <main class="wrap">
+    <% if (view === "home") { %>
+      <div class="head">
+        <h1>Reference Documents</h1>
+        <p class="intro">Shared library for surveyors and admins. Admins upload and delete; surveyors open in the portal and can download. Clients never see this area.</p>
+      </div>
+      <% if (isAdmin) { %>
+        <p class="note">You can drag files into a category and delete them.</p>
+      <% } else { %>
+        <p class="note">Open documents in the portal and download them. Upload and delete are for admins.</p>
+      <% } %>
+      <div class="grid" id="catGrid" role="list">
+        <% columns.forEach(function (col) { %>
+          <div class="grid-col">
+            <% col.forEach(function (cat) { %>
+              <a class="tile" role="listitem" href="<%= baseUrl('/reference-documents/' + cat.id) %>">
+                <div class="tile-icon" aria-hidden="true"><%= cat.icon %></div>
+                <p class="tile-title"><%= cat.title %></p>
+                <p class="tile-sub"><%= cat.blurb %></p>
+                <p class="tile-count"><%= cat.count %> <%= cat.count === 1 ? "document" : "documents" %></p>
+              </a>
+            <% }) %>
+          </div>
+        <% }) %>
+      </div>
+      <p class="footer">
+        <% if (isAdmin) { %><%= storageNote %> <% } %>
+        Clients do not see this library.
+      </p>
+    <% } else { %>
+      <a class="btn back" href="<%= baseUrl('/reference-documents') %>">← All categories</a>
+      <div class="panel">
+        <h2 id="catTitle"><%= category.title %></h2>
+        <p id="catIntro"><%= category.blurb %><%= isAdmin ? " Admins can add or remove files here." : " Surveyors can open and download files here." %></p>
+        <% if (notice) { %><p class="note"><%= notice %></p><% } %>
+        <% if (error) { %><p class="note note-error"><%= error %></p><% } %>
+        <% if (isAdmin) { %>
+          <form class="drop" id="dropZone" method="post" action="<%= baseUrl('/reference-documents/' + category.id) %>" enctype="multipart/form-data">
+            <strong>Drag and drop files here</strong>
+            <div class="drop-hint">or <button type="button" class="btn" id="btnBrowse">browse</button> · PDF, Word, Excel, images</div>
+            <input type="file" name="files" id="fileInput" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" />
+          </form>
+        <% } %>
+        <div class="toolbar">
+          <input type="search" id="docSearch" placeholder="Search by file name…" autocomplete="off" />
+        </div>
+        <div class="table-wrap">
+          <table class="table" aria-label="Documents">
+            <thead>
+              <tr>
+                <th scope="col">File name</th>
+                <th scope="col">Type</th>
+                <th scope="col">Updated</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody id="docBody">
+              <% documents.forEach(function (d) { %>
+                <tr data-name="<%= d.name %>">
+                  <td><strong><%= d.name %></strong></td>
+                  <td><span class="pill"><%= d.typeLabel %></span></td>
+                  <td><%= d.updated %></td>
+                  <td>
+                    <div class="actions">
+                      <a class="btn" href="<%= baseUrl('/reference-documents/' + category.id + '/' + d.id + '/view') %>" data-open data-preview="<%= d.preview %>" data-name="<%= d.name %>" data-download="<%= baseUrl('/reference-documents/' + category.id + '/' + d.id + '/download') %>">Open</a>
+                      <a class="btn" href="<%= baseUrl('/reference-documents/' + category.id + '/' + d.id + '/download') %>">Download</a>
+                      <% if (isAdmin) { %>
+                        <form class="inline-form" method="post" action="<%= baseUrl('/reference-documents/' + category.id + '/' + d.id + '/delete') %>" data-delete-form data-name="<%= d.name %>" data-category="<%= category.title %>">
+                          <button type="submit" class="btn btn-danger">Delete</button>
+                        </form>
+                      <% } %>
+                    </div>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+        <div class="empty" id="docEmpty" data-empty="<%= isAdmin ? 'No documents yet — drag files onto the drop area above.' : 'No documents in this category yet.' %>" <%= documents.length ? "hidden" : "" %>>
+          <%= isAdmin ? "No documents yet — drag files onto the drop area above." : "No documents in this category yet." %>
+        </div>
+        <% if (isAdmin) { %><p class="footer"><%= storageNote %></p><% } %>
+      </div>
+      <div class="viewer-backdrop" id="viewer" role="dialog" aria-modal="true" aria-labelledby="viewerTitle" hidden>
+        <div class="viewer">
+          <div class="viewer-head">
+            <h3 id="viewerTitle">Document</h3>
+            <button type="button" class="btn" id="btnCloseViewer">Close</button>
+          </div>
+          <div class="viewer-body" id="viewerBody"></div>
+          <div class="viewer-foot">
+            <a class="btn btn-primary" id="btnDownloadViewer" href="#">Download</a>
+          </div>
+        </div>
+      </div>
+      <script src="<%= baseUrl('/js/reference-documents.js') %>"></script>
+    <% } %>
+  </main>
+</div>
+</body>
+</html>

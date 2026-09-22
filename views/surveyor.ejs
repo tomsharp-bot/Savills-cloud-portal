@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Home — Savills Cloud Portal</title>
+  <%- include("partials/head-css") %>
+  <link rel="stylesheet" href="<%= baseUrl('/css/programme.css') %>" />
+</head>
+<body>
+<div id="screen-app" class="programme-page">
+  <%- include("partials/topbar") %>
+  <main class="programme wrap admin-home">
+    <div class="head">
+      <div>
+        <h1>Savills Cloud Portal</h1>
+        <p class="intro">Choose a section.</p>
+      </div>
+    </div>
+    <div class="admin-grid">
+      <a class="admin-tile" href="<%= baseUrl('/projects') %>">
+        <h2>Project Progress</h2>
+        <p>Current and archived survey projects assigned to you.</p>
+      </a>
+      <a class="admin-tile" href="<%= baseUrl('/reference-documents') %>">
+        <h2>Reference Documents</h2>
+        <p>Shared library. Open documents in the portal or download them.</p>
+      </a>
+    </div>
+  </main>
+</div>
+</body>
+</html>

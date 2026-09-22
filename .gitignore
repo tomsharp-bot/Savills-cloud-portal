@@ -10,4 +10,6 @@ uploads/projects/*
 !uploads/projects/.gitkeep
 uploads/hhsrs-site-form/*
 !uploads/hhsrs-site-form/.gitkeep
+uploads/reference-documents/*
+!uploads/reference-documents/.gitkeep
 .prisma/

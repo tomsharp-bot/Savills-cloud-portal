@@ -334,3 +334,21 @@ model HhsrsSiteSubmission {
   @@index([projectId])
   @@index([status])
 }
+
+/// Shared reference library (admins + surveyors). Not project-scoped and never shown to clients.
+/// spacesKey empty = bytes under uploads/reference-documents/. Set = DigitalOcean Spaces object.
+model ReferenceDocument {
+  id         String   @id @default(cuid())
+  /// general | blocks | hhsrs | rdsap | new-starter | other
+  category   String
+  name       String
+  storedName String
+  /// File extension: pdf, doc, docx, xls, xlsx, png, jpg, jpeg
+  type       String
+  size       Int
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+  spacesKey  String   @default("")
+
+  @@index([category])
+}

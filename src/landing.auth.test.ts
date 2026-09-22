@@ -87,7 +87,7 @@ before(async () => {
 });
 
 describe("post-login landing by role", () => {
-  it("sends admins to the hub and surveyors and clients to Project Progress", async (t) => {
+  it("sends admins to the hub, surveyors to their home, and clients to Project Progress", async (t) => {
     if (!dbReady) {
       t.skip("Postgres with seeded users is not available");
       return;
@@ -100,7 +100,7 @@ describe("post-login landing by role", () => {
 
     const surveyor = await login(app, "peter.m", "PeterMay2468");
     assert.equal(surveyor.status, 302);
-    assert.equal(surveyor.location, "/projectprogress/projects");
+    assert.equal(surveyor.location, "/projectprogress/surveyor");
 
     const client = await login(app, "client.j", "ClientJones2468");
     assert.equal(client.status, 302);
@@ -124,6 +124,8 @@ describe("post-login landing by role", () => {
     assert.match(hub.body, /href="\/projectprogress\/personnel"/);
     assert.match(hub.body, /href="\/projectprogress\/photos"/);
     assert.match(hub.body, /href="\/projectprogress\/projects-programme"/);
+    assert.match(hub.body, /href="\/projectprogress\/reference-documents"/);
+    assert.match(hub.body, /Reference Documents/);
     assert.match(hub.body, /class="brand" href="\/projectprogress\/admin"/);
 
     const home = await request(app, "GET", "/projectprogress", { cookie: adminCookie });
@@ -144,7 +146,17 @@ describe("post-login landing by role", () => {
     const surveyorCookie = cookieHeader(surveyorLogin.setCookie);
     const surveyorHome = await request(app, "GET", "/projectprogress", { cookie: surveyorCookie });
     assert.equal(surveyorHome.status, 302);
-    assert.equal(surveyorHome.location, "/projectprogress/projects");
+    assert.equal(surveyorHome.location, "/projectprogress/surveyor");
+
+    const surveyorLanding = await request(app, "GET", "/projectprogress/surveyor", { cookie: surveyorCookie });
+    assert.equal(surveyorLanding.status, 200);
+    assert.match(surveyorLanding.body, /Project Progress/);
+    assert.match(surveyorLanding.body, /Reference Documents/);
+    assert.equal(surveyorLanding.body.match(/class="admin-tile"/g)?.length, 2);
+    assert.doesNotMatch(surveyorLanding.body, /Personnel/);
+    assert.doesNotMatch(surveyorLanding.body, /Photo Storage/);
+    assert.doesNotMatch(surveyorLanding.body, /HHSRS Reporter/);
+    assert.doesNotMatch(surveyorLanding.body, /Projects Programme/);
 
     const surveyorHub = await request(app, "GET", "/projectprogress/admin", { cookie: surveyorCookie });
     assert.equal(surveyorHub.status, 403);
@@ -154,7 +166,8 @@ describe("post-login landing by role", () => {
 
     const projects = await request(app, "GET", "/projectprogress/projects", { cookie: surveyorCookie });
     assert.equal(projects.status, 200);
-    assert.match(projects.body, /class="brand" href="\/projectprogress\/projects"/);
+    assert.match(projects.body, /class="brand" href="\/projectprogress\/surveyor"/);
+    assert.match(projects.body, /href="\/projectprogress\/reference-documents"/);
     assert.doesNotMatch(projects.body, /href="\/projectprogress\/admin"/);
   });
 });
