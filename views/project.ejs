@@ -47,7 +47,7 @@
         <div class="panel <%= tab === 'sample-analysis' ? 'panel-sample' : '' %>">
           <% if (tab === "summary") { %>
             <h3 style="margin:0 0 4px;color:var(--navy)">Summary</h3>
-            <p style="margin:0;color:var(--muted);font-size:.9rem">Tiles follow the survey types switched on for this project.</p>
+            <p style="margin:0;color:var(--muted);font-size:.9rem">Tiles follow the survey types switched on for this project. <strong>Total assets</strong> counts every dwelling, block and garage that is not omitted, even when that survey type is switched off.</p>
             <p class="summary-types"><%= typesLine.length ? ("Included: " + typesLine.join(" · ")) : "No survey types selected for this project." %></p>
             <div class="stats">
               <% summary.forEach(col => { %>
@@ -120,7 +120,7 @@
 
           <% if (tab === "loader" && isAdmin) { %>
             <h3 style="margin:0 0 4px;color:var(--navy)">Data Loader</h3>
-            <p style="margin:0;color:var(--muted);font-size:.9rem">Drop the daily Excel — use the <strong>Asset Visits</strong> sheet (or Data). UPRN is the match key. With <strong>Auto</strong>, rows route to Dwellings / Blocks / Garages from Survey Design / Archetype / type fields. Each Apply <strong>appends</strong> to the Visit Log (never replaces).</p>
+            <p style="margin:0;color:var(--muted);font-size:.9rem">Drop the daily Excel — use the <strong>Asset Visits</strong> sheet (or Data). UPRN is the match key. With <strong>Auto</strong>, rows route to Dwellings / Blocks / Garages from Survey Design / Archetype / type fields. Each Apply <strong>appends</strong> to the Visit Log (never replaces). A full stocklist, including a large MTVH file, goes in <strong>Upload or refresh stocklist</strong> below — not this visit box.</p>
             <form id="loader-form" method="post" action="<%= baseUrl('/projects/' + project.id + '/loader') %>" enctype="multipart/form-data">
               <div class="loader-drop" id="loader-drop" tabindex="0">
                 <strong>Drag Excel here</strong>
@@ -191,7 +191,7 @@
 
             <div class="stock-refresh-box">
               <h4>Upload or refresh stocklist</h4>
-              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a stock Excel/CSV with a <strong>UPRN</strong> column. The first upload on an empty project loads the full list. Later uploads add new UPRNs and mark removed ones mid-job (they stay as “Not on latest stocklist”). With <strong>Auto</strong> (default), each row is routed from <strong>Archetype</strong>, <strong>Dwelling Type</strong>, <strong>Asset Type</strong>, or similar — Garage / garage site → Garages; Block / Blocks → Blocks; commercial units are not sent to Blocks. House, bungalow, flat, maisonette, bedsit, room, studio, and everything else → Dwellings. A file-wide Survey Design of “Blocks” does not override those types. Every sheet with a UPRN column is loaded. On refresh, the file’s classification wins if that UPRN already sits on another tab. Choosing Dwellings / Blocks / Garages above still targets that tab only. New rows start as Asset Status “No Visit”. If a removed row is already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved. Use <strong>Export stocklist</strong> to download the current grids, edit Patch / Surveyor, and re-upload here. On Dwellings, Resident Name / Number / Email, Letter Date 1 / 2 and X1–X3 are imported when those columns are in the file (header names can vary slightly). Use <strong>Remove assets not on latest stocklist</strong> to permanently delete those marked rows (you choose whether completed Full Survey / Ext-Only rows go too).</p>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:.88rem">Drop a stock Excel/CSV with a <strong>UPRN</strong> column (a title block above the header is fine, and “Asset UPRN” counts). The first upload on an empty project loads the full list, including lists of around 40,000 assets — they are saved in batches so the page does not have to draw every row. Later uploads add new UPRNs and mark removed ones mid-job (they stay as “Not on latest stocklist”). With <strong>Auto</strong> (default), each row is routed from <strong>Archetype</strong>, <strong>Dwelling Type</strong>, <strong>Asset Type</strong>, or similar — Garage / garage site → Garages; Block / Blocks → Blocks; commercial units are not sent to Blocks. House, bungalow, flat, maisonette, bedsit, room, studio, and everything else → Dwellings. A file-wide Survey Design of “Blocks” does not override those types. Every sheet with a UPRN column is loaded. On refresh, the file’s classification wins if that UPRN already sits on another tab. Choosing Dwellings / Blocks / Garages above still targets that tab only. New rows start as Asset Status “No Visit”. If a removed row is already <strong>Full Survey</strong> or <strong>Ext-Only</strong>, a Site Comment “Omitted but already surveyed” is added and they still count as completed. Other removals can be omitted from counts (checkbox). Visit history on matching UPRNs is preserved. Repeated UPRNs count once (the first row is kept). Summary → <strong>Total assets</strong> is dwellings + blocks + garages, excluding omitted rows. Use <strong>Export stocklist</strong> to download the current grids, edit Patch / Surveyor, and re-upload here. On Dwellings, Resident Name / Number / Email, Letter Date 1 / 2 and X1–X3 are imported when those columns are in the file (header names can vary slightly). Use <strong>Remove assets not on latest stocklist</strong> to permanently delete those marked rows (you choose whether completed Full Survey / Ext-Only rows go too).</p>
               <form class="stock-tools" method="post" action="<%= baseUrl('/projects/' + project.id + '/stock-refresh') %>" enctype="multipart/form-data">
                 <input type="file" id="stock-refresh-file" name="file" accept=".xlsx,.xls,.csv" required />
                 <input type="hidden" name="target" id="stock-refresh-target" value="auto" />
@@ -204,19 +204,28 @@
                 <button type="button" class="btn btn-danger btn-sm" data-clear-stock>Clear entire stocklist</button>
               </div>
               <% if (flashRefresh) { %>
+              <% const addedSample = (flashRefresh.addedSample || flashRefresh.added || []).slice(0, 25); %>
+              <% const removedSample = (flashRefresh.removedSample || flashRefresh.removed || []).slice(0, 25); %>
+              <% const addedCount = flashRefresh.addedCount != null ? flashRefresh.addedCount : (flashRefresh.added || []).length; %>
+              <% const removedCount = flashRefresh.removedCount != null ? flashRefresh.removedCount : (flashRefresh.removed || []).length; %>
               <div class="stock-refresh-results">
+                <% if (flashRefresh.fileRows != null) { %>
+                <p class="loader-log">File rows <%= flashRefresh.fileRows %> · unique UPRNs <%= flashRefresh.uniqueUprn %><% if (flashRefresh.blankUprn) { %> · blank UPRN skipped <%= flashRefresh.blankUprn %><% } %><% if (flashRefresh.duplicateUprn) { %> · duplicate UPRN skipped <%= flashRefresh.duplicateUprn %> (first row kept)<% } %><% if (flashRefresh.fileByTab) { %> · file split D <%= flashRefresh.fileByTab.dwelling %> / B <%= flashRefresh.fileByTab.block %> / G <%= flashRefresh.fileByTab.garage %><% } %>. Summary → Total assets counts one row per UPRN.</p>
+                <% } %>
                 <div class="stock-refresh-panel">
-                  <h5>Added: <span class="count"><%= flashRefresh.added.length %></span></h5>
+                  <h5>Added: <span class="count"><%= addedCount %></span></h5>
                   <ul>
-                    <% if (!flashRefresh.added.length) { %><li class="empty">None</li><% } %>
-                    <% flashRefresh.added.forEach(u => { %><li><%= u %></li><% }) %>
+                    <% if (!addedCount) { %><li class="empty">None</li><% } %>
+                    <% addedSample.forEach(u => { %><li><%= u %></li><% }) %>
+                    <% if (addedCount > addedSample.length) { %><li class="empty"><%= addedCount - addedSample.length %> more not listed</li><% } %>
                   </ul>
                 </div>
                 <div class="stock-refresh-panel">
-                  <h5>Removed: <span class="count"><%= flashRefresh.removed.length %></span></h5>
+                  <h5>Removed: <span class="count"><%= removedCount %></span></h5>
                   <ul>
-                    <% if (!flashRefresh.removed.length) { %><li class="empty">None</li><% } %>
-                    <% flashRefresh.removed.forEach(u => { %><li><%= u %></li><% }) %>
+                    <% if (!removedCount) { %><li class="empty">None</li><% } %>
+                    <% removedSample.forEach(u => { %><li><%= u %></li><% }) %>
+                    <% if (removedCount > removedSample.length) { %><li class="empty"><%= removedCount - removedSample.length %> more not listed</li><% } %>
                   </ul>
                 </div>
               </div>

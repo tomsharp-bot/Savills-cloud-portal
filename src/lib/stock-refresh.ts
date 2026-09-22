@@ -1,4 +1,4 @@
-import type { AssetKind } from "@prisma/client";
+import type { AssetKind, Prisma } from "@prisma/client";
 import { cellVal, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
 import { dwellingMisrouteWarning, routeStockRow, type StockRouteTarget } from "./stock-route.js";
 import { epcRequiredFromSurveyType } from "./epc-survey.js";
@@ -63,10 +63,94 @@ export type RefreshPlan = {
   matched: RefreshPlanItem[];
   reclassified: ReclassifyItem[];
   error?: string;
+  fileRows: number;
+  blankUprn: number;
+  duplicateUprn: number;
+  uniqueUprn: number;
+  fileByTab: Record<AssetKind, number>;
 };
 
 export function emptyByTab(): Record<AssetKind, number> {
   return { dwelling: 0, block: 0, garage: 0 };
+}
+
+/**
+ * Rows per INSERT. Each asset row carries well under 40 columns, and Postgres
+ * rejects a statement with more than 65535 bind parameters. One `create` per
+ * row cannot finish ~44k assets before the request is cut off (~9.5k was what
+ * landed). Keep this batch under the parameter ceiling.
+ */
+export const STOCK_IMPORT_BATCH = 1000;
+export const STOCK_IMPORT_COLUMNS = 40;
+export const POSTGRES_MAX_BIND_PARAMS = 65535;
+/** Address updates are separate statements inside one transaction. */
+export const STOCK_UPDATE_BATCH = 250;
+/** UPRNs shown on the Data Loader page. The full list is not stored in the session cookie. */
+export const STOCK_FLASH_SAMPLE = 25;
+/** Wide ~44k-row workbooks can exceed the old 20MB cap and were rejected whole. */
+export const STOCK_UPLOAD_MAX_BYTES = 64 * 1024 * 1024;
+
+export type StockFileStats = {
+  fileRows: number;
+  blankUprn: number;
+  duplicateUprn: number;
+  uniqueUprn: number;
+  fileByTab: Record<AssetKind, number>;
+};
+
+export type StockRefreshFlash = {
+  projectId: string;
+  addedCount: number;
+  removedCount: number;
+  addedSample: string[];
+  removedSample: string[];
+  addedByTab: Record<AssetKind, number>;
+  alsoOmit: boolean;
+  tab: string;
+  fileRows: number;
+  uniqueUprn: number;
+  blankUprn: number;
+  duplicateUprn: number;
+  fileByTab: Record<AssetKind, number>;
+};
+
+export function buildStockRefreshFlash(opts: {
+  projectId: string;
+  added: string[];
+  removed: string[];
+  addedByTab: Record<AssetKind, number>;
+  alsoOmit: boolean;
+  tab: string;
+  stats: StockFileStats;
+}): StockRefreshFlash {
+  return {
+    projectId: opts.projectId,
+    addedCount: opts.added.length,
+    removedCount: opts.removed.length,
+    addedSample: opts.added.slice(0, STOCK_FLASH_SAMPLE),
+    removedSample: opts.removed.slice(0, STOCK_FLASH_SAMPLE),
+    addedByTab: opts.addedByTab,
+    alsoOmit: opts.alsoOmit,
+    tab: opts.tab,
+    fileRows: opts.stats.fileRows,
+    uniqueUprn: opts.stats.uniqueUprn,
+    blankUprn: opts.stats.blankUprn,
+    duplicateUprn: opts.stats.duplicateUprn,
+    fileByTab: opts.stats.fileByTab,
+  };
+}
+
+export function stockCreateInput(projectId: string, item: RefreshPlanItem): Prisma.AssetCreateManyInput {
+  return {
+    projectId,
+    kind: item.kind,
+    uprn: item.uprn,
+    assetStatus: "No Visit",
+    omitAsset: false,
+    stockMissing: false,
+    surveyType: surveyTypeForKind(item.kind),
+    ...item.address,
+  };
 }
 
 /** Explicit Dwellings/Blocks/Garages target keeps that tab; Auto infers per row. */
@@ -82,11 +166,38 @@ export function formatStockRefreshResult(opts: {
   rows?: RawRow[];
   addedUprns?: string[];
   target?: StockRefreshTarget;
+  fileRows?: number;
+  uniqueUprn?: number;
+  blankUprn?: number;
+  duplicateUprn?: number;
+  fileByTab?: Record<AssetKind, number>;
+  sheets?: { name: string; rows: number; headerRow: number }[];
+  warnings?: string[];
 }): string {
   const { addedByTab, removedCount, movedCount = 0, alsoOmit } = opts;
   let msg =
     `Added ${addedByTab.dwelling} dwellings, ${addedByTab.block} blocks, ${addedByTab.garage} garages` +
     ` · Removed (marked) ${removedCount}`;
+  if (opts.fileByTab) {
+    const file = opts.fileByTab;
+    msg += ` · File has ${file.dwelling} dwellings, ${file.block} blocks, ${file.garage} garages`;
+  }
+  if (opts.fileRows != null && opts.uniqueUprn != null) {
+    msg += ` · ${opts.uniqueUprn} unique UPRN(s) from ${opts.fileRows} file row(s)`;
+    if (opts.blankUprn) msg += ` · ${opts.blankUprn} blank UPRN row(s) skipped`;
+    if (opts.duplicateUprn) {
+      msg += ` · ${opts.duplicateUprn} duplicate UPRN row(s) skipped (first row kept)`;
+    }
+    if (opts.uniqueUprn < opts.fileRows) {
+      msg += ". Summary counts one asset per UPRN, so repeated rows are not extra assets";
+    }
+  }
+  if (opts.sheets?.length) {
+    msg += ` · Read ${opts.sheets
+      .map((sheet) => `${sheet.name} (${sheet.rows} rows, header row ${sheet.headerRow})`)
+      .join("; ")}`;
+  }
+  if (opts.warnings?.length) msg += ` · ${opts.warnings.join(" ")}`;
   if (movedCount) msg += ` · Moved ${movedCount} onto the file’s tab`;
   if (alsoOmit) msg += " · omitted from counts";
   const warning =
@@ -243,13 +354,34 @@ export function planStocklistRefresh(
   alsoOmit: boolean,
   target: StockRefreshTarget = "auto"
 ): RefreshPlan {
-  const empty: RefreshPlan = { added: [], removed: [], matched: [], reclassified: [] };
   const fileByUprn = new Map<string, { raw: RawRow; kind: AssetKind }>();
+  const fileByTab = emptyByTab();
+  let fileRowCount = 0;
+  let blankUprn = 0;
+  let duplicateUprn = 0;
   for (const raw of fileRows || []) {
+    fileRowCount += 1;
     const uprn = extractUprn(raw);
-    if (!uprn) continue;
-    if (!fileByUprn.has(uprn)) fileByUprn.set(uprn, { raw, kind: kindForStockRow(raw, target) });
+    if (!uprn) {
+      blankUprn += 1;
+      continue;
+    }
+    if (fileByUprn.has(uprn)) {
+      duplicateUprn += 1;
+      continue;
+    }
+    const kind = kindForStockRow(raw, target);
+    fileByUprn.set(uprn, { raw, kind });
+    fileByTab[kind] += 1;
   }
+  const stats = {
+    fileRows: fileRowCount,
+    blankUprn,
+    duplicateUprn,
+    uniqueUprn: fileByUprn.size,
+    fileByTab,
+  };
+  const empty: RefreshPlan = { added: [], removed: [], matched: [], reclassified: [], ...stats };
   if (!fileByUprn.size) {
     return { ...empty, error: "No UPRN column / values found in file" };
   }
@@ -298,7 +430,37 @@ export function planStocklistRefresh(
   }
 
   void alsoOmit;
-  return { added, removed, matched, reclassified };
+  return { added, removed, matched, reclassified, ...stats };
+}
+
+export type StockRefreshApplyResult = StockFileStats & {
+  added: string[];
+  removed: string[];
+  addedByTab: Record<AssetKind, number>;
+  moved: number;
+  error?: string;
+};
+
+function planStats(plan: RefreshPlan): StockFileStats {
+  return {
+    fileRows: plan.fileRows,
+    blankUprn: plan.blankUprn,
+    duplicateUprn: plan.duplicateUprn,
+    uniqueUprn: plan.uniqueUprn,
+    fileByTab: plan.fileByTab,
+  };
+}
+
+function causeText(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.replace(/\s+/g, " ").slice(0, 240);
+}
+
+async function updateInChunks(rows: { id: string; data: Prisma.AssetUpdateInput }[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += STOCK_UPDATE_BATCH) {
+    const chunk = rows.slice(i, i + STOCK_UPDATE_BATCH);
+    await prisma.$transaction(chunk.map((row) => prisma.asset.update({ where: { id: row.id }, data: row.data })));
+  }
 }
 
 export async function applyStocklistRefresh(opts: {
@@ -306,13 +468,7 @@ export async function applyStocklistRefresh(opts: {
   target: StockRefreshTarget;
   rows: RawRow[];
   alsoOmit: boolean;
-}): Promise<{
-  added: string[];
-  removed: string[];
-  addedByTab: Record<AssetKind, number>;
-  moved: number;
-  error?: string;
-}> {
+}): Promise<StockRefreshApplyResult> {
   const existing = await prisma.asset.findMany({
     where:
       opts.target === "auto"
@@ -321,63 +477,47 @@ export async function applyStocklistRefresh(opts: {
   });
   const plan = planStocklistRefresh(existing, opts.rows, opts.alsoOmit, opts.target);
   const addedByTab = emptyByTab();
-  if (plan.error) return { added: [], removed: [], addedByTab, moved: 0, error: plan.error };
+  const stats = planStats(plan);
+  if (plan.error) return { added: [], removed: [], addedByTab, moved: 0, error: plan.error, ...stats };
 
-  for (const m of plan.matched) {
-    const row = existing.find((r) => String(r.uprn) === m.uprn && r.kind === m.kind);
-    if (!row) continue;
-    await prisma.asset.update({
-      where: { id: row.id },
-      data: {
-        stockMissing: false,
-        ...m.address,
-        siteComments: row.siteComments,
-        external: row.external,
-        visit1: row.visit1,
-        visit2: row.visit2,
-        visit3: row.visit3,
-        surveyDate: row.surveyDate,
-        surveyedBy: row.surveyedBy,
-        assetStatus: String(row.external).toLowerCase() === "yes" ? "Ext-Only" : row.assetStatus,
-      },
-    });
+  const byKindUprn = new Map<string, (typeof existing)[number]>();
+  const byUprn = new Map<string, (typeof existing)[number][]>();
+  for (const row of existing) {
+    const uprn = String(row.uprn);
+    byKindUprn.set(`${row.kind}\0${uprn}`, row);
+    const list = byUprn.get(uprn) || [];
+    list.push(row);
+    byUprn.set(uprn, list);
   }
 
-  for (const r of plan.reclassified) {
-    const row = existing.find((e) => String(e.uprn) === r.uprn && e.kind === r.from);
-    if (!row) continue;
-    const conflict = existing.find((e) => String(e.uprn) === r.uprn && e.kind === r.to && e.id !== row.id);
-    if (conflict) {
-      const takeVisits = !conflict.visit1 && row.visit1;
-      await prisma.asset.update({
-        where: { id: conflict.id },
-        data: {
-          stockMissing: false,
-          ...r.address,
-          siteComments: conflict.siteComments || row.siteComments,
-          external: conflict.external || row.external,
-          visit1: takeVisits ? row.visit1 : conflict.visit1,
-          visit2: takeVisits ? row.visit2 : conflict.visit2,
-          visit3: takeVisits ? row.visit3 : conflict.visit3,
-          surveyDate: takeVisits ? row.surveyDate : conflict.surveyDate,
-          surveyedBy: takeVisits ? row.surveyedBy : conflict.surveyedBy,
-          assetStatus:
-            String(conflict.external || row.external).toLowerCase() === "yes"
-              ? "Ext-Only"
-              : takeVisits
-                ? row.assetStatus
-                : conflict.assetStatus,
-        },
+  // Insert the missing UPRNs first. A retry after a cut-off request then adds
+  // the rest before it spends time refreshing rows that are already saved.
+  let inserted = 0;
+  try {
+    for (let i = 0; i < plan.added.length; i += STOCK_IMPORT_BATCH) {
+      const chunk = plan.added.slice(i, i + STOCK_IMPORT_BATCH);
+      await prisma.asset.createMany({
+        data: chunk.map((item) => stockCreateInput(opts.projectId, item)),
       });
-      await prisma.asset.delete({ where: { id: row.id } });
-    } else {
-      await prisma.asset.update({
-        where: { id: row.id },
+      for (const item of chunk) addedByTab[item.kind] += 1;
+      inserted += chunk.length;
+    }
+  } catch (err) {
+    throw new Error(
+      `Stock import stopped after adding ${inserted} of ${plan.added.length} new assets. Re-apply the same file to continue. ${causeText(err)}`
+    );
+  }
+
+  try {
+    const matchedWrites: { id: string; data: Prisma.AssetUpdateInput }[] = [];
+    for (const m of plan.matched) {
+      const row = byKindUprn.get(`${m.kind}\0${m.uprn}`);
+      if (!row) continue;
+      matchedWrites.push({
+        id: row.id,
         data: {
-          kind: r.to,
           stockMissing: false,
-          ...r.address,
-          surveyType: r.address.surveyType || surveyTypeForKind(r.to),
+          ...m.address,
           siteComments: row.siteComments,
           external: row.external,
           visit1: row.visit1,
@@ -388,39 +528,80 @@ export async function applyStocklistRefresh(opts: {
           assetStatus: String(row.external).toLowerCase() === "yes" ? "Ext-Only" : row.assetStatus,
         },
       });
-      row.kind = r.to;
     }
-  }
+    await updateInChunks(matchedWrites);
 
-  for (const a of plan.added) {
-    await prisma.asset.create({
-      data: {
-        projectId: opts.projectId,
-        kind: a.kind,
-        uprn: a.uprn,
-        assetStatus: "No Visit",
-        omitAsset: false,
-        stockMissing: false,
-        surveyType: surveyTypeForKind(a.kind),
-        ...a.address,
-      },
-    });
-    addedByTab[a.kind] += 1;
-  }
-
-  for (const uprn of plan.removed) {
-    const rows = existing.filter((r) => String(r.uprn) === uprn);
-    for (const row of rows) {
-      const surveyed = isSurveyedStatus(row.assetStatus);
-      await prisma.asset.update({
-        where: { id: row.id },
-        data: {
-          stockMissing: true,
-          siteComments: surveyed ? appendSurveyedNote(row.siteComments) : row.siteComments,
-          omitAsset: surveyed ? false : opts.alsoOmit ? true : row.omitAsset,
-        },
-      });
+    for (const r of plan.reclassified) {
+      const row = byKindUprn.get(`${r.from}\0${r.uprn}`);
+      if (!row) continue;
+      const conflict = byKindUprn.get(`${r.to}\0${r.uprn}`);
+      if (conflict && conflict.id !== row.id) {
+        const takeVisits = !conflict.visit1 && row.visit1;
+        await prisma.asset.update({
+          where: { id: conflict.id },
+          data: {
+            stockMissing: false,
+            ...r.address,
+            siteComments: conflict.siteComments || row.siteComments,
+            external: conflict.external || row.external,
+            visit1: takeVisits ? row.visit1 : conflict.visit1,
+            visit2: takeVisits ? row.visit2 : conflict.visit2,
+            visit3: takeVisits ? row.visit3 : conflict.visit3,
+            surveyDate: takeVisits ? row.surveyDate : conflict.surveyDate,
+            surveyedBy: takeVisits ? row.surveyedBy : conflict.surveyedBy,
+            assetStatus:
+              String(conflict.external || row.external).toLowerCase() === "yes"
+                ? "Ext-Only"
+                : takeVisits
+                  ? row.assetStatus
+                  : conflict.assetStatus,
+          },
+        });
+        await prisma.asset.delete({ where: { id: row.id } });
+        byKindUprn.delete(`${r.from}\0${r.uprn}`);
+      } else {
+        await prisma.asset.update({
+          where: { id: row.id },
+          data: {
+            kind: r.to,
+            stockMissing: false,
+            ...r.address,
+            surveyType: r.address.surveyType || surveyTypeForKind(r.to),
+            siteComments: row.siteComments,
+            external: row.external,
+            visit1: row.visit1,
+            visit2: row.visit2,
+            visit3: row.visit3,
+            surveyDate: row.surveyDate,
+            surveyedBy: row.surveyedBy,
+            assetStatus: String(row.external).toLowerCase() === "yes" ? "Ext-Only" : row.assetStatus,
+          },
+        });
+        byKindUprn.delete(`${r.from}\0${r.uprn}`);
+        row.kind = r.to;
+        byKindUprn.set(`${r.to}\0${r.uprn}`, row);
+      }
     }
+
+    const removedWrites: { id: string; data: Prisma.AssetUpdateInput }[] = [];
+    for (const uprn of plan.removed) {
+      for (const row of byUprn.get(uprn) || []) {
+        const surveyed = isSurveyedStatus(row.assetStatus);
+        removedWrites.push({
+          id: row.id,
+          data: {
+            stockMissing: true,
+            siteComments: surveyed ? appendSurveyedNote(row.siteComments) : row.siteComments,
+            omitAsset: surveyed ? false : opts.alsoOmit ? true : row.omitAsset,
+          },
+        });
+      }
+    }
+    await updateInChunks(removedWrites);
+  } catch (err) {
+    throw new Error(
+      `Saved ${inserted} new asset(s), then a follow-up update stopped. Summary already includes the rows that were saved. Re-apply the same file to finish. ${causeText(err)}`
+    );
   }
 
   return {
@@ -428,5 +609,6 @@ export async function applyStocklistRefresh(opts: {
     removed: plan.removed,
     addedByTab,
     moved: plan.reclassified.length,
+    ...stats,
   };
 }
