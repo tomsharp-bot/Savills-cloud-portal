@@ -424,6 +424,10 @@ describe("Account password and Personnel temp reset", () => {
     const adminHub = await request(app, "GET", "/admin");
     assert.equal(adminHub.status, 302);
     assert.equal(adminHub.location, "/login");
+
+    const photos = await request(app, "GET", "/photos");
+    assert.equal(photos.status, 302);
+    assert.equal(photos.location, "/login");
   });
 
   it("prefixes Change password under BASE_PATH=/projectprogress", async () => {
@@ -439,6 +443,10 @@ describe("Account password and Personnel temp reset", () => {
     const adminHub = await request(app, "GET", "/projectprogress/admin");
     assert.equal(adminHub.status, 302);
     assert.equal(adminHub.location, "/projectprogress/login");
+
+    const photos = await request(app, "GET", "/projectprogress/photos");
+    assert.equal(photos.status, 302);
+    assert.equal(photos.location, "/projectprogress/login");
   });
 
   it("ships Change password in the header and copy/reset helpers on static assets", async () => {

@@ -3,38 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin — Savills Cloud Portal</title>
+  <title>Home — Savills Cloud Portal</title>
   <%- include("partials/head-css") %>
   <link rel="stylesheet" href="<%= baseUrl('/css/programme.css') %>" />
 </head>
 <body>
 <div id="screen-app" class="programme-page">
   <%- include("partials/topbar") %>
-  <%- include("partials/admin-hub", { active: "" }) %>
-  <main class="programme wrap">
+  <main class="programme wrap admin-home">
     <div class="head">
       <div>
-        <h1>Admin</h1>
-        <p class="intro">Open Project Progress, HHSRS reporting, or the Projects Programme. Photos storage is not available on this portal yet.</p>
+        <h1>Savills Cloud Portal</h1>
+        <p class="intro">Choose a section. Projects Programme stays available from this page and from Project Progress.</p>
       </div>
     </div>
     <div class="admin-grid">
+      <a class="admin-tile" href="<%= baseUrl('/HHSRSreporter') %>">
+        <h2>HHSRS Reporter</h2>
+        <p>Office queue for site-form submissions and client email drafts.</p>
+      </a>
       <a class="admin-tile" href="<%= baseUrl('/projects') %>">
         <h2>Project Progress</h2>
         <p>Current, upcoming, and archived survey projects.</p>
       </a>
-      <a class="admin-tile" href="<%= baseUrl('/hhsrs-submissions') %>">
-        <h2>HHSRS Reporting</h2>
-        <p>Site reports raised from the public HHSRS form.</p>
+      <a class="admin-tile" href="<%= baseUrl('/personnel') %>">
+        <h2>Personnel</h2>
+        <p>Surveyors, clients, and portal administrators.</p>
+      </a>
+      <a class="admin-tile" href="<%= baseUrl('/photos') %>">
+        <h2>Photos</h2>
+        <p>Shared photo storage. Not wired yet — this opens the Photos section.</p>
       </a>
       <a class="admin-tile" href="<%= baseUrl('/projects-programme') %>">
         <h2>Projects Programme</h2>
         <p>Surveyor by week board, with live project numbers below.</p>
       </a>
-      <div class="admin-tile is-soon">
-        <h2>Photos Storage <span class="soon">soon</span></h2>
-        <p>Shared photo storage is not wired yet. Project documents still live on each project.</p>
-      </div>
     </div>
   </main>
 </div>

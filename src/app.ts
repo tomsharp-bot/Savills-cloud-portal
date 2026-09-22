@@ -19,6 +19,8 @@ import { HHSRS_REPORTER_ALIAS, HHSRS_REPORTER_PATH } from "./lib/hhsrs-reporter.
 import { adminRouter } from "./routes/admin.js";
 import { programmeRouter } from "./routes/programme.js";
 import { isAdmin, roleLabel } from "./lib/access.js";
+import { postLoginPath } from "./lib/landing.js";
+import { photosRouter } from "./routes/photos.js";
 import { prisma } from "./lib/prisma.js";
 
 const viewsDir = path.join(process.cwd(), "views");
@@ -143,7 +145,7 @@ export function createApp(options: CreateAppOptions = {}) {
     });
     // Avoid Express's default 301 /projectprogress → /projectprogress/
     app.get(basePath, (req: express.Request, res: express.Response) => {
-      res.redirect(req.user ? "/projects" : "/login");
+      res.redirect(req.user ? postLoginPath(req.user.role) : "/login");
     });
   }
 
@@ -152,7 +154,7 @@ export function createApp(options: CreateAppOptions = {}) {
   portal.get("/health", healthHandler);
   portal.use(authRouter);
   portal.get("/", (req: express.Request, res: express.Response) => {
-    res.redirect(req.user ? "/projects" : "/login");
+    res.redirect(req.user ? postLoginPath(req.user.role) : "/login");
   });
 
   portal.use(requireAuth);
@@ -161,6 +163,7 @@ export function createApp(options: CreateAppOptions = {}) {
   portal.use("/admin", adminRouter);
   portal.use("/projects-programme", programmeRouter);
   portal.use("/personnel", personnelRouter);
+  portal.use("/photos", photosRouter);
   portal.use(stockRouter);
   portal.use(loaderRouter);
   portal.use(completionsRouter);
