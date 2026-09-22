@@ -117,22 +117,22 @@ th{font-size:.54rem;text-transform:uppercase;color:var(--muted);background:#fafb
 .personnel-section h3{margin:0 0 8px;color:var(--navy);font-size:1.1rem}
 .personnel-section .sec-sub{margin:0 0 10px;color:var(--muted);font-size:.88rem}
 .personnel-table-wrap{width:100%;overflow-x:auto}
-.personnel-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.82rem}
+.personnel-table{width:max-content;min-width:100%;table-layout:fixed;border-collapse:collapse;font-size:.82rem}
 .personnel-table th,.personnel-table td{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .personnel-table th{font-size:.68rem;text-transform:uppercase;color:var(--muted);background:#fafbfc}
 .personnel-table input[type=text],.personnel-table input.agency-input,.personnel-table input.initials-input{width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:3px 5px;font-size:.8rem}
-.personnel-table .col-name{width:96px}
+.personnel-table .col-name{width:88px;max-width:88px}
 .personnel-table .col-actions{width:118px;white-space:normal}
-.personnel-table .col-tick{width:88px;min-width:88px;text-align:center;white-space:normal;overflow:hidden;text-overflow:ellipsis;font-size:.65rem;line-height:1.15;font-weight:600;vertical-align:bottom}
-.personnel-table td.col-tick{vertical-align:middle;font-size:inherit;font-weight:inherit}
+.personnel-table .col-tick{width:96px;min-width:96px;max-width:96px;text-align:center;white-space:normal;overflow:hidden;text-overflow:ellipsis;font-size:.62rem;line-height:1.15;font-weight:600;vertical-align:bottom;word-break:break-word}
+.personnel-table td.col-tick{vertical-align:middle;font-size:inherit;font-weight:inherit;white-space:nowrap}
 .personnel-table .col-freeze{width:72px;text-align:center}
-.personnel-table .col-pw{width:250px;white-space:normal}
-.personnel-table .col-initials{width:56px}
-.personnel-table .col-user{width:96px}
-.personnel-table .col-agency{width:96px}
-.personnel-table .col-role{width:110px}
-.personnel-table .col-company{width:110px}
-.personnel-table .col-email{width:160px}
+.personnel-table .col-pw{width:250px;max-width:250px;white-space:normal}
+.personnel-table .col-initials{width:52px}
+.personnel-table .col-user{width:88px}
+.personnel-table .col-agency{width:88px}
+.personnel-table .col-role{width:100px}
+.personnel-table .col-company{width:100px}
+.personnel-table .col-email{width:150px}
 .personnel-table .btn-sm{padding:2px 6px;font-size:.7rem}
 .col-filter-row th{padding:3px 4px;background:#f0f3f6;vertical-align:bottom;font-weight:500;text-transform:none}
 .col-filter-row input,.col-filter-row select{width:100%;min-width:52px;margin:0;padding:3px 4px;font-size:.65rem;border:1px solid var(--border);border-radius:4px}
