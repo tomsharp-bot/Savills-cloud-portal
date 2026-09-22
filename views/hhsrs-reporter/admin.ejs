@@ -1,0 +1,49 @@
+<%- include("partials/layout-open") %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-section-title">Admin</h2>
+    <p class="subtitle">Project settings placeholder — mirrors the desktop Reporter Admin area.</p>
+  </div>
+  <div class="header-meta">
+    <strong>Admin</strong>
+    Portal · live shell
+  </div>
+</div>
+
+<section class="panel site-link-panel" aria-label="Surveyor site form link">
+  <div class="panel-head neutral">
+    <h2>Surveyor site form link</h2>
+    <span class="count count-review">Share</span>
+  </div>
+  <div class="site-link-box">
+    <p class="site-link-help">Give surveyors this link to open the phone site form (no login). Copy and send by email or WhatsApp.</p>
+    <div class="site-link-row">
+      <input type="text" id="admin-site-form-url" class="site-link-input" readonly value="<%= siteFormPublicUrl %>" aria-label="Surveyor site form URL" />
+      <button type="button" class="btn btn-primary btn-sm" id="btn-copy-site-form-link">Copy link</button>
+    </div>
+    <p class="site-link-status" id="copy-site-form-status" aria-live="polite"></p>
+  </div>
+</section>
+
+<section class="panel" aria-label="Admin placeholder">
+  <div class="panel-head neutral">
+    <h2>Project settings</h2>
+    <span class="count count-review">Placeholder</span>
+  </div>
+  <div class="admin-placeholder">
+    <p>Admin lives in the left sidebar (yellow gear, yellow-bordered control), matching the desktop Reporter.</p>
+    <p>Project setup (names, templates, recipients, extras) is deferred for a follow-up. Review and create currently uses stubbed project rules for show/hide extras.</p>
+    <ul>
+      <li>Edit / add projects</li>
+      <li>Choose template &amp; subject pattern</li>
+      <li>Optional extras (call details, survey date, vulnerabilities…)</li>
+      <li>Confirmed To / CC lists</li>
+    </ul>
+    <p style="margin-top:1rem;"><a class="btn btn-ghost btn-sm" href="<%= reporterBase %>">← Back to Pending Issues</a></p>
+  </div>
+</section>
+
+<p class="footer-note">Admin · Placeholder UI · Site-form link is live</p>
+
+<%- include("partials/layout-close") %>

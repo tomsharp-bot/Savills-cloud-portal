@@ -1,0 +1,275 @@
+<%- include("partials/layout-open") %>
+<%
+  const isFilled = mode === "filled" && row;
+  const projectValue = isFilled
+    ? ((matchedProject && matchedProject.name) || row.projectName)
+    : "";
+%>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-section-title">Review and create</h2>
+    <% if (isFilled) { %>
+      <p class="subtitle" id="review-subtitle">Review the site submission for <%= row.projectName %>, then copy the client email into Outlook.</p>
+    <% } else { %>
+      <p class="subtitle" id="review-subtitle" hidden></p>
+    <% } %>
+  </div>
+  <span class="review-mode-badge <%= isFilled ? 'is-filled' : '' %>" id="review-mode-badge"><%= isFilled ? "From queue" : "New case" %></span>
+</div>
+
+<section class="actions-row">
+  <a class="btn btn-ghost" href="<%= reporterBase %>">← Back to Pending Issues</a>
+  <% if (isFilled) { %>
+    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" style="display:inline" onsubmit="return confirm('Confirm you have copied this draft and are ready to send (or have already sent) from Outlook?');">
+      <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
+      <button type="submit" class="btn btn-primary" id="btn-mark-actioned">Mark as actioned → Main Log</button>
+    </form>
+  <% } else { %>
+    <button type="button" class="btn btn-primary" id="btn-mark-actioned" disabled title="Open a waiting case from Pending Issues first">Mark as actioned → Main Log</button>
+  <% } %>
+</section>
+
+<div id="review-workspace">
+  <% if (isFilled) { %>
+  <form method="post" action="<%= reporterBase %>/review/<%= row.id %>" id="rv-save-form">
+    <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
+    <input type="hidden" name="status" value="<%= row.status === 'new' ? 'in_review' : row.status %>" />
+  <% } %>
+
+  <div class="review-project-first">
+    <label for="rv-project">Project</label>
+    <select id="rv-project" name="projectNameDisplay" aria-describedby="rv-project-hint" <%= isFilled ? "" : "" %>>
+      <option value="">Select a project…</option>
+      <% demoProjects.forEach((p) => { %>
+        <option value="<%= p.name %>" <%= projectValue === p.name ? "selected" : "" %>><%= p.name %></option>
+      <% }) %>
+      <% if (isFilled && !matchedProject) { %>
+        <option value="<%= row.projectName %>" selected><%= row.projectName %></option>
+      <% } %>
+    </select>
+    <p class="review-project-hint" id="rv-project-hint">Choose the project first. Extra fields and the email draft follow its rules.</p>
+  </div>
+
+  <div class="review-grid">
+    <section class="panel" aria-label="Case details">
+      <div class="panel-head review-head">
+        <h2 id="rv-case-heading">Case details</h2>
+        <span class="count count-review" id="rv-case-badge"><%= isFilled ? "Case" : "Blank" %></span>
+      </div>
+      <div class="blank-case-form" id="rv-case-form">
+        <fieldset class="case-fields" id="rv-case-fields" <%= isFilled || projectValue ? "" : "disabled" %>>
+          <div class="field-row">
+            <div>
+              <label for="rv-uprn">UPRN</label>
+              <input id="rv-uprn" name="uprnDisplay" type="text" value="<%= isFilled ? row.uprn : '' %>" <%= isFilled ? "readonly" : "" %> placeholder="UPRN" autocomplete="off" />
+            </div>
+            <div>
+              <label for="rv-surveyor">Surveyor</label>
+              <input id="rv-surveyor" type="text" value="<%= isFilled ? row.surveyorName : '' %>" <%= isFilled ? "readonly" : "" %> placeholder="Surveyor name" autocomplete="off" />
+            </div>
+          </div>
+          <div>
+            <label for="rv-address">Address</label>
+            <input id="rv-address" type="text" value="<%= isFilled ? (row.fullAddress + (row.postcode ? ', ' + row.postcode : '')) : '' %>" <%= isFilled ? "readonly" : "" %> placeholder="Flat / house address" autocomplete="off" />
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="rv-hazard">Hazard / category</label>
+              <% if (isFilled) { %>
+                <input id="rv-hazard" type="text" value="<%= row.category %>" readonly />
+              <% } else { %>
+                <input id="rv-hazard" type="text" placeholder="e.g. Electrical Hazards" autocomplete="off" list="hazard-list" />
+                <datalist id="hazard-list">
+                  <% categories.forEach((c) => { %><option value="<%= c %>"></option><% }) %>
+                </datalist>
+              <% } %>
+            </div>
+            <div>
+              <label for="rv-rating">Rating</label>
+              <select id="rv-rating" name="rating" <%= isFilled ? "required" : "" %>>
+                <option value="">Select…</option>
+                <%
+                  const ratingList = (matchedProject && ratingOptions[matchedProject.ratingScheme]) || ratings;
+                  const currentRating = isFilled ? row.rating : "";
+                  const opts = Array.from(new Set([...(ratingList || []), currentRating].filter(Boolean)));
+                  opts.forEach((r) => {
+                %>
+                  <option value="<%= r %>" <%= currentRating === r ? "selected" : "" %>><%= r %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label for="rv-notes">Site notes / short description</label>
+            <textarea id="rv-notes" name="clientDescription" placeholder="Concise fault and location…"><%= isFilled ? (row.clientDescription || row.comment) : "" %></textarea>
+            <% if (isFilled && row.comment && row.clientDescription) { %>
+              <p class="review-project-hint">Surveyor comment (source): <%= row.comment %></p>
+            <% } %>
+          </div>
+
+          <div class="project-extra" data-extra="calls" hidden>
+            <div class="field-row">
+              <div>
+                <label for="rv-call-status">Call outcome</label>
+                <select id="rv-call-status" name="callOutcome">
+                  <% callOutcomes.forEach((o) => { %>
+                    <option value="<%= o %>" <%= isFilled && row.callOutcome === o ? "selected" : "" %>><%= o || "Select…" %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div>
+                <label for="rv-call-ref">Call reference</label>
+                <input id="rv-call-ref" name="clientCallReference" type="text" value="<%= isFilled ? row.clientCallReference : '' %>" placeholder="Call reference number" autocomplete="off" />
+              </div>
+            </div>
+            <div>
+              <label for="rv-call-notes">Call notes (optional)</label>
+              <input id="rv-call-notes" type="text" placeholder="e.g. unable to get through" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="project-extra" data-extra="survey_date" hidden>
+            <label for="rv-survey-date">Survey date</label>
+            <input id="rv-survey-date" type="<%= isFilled ? 'text' : 'date' %>" value="<%= isFilled ? row.surveyDate : '' %>" <%= isFilled ? "readonly" : "" %> />
+          </div>
+
+          <div class="project-extra" data-extra="onward" hidden>
+            <div class="field-row">
+              <div>
+                <label for="rv-onward-topic">Onward subject hazard</label>
+                <select id="rv-onward-topic" name="onwardTopic">
+                  <option value="">Select…</option>
+                  <% onwardTopics.forEach((t) => { %>
+                    <option value="<%= t %>" <%= isFilled && row.onwardTopic === t ? "selected" : "" %>><%= t %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="check-row" style="margin-top:1.55rem">
+                <input id="rv-cat1" name="cat1Confirmed" type="checkbox" value="true" <%= isFilled && row.cat1Confirmed ? "checked" : "" %> />
+                <label for="rv-cat1" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--text)">Category 1 confirmed (for CAT1 subject)</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="project-extra" data-extra="cause" hidden>
+            <label for="rv-cause">Suspected cause · if reported</label>
+            <input id="rv-cause" name="suspectedCause" type="text" value="<%= isFilled ? row.suspectedCause : '' %>" placeholder="Only if the surveyor reported a cause" autocomplete="off" />
+            <div class="check-row">
+              <input type="hidden" name="includeCause" value="false" />
+              <input id="rv-include-cause" name="includeCause" type="checkbox" value="true" <%= !isFilled || row.includeCause ? "checked" : "" %> />
+              <label for="rv-include-cause" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--text)">Include cause in client email</label>
+            </div>
+          </div>
+
+          <div class="project-extra" data-extra="vulnerabilities" hidden>
+            <label for="rv-vulnerabilities">Resident vulnerabilities · only details reported</label>
+            <textarea id="rv-vulnerabilities" name="vulnerabilities" style="min-height:72px" placeholder="Enter relevant resident details from the email, if any."><%= isFilled ? row.vulnerabilities : "" %></textarea>
+            <div class="check-row">
+              <input id="rv-include-vuln" type="checkbox" />
+              <label for="rv-include-vuln" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--text)">Include in client email</label>
+              <span id="rv-vuln-rule" class="review-project-hint" style="margin:0"></span>
+            </div>
+          </div>
+
+          <div class="project-extra" data-extra="escalation" hidden>
+            <label for="rv-escalation">Escalation category · if reported</label>
+            <input id="rv-escalation" name="escalation" type="text" value="<%= isFilled ? row.escalation : '' %>" placeholder="e.g. Significant Severe" autocomplete="off" />
+          </div>
+
+          <div class="project-extra" data-extra="work_order" hidden>
+            <label for="rv-work-order">Work order number</label>
+            <input id="rv-work-order" name="workOrder" type="text" value="<%= isFilled ? row.workOrder : '' %>" placeholder="e.g. WO 0309445" autocomplete="off" />
+          </div>
+
+          <div class="project-extra" data-extra="online_form" hidden>
+            <p class="cornwall-form-note" id="rv-online-form-note">
+              <strong>Cornwall online form:</strong> for damp / mould, Tom’s separate online form may still be required after this email. Track that action until completed.
+            </p>
+            <label for="rv-online-action">Online form action</label>
+            <input id="rv-online-action" type="text" placeholder="e.g. Separate damp and mould online form" autocomplete="off" />
+          </div>
+
+          <% if (isFilled) { %>
+            <label for="rv-internal-notes">Internal notes</label>
+            <textarea id="rv-internal-notes" name="internalNotes" style="min-height:72px"><%= row.internalNotes %></textarea>
+
+            <% if (photos.length) { %>
+              <p class="review-project-hint" style="margin-top:0.75rem">Photos — attach these in Outlook when you send.</p>
+              <div class="photo-strip">
+                <% photos.forEach((p) => { const name = String(p).split("/").pop(); %>
+                  <a href="<%= reporterBase + '/' + row.id + '/photos/' + encodeURIComponent(name) %>" target="_blank" rel="noreferrer">
+                    <img src="<%= reporterBase + '/' + row.id + '/photos/' + encodeURIComponent(name) %>" alt="<%= name %>" />
+                  </a>
+                <% }) %>
+              </div>
+            <% } %>
+
+            <div class="actions-row" style="margin:1rem 0 0;padding:0;border:0;background:transparent;box-shadow:none">
+              <button type="submit" class="btn btn-primary">Save review</button>
+            </div>
+          <% } %>
+        </fieldset>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Client email draft">
+      <div class="panel-head neutral">
+        <h2>Client email draft</h2>
+        <span class="count count-review" id="rv-email-badge">Draft</span>
+      </div>
+      <% if (draftError) { %><p class="flash flash-err"><%= draftError %></p><% } %>
+      <form class="email-form" id="rv-email-form" onsubmit="return false;">
+        <div class="field-with-copy">
+          <label for="rv-email-to">To</label>
+          <input id="rv-email-to" type="text" placeholder="Select a project for recipients…" value="<%= draftTo || '' %>" />
+          <button type="button" class="btn-copy" data-copy="rv-email-to">Copy</button>
+        </div>
+        <div class="field-with-copy">
+          <label for="rv-email-cc">Cc</label>
+          <input id="rv-email-cc" type="text" placeholder="optional" value="<%= draftCc || '' %>" />
+          <button type="button" class="btn-copy" data-copy="rv-email-cc">Copy</button>
+        </div>
+        <div class="field-with-copy">
+          <label for="rv-email-subject">Subject</label>
+          <input id="rv-email-subject" type="text" placeholder="Subject" value="<%= draftSubject || '' %>" />
+          <button type="button" class="btn-copy" data-copy="rv-email-subject">Copy</button>
+        </div>
+        <div class="field-with-copy">
+          <label for="rv-email-body">Body</label>
+          <textarea id="rv-email-body" placeholder="Draft email…"><%= draftBody || "" %></textarea>
+          <button type="button" class="btn-copy" data-copy="rv-email-body">Copy</button>
+        </div>
+        <p class="review-project-hint" style="margin-top:0.75rem">Copy into Outlook, attach photos, then send. Use <strong>Mark as actioned → Main Log</strong> when done.</p>
+      </form>
+    </section>
+  </div>
+
+  <% if (isFilled) { %></form><% } %>
+
+  <section class="panel" aria-label="Also waiting" id="rv-also-waiting" style="margin-top:1rem">
+    <div class="panel-head received-head">
+      <h2>Also in Pending Issues</h2>
+      <span class="count count-received"><%= alsoWaiting.length %> <%= alsoWaiting.length === 1 ? "case" : "cases" %></span>
+    </div>
+    <ul class="queue-list" id="rv-also-list">
+      <% if (!alsoWaiting.length) { %>
+        <li><div>No other waiting cases.</div></li>
+      <% } else { %>
+        <% alsoWaiting.forEach((r) => { %>
+          <li>
+            <div>
+              <span class="addr"><%= r.fullAddress %></span>
+              · <%= r.category %> · <%= r.rating %> · <%= r.surveyorName %> · <%= r.projectName %>
+            </div>
+            <a class="link-action" href="<%= reporterBase %>/review/<%= r.id %>">Open</a>
+          </li>
+        <% }) %>
+      <% } %>
+    </ul>
+  </section>
+</div>
+
+<p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
+
+<%- include("partials/layout-close") %>

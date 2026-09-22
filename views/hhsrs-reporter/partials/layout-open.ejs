@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= typeof title !== 'undefined' ? title : 'HHSRS Reporter' %> — Savills Cloud Portal</title>
+  <link rel="stylesheet" href="<%= reporterCssUrl %>" />
+</head>
+<body class="hhsrs-reporter">
+<div id="screen-app">
+  <header class="topbar" role="banner">
+    <div class="brand-lockup">
+      <img src="<%= logoUrl %>" width="28" height="28" alt="Savills" />
+      <strong>Savills Cloud Portal</strong>
+    </div>
+    <nav class="right" aria-label="Portal navigation">
+      <a class="linkish" href="<%= portalHomeUrl %>">Portal home</a>
+      <a class="linkish active" href="<%= reporterBase %>" aria-current="page">HHSRS Reporter</a>
+      <span id="header-user"><%= user.name %> <span class="role-pill">Admin</span></span>
+      <form class="inline-form" method="post" action="<%= logoutUrl %>">
+        <button type="submit" class="linkish">Log out</button>
+      </form>
+    </nav>
+  </header>
+
+  <div class="stage">
+    <div class="app-shell">
+      <%- include("./sidebar") %>
+      <div class="work-panel">
+        <div class="content-pane">
+          <%- include("./tool-header") %>
+          <%- include("./step-tabs") %>
+          <% if (typeof flashOk !== 'undefined' && flashOk) { %><p class="flash flash-ok"><%= flashOk %></p><% } %>
+          <% if (typeof flashErr !== 'undefined' && flashErr) { %><p class="flash flash-err"><%= flashErr %></p><% } %>

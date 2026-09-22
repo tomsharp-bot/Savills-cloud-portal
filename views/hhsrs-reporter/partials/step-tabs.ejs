@@ -1,0 +1,12 @@
+<nav class="step-tabs" aria-label="HHSRS Reporter steps">
+  <a href="<%= reporterBase %>" class="<%= activeNav === 'pending' ? 'active' : '' %>">
+    <span class="step" aria-hidden="true">01</span> Pending Issues
+    <% if (summary.waiting > 0) { %><span class="step-badge"><%= summary.waiting %></span><% } %>
+  </a>
+  <a href="<%= reporterBase %>/review" class="<%= activeNav === 'review' ? 'active' : '' %>">
+    <span class="step" aria-hidden="true">02</span> Review and create
+  </a>
+  <a href="<%= reporterBase %>/main-log" class="<%= activeNav === 'main-log' ? 'active' : '' %>">
+    <span class="step" aria-hidden="true">03</span> Main Log
+  </a>
+</nav>

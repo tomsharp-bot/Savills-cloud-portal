@@ -111,6 +111,86 @@ export function tryDraftFromRow(row: Parameters<typeof submissionDraftInput>[0])
   }
 }
 
+/** Waiting queue = not yet actioned into the Main Log. */
+export const HHSRS_WAITING_STATUSES = ["new", "in_review", "email_ready"] as const;
+
+export const HHSRS_ACTIONED_STATUSES = ["email_sent", "closed"] as const;
+
+export function isWaitingStatus(status: string): boolean {
+  return (HHSRS_WAITING_STATUSES as readonly string[]).includes(status);
+}
+
+export function isActionedStatus(status: string): boolean {
+  return (HHSRS_ACTIONED_STATUSES as readonly string[]).includes(status);
+}
+
+/** Relative time for Pending Issues (en-GB). Under ~48h stays visually urgent. */
+export function formatTimeAgo(iso: Date | string, now: Date = new Date()): {
+  relative: string;
+  absolute: string;
+  urgent: boolean;
+} {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) {
+    return { relative: "", absolute: String(iso || ""), urgent: false };
+  }
+  const diffMs = Math.max(0, now.getTime() - d.getTime());
+  const mins = Math.floor(diffMs / 60000);
+  let relative: string;
+  if (mins < 1) relative = "just now";
+  else if (mins < 60) relative = mins === 1 ? "1 minute ago" : `${mins} minutes ago`;
+  else {
+    const hours = Math.floor(mins / 60);
+    if (hours < 48) relative = hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+    else {
+      const days = Math.floor(hours / 24);
+      relative = days === 1 ? "1 day ago" : `${days} days ago`;
+    }
+  }
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const day = d.getDate();
+  const mon = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const absolute = `${day} ${mon} ${year} · ${hh}:${mm}`;
+  return { relative, absolute, urgent: diffMs < 48 * 60 * 60 * 1000 };
+}
+
+export function formatWorkspaceDate(now: Date = new Date()): string {
+  return now.toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export function ratingDisplayClass(rating: string): string {
+  const r = (rating || "").trim().toLowerCase();
+  if (r === "cat 1" || r === "high" || r.startsWith("severe") || r.includes("emergency")) {
+    return "rating-cat1";
+  }
+  if (r === "cat 2" || r === "medium" || r === "moderate") {
+    return "rating-cat2";
+  }
+  return "";
+}
+
+export function actionedStatusLabel(status: string): string {
+  if (status === "email_sent") return "Pack sent";
+  if (status === "closed") return "Notice filed";
+  if (status === "email_ready") return "Email ready";
+  return statusLabel(status);
+}
+
+export type ReporterSummary = {
+  waiting: number;
+  inReview: number;
+  actionedMonth: number;
+  mainLog: number;
+};
+
 export function readReporterUpdate(body: Record<string, unknown>): {
   rating: string;
   clientDescription: string;

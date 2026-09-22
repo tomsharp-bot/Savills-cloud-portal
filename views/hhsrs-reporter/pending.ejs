@@ -1,0 +1,112 @@
+<%- include("partials/layout-open") %>
+
+<h2 class="page-section-title">Pending Issues</h2>
+
+<div class="landing-toolbar" aria-label="Quick tools">
+  <a class="linkish dark" href="#last-actioned" style="margin-left:auto;font-size:0.75rem;">Jump to last 20 actioned</a>
+</div>
+
+<section class="panel waiting-urgent" id="not-actioned" aria-label="Pending issues">
+  <div class="panel-head received-head">
+    <h2><span class="urgent-icon" aria-hidden="true">!</span> Pending issues</h2>
+    <span class="count count-received"><%= waitingRows.length %> need action</span>
+  </div>
+  <div class="waiting-banner">
+    <span class="badge-need">Urgent</span>
+    <span>These hazards are waiting — review and create packs before they age further.</span>
+  </div>
+  <% if (!waitingRows.length) { %>
+    <p class="empty" style="padding:1rem 1.1rem;">No pending site-form submissions. New cases from the surveyor form appear here.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="landing-table" id="waiting-table">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Address</th>
+            <th>UPRN</th>
+            <th>Surveyor</th>
+            <th>Category</th>
+            <th>Rating</th>
+            <th>Received</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% waitingRows.forEach((row) => {
+            const ago = formatTimeAgo(row.createdAt);
+          %>
+            <tr>
+              <td><span class="project-pill"><%= row.projectName %></span></td>
+              <td><strong><%= row.fullAddress %></strong></td>
+              <td><span style="color:var(--muted)"><%= row.uprn %></span></td>
+              <td><%= row.surveyorName %></td>
+              <td><%= row.category %></td>
+              <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
+              <td>
+                <span class="<%= ago.urgent ? 'time-ago-urgent' : '' %>"><%= ago.relative %></span>
+                <span class="time-ago-abs"><%= ago.absolute %></span>
+              </td>
+              <td>
+                <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review and create</a>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-foot"><span>Newest first</span></div>
+  <% } %>
+</section>
+
+<section class="panel" id="last-actioned" aria-label="Last 20 issues that have been actioned" style="margin-top:1.25rem;">
+  <div class="panel-head dealt-head">
+    <h2>Last 20 issues that have been actioned</h2>
+    <span class="count count-dealt"><%= actionedRows.length %> shown</span>
+  </div>
+  <% if (!actionedRows.length) { %>
+    <p class="empty" style="padding:1rem 1.1rem;">Nothing actioned yet. Use Mark as actioned → Main Log from Review and create.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="landing-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Project</th>
+            <th>Address</th>
+            <th>UPRN</th>
+            <th>Surveyor</th>
+            <th>Category</th>
+            <th>Rating</th>
+            <th>Actioned</th>
+            <th>By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% actionedRows.forEach((row, i) => {
+            const when = row.emailSentAt || row.updatedAt;
+          %>
+            <tr>
+              <td><%= i + 1 %></td>
+              <td><span class="project-pill"><%= row.projectName %></span></td>
+              <td><strong><%= row.fullAddress %></strong></td>
+              <td><%= row.uprn %></td>
+              <td><%= row.surveyorName %></td>
+              <td><%= row.category %></td>
+              <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
+              <td><%= formatDocDate(when) %></td>
+              <td><%= row.emailSentBy || row.lastEditedBy || "—" %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <span>Most recently actioned first · Full history in <a class="linkish dark" href="<%= reporterBase %>/main-log">Main Log</a></span>
+    </div>
+  <% } %>
+</section>
+
+<p class="footer-note">HHSRS Reporter · Pending Issues · Live site-form queue · en-GB</p>
+
+<%- include("partials/layout-close") %>
