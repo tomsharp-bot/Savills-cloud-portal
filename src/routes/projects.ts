@@ -21,6 +21,7 @@ import { parseProjectTarget } from "../lib/project-target.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
 import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { buildSampleAnalysis } from "../lib/sample-analysis.js";
+import { buildCurrentProjectTileStats, type ProjectTileStats } from "../lib/project-tile-stats.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 import { loadStockRows } from "../lib/stock-query.js";
 import { assembleStockTab, stockKindFromTab, STOCK_PAGE_SIZE } from "../lib/stock-page.js";
@@ -57,10 +58,33 @@ projectsRouter.get("/", async (req: Request, res: Response) => {
     upcoming: isAdmin(user) ? visible.filter((p) => p.stage === "upcoming") : [],
     archive: recentArchived(archived),
   };
+
+  let tileStats: Record<string, ProjectTileStats> = {};
+  if (isAdmin(user) && boards.current.length) {
+    const currentIds = boards.current.map((p) => p.id);
+    const assets = await prisma.asset.findMany({
+      where: { projectId: { in: currentIds } },
+      select: {
+        projectId: true,
+        kind: true,
+        patch: true,
+        omitAsset: true,
+        assetStatus: true,
+        surveyType: true,
+        external: true,
+        visit1: true,
+        visit2: true,
+        visit3: true,
+      },
+    });
+    tileStats = Object.fromEntries(buildCurrentProjectTileStats(boards.current, assets));
+  }
+
   res.render("projects", {
     title: "Projects",
     user,
     boards,
+    tileStats,
     archiveTotal: archived.length,
     archiveLimit: ARCHIVE_BOARD_LIMIT,
     selectedId: String(req.query.selected || ""),

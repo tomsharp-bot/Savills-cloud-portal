@@ -5,8 +5,136 @@ const ROUNDS = 10;
 
 export const MIN_PASSWORD_LENGTH = 10;
 
-/** Unambiguous charset (no 0/O, 1/l/I) for admin-issued temps that people type. */
-const TEMP_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+/**
+ * Six-letter lowercase words for admin-issued temps (pronounceable).
+ * Fixed length keeps `{word}.{word}.2468` consistent and easy to read aloud.
+ */
+const TEMP_WORDS = [
+  "anchor",
+  "banana",
+  "beacon",
+  "bridge",
+  "bronze",
+  "button",
+  "cactus",
+  "candle",
+  "canvas",
+  "castle",
+  "celery",
+  "chapel",
+  "cherry",
+  "cirrus",
+  "citron",
+  "clover",
+  "cobalt",
+  "copper",
+  "cradle",
+  "crater",
+  "dancer",
+  "dapper",
+  "desert",
+  "domain",
+  "donkey",
+  "dragon",
+  "drawer",
+  "driver",
+  "echoes",
+  "elbows",
+  "engine",
+  "falcon",
+  "fennel",
+  "ferris",
+  "filter",
+  "forest",
+  "foster",
+  "fridge",
+  "galaxy",
+  "garlic",
+  "gentle",
+  "ginger",
+  "glider",
+  "golden",
+  "gravel",
+  "guitar",
+  "harbor",
+  "helmet",
+  "herald",
+  "hockey",
+  "hunter",
+  "island",
+  "jacket",
+  "jasper",
+  "jumper",
+  "jungle",
+  "kettle",
+  "kitten",
+  "ladder",
+  "lizard",
+  "magnet",
+  "marble",
+  "meadow",
+  "meteor",
+  "mirror",
+  "monkey",
+  "nebula",
+  "nectar",
+  "nickel",
+  "nimble",
+  "normal",
+  "orange",
+  "orchid",
+  "oxygen",
+  "palace",
+  "parcel",
+  "pepper",
+  "pickle",
+  "planet",
+  "pocket",
+  "ponder",
+  "portal",
+  "potato",
+  "puzzle",
+  "quartz",
+  "rabbit",
+  "radish",
+  "ranger",
+  "ribbon",
+  "ripple",
+  "rocket",
+  "saddle",
+  "salmon",
+  "sandal",
+  "saturn",
+  "silver",
+  "socket",
+  "sphere",
+  "spider",
+  "spring",
+  "square",
+  "stable",
+  "stream",
+  "summer",
+  "tablet",
+  "temple",
+  "timber",
+  "tomato",
+  "tunnel",
+  "turtle",
+  "valley",
+  "velvet",
+  "violet",
+  "walnut",
+  "willow",
+  "window",
+  "winter",
+  "yellow",
+  "zephyr",
+  "zipper",
+] as const;
+
+if (TEMP_WORDS.some((w) => w.length !== 6)) {
+  throw new Error("TEMP_WORDS must be exactly 6 letters each");
+}
 
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, ROUNDS);
@@ -22,14 +150,24 @@ export function tempPassword(name: string): string {
   return `${letters}2468`;
 }
 
-/** Cryptographically random temporary password for admin create/reset. */
-export function randomTempPassword(length = 12): string {
-  const n = Math.max(length, MIN_PASSWORD_LENGTH);
-  let out = "";
-  for (let i = 0; i < n; i++) {
-    out += TEMP_CHARS[randomInt(TEMP_CHARS.length)];
+function pickTempWord(): string {
+  return TEMP_WORDS[randomInt(TEMP_WORDS.length)];
+}
+
+/**
+ * Admin-issued temporary password: two random 6-letter words + `.2468`.
+ * Example: `orange.forest.2468`
+ */
+export function randomTempPassword(): string {
+  let word1 = pickTempWord();
+  let word2 = pickTempWord();
+  // Prefer two different words when the list allows it.
+  if (TEMP_WORDS.length > 1) {
+    for (let i = 0; i < 8 && word2 === word1; i++) {
+      word2 = pickTempWord();
+    }
   }
-  return out;
+  return `${word1}.${word2}.2468`;
 }
 
 export async function issueTempPassword(): Promise<{ plain: string; hash: string }> {

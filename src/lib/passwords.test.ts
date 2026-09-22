@@ -10,6 +10,8 @@ import {
   verifyPassword,
 } from "./passwords.js";
 
+const TEMP_PW_RE = /^([a-z]{6})\.([a-z]{6})\.2468$/;
+
 describe("tempPassword (legacy Name2468)", () => {
   it("uses letters from the name plus 2468", () => {
     assert.equal(tempPassword("Phil Moon"), "PhilMoon2468");
@@ -18,25 +20,30 @@ describe("tempPassword (legacy Name2468)", () => {
 });
 
 describe("randomTempPassword", () => {
-  it("is at least the minimum length and uses an unambiguous charset", () => {
+  it("uses two 6-letter words then .2468 (e.g. orange.forest.2468)", () => {
     const pw = randomTempPassword();
     assert.ok(pw.length >= MIN_PASSWORD_LENGTH);
-    assert.match(pw, /^[ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789]+$/);
-    assert.doesNotMatch(pw, /[0O1Il]/);
+    const match = TEMP_PW_RE.exec(pw);
+    assert.ok(match, `expected word.word.2468, got ${pw}`);
+    assert.equal(match![1].length, 6);
+    assert.equal(match![2].length, 6);
+    assert.match(pw, /\.2468$/);
   });
 
-  it("is stronger than the Name2468 mock and unique per call", () => {
+  it("is unique per call and not the legacy Name2468 mock", () => {
     const a = randomTempPassword();
     const b = randomTempPassword();
     assert.notEqual(a, b);
     assert.notEqual(a, tempPassword("Phil Moon"));
-    assert.doesNotMatch(a, /2468$/);
+    assert.match(a, TEMP_PW_RE);
+    assert.match(b, TEMP_PW_RE);
   });
 });
 
 describe("issueTempPassword", () => {
   it("returns a plaintext temp and a hash that verifies it", async () => {
     const issued = await issueTempPassword();
+    assert.match(issued.plain, TEMP_PW_RE);
     assert.ok(issued.plain.length >= MIN_PASSWORD_LENGTH);
     assert.notEqual(issued.hash, issued.plain);
     assert.equal(await verifyPassword(issued.plain, issued.hash), true);

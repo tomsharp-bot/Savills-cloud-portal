@@ -68,6 +68,17 @@
                       <span class="stage-tag stage-<%= p.stage %>"><%= p.stage === 'current' ? 'Current' : p.stage === 'upcoming' ? 'Upcoming' : 'Archive' %></span>
                       <h3><%= p.name %></h3>
                       <p class="pm">Project Manager: <%= p.projectManager %></p>
+                      <% if (isAdmin && p.stage === "current" && tileStats && tileStats[p.id]) { %>
+                        <% const s = tileStats[p.id]; %>
+                        <ul class="tile-stats" aria-label="Project stats">
+                          <li>Dwellings <strong><%= s.dwellings %></strong></li>
+                          <li>Surveys <strong><%= s.surveysLabel %></strong></li>
+                          <li>Blocks <strong><%= s.blocks %></strong></li>
+                          <li>Access <strong><%= s.accessPct %></strong></li>
+                          <li>Target <strong><%= s.target %></strong></li>
+                          <li>Done <strong><%= s.completionPct %></strong></li>
+                        </ul>
+                      <% } %>
                     </a>
                     <div class="row-actions">
                       <% if (isAdmin) { %>
