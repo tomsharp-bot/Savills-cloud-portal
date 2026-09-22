@@ -144,6 +144,9 @@ loaderRouter.post("/projects/:id/stock-refresh", upload.single("file"), async (r
     removedCount: result.removed.length,
     movedCount: result.moved,
     alsoOmit,
+    rows,
+    addedUprns: result.added,
+    target,
   });
   await prisma.loaderHistory.create({
     data: {
