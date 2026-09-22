@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   accentClassForName,
   buildFolderName,
@@ -69,6 +71,24 @@ describe("accentClassForName", () => {
   it("returns a stable accent class", () => {
     assert.equal(accentClassForName("Onward"), "acc-Onward");
     assert.match(accentClassForName("Test 1"), /^acc-/);
+  });
+});
+
+describe("photo lightbox markup", () => {
+  it("keeps the lightbox inside Photo Storage so overlay styles apply, and sizes it to the viewport", () => {
+    const view = readFileSync(join(process.cwd(), "views/photos-project.ejs"), "utf8");
+    const css = readFileSync(join(process.cwd(), "public/css/photos.css"), "utf8");
+    const pageOpen = view.indexOf('class="photos-page"');
+    const lightbox = view.indexOf('id="photoLightbox"');
+    const pageClose = view.lastIndexOf("</div>");
+    const script = view.indexOf("<script>");
+    assert.ok(pageOpen >= 0 && lightbox > pageOpen, "lightbox should follow the photos page root");
+    assert.ok(lightbox < pageClose && pageClose < script, "lightbox should sit inside the photos page, before scripts");
+    assert.match(css, /\.lightbox-backdrop\s*\{[^}]*position:\s*fixed/s);
+    assert.match(css, /\.lightbox-backdrop\s*\{[^}]*align-items:\s*center/s);
+    assert.match(css, /\.lightbox-backdrop\s*\{[^}]*justify-content:\s*center/s);
+    assert.match(css, /width:\s*min\(1100px,\s*92vw\)/);
+    assert.match(css, /max-height:\s*min\(78vh,\s*820px\)/);
   });
 });
 

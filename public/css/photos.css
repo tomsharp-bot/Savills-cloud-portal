@@ -391,7 +391,13 @@
   padding: 16px;
   z-index: 100;
 }
-.photos-page .lightbox-backdrop { background: rgba(11, 31, 51, 0.72); z-index: 80; }
+.photos-page .lightbox-backdrop {
+  background: rgba(11, 31, 51, 0.72);
+  z-index: 400;
+  padding: 24px;
+}
+.photos-page .modal-backdrop[hidden],
+.photos-page .lightbox-backdrop[hidden] { display: none !important; }
 .photos-page .modal-backdrop.open,
 .photos-page .lightbox-backdrop.open { display: flex; }
 .photos-page .modal {
@@ -480,8 +486,9 @@
 .photos-page .lightbox {
   background: #fff;
   border-radius: 14px;
-  max-width: min(1100px, 96vw);
-  width: 100%;
+  max-width: min(1200px, 96vw);
+  width: min(1200px, 96vw);
+  margin: auto;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
@@ -495,15 +502,21 @@
 }
 .photos-page .lightbox-head h3 { margin: 0; font-size: 0.95rem; color: var(--navy); word-break: break-all; }
 .photos-page .lightbox-sub { margin: 4px 0 0; font-size: 0.75rem; color: var(--muted); }
-.photos-page .lightbox-body { padding: 16px; display: flex; justify-content: center; background: #eef2f6; }
+.photos-page .lightbox-body {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2f6;
+}
 .photos-page .lightbox-body img {
-  width: min(960px, 92vw);
+  width: min(1100px, 92vw);
   height: auto;
   aspect-ratio: 4 / 3;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 8px;
   display: block;
-  max-height: min(85vh, 1050px);
+  max-height: min(78vh, 820px);
 }
 .photos-page .lightbox-foot {
   padding: 12px 14px;
