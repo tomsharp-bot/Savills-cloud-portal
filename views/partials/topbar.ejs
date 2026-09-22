@@ -1,5 +1,5 @@
 <header class="topbar">
-  <strong>Savills Cloud Portal</strong>
+  <a class="brand" href="<%= baseUrl(isAdmin ? '/admin' : '/projects') %>">Savills Cloud Portal</a>
   <div class="right">
     <a class="linkish" href="<%= baseUrl('/projects') %>">Projects</a>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/admin') %>">Admin</a><% } %>

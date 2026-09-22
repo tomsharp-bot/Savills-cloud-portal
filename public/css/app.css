@@ -23,6 +23,9 @@ input[type=text],input[type=password],input[type=search],input[type=email],input
 .login-note{margin-top:16px;font-size:.8rem;color:var(--muted);line-height:1.4}
 #screen-app{min-height:100vh;display:flex;flex-direction:column}
 .topbar{background:var(--navy);color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.topbar .brand{color:#fff;font-weight:700;text-decoration:none}
+.topbar .brand:hover{text-decoration:underline}
+a.btn{display:inline-block;text-decoration:none}
 .topbar .right{display:flex;align-items:center;gap:12px;font-size:.9rem;flex-wrap:wrap}
 .main{flex:1;padding:20px 24px;width:100%;text-align:left}
 .page-title{margin:0 0 6px;font-size:1.5rem;color:var(--navy)}

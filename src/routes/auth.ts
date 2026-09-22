@@ -3,12 +3,13 @@ import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/passwords.js";
 import { reapplyAllExternalLinks } from "../lib/external.js";
 import { loginBlockedForMissingAccess, NO_SITE_ACCESS_ERROR } from "../lib/login-access.js";
+import { postLoginPath } from "../lib/landing.js";
 
 export const authRouter = Router();
 
 authRouter.get("/login", (req: Request, res: Response) => {
   if (req.user) {
-    res.redirect("/projects");
+    res.redirect(postLoginPath(req.user.role));
     return;
   }
   res.render("login", { error: "", username: "" });
@@ -55,7 +56,7 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       console.error("External list re-apply on login failed", err);
     }
   }
-  res.redirect("/projects");
+  res.redirect(postLoginPath(user.role));
 });
 
 authRouter.post("/logout", (req: Request, res: Response) => {

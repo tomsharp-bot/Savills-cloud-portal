@@ -38,10 +38,15 @@
   opacity: 0.75;
   margin-left: 4px;
 }
+.programme-page main.admin-home {
+  padding: 20px 24px 40px;
+  max-width: 1100px;
+}
 .programme-page .admin-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 12px;
+  width: 100%;
 }
 .programme-page .admin-tile {
   display: block;

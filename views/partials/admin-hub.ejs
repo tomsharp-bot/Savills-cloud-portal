@@ -1,6 +1,8 @@
 <nav class="hub" aria-label="Admin hub">
+  <a class="hub-card <%= active === 'home' ? 'active' : '' %>" href="<%= baseUrl('/admin') %>">Home</a>
+  <a class="hub-card <%= active === 'hhsrs' ? 'active' : '' %>" href="<%= baseUrl('/HHSRSreporter') %>">HHSRS Reporter</a>
   <a class="hub-card <%= active === 'projects' ? 'active' : '' %>" href="<%= baseUrl('/projects') %>">Project Progress</a>
-  <a class="hub-card <%= active === 'hhsrs' ? 'active' : '' %>" href="<%= baseUrl('/hhsrs-submissions') %>">HHSRS Reporting</a>
+  <a class="hub-card <%= active === 'personnel' ? 'active' : '' %>" href="<%= baseUrl('/personnel') %>">Personnel</a>
+  <a class="hub-card <%= active === 'photos' ? 'active' : '' %>" href="<%= baseUrl('/photos') %>">Photos</a>
   <a class="hub-card <%= active === 'programme' ? 'active' : '' %>" href="<%= baseUrl('/projects-programme') %>">Projects Programme</a>
-  <span class="hub-card" title="Photo storage is not wired on this portal yet">Photos Storage <span class="soon">soon</span></span>
 </nav>

@@ -33,7 +33,7 @@ Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site
 - **Documents** (local disk now; Spaces later)
 - **Completions** view/download stubs
 - **HHSRS site reporting** (public phone form at `/HHSRS-site-form`; admin Reporter at `/HHSRSreporter`; intake list under the portal)
-- **Admin overview** at `/admin` (Project Progress, HHSRS Reporting, Projects Programme; Photos Storage is a placeholder)
+- **Admin landing** at `/admin` after login (HHSRS Reporter at `/HHSRSreporter`, Project Progress, Personnel, Photos, Projects Programme). Surveyors skip the hub and land on `/projects`. Clients still land on `/projects`.
 - **Projects Programme** (admin) at `/projects-programme` — surveyor × week board. With `BASE_PATH=/projectprogress` the live URL is `https://savillscloudportal.co.uk/projectprogress/projects-programme` (hub: `https://savillscloudportal.co.uk/projectprogress/admin`). Bottom tables read Project Progress: current, upcoming, and the 5 most recently archived. Survey-type text starts from each project's survey-type ticks and is stored on edit. The grid itself is one shared board in Postgres.
 
 ## Local setup
