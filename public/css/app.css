@@ -131,7 +131,13 @@ th{font-size:.54rem;text-transform:uppercase;color:var(--muted);background:#fafb
 .stock-table{margin:0;border-collapse:separate;border-spacing:0}
 .stock-table thead{position:sticky;top:0;z-index:4}
 .stock-table thead tr.stock-head th{background:#fafbfc;box-shadow:inset 0 -1px 0 var(--border)}
+.stock-table thead tr.stock-head th.col-site-comments{background:#ffe566}
+.stock-head .sort-link{background:transparent;border:0;padding:0;margin:0;font:inherit;font-weight:700;color:inherit;cursor:pointer;text-align:left;white-space:nowrap}
+.stock-head .sort-link.active{color:var(--navy)}
 .stock-table thead tr.col-filter-row th{background:#f0f3f6;box-shadow:inset 0 -1px 0 var(--border)}
+.col-filter-row input.filter-active,.col-filter-row select.filter-active{color:#a11;font-weight:700}
+.stock-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+.stock-pager .btn:disabled{opacity:.45;cursor:default}
 .stock-tab-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 0 4px}
 .stock-tab-head h3{margin:0;color:var(--navy)}
 .stock-count{margin:0;font-size:.9rem;font-weight:600;color:var(--navy);white-space:nowrap;padding-top:2px}

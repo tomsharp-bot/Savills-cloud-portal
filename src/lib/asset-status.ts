@@ -118,38 +118,122 @@ function headerKey(s: string): string {
 }
 
 /**
- * Type/archetype columns used to split stock onto Dwellings / Blocks / Garages.
- * Deliberately excludes address fields such as "Block" (building name) and Combined Address,
+ * Columns that describe the asset itself (house, flat, block, garage).
+ * Address fields such as "Block" (the building name) are not in this list,
  * so “Block A, High Street” does not route a dwelling onto the Blocks tab.
  */
-export const STOCK_KIND_HINT_HEADERS = [
-  "Survey Design",
+export const STOCK_TYPE_HEADERS = [
   "Archetype",
+  "Property Archetype",
+  "Dwelling Type",
+  "Dwelling Archetype",
   "Property Type",
   "Asset Type",
   "Stock Type",
   "Type Of Property",
-  "Visit Type",
-  "Survey Type",
+  "Building Type",
+  "Accommodation Type",
   "Asset Category",
   "Property Category",
   "Unit Type",
 ] as const;
 
-/** Auto-route: Garage / Garages / Garage Sites → garage; Block / Blocks / MTVH Blocks → block; else dwelling. */
+/**
+ * Programme labels. Used only when no asset-type column says what the row is.
+ * A file-wide Survey Design of "Blocks" must not drag houses and flats onto Blocks.
+ */
+export const STOCK_PROGRAMME_HEADERS = ["Survey Design", "Survey Type", "Visit Type"] as const;
+
+/** @deprecated Use STOCK_TYPE_HEADERS and STOCK_PROGRAMME_HEADERS. Kept for callers that listed every hint. */
+export const STOCK_KIND_HINT_HEADERS = [...STOCK_TYPE_HEADERS, ...STOCK_PROGRAMME_HEADERS] as const;
+
+const TYPE_HEADER_KEYS = new Set(STOCK_TYPE_HEADERS.map(headerKey));
+const PROGRAMME_HEADER_KEYS = new Set(STOCK_PROGRAMME_HEADERS.map(headerKey));
+
+function isTypeHeaderKey(key: string): boolean {
+  if (PROGRAMME_HEADER_KEYS.has(key)) return false;
+  if (TYPE_HEADER_KEYS.has(key)) return true;
+  if (key === "block" || key === "blocks") return false;
+  return /(archetype|propertytype|assettype|unittype|dwellingtype|buildingtype|accommodationtype|stocktype)$/.test(key);
+}
+
+type KindHit = AssetKind | "commercial";
+
+function normaliseKindText(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[_]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+/** House, flat, bungalow, maisonette, bedsit, room, studio — including bung. / mais. */
+function isResidentialDwellingLabel(value: string): boolean {
+  return /\b(houses?|bungalows?|bung\.?|flats?|maisonettes?|mais\.?|bedsits?|bed sits?|bed-sits?|rooms?|studios?|dwellings?|terraced|terrace|semi-detached|semi detached|detached|hmo)\b/.test(
+    value
+  );
+}
+
+function isBlockLabel(value: string): boolean {
+  if (/^blocks?\b/.test(value) || /\bblocks?\s+of\b/.test(value)) return true;
+  if (/\b(low-rise|low rise|high-rise|high rise|walk-up|walk up|communal)\s+blocks?\b/.test(value)) return true;
+  if (/^(walk-ups?|walk ups?|communal blocks?|mtvh blocks?)$/.test(value)) return true;
+  return /\bblocks?\b/.test(value) || /\bwalk-ups?\b/.test(value) || /\bwalk ups?\b/.test(value);
+}
+
+function isGarageLabel(value: string): boolean {
+  return /\bgarages?\b/.test(value) || /garage\s*sites?/.test(value);
+}
+
+function isCommercialLabel(value: string): boolean {
+  return /\bcommercial\b/.test(value);
+}
+
+/** One cell: garage, block, a residential dwelling, commercial, or nothing we recognise. */
+function classifyKindText(raw: string): KindHit | null {
+  const value = normaliseKindText(raw);
+  if (!value) return null;
+  if (isGarageLabel(value)) return "garage";
+  if (isCommercialLabel(value)) return "commercial";
+  // "Block" / "Block of flats" is the block. "Flat" / "House in a block" is a dwelling.
+  if (/^blocks?\b/.test(value) || /\bblocks?\s+of\b/.test(value)) return "block";
+  if (isResidentialDwellingLabel(value)) return "dwelling";
+  if (isBlockLabel(value)) return "block";
+  return null;
+}
+
+function firstHit(values: string[]): KindHit | null {
+  const hits = values.map(classifyKindText).filter((hit): hit is KindHit => hit != null);
+  if (hits.includes("garage")) return "garage";
+  if (hits.includes("dwelling")) return "dwelling";
+  if (hits.includes("block")) return "block";
+  if (hits.includes("commercial")) return "commercial";
+  return null;
+}
+
+/**
+ * Auto-route.
+ * Garage / garage site → garage.
+ * Block / Blocks → block.
+ * Commercial unit → not a block (there is no commercial stock tab, so it stays a dwelling).
+ * House, bungalow, flat, maisonette, bedsit, room, studio, and anything else → dwelling.
+ * Asset-type columns win over Survey Design / Survey Type, which are often the same on every row.
+ */
 export function inferStockKind(raw: Record<string, unknown> | null | undefined): AssetKind {
   if (!raw) return "dwelling";
-  const want = new Set(STOCK_KIND_HINT_HEADERS.map(headerKey));
-  const values: string[] = [];
-  for (const k of Object.keys(raw)) {
-    if (!want.has(headerKey(k))) continue;
-    const v = raw[k];
-    if (v == null || v === "") continue;
-    values.push(String(v));
+  const typeValues: string[] = [];
+  const programmeValues: string[] = [];
+  for (const key of Object.keys(raw)) {
+    const norm = headerKey(key);
+    const cell = raw[key];
+    if (cell == null || cell === "") continue;
+    const text = String(cell);
+    if (isTypeHeaderKey(norm)) typeValues.push(text);
+    else if (PROGRAMME_HEADER_KEYS.has(norm)) programmeValues.push(text);
   }
-  const blob = values.join(" | ").toLowerCase();
-  if (/garage/.test(blob)) return "garage";
-  if (/\bblocks?\b|communal|maisonette block|low-rise block|walk-up/.test(blob)) return "block";
+  const fromType = firstHit(typeValues);
+  const hit = fromType || firstHit(programmeValues);
+  if (hit === "garage" || hit === "block") return hit;
   return "dwelling";
 }
 

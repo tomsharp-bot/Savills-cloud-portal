@@ -1,4 +1,5 @@
 import { formatStockDate } from "./dates.js";
+import { epcRequiredFlag } from "./epc-survey.js";
 import { STOCK_DATE_COLS, STOCK_SELECT_COLS } from "./stock-columns.js";
 
 export type StockFilterRow = Record<string, unknown>;
@@ -9,6 +10,7 @@ export const BLANK_FILTER = "__blank__";
 /** Named-field lookup so Asset Status never falls through to Survey Type or Site Comments. */
 export function stockFilterCellText(row: StockFilterRow, column: string): string {
   if (column === "omitAsset") return row.omitAsset ? "omitted" : "included";
+  if (column === "epcRequired") return epcRequiredFlag(row.epcRequired) ? "YES" : "";
   if (Object.prototype.hasOwnProperty.call(row, column) && row[column] != null) {
     const raw = row[column];
     if (STOCK_DATE_COLS.has(column)) return formatStockDate(raw).trim();

@@ -1,0 +1,53 @@
+<%
+  const limit = typeof stockPageSize === "number" && stockPageSize > 0 ? stockPageSize : 100;
+  const visibleRows = (rows || []).slice(0, limit);
+  const dateCols = typeof stockDateCols !== "undefined" ? stockDateCols : new Set();
+  const editCols = new Set(typeof adminEditCols !== "undefined" ? adminEditCols : []);
+  const canComment = isAdmin || isSurveyor;
+  const displayVal = (row, col) => dateCols.has(col) ? formatStockDate(row[col]) : String(row[col] == null ? "" : row[col]);
+  const emptyLabel = stockFiltered ? "No assets match these filters." : "No assets in this tab yet.";
+%>
+<% if (!visibleRows.length) { %>
+  <tr class="stock-empty"><td colspan="<%= cols.length %>" class="empty"><%= emptyLabel %></td></tr>
+<% } else { %>
+  <% visibleRows.forEach(r => { %>
+    <tr class="<%= r.omitAsset ? 'row-omitted' : '' %> <%= r.stockMissing ? 'row-stock-missing' : '' %>"
+        data-asset="<%= r.id %>"
+        data-omit="<%= r.omitAsset ? '1' : '0' %>">
+      <% cols.forEach(c => { %>
+        <% if (c === "siteComments") { %>
+          <td data-col="siteComments">
+            <input class="comment-input" data-comment="<%= r.id %>" value="<%= r.siteComments %>" <%= canComment ? "" : "disabled" %> />
+          </td>
+        <% } else if (c === "omitAsset") { %>
+          <td class="omit-cell" data-col="omitAsset" data-value="<%= r.omitAsset ? 'omitted' : 'included' %>">
+            <% if (isAdmin) { %>
+              <label><input type="checkbox" data-omit="<%= r.id %>" <%= r.omitAsset ? "checked" : "" %> /> <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %></label>
+            <% } else { %>
+              <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %>
+            <% } %>
+          </td>
+        <% } else if (c === "epcRequired") { %>
+          <td class="omit-cell" data-col="epcRequired" data-value="<%= r.epcRequired ? 'YES' : '' %>">
+            <% if (isAdmin) { %>
+              <label><input type="checkbox" data-epc="<%= r.id %>" <%= r.epcRequired ? "checked" : "" %> /> <% if (r.epcRequired) { %>YES<% } %></label>
+            <% } else { %>
+              <%= r.epcRequired ? "YES" : "" %>
+            <% } %>
+          </td>
+        <% } else if (editCols.has(c) && isAdmin) { %>
+          <td data-col="<%= c %>">
+            <input class="comment-input" data-admin-field="<%= c %>" data-asset="<%= r.id %>" value="<%= displayVal(r, c) %>" placeholder="<%= dateCols.has(c) ? 'DD/MM/YY' : '' %>" />
+          </td>
+        <% } else if (c === "assetStatus") { %>
+          <td data-col="assetStatus" data-value="<%= r.assetStatus %>">
+            <%= r.assetStatus %>
+            <% if (r.stockMissing) { %><span class="stock-missing-tag">Not on latest stocklist</span><% } %>
+          </td>
+        <% } else { %>
+          <td class="locked" data-col="<%= c %>"><%= displayVal(r, c) %></td>
+        <% } %>
+      <% }) %>
+    </tr>
+  <% }) %>
+<% } %>

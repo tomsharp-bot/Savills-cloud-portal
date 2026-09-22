@@ -79,6 +79,21 @@ describe("Auto-route to Dwellings / Blocks / Garages", () => {
     assert.equal(inferStockKind({ Archetype: "House", "Visit Type": "SCS" }), "dwelling");
     assert.equal(inferStockKind({}), "dwelling");
   });
+
+  it("keeps residential types as dwellings even when the survey design says Blocks", () => {
+    for (const archetype of ["House", "Flat", "Bungalow", "Bung.", "Maisonette", "Mais.", "Bedsit", "Room", "Studio"]) {
+      assert.equal(
+        inferStockKind({ Archetype: archetype, "Survey Design": "MTVH Blocks", "Survey Type": "Blocks" }),
+        "dwelling",
+        archetype
+      );
+    }
+    assert.equal(inferStockKind({ "Dwelling Type": "End terrace house" }), "dwelling");
+    assert.equal(inferStockKind({ "Asset Type": "Commercial Unit" }), "dwelling");
+    assert.equal(inferStockKind({ "Asset Type": "Commercial unit", Archetype: "Shop" }), "dwelling");
+    assert.equal(inferStockKind({ Archetype: "Block" }), "block");
+    assert.equal(inferStockKind({ Archetype: "Low-rise block" }), "block");
+  });
 });
 
 describe("Asset Status filter options", () => {

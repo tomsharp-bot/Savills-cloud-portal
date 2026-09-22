@@ -30,6 +30,15 @@ describe("Stock columns", () => {
     assert.ok(dwell.includes("siteComments"));
   });
 
+  it("puts EPC Req. immediately before Survey Type on Dwellings when asked", () => {
+    const cols = stockColumns("dwelling", { includeEpcRequired: true });
+    assert.equal(cols.indexOf("epcRequired") + 1, cols.indexOf("surveyType"));
+    assert.equal(STOCK_LABELS.epcRequired, "EPC Req.");
+    assert.equal(stockColumns("dwelling").includes("epcRequired"), false);
+    assert.equal(stockColumns("block", { includeEpcRequired: true }).includes("epcRequired"), false);
+    assert.equal(stockColumns("garage", { includeEpcRequired: true }).includes("epcRequired"), false);
+  });
+
   it("treats letter dates like other stock dates", () => {
     assert.ok(STOCK_DATE_COLS.has("letterDate1"));
     assert.ok(STOCK_DATE_COLS.has("letterDate2"));

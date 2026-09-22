@@ -2,18 +2,23 @@
   const cols = stockColsByKind[kind];
   const labels = stockLabels;
   const selectCols = stockSelectCols;
-  const dateCols = stockDateCols;
   const title = kind === "dwelling" ? "Dwellings" : kind === "block" ? "Blocks" : "Garages";
-  const canComment = isAdmin || isSurveyor;
-  const editCols = new Set(typeof adminEditCols !== "undefined" ? adminEditCols : []);
-  const displayVal = (row, col) => dateCols.has(col) ? formatStockDate(row[col]) : String(row[col] || "");
+  const filters = typeof stockFilters !== "undefined" && stockFilters ? stockFilters : {};
+  const options = typeof stockFilterOptions !== "undefined" && stockFilterOptions ? stockFilterOptions : {};
+  const sort = typeof stockSort !== "undefined" ? stockSort : "uprn";
+  const dir = typeof stockDir !== "undefined" ? stockDir : "asc";
+  const pageInfo = typeof stockPage !== "undefined" ? stockPage : { page: 1, pageCount: 1 };
+  const countLabel = typeof stockLabel !== "undefined" ? stockLabel : ((rows || []).length + " Assets");
+  const pagerLabel = typeof stockPagerLabel !== "undefined" ? stockPagerLabel : ("Page " + pageInfo.page + " of " + pageInfo.pageCount);
+  const filterClass = (value) => String(value || "").trim() ? "filter-active" : "";
 %>
 <div class="stock-tab-head">
   <h3><%= title %></h3>
-  <p class="stock-count" data-stock-count="<%= kind %>"><%= rows.length %> of <%= rows.length %> Assets Displayed</p>
+  <p class="stock-count" data-stock-count="<%= kind %>"><%= countLabel %></p>
 </div>
-<p style="margin:0;color:var(--muted);font-size:.9rem"><% if (isAdmin && kind === "dwelling") { %>Site Comments editable by surveyor. Resident, letter and X fields are Admin-only. Per-column filters below headers.<% } else { %>Site Comments editable by surveyor · all other columns locked. Per-column filters below headers.<% } %></p>
+<p style="margin:0;color:var(--muted);font-size:.9rem"><% if (isAdmin && kind === "dwelling") { %>Site Comments editable by surveyor. Resident, letter and X fields are Admin-only. Filters apply to the whole tab; one page of rows is shown at a time.<% } else { %>Site Comments editable by surveyor · all other columns locked. Filters apply to the whole tab; one page of rows is shown at a time.<% } %></p>
 <div class="stock-tools">
+  <button type="button" class="btn btn-ghost btn-sm" data-clear-filters="<%= kind %>">Clear All Filters</button>
   <% if (!isClient) { %>
     <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/stock/export?scope=' + kind) %>">Export this tab</a>
     <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects/' + project.id + '/stock/export?scope=all') %>">Export all stock</a>
@@ -23,74 +28,57 @@
   <% } %>
 </div>
 <div class="stock-table-wrap">
-  <table class="stock-table" data-stock="<%= kind %>" data-project="<%= project.id %>">
+  <table class="stock-table" data-stock="<%= kind %>" data-project="<%= project.id %>"
+         data-page="<%= pageInfo.page %>" data-sort="<%= sort %>" data-dir="<%= dir %>"
+         data-page-size="<%= typeof stockPageSize !== 'undefined' ? stockPageSize : 100 %>">
     <thead>
       <tr class="stock-head">
-        <% cols.forEach(c => { %><th><%= labels[c] %></th><% }) %>
+        <% cols.forEach(c => { %>
+          <th class="<%= c === 'siteComments' ? 'col-site-comments' : '' %>">
+            <button type="button" class="sort-link <%= sort === c ? 'active' : '' %>" data-sort-col="<%= c %>" data-sort-label="<%= labels[c] %>">
+              <%= labels[c] %><% if (sort === c) { %> <%= dir === "asc" ? "↑" : "↓" %><% } %>
+            </button>
+          </th>
+        <% }) %>
       </tr>
       <tr class="col-filter-row" data-stock-filters="<%= kind %>">
         <% cols.forEach(c => { %>
+          <% const current = filters[c] || ""; %>
           <th>
             <% if (c === "omitAsset") { %>
-              <select data-filter="omitAsset">
+              <select data-filter="omitAsset" class="<%= filterClass(current) %>">
                 <option value="">All</option>
-                <option value="included">Included</option>
-                <option value="omitted">Omitted</option>
+                <option value="included" <%= current === "included" ? "selected" : "" %>>Included</option>
+                <option value="omitted" <%= current === "omitted" ? "selected" : "" %>>Omitted</option>
+              </select>
+            <% } else if (c === "epcRequired") { %>
+              <select data-filter="epcRequired" class="<%= filterClass(current) %>">
+                <option value="">All</option>
+                <option value="YES" <%= current === "YES" ? "selected" : "" %>>YES</option>
+                <option value="__blank__" <%= current === "__blank__" ? "selected" : "" %>>(blank)</option>
               </select>
             <% } else if (selectCols.has(c)) { %>
-              <select data-filter="<%= c %>">
+              <select data-filter="<%= c %>" class="<%= filterClass(current) %>">
                 <option value="">All</option>
-                <% const vals = c === "assetStatus"
-                  ? (typeof assetStatusOptions !== "undefined" ? assetStatusOptions : [...new Set(rows.map(r => String(displayVal(r, c) ?? "").trim()))].sort())
-                  : [...new Set(rows.map(r => String(displayVal(r, c) ?? "").trim()))].sort(); %>
-                <% vals.forEach(v => { const shown = String(v ?? "").trim(); %>
-                  <option value="<%= shown ? shown : '__blank__' %>"><%= shown || "(blank)" %></option>
+                <% const vals = options[c] || (c === "assetStatus" && typeof assetStatusOptions !== "undefined" ? assetStatusOptions : []); %>
+                <% vals.forEach(v => { const shown = String(v ?? "").trim(); const value = shown ? shown : "__blank__"; %>
+                  <option value="<%= value %>" <%= current === value ? "selected" : "" %>><%= shown || "(blank)" %></option>
                 <% }) %>
               </select>
             <% } else { %>
-              <input type="text" data-filter="<%= c %>" placeholder="Filter" />
+              <input type="text" data-filter="<%= c %>" class="<%= filterClass(current) %>" value="<%= current %>" placeholder="Filter" />
             <% } %>
           </th>
         <% }) %>
       </tr>
     </thead>
     <tbody>
-      <% if (!rows.length) { %>
-        <tr><td colspan="<%= cols.length %>" class="empty">No assets in this tab yet.</td></tr>
-      <% } else { %>
-        <% rows.forEach(r => { %>
-          <tr class="<%= r.omitAsset ? 'row-omitted' : '' %> <%= r.stockMissing ? 'row-stock-missing' : '' %>"
-              data-asset="<%= r.id %>"
-              data-omit="<%= r.omitAsset ? '1' : '0' %>">
-            <% cols.forEach(c => { %>
-              <% if (c === "siteComments") { %>
-                <td data-col="siteComments">
-                  <input class="comment-input" data-comment="<%= r.id %>" value="<%= r.siteComments %>" <%= canComment ? "" : "disabled" %> />
-                </td>
-              <% } else if (c === "omitAsset") { %>
-                <td class="omit-cell" data-col="omitAsset" data-value="<%= r.omitAsset ? 'omitted' : 'included' %>">
-                  <% if (isAdmin) { %>
-                    <label><input type="checkbox" data-omit="<%= r.id %>" <%= r.omitAsset ? "checked" : "" %> /> <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %></label>
-                  <% } else { %>
-                    <% if (r.omitAsset) { %><span class="omit-tag">Omitted</span><% } %>
-                  <% } %>
-                </td>
-              <% } else if (editCols.has(c) && isAdmin) { %>
-                <td data-col="<%= c %>">
-                  <input class="comment-input" data-admin-field="<%= c %>" data-asset="<%= r.id %>" value="<%= displayVal(r, c) %>" placeholder="<%= dateCols.has(c) ? 'DD/MM/YY' : '' %>" />
-                </td>
-              <% } else if (c === "assetStatus") { %>
-                <td data-col="assetStatus" data-value="<%= r.assetStatus %>">
-                  <%= r.assetStatus %>
-                  <% if (r.stockMissing) { %><span class="stock-missing-tag">Not on latest stocklist</span><% } %>
-                </td>
-              <% } else { %>
-                <td class="locked" data-col="<%= c %>"><%= displayVal(r, c) %></td>
-              <% } %>
-            <% }) %>
-          </tr>
-        <% }) %>
-      <% } %>
+      <%- include("stock-rows", { cols: cols, rows: rows }) %>
     </tbody>
   </table>
+</div>
+<div class="stock-pager" data-stock-pager="<%= kind %>">
+  <button type="button" class="btn btn-ghost btn-sm" data-stock-page-prev <%= pageInfo.page <= 1 ? "disabled" : "" %>>Previous</button>
+  <span data-stock-page-label><%= pagerLabel %></span>
+  <button type="button" class="btn btn-ghost btn-sm" data-stock-page-next <%= pageInfo.page >= pageInfo.pageCount ? "disabled" : "" %>>Next</button>
 </div>

@@ -1,9 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { canClearStock, canEditSiteComments, canExportStock, canOmitAsset, canPurgeMissingStock, canSeeProject, isAdmin } from "../lib/access.js";
+import { canClearStock, canEditSiteComments, canExportStock, canOmitAsset, canPurgeMissingStock, canSeeProject, canSeeProjectTab, isAdmin } from "../lib/access.js";
 import { applyMissingStockPurge, formatPurgeNotice } from "../lib/stock-purge.js";
-import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS } from "../lib/stock-columns.js";
+import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, stockColumns } from "../lib/stock-columns.js";
 import { formatStockDate } from "../lib/dates.js";
+import { applyEpcSurveyType } from "../lib/epc-survey.js";
+import { assembleStockTab } from "../lib/stock-page.js";
+import { loadStockRows } from "../lib/stock-query.js";
 import { userAccessIds } from "../middleware/auth.js";
 import { buildStockWorkbook, parseExportScope, stockExportFilename } from "../lib/stock-export.js";
 
@@ -44,13 +47,16 @@ stockRouter.get("/projects/:id/stock/export", async (req: Request, res: Response
         break;
       }
     }
-    return { ...a, agency };
+    return applyEpcSurveyType({ ...a, agency }, project.typeConditionEpc);
   });
   const groups = kinds.map((kind) => ({
     kind,
     rows: withAgency.filter((a) => a.kind === kind),
   }));
-  const buf = buildStockWorkbook(groups, { includeAdminOnly: isAdmin(user) });
+  const buf = buildStockWorkbook(groups, {
+    includeAdminOnly: isAdmin(user),
+    includeEpcRequired: project.typeConditionEpc,
+  });
   const filename = stockExportFilename(project.name, scope);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -135,6 +141,71 @@ stockRouter.post("/projects/:id/stock/purge-missing", async (req: Request, res: 
   res.redirect(`/projects/${project.id}?tab=summary&notice=` + encodeURIComponent(notice));
 });
 
+function renderStockRows(res: Response, locals: Record<string, unknown>): Promise<string> {
+  return new Promise((resolve, reject) => {
+    res.app.render("partials/stock-rows", locals, (err, html) => {
+      if (err) reject(err);
+      else resolve(html || "");
+    });
+  });
+}
+
+function tabForKind(kind: "dwelling" | "block" | "garage"): string {
+  if (kind === "block") return "blocks";
+  if (kind === "garage") return "garages";
+  return "dwellings";
+}
+
+stockRouter.get("/projects/:id/stock/page", async (req: Request, res: Response) => {
+  const user = req.user!;
+  const kindRaw = String(req.query.kind || "");
+  const kind = kindRaw === "dwelling" || kindRaw === "block" || kindRaw === "garage" ? kindRaw : null;
+  if (!kind) {
+    res.status(400).json({ error: "Choose a stock tab." });
+    return;
+  }
+  const accessIds = await userAccessIds(user.id);
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project || !canSeeProject(user, project, accessIds)) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  if (!canSeeProjectTab(user, tabForKind(kind))) {
+    res.status(403).json({ error: "Not available." });
+    return;
+  }
+  const includeEpcRequired = !!project.typeConditionEpc;
+  const columns = stockColumns(kind, { includeAdminOnly: isAdmin(user), includeEpcRequired });
+  const prepared = await loadStockRows(project.id, kind, includeEpcRequired);
+  const tabModel = assembleStockTab(prepared, columns, req.query as Record<string, unknown>);
+  const html = await renderStockRows(res, {
+    rows: tabModel.page.rows,
+    cols: columns,
+    stockPageSize: tabModel.page.pageSize,
+    stockFiltered: tabModel.stockFiltered,
+    isAdmin: isAdmin(user),
+    isSurveyor: user.role === "surveyor",
+    formatStockDate,
+    stockDateCols: STOCK_DATE_COLS,
+    adminEditCols: isAdmin(user) ? [...ADMIN_EDIT_STOCK_COLS] : [],
+  });
+  res.json({
+    ok: true,
+    html,
+    page: tabModel.page.page,
+    pageCount: tabModel.page.pageCount,
+    pageSize: tabModel.page.pageSize,
+    from: tabModel.page.from,
+    to: tabModel.page.to,
+    matched: tabModel.page.matched,
+    total: tabModel.page.total,
+    sort: tabModel.page.sort,
+    dir: tabModel.page.dir,
+    label: tabModel.label,
+    pagerLabel: tabModel.pagerLabel,
+  });
+});
+
 stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Response) => {
   const user = req.user!;
   const accessIds = await userAccessIds(user.id);
@@ -166,6 +237,21 @@ stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Res
     }
     data.omitAsset = req.body.omitAsset === true || req.body.omitAsset === "true";
   }
+  if (
+    typeof req.body.epcRequired === "boolean" ||
+    req.body.epcRequired === "true" ||
+    req.body.epcRequired === "false"
+  ) {
+    if (!isAdmin(user)) {
+      res.status(403).json({ error: "Admin only." });
+      return;
+    }
+    if (asset.kind !== "dwelling") {
+      res.status(400).json({ error: "EPC Req. is only on Dwellings." });
+      return;
+    }
+    data.epcRequired = req.body.epcRequired === true || req.body.epcRequired === "true";
+  }
   for (const col of ADMIN_EDIT_STOCK_COLS) {
     if (typeof req.body[col] !== "string") continue;
     if (!isAdmin(user)) {
@@ -180,5 +266,5 @@ stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Res
     data[col] = STOCK_DATE_COLS.has(col) ? formatStockDate(raw) : raw;
   }
   const updated = await prisma.asset.update({ where: { id: asset.id }, data });
-  res.json({ ok: true, asset: updated });
+  res.json({ ok: true, asset: applyEpcSurveyType(updated, project.typeConditionEpc) });
 });

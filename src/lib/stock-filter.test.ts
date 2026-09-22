@@ -86,24 +86,17 @@ describe("Visit import → Full Survey Asset Status filter", () => {
   });
 
   it("Asset Status cells expose data-col and data-value so the grid filter hits the right field", () => {
-    const template = readFileSync(join(root, "views/partials/stock-table.ejs"), "utf8");
+    const table = readFileSync(join(root, "views/partials/stock-table.ejs"), "utf8");
+    const rowTemplate = readFileSync(join(root, "views/partials/stock-rows.ejs"), "utf8");
+    const template = table + "\n" + rowTemplate;
     assert.match(template, /data-col="assetStatus"/);
     assert.match(template, /data-value="<%= r\.assetStatus %>"/);
     const script = readFileSync(join(root, "public/js/app.js"), "utf8");
-    assert.match(script, /data-col=/);
-    assert.match(script, /data-value/);
-    assert.doesNotMatch(
-      script,
-      /comment\s*\n?\s*\? comment\.value\s*\n?\s*: tr\.textContent/
-    );
-    const cellFn = script.slice(script.indexOf("function stockFilterCellText"), script.indexOf("function applyStockFilters"));
-    assert.doesNotMatch(cellFn, /tr\.textContent/);
-    const omitAt = cellFn.indexOf('key === "omitAsset"');
-    const commentAt = cellFn.indexOf('key === "siteComments"');
-    const colAt = cellFn.indexOf("data-col=");
-    assert.ok(omitAt >= 0 && omitAt < colAt);
-    assert.ok(commentAt >= 0 && commentAt < colAt);
-    assert.match(script, /__blank__/);
+    assert.match(script, /\/stock\/page/);
+    assert.match(script, /appUrl\(/);
+    assert.match(script, /f_" \+ el\.dataset\.filter/);
+    assert.match(script, /data-clear-filters/);
+    assert.match(script, /filter-active/);
     assert.match(template, /data-col="siteComments"/);
     assert.match(template, /data-col="omitAsset"/);
     assert.match(template, /data-comment=/);
@@ -113,7 +106,10 @@ describe("Visit import → Full Survey Asset Status filter", () => {
   });
 
   it("binds every stock column to its own field on Dwellings, Blocks and Garages", () => {
-    const template = readFileSync(join(root, "views/partials/stock-table.ejs"), "utf8");
+    const template =
+      readFileSync(join(root, "views/partials/stock-table.ejs"), "utf8") +
+      "\n" +
+      readFileSync(join(root, "views/partials/stock-rows.ejs"), "utf8");
     for (const kind of ["dwelling", "block", "garage"] as const) {
       for (const col of stockColumns(kind)) {
         if (col === "siteComments" || col === "omitAsset" || col === "assetStatus") continue;

@@ -126,7 +126,7 @@ loaderRouter.post("/projects/:id/stock-refresh", upload.single("file"), async (r
   }
   let rows;
   try {
-    rows = parseUprnWorkbook(req.file.buffer, req.file.originalname);
+    rows = parseUprnWorkbook(req.file.buffer, req.file.originalname, { allSheets: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     res.redirect(`/projects/${project.id}?tab=loader&error=` + encodeURIComponent("Stocklist parse failed: " + msg));

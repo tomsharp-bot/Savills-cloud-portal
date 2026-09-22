@@ -1,5 +1,6 @@
 import type { Asset, Project } from "@prisma/client";
 import { isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
+import { applyEpcSurveyType, isEpcSurveyType } from "./epc-survey.js";
 import { formatProjectTarget } from "./project-target.js";
 
 export type KpiStack = {
@@ -17,15 +18,25 @@ function completed(assets: Asset[]) {
 }
 
 export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
-  const dwellings = assets.filter((a) => a.kind === "dwelling");
-  const blocks = assets.filter((a) => a.kind === "block");
-  const garages = assets.filter((a) => a.kind === "garage");
+  const view = assets.map((asset) => applyEpcSurveyType(asset, !!project.typeConditionEpc));
+  const dwellings = view.filter((a) => a.kind === "dwelling");
+  const blocks = view.filter((a) => a.kind === "block");
+  const garages = view.filter((a) => a.kind === "garage");
   const showDwellings = !!(project.typeConditionOnly || project.typeConditionEpc);
 
   const dwellCounted = counted(dwellings);
   const blockCounted = counted(blocks);
   const garageCounted = counted(garages);
-  const full = dwellCounted.filter((a) => isFullSurveyStatus(a.assetStatus)).length;
+  const fullAssets = dwellCounted.filter((a) => isFullSurveyStatus(a.assetStatus));
+  const fullCondition = fullAssets.filter((a) => !isEpcSurveyType(a.surveyType)).length;
+  const fullEpc = fullAssets.filter((a) => isEpcSurveyType(a.surveyType)).length;
+  const full = fullCondition + fullEpc;
+  const fullTiles = project.typeConditionEpc
+    ? [
+        { label: "Full Surveys Completed: Condition Only", value: String(fullCondition) },
+        { label: "Full Surveys Completed: Condition + EPC", value: String(fullEpc) },
+      ]
+    : [{ label: "Full Surveys Completed", value: String(full) }];
   const ext = dwellCounted.filter((a) => isExtOnlyStatus(a.assetStatus)).length;
   const remaining = Math.max(0, dwellCounted.length - full - ext);
   const extPending = dwellCounted.filter(
@@ -42,7 +53,7 @@ export function buildSummary(project: Project, assets: Asset[]): KpiStack[] {
       tiles: [
         { label: "Total Dwellings", value: String(dwellCounted.length) },
         { label: "Project Target", value: formatProjectTarget(project) },
-        { label: "Full Surveys Completed", value: String(full) },
+        ...fullTiles,
         { label: "Full Surveys Remaining", value: String(remaining) },
         { label: "External-only Completed", value: String(ext) },
         { label: "External-only Remaining", value: String(extPending) },

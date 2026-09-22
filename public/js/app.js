@@ -79,89 +79,185 @@
     return res.json();
   }
 
-  document.querySelectorAll("input[data-comment]").forEach((inp) => {
-    inp.addEventListener("change", () => {
-      const table = inp.closest("table");
-      const projectId = table && table.dataset.project;
+  function stockTableFrom(el) {
+    return el && el.closest ? el.closest("table[data-stock]") : null;
+  }
+
+  document.addEventListener("change", async (e) => {
+    const inp = e.target;
+    if (!inp || !inp.closest) return;
+    const table = stockTableFrom(inp);
+    if (!table) return;
+    const projectId = table.dataset.project;
+    if (inp.matches("input[data-comment]")) {
       patchAsset(projectId, inp.dataset.comment, { siteComments: inp.value });
-    });
-  });
-  document.querySelectorAll("input[data-omit]").forEach((inp) => {
-    inp.addEventListener("change", async () => {
-      const table = inp.closest("table");
-      const projectId = table && table.dataset.project;
-      const tr = inp.closest("tr");
-      const ok = await patchAsset(projectId, inp.dataset.omit, { omitAsset: inp.checked });
-      if (ok && tr) {
-        tr.classList.toggle("row-omitted", inp.checked);
-        tr.dataset.omit = inp.checked ? "1" : "0";
-        const omitCell = tr.querySelector('[data-col="omitAsset"]');
-        if (omitCell) omitCell.setAttribute("data-value", inp.checked ? "omitted" : "included");
-      }
-    });
-  });
-  document.querySelectorAll("input[data-admin-field]").forEach((inp) => {
-    inp.addEventListener("change", () => {
-      const table = inp.closest("table");
-      const projectId = table && table.dataset.project;
+      return;
+    }
+    if (inp.matches("input[data-admin-field]")) {
       const body = {};
       body[inp.dataset.adminField] = inp.value;
       patchAsset(projectId, inp.dataset.asset, body);
-    });
+      return;
+    }
+    if (inp.matches("input[data-omit]")) {
+      const ok = await patchAsset(projectId, inp.dataset.omit, { omitAsset: inp.checked });
+      if (ok) loadStockPage(table, { page: table.dataset.page || "1" });
+      return;
+    }
+    if (inp.matches("input[data-epc]")) {
+      const ok = await patchAsset(projectId, inp.dataset.epc, { epcRequired: inp.checked });
+      if (ok) loadStockPage(table, { page: table.dataset.page || "1" });
+    }
   });
 
-  function stockFilterCellText(tr, key) {
-    if (key === "omitAsset") return tr.dataset.omit === "1" ? "omitted" : "included";
-    if (key === "siteComments") {
-      const comment = tr.querySelector("[data-comment]");
-      if (comment) return comment.value || "";
-    }
-    const fieldInp = tr.querySelector('[data-admin-field="' + key + '"]');
-    if (fieldInp) return fieldInp.value || "";
-    const cell = tr.querySelector('[data-col="' + key + '"]');
-    if (cell) {
-      if (cell.getAttribute("data-value") != null) return cell.getAttribute("data-value") || "";
-      return cell.textContent || "";
-    }
-    return "";
+  function markFilterActive(el) {
+    el.classList.toggle("filter-active", String(el.value || "").trim() !== "");
   }
 
-  function applyStockFilters(table) {
+  function stockQuery(table, overrides) {
     const kind = table.dataset.stock;
-    const filters = [];
+    const params = new URLSearchParams();
+    params.set("kind", kind);
+    params.set("page", String((overrides && overrides.page) || table.dataset.page || "1"));
+    params.set("sort", (overrides && overrides.sort) || table.dataset.sort || "uprn");
+    params.set("dir", (overrides && overrides.dir) || table.dataset.dir || "asc");
     document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
-      filters.push({
-        key: el.dataset.filter,
-        q: (el.value || "").trim().toLowerCase(),
-        exact: el.tagName === "SELECT",
-      });
+      markFilterActive(el);
+      const value = String(el.value || "").trim();
+      if (value) params.set("f_" + el.dataset.filter, value);
     });
-    const rows = [...table.tBodies[0].rows].filter((r) => r.dataset.asset);
-    let shown = 0;
-    rows.forEach((tr) => {
-      let ok = true;
-      filters.forEach((f) => {
-        if (!f.q) return;
-        const text = String(stockFilterCellText(tr, f.key) || "").trim().toLowerCase();
-        if (f.exact && f.q === "__blank__") {
-          if (text !== "") ok = false;
-        } else if (f.exact) {
-          if (text !== f.q) ok = false;
-        } else if (!text.includes(f.q)) {
-          ok = false;
-        }
-      });
-      tr.style.display = ok ? "" : "none";
-      if (ok) shown += 1;
-    });
-    const count = document.querySelector('[data-stock-count="' + kind + '"]');
-    if (count) count.textContent = shown + " of " + rows.length + " Assets Displayed";
+    return params;
   }
+
+  const stockLoads = new WeakMap();
+
+  function paintSort(table, sort, dir) {
+    table.querySelectorAll("[data-sort-col]").forEach((btn) => {
+      const on = btn.dataset.sortCol === sort;
+      btn.classList.toggle("active", on);
+      const label = btn.dataset.sortLabel || btn.textContent || "";
+      btn.textContent = label + (on ? (dir === "asc" ? " ↑" : " ↓") : "");
+    });
+  }
+
+  function syncStockUrl(table, params) {
+    const url = new URL(window.location.href);
+    const kind = table.dataset.stock;
+    const tab = kind === "block" ? "blocks" : kind === "garage" ? "garages" : "dwellings";
+    url.searchParams.set("tab", tab);
+    [...url.searchParams.keys()].forEach((key) => {
+      if (key === "page" || key === "sort" || key === "dir" || key.indexOf("f_") === 0) url.searchParams.delete(key);
+    });
+    params.forEach((value, key) => {
+      if (key !== "kind") url.searchParams.set(key, value);
+    });
+    history.replaceState(null, "", url);
+  }
+
+  async function loadStockPage(table, overrides) {
+    const projectId = table.dataset.project;
+    const params = stockQuery(table, overrides);
+    const seq = (stockLoads.get(table) || 0) + 1;
+    stockLoads.set(table, seq);
+    table.setAttribute("aria-busy", "true");
+    let data = null;
+    try {
+      const res = await fetch(appUrl("/projects/" + projectId + "/stock/page?" + params.toString()), {
+        headers: { Accept: "application/json" },
+      });
+      data = await res.json().catch(() => null);
+      if (stockLoads.get(table) !== seq) return;
+      if (!res.ok || !data) {
+        const count = document.querySelector('[data-stock-count="' + table.dataset.stock + '"]');
+        if (count) count.textContent = (data && data.error) || "Could not load stock rows.";
+        return;
+      }
+    } catch (err) {
+      if (stockLoads.get(table) !== seq) return;
+      const count = document.querySelector('[data-stock-count="' + table.dataset.stock + '"]');
+      if (count) count.textContent = "Could not load stock rows.";
+      return;
+    } finally {
+      if (stockLoads.get(table) === seq) table.removeAttribute("aria-busy");
+    }
+    const tbody = table.tBodies[0];
+    if (tbody) tbody.innerHTML = data.html || "";
+    table.dataset.page = String(data.page);
+    table.dataset.sort = data.sort || "uprn";
+    table.dataset.dir = data.dir || "asc";
+    const kind = table.dataset.stock;
+    const count = document.querySelector('[data-stock-count="' + kind + '"]');
+    if (count) count.textContent = data.label || "";
+    const pager = document.querySelector('[data-stock-pager="' + kind + '"]');
+    if (pager) {
+      const prev = pager.querySelector("[data-stock-page-prev]");
+      const next = pager.querySelector("[data-stock-page-next]");
+      const label = pager.querySelector("[data-stock-page-label]");
+      if (label) label.textContent = data.pagerLabel || "";
+      if (prev) prev.disabled = data.page <= 1;
+      if (next) next.disabled = data.page >= data.pageCount;
+    }
+    paintSort(table, table.dataset.sort, table.dataset.dir);
+    syncStockUrl(table, params);
+  }
+
   document.querySelectorAll("table[data-stock]").forEach((table) => {
     const kind = table.dataset.stock;
     document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
-      el.addEventListener("input", () => applyStockFilters(table));
-      el.addEventListener("change", () => applyStockFilters(table));
+      markFilterActive(el);
+      let timer = 0;
+      const run = () => loadStockPage(table, { page: "1" });
+      el.addEventListener("input", () => {
+        markFilterActive(el);
+        if (el.tagName === "SELECT") return;
+        clearTimeout(timer);
+        timer = setTimeout(run, 250);
+      });
+      el.addEventListener("change", () => {
+        markFilterActive(el);
+        clearTimeout(timer);
+        run();
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-clear-filters]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const kind = btn.getAttribute("data-clear-filters");
+      document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
+        el.value = "";
+        markFilterActive(el);
+      });
+      const table = document.querySelector('table[data-stock="' + kind + '"]');
+      if (table) loadStockPage(table, { page: "1" });
+    });
+  });
+
+  document.querySelectorAll("[data-stock-page-prev]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pager = btn.closest("[data-stock-pager]");
+      const table = document.querySelector('table[data-stock="' + (pager && pager.getAttribute("data-stock-pager")) + '"]');
+      if (!table || btn.disabled) return;
+      const page = Math.max(1, Number(table.dataset.page || 1) - 1);
+      loadStockPage(table, { page: String(page) });
+    });
+  });
+  document.querySelectorAll("[data-stock-page-next]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pager = btn.closest("[data-stock-pager]");
+      const table = document.querySelector('table[data-stock="' + (pager && pager.getAttribute("data-stock-pager")) + '"]');
+      if (!table || btn.disabled) return;
+      const page = Number(table.dataset.page || 1) + 1;
+      loadStockPage(table, { page: String(page) });
+    });
+  });
+  document.querySelectorAll("table[data-stock] [data-sort-col]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const table = stockTableFrom(btn);
+      if (!table) return;
+      const col = btn.dataset.sortCol;
+      const dir = table.dataset.sort === col && table.dataset.dir !== "desc" ? "desc" : "asc";
+      loadStockPage(table, { page: "1", sort: col, dir: dir });
     });
   });
 

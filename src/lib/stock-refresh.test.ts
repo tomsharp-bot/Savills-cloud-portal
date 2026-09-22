@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { Asset, Project } from "@prisma/client";
+import { buildSummary } from "./summary.js";
 import {
   OMITTED_SURVEYED_NOTE,
   appendSurveyedNote,
@@ -239,6 +241,60 @@ describe("Stocklist Auto routing to Dwellings / Blocks / Garages", () => {
     );
     assert.equal(kindForStockRow({ Archetype: "MTVH Blocks" }), "block");
     assert.equal(kindForStockRow({ Archetype: "MTVH Blocks" }, "dwelling"), "dwelling");
+  });
+
+  it("sends Block to Blocks and House/Flat/Bungalow to Dwellings so Summary counts both", () => {
+    const plan = planStocklistRefresh(
+      [],
+      [
+        { UPRN: "B1", Archetype: "Block", "Survey Design": "Leeds Blocks" },
+        { UPRN: "H1", Archetype: "House", "Survey Design": "Leeds Blocks" },
+        { UPRN: "F1", Archetype: "Flat", "Survey Type": "Blocks" },
+        { UPRN: "U1", Archetype: "Bungalow" },
+        { UPRN: "U2", "Dwelling Type": "Bung." },
+        { UPRN: "M1", Archetype: "Maisonette" },
+        { UPRN: "S1", Archetype: "Studio" },
+        { UPRN: "C1", "Asset Type": "Commercial Unit" },
+      ],
+      false,
+      "auto"
+    );
+    const kindByUprn = Object.fromEntries(plan.added.map((row) => [row.uprn, row.kind]));
+    assert.equal(kindByUprn.B1, "block");
+    assert.equal(kindByUprn.H1, "dwelling");
+    assert.equal(kindByUprn.F1, "dwelling");
+    assert.equal(kindByUprn.U1, "dwelling");
+    assert.equal(kindByUprn.U2, "dwelling");
+    assert.equal(kindByUprn.M1, "dwelling");
+    assert.equal(kindByUprn.S1, "dwelling");
+    assert.notEqual(kindByUprn.C1, "block");
+    assert.equal(kindByUprn.C1, "dwelling");
+
+    const assets = plan.added.map(
+      (row) =>
+        ({
+          kind: row.kind,
+          uprn: row.uprn,
+          omitAsset: false,
+          assetStatus: "No Visit",
+          surveyType: "",
+          external: "",
+          epcRequired: false,
+        }) as Asset
+    );
+    const proj = {
+      typeConditionOnly: true,
+      typeConditionEpc: false,
+      typeBlocks: true,
+      typeGarages: false,
+      projectTargetValue: 75,
+      projectTargetUnit: "percent",
+    } as Project;
+    const summary = buildSummary(proj, assets);
+    const dwell = summary.find((stack) => stack.key === "dwellings");
+    const blocks = summary.find((stack) => stack.key === "blocks");
+    assert.equal(dwell?.tiles.find((tile) => tile.label === "Total Dwellings")?.value, "7");
+    assert.equal(blocks?.tiles.find((tile) => tile.label === "Total Blocks")?.value, "1");
   });
 });
 

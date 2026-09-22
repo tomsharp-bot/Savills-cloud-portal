@@ -22,6 +22,8 @@ import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archiv
 import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { buildSampleAnalysis } from "../lib/sample-analysis.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
+import { loadStockRows } from "../lib/stock-query.js";
+import { assembleStockTab, stockKindFromTab, STOCK_PAGE_SIZE } from "../lib/stock-page.js";
 
 export const projectsRouter = Router();
 
@@ -248,32 +250,23 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     }
   }
 
-  const assets = await prisma.asset.findMany({
-    where: { projectId: project.id },
-    orderBy: [{ kind: "asc" }, { uprn: "asc" }],
-  });
-  const surveyors = await prisma.user.findMany({
-    where: { role: "surveyor" },
-    select: { id: true, name: true, initials: true, agency: true },
-  });
-  const agencyByInitials = new Map(
-    surveyors.filter((s) => s.initials).map((s) => [s.initials!.toUpperCase(), s.agency || ""])
-  );
+  const stockKind = stockKindFromTab(tab);
+  const needsAssets = tab === "summary" || tab === "sample-analysis";
+  const assets = needsAssets
+    ? await prisma.asset.findMany({
+        where: { projectId: project.id },
+        orderBy: [{ kind: "asc" }, { uprn: "asc" }],
+      })
+    : [];
+  const surveyors =
+    tab === "sample-analysis"
+      ? await prisma.user.findMany({
+          where: { role: "surveyor" },
+          select: { id: true, name: true, initials: true, agency: true },
+        })
+      : [];
 
-  const withAgency = assets.map((a) => {
-    const tokens = [a.surveyedBy, a.surveyor].map((x) => String(x || "").trim()).filter(Boolean);
-    let agency = "";
-    for (const token of tokens) {
-      const hit = agencyByInitials.get(token.toUpperCase());
-      if (hit) {
-        agency = hit;
-        break;
-      }
-    }
-    return { ...a, agency };
-  });
-
-  const summary = buildSummary(project, assets);
+  const summary = needsAssets ? buildSummary(project, assets) : [];
   let sample: ReturnType<typeof buildSampleAnalysis> & { canEdit: boolean } | null = null;
   if (tab === "sample-analysis") {
     const [patchMeta, accessRows] = await Promise.all([
@@ -329,6 +322,33 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     req.session.flashRefresh = undefined;
   }
 
+  const includeEpcRequired = !!project.typeConditionEpc;
+  const stockColsByKind = {
+    dwelling: stockColumns("dwelling", { includeAdminOnly: isAdmin(user), includeEpcRequired }),
+    block: stockColumns("block", { includeAdminOnly: isAdmin(user) }),
+    garage: stockColumns("garage", { includeAdminOnly: isAdmin(user) }),
+  };
+  let stockRows: Awaited<ReturnType<typeof loadStockRows>> = [];
+  let stockFilters: Record<string, string> = {};
+  let stockFilterOptions: Record<string, string[]> = {};
+  let stockPage = { page: 1, pageCount: 1, pageSize: STOCK_PAGE_SIZE, matched: 0, total: 0, from: 0, to: 0 };
+  let stockSort = "uprn";
+  let stockDir: "asc" | "desc" = "asc";
+  let stockLabel = "0 of 0 Assets Displayed";
+  let stockPagerText = "Page 1 of 1";
+  if (stockKind) {
+    const prepared = await loadStockRows(project.id, stockKind, includeEpcRequired);
+    const tabModel = assembleStockTab(prepared, stockColsByKind[stockKind], req.query as Record<string, unknown>);
+    stockRows = tabModel.page.rows;
+    stockFilters = tabModel.listQuery.filters;
+    stockFilterOptions = tabModel.filterOptions;
+    stockPage = tabModel.page;
+    stockSort = tabModel.page.sort;
+    stockDir = tabModel.page.dir;
+    stockLabel = tabModel.label;
+    stockPagerText = tabModel.pagerLabel;
+  }
+
   res.render("project", {
     title: project.name,
     user,
@@ -336,10 +356,17 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     tab,
     typesLine: includedTypeLabels(project),
     summary,
-    assets: withAgency,
-    dwellings: withAgency.filter((a) => a.kind === "dwelling"),
-    blocks: withAgency.filter((a) => a.kind === "block"),
-    garages: withAgency.filter((a) => a.kind === "garage"),
+    stockKind,
+    stockRows,
+    stockFilters,
+    stockFilterOptions,
+    stockPage,
+    stockSort,
+    stockDir,
+    stockLabel,
+    stockPagerLabel: stockPagerText,
+    stockPageSize: STOCK_PAGE_SIZE,
+    stockFiltered: stockPage.total > 0 && stockPage.matched === 0,
     completions,
     visitLogs,
     loaderHistory,
@@ -351,13 +378,9 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     formatBytes,
     stockLabels: STOCK_LABELS,
     stockSelectCols: STOCK_SELECT_COLS,
-    assetStatusOptions: assetStatusFilterOptions(withAgency.map((a) => a.assetStatus)),
+    assetStatusOptions: stockFilterOptions.assetStatus || assetStatusFilterOptions(),
     stockDateCols: STOCK_DATE_COLS,
-    stockColsByKind: {
-      dwelling: stockColumns("dwelling", { includeAdminOnly: isAdmin(user) }),
-      block: stockColumns("block", { includeAdminOnly: isAdmin(user) }),
-      garage: stockColumns("garage", { includeAdminOnly: isAdmin(user) }),
-    },
+    stockColsByKind,
     adminEditCols: isAdmin(user) ? [...ADMIN_EDIT_STOCK_COLS] : [],
     sample,
     notice: req.query.notice || "",
