@@ -82,17 +82,25 @@ describe("HHSRS Reporter projectDraft", () => {
       [
         "Hi all,",
         "",
-        "One of our surveyors has visited 1 high street, EX1 1AA.",
-        "The light fitting in the lounge is damaged. We have recorded this as High for Electrical Hazards on the HHSRS.",
+        "• Address: 1 high street, EX1 1AA",
+        "• UPRN: 100123",
+        "• Hazard: Electrical Hazards",
+        "• Rating: High",
+        "• Site notes: The light fitting in the lounge is damaged.",
+        "• Survey date: 2026-09-20",
       ].join("\n")
     );
+    assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
+    assert.doesNotMatch(draft.body, /on the HHSRS/);
   });
 
-  it("keeps BPHA intro without photo wording even when photos are present", () => {
+  it("keeps BPHA subject and omits the surveyor-visit intro", () => {
     const draft = projectDraft({ ...base, project: "BPHA East 2026" }, ["a"]);
     assert.equal(draft.subject, "BPHA - HHSRS – 1 high street, EX1 1AA");
-    assert.match(draft.body, /One of our surveyors has visited 1 high street, EX1 1AA\./);
+    assert.match(draft.body, /• Site notes: The light fitting in the lounge is damaged\./);
+    assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /Attached is a photo/);
+    assert.doesNotMatch(draft.body, /on the HHSRS/);
   });
 
   it("builds an Onward CAT1 draft when required fields are present", () => {
@@ -112,8 +120,10 @@ describe("HHSRS Reporter projectDraft", () => {
       draft.subject,
       "Onward 2026 – HHSRS CAT1 (Electrical) – UPRN 100123 - 1 high street, EX1 1AA"
     );
-    assert.match(draft.body, /Onward Call Reference: CR-99/);
-    assert.match(draft.body, /Survey date: 2026-09-20/);
+    assert.match(draft.body, /• Onward call reference: CR-99/);
+    assert.match(draft.body, /• Survey date: 2026-09-20/);
+    assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
+    assert.doesNotMatch(draft.body, /on the HHSRS/);
   });
 });
 
@@ -147,8 +157,10 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       clientDescription: "There is an exposed wire on the hallway ceiling.",
       photoCount: 2,
     });
-    assert.match(draft.body, /Attached are photos taken from 1 High Street, EX1 1AA\./);
-    assert.match(draft.body, /There is an exposed wire on the hallway ceiling\. We have recorded this as Medium/);
+    assert.match(draft.body, /• Site notes: There is an exposed wire on the hallway ceiling\./);
+    assert.match(draft.body, /• Rating: Medium/);
+    assert.doesNotMatch(draft.body, /Attached are photos/);
+    assert.doesNotMatch(draft.body, /on the HHSRS/);
   });
 });
 

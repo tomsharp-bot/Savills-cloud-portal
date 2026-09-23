@@ -103,8 +103,11 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(unchanged.postcode, "EX1 1AA");
     const draft = draftEmailFromReviewFields(unchanged);
     assert.match(draft.subject, /Demo Housing - HHSRS/);
-    assert.match(draft.body, /The light fitting in the lounge is damaged/);
-    assert.match(draft.body, /Attached are photos taken from/);
+    assert.match(draft.body, /• Site notes: The light fitting in the lounge is damaged/);
+    assert.match(draft.body, /• Hazard: Electrical Hazards/);
+    assert.doesNotMatch(draft.body, /Attached are photos/);
+    assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
+    assert.doesNotMatch(draft.body, /on the HHSRS/);
 
     const edited = mergeReviewDraftFields(row, {
       notes: "Loose socket in the kitchen.",

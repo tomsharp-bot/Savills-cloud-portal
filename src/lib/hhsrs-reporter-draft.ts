@@ -745,49 +745,55 @@ export function baseProjectDraft(data: DraftCase, photos: string[]): { subject: 
     }
   }
 
-  let intro =
-    (photos.length === 1
-      ? "Attached is a photo taken from "
-      : photos.length > 1
-        ? "Attached are photos taken from "
-        : "One of our surveyors has visited ") +
-    (photos.length ? address + "." : address + ".");
-  if (template === "BPHA") intro = "One of our surveyors has visited " + address + ".";
-
-  let lines: string[] = [
-    "Hi all,",
-    "",
-    intro,
-    description + ` We have recorded this as ${rating} for ${hazard} on the HHSRS.`,
-  ];
-  if (template === "Onward") {
-    const iso = data.surveyDate!.slice(0, 10);
-    lines.push("", "Survey date: " + iso);
-  }
-  const call = callUpdate(data);
-  if (call) lines.push(call);
-
-  if (template === "Vico Homes") {
-    lines = ["Hi all,", "", intro, description];
-    if (data.suspectedCause && data.includeCause !== false) lines.push(causeSentence(data.suspectedCause));
-    if ((data.vulnerabilities || "").trim()) lines.push(sentence(data.vulnerabilities || ""));
-    lines.push(`We have recorded this as ${rating} for ${hazard} on the HHSRS.`);
-    if (data.escalation) {
-      const a = "aeiou".includes(data.escalation[0].toLowerCase()) ? "an " : "a ";
-      lines.push("We have categorised this as " + a + data.escalation + " hazard.");
-    }
-    if (call) lines.push(call);
-  }
-  if (template !== "Vico Homes" && data.suspectedCause && data.includeCause !== false) {
-    lines.push(causeSentence(data.suspectedCause));
-  }
-  if (template !== "Vico Homes" && includeVulnerabilities(data) && (data.vulnerabilities || "").trim()) {
-    lines.push("", "Resident vulnerabilities: " + sentence(data.vulnerabilities || ""));
-  }
-  if ((data.workOrder || "").trim()) lines.push("Work order number: " + data.workOrder!.trim());
-  if (template === "A2Dominion" && (data.uprn || "").trim()) lines.push("UPRN: " + data.uprn!.trim());
+  callUpdate(data);
+  void photos;
+  const lines = ["Hi all,", "", ...bulletBodyLines({ ...data, hazard, rating, description, address })];
 
   return { subject, body: lines.join("\n") };
+}
+
+function bullet(label: string, value: string): string {
+  return `• ${label}: ${value.replace(/\s+/g, " ").trim()}`;
+}
+
+/** Short client body. Subject, To, and Cc stay on the project templates. */
+function bulletBodyLines(data: DraftCase & { description: string; address: string }): string[] {
+  const lines: string[] = [
+    bullet("Address", data.address),
+  ];
+  const uprn = (data.uprn || "").trim();
+  if (uprn) lines.push(bullet("UPRN", uprn));
+  lines.push(bullet("Hazard", data.hazard));
+  lines.push(bullet("Rating", data.rating || ""));
+  lines.push(bullet("Site notes", data.description));
+
+  const reference = (data.callRef || "").trim();
+  if (reference) {
+    const label = templateId(data.project) === "Onward" ? "Onward call reference" : "Call reference";
+    lines.push(bullet(label, reference));
+  }
+  const survey = (data.surveyDate || "").trim();
+  if (survey) lines.push(bullet("Survey date", /^\d{4}-\d{2}-\d{2}/.test(survey) ? survey.slice(0, 10) : survey));
+  if (data.suspectedCause && data.includeCause !== false) {
+    const cause = causeSentence(data.suspectedCause).replace(/^Suspected cause:\s*/i, "").replace(/\.$/, "");
+    if (cause) lines.push(bullet("Cause", cause));
+  }
+  if (includeVulnerabilities(data) && (data.vulnerabilities || "").trim()) {
+    lines.push(bullet("Vulnerabilities", sentence(data.vulnerabilities || "").replace(/\.$/, "")));
+  }
+  if ((data.escalation || "").trim()) lines.push(bullet("Escalation", data.escalation!.trim()));
+  if ((data.workOrder || "").trim()) lines.push(bullet("Work order", data.workOrder!.trim()));
+
+  const onward = templateId(data.project) === "Onward";
+  const outcome = data.callStatus || "";
+  if (outcome === "Completed" && !reference) {
+    const centre = onward ? "the Onward Call Centre" : "the contact centre";
+    lines.push(bullet(onward ? "Onward call" : "Call", `Called ${centre}. No reference supplied.`));
+  } else if (outcome === "Attempted" || outcome === "Not yet called") {
+    const prose = callUpdate(data).replace(/\s*(?:Onward Call Reference|Call reference):.*$/, "").trim();
+    if (prose) lines.push(bullet(onward ? "Onward call" : "Call", prose.replace(/\.$/, "")));
+  }
+  return lines;
 }
 
 function caseFindings(data: DraftCase): DraftCase[] {
@@ -808,19 +814,18 @@ export function projectDraft(data: DraftCase, photos: string[]): { subject: stri
   if (template === "Vico Homes" && findings.some((f) => !f.hazard.includes("Damp"))) {
     subject = subject.replace("HHSRS D&M", "HHSRS");
   }
-  const firstLines = drafts[0].body.split("\n");
-  const lines = firstLines.slice(0, 3);
-  const tail: string[] = [];
-  for (const draft of drafts) {
-    const parts = draft.body.split("\n").slice(3);
-    const end = parts.findIndex((line) => line.includes("on the HHSRS."));
-    if (end < 0) throw new DraftError("Check the hazard wording before combining this email.");
-    lines.push("", ...parts.slice(0, end + 1));
-    for (const line of parts.slice(end + 1)) {
-      if (line.trim() && !tail.includes(line)) tail.push(line);
+  const lines = drafts[0].body.split("\n");
+  const shared = new Set(lines.map((line) => line.trim()).filter(Boolean));
+  for (const draft of drafts.slice(1)) {
+    const finding = draft.body.split("\n").filter((line) => /^• (?:Hazard|Rating|Site notes):/.test(line));
+    if (finding.length) lines.push("", ...finding);
+    for (const line of draft.body.split("\n")) {
+      if (!/^• /.test(line) || /^• (?:Address|UPRN|Hazard|Rating|Site notes):/.test(line)) continue;
+      if (shared.has(line.trim())) continue;
+      shared.add(line.trim());
+      lines.push(line);
     }
   }
-  if (tail.length) lines.push("", ...tail);
   return { subject, body: lines.join("\n") };
 }
 

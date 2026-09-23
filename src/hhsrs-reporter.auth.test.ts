@@ -318,7 +318,7 @@ describe("HHSRS Reporter auth and queue", () => {
     }
   });
 
-  it("generates a BPHA draft that keeps surveyor-visit intro wording", async (t) => {
+  it("generates a BPHA draft as bullets without the surveyor-visit intro", async (t) => {
     if (!dbReady) {
       t.skip("Postgres with seeded users is not available");
       return;
@@ -345,8 +345,9 @@ describe("HHSRS Reporter auth and queue", () => {
       const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /BPHA - HHSRS/);
-      assert.match(page.body, /One of our surveyors has visited/);
-      assert.match(page.body, /There is mould in the cupboard in the hallway/);
+      assert.match(page.body, /• Site notes: There is mould in the cupboard in the hallway/);
+      assert.doesNotMatch(page.body, /One of our surveyors has visited/);
+      assert.doesNotMatch(page.body, /on the HHSRS/);
       assert.match(page.body, /data-extra="calls"/);
     } finally {
       await prisma.hhsrsSiteSubmission.delete({ where: { id: row.id } });
