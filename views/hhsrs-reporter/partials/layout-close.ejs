@@ -3,6 +3,15 @@
     </div><!-- /.app-shell -->
   </div><!-- /.stage -->
 </div><!-- /#screen-app -->
+<div class="alert-toast" id="hhsrs-alert-toast" role="alert" aria-live="assertive" aria-atomic="true">
+  <div class="toast-kicker" id="hhsrs-toast-kicker">New hazard</div>
+  <p class="toast-title" id="hhsrs-toast-title"></p>
+  <p class="toast-body" id="hhsrs-toast-body"></p>
+  <div class="toast-actions">
+    <a class="btn btn-accent btn-sm" id="hhsrs-toast-open" href="#">Review and create</a>
+    <button type="button" class="btn btn-ghost btn-sm" id="hhsrs-toast-dismiss">Dismiss</button>
+  </div>
+</div>
 <script>
   window.HHSRS_REPORTER = {
     base: <%- JSON.stringify(reporterBase) %>,
@@ -14,6 +23,8 @@
         : ((typeof matchedProject !== 'undefined' && matchedProject) ? matchedProject.name : '')
     ) %>,
     mode: <%- JSON.stringify(typeof mode !== 'undefined' ? mode : activeNav) %>,
+    initialPendingIds: <%- JSON.stringify(typeof initialPendingIds !== 'undefined' ? initialPendingIds : null) %>,
+    alertsPollMs: 30000,
     serverDraft: <%- JSON.stringify({
       to: typeof draftTo !== 'undefined' ? draftTo : '',
       cc: typeof draftCc !== 'undefined' ? draftCc : '',
