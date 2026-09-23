@@ -276,8 +276,16 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
     assert.match(form.body, /data-max-file-mb="40"/);
     assert.match(form.body, /Project &amp; visit/);
+    assert.match(form.body, /class="hhsrs-body hhsrs-form-page"/);
+    assert.match(form.body, /class="work-panel"/);
+    assert.match(form.body, /class="panel-top"/);
+    assert.match(form.body, /Housing · Survey reporting/);
+    assert.match(form.body, /<strong>HHSRS Site Reporting<\/strong>/);
+    assert.match(form.body, /class="info-box hazard"/);
     assert.match(form.body, /id="issue-details" hidden/);
     assert.match(form.body, /id="visit-gate-hint"/);
+    assert.doesNotMatch(form.body, /Fill Campion House sample/);
+    assert.doesNotMatch(form.body, /btn-sample/);
     assert.match(form.body, /data-extra="onward"/);
     assert.match(form.body, /data-extra="saxon"/);
     assert.match(form.body, /Category 1 confirmed/);
@@ -307,6 +315,9 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(css.body, /\.hhsrs-btn-secondary/);
     assert.match(css.body, /\.hhsrs-btn-find/);
     assert.match(css.body, /\.match-list/);
+    assert.match(css.body, /--navy-deep:\s*#071522/);
+    assert.match(css.body, /\.hhsrs-form-page \.work-panel/);
+    assert.match(css.body, /\.hhsrs-form-page \.info-box\.hazard/);
 
     const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
     assert.equal(js.status, 200);

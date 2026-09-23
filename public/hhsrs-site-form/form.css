@@ -398,3 +398,251 @@ body.hhsrs-landing {
   border-color: var(--yellow);
   background: #fffceb;
 }
+
+/* New-issue form chrome (v9 mock). Scoped so landing, review, and thanks stay as they are. */
+body.hhsrs-form-page {
+  --navy-deep: #071522;
+  --navy-mid: #12283d;
+  --red: #ce171e;
+  --info: #e8ecef;
+  --panel: #f4f6f8;
+  --radius-panel: 22px;
+  --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.18);
+  background: var(--navy-deep);
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+.hhsrs-form-page .stage {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+}
+.hhsrs-form-page .play-layout {
+  width: min(640px, 100%);
+}
+.hhsrs-form-page .work-panel {
+  background: var(--panel);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+.hhsrs-form-page .panel-top {
+  background: var(--info);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.hhsrs-form-page .panel-top .hhsrs-logo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.hhsrs-form-page .panel-top .hhsrs-logo svg {
+  width: 44px;
+  height: 44px;
+  display: block;
+  border-radius: 8px;
+}
+.hhsrs-form-page .panel-top .brand-text { min-width: 0; }
+.hhsrs-form-page .panel-top .eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hhsrs-form-page .panel-top strong {
+  display: block;
+  font-size: 1.22rem;
+  color: var(--navy);
+  margin-top: 2px;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.hhsrs-form-page .panel-body {
+  padding: 20px 18px 24px;
+}
+.hhsrs-form-page .panel-body h1 {
+  margin: 0 0 6px;
+  color: var(--navy);
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.hhsrs-form-page .hhsrs-lead {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.hhsrs-form-page .info-box {
+  background: var(--info);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 14px 16px;
+  margin: 0 0 14px;
+}
+.hhsrs-form-page .info-box.hazard {
+  background: #dde3e9;
+  border-color: #c8d0d9;
+}
+.hhsrs-form-page .info-box .box-title {
+  margin: 0 0 10px;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hhsrs-form-page .extra-project-label {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--navy);
+}
+.hhsrs-form-page .hhsrs-form label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+.hhsrs-form-page .info-box > label:first-of-type,
+.hhsrs-form-page .info-box .field-row > div > label:first-child {
+  margin-top: 0;
+}
+.hhsrs-form-page .info-box > .field-row + label:first-of-type,
+.hhsrs-form-page #extra-box > label[for="otherDetails"] {
+  margin-top: 12px;
+}
+.hhsrs-form-page .hhsrs-form label.hhsrs-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.hhsrs-form-page .hhsrs-form label.hhsrs-file-btn {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: inherit;
+  font-weight: 700;
+  color: #fff;
+  margin: 8px 0 0 !important;
+}
+.hhsrs-form-page .hhsrs-form input[type=text],
+.hhsrs-form-page .hhsrs-form input[type=date],
+.hhsrs-form-page .hhsrs-form select,
+.hhsrs-form-page .hhsrs-form textarea {
+  border-radius: 10px;
+  min-height: 48px;
+  padding: 12px;
+}
+.hhsrs-form-page .field-row { gap: 10px; }
+.hhsrs-form-page .hhsrs-photos {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  background: transparent;
+}
+.hhsrs-form-page .hhsrs-photos .optional {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.hhsrs-form-page .hhsrs-photos .hhsrs-hint { margin: 0 0 10px; font-size: 0.9rem; }
+.hhsrs-form-page .manual-hint { margin: 14px 0 0; }
+.hhsrs-form-page .photo-grid { gap: 10px; margin: 8px 0; }
+.hhsrs-form-page .hhsrs-btn {
+  border-radius: 12px;
+  min-height: 52px;
+  margin: 0 0 10px;
+}
+.hhsrs-form-page .hhsrs-btn-primary {
+  background: var(--yellow);
+  color: var(--navy);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+}
+.hhsrs-form-page .hhsrs-btn-secondary {
+  background: #fff;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.hhsrs-form-page .photo-card .photo-remove {
+  width: calc(100% - 16px);
+}
+.hhsrs-form-page .actions {
+  margin-top: 6px;
+  padding-top: 4px;
+}
+.hhsrs-form-page .find-row {
+  align-items: end;
+  margin-top: 12px;
+}
+.hhsrs-form-page .find-row .hhsrs-hint {
+  margin: 0;
+  align-self: center;
+  font-size: 0.9rem;
+}
+.hhsrs-form-page .hhsrs-btn-find {
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.hhsrs-form-page .hhsrs-btn-find:hover { background: var(--navy-mid); filter: none; }
+.hhsrs-form-page .find-status { font-size: 0.85rem; }
+.hhsrs-form-page .match-list button { font-size: 0.9rem; }
+.hhsrs-form-page .form-rest[hidden],
+.hhsrs-form-page .gate-hint[hidden],
+.hhsrs-form-page .project-extra[hidden] {
+  display: none !important;
+}
+.hhsrs-form-page .form-rest.is-opening .info-box {
+  animation: hhsrs-drop-in 0.28s ease-out;
+}
+@keyframes hhsrs-drop-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hhsrs-form-page .gate-hint {
+  margin: 0 0 4px;
+  padding: 12px 14px;
+  background: #eef2f7;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+@media (max-width: 430px) {
+  .hhsrs-form-page .panel-top { padding: 14px 14px; }
+  .hhsrs-form-page .panel-top strong { font-size: 1.05rem; }
+  .hhsrs-form-page .panel-body { padding: 16px 14px 20px; }
+  .hhsrs-form-page .find-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .hhsrs-form-page .hhsrs-btn-find { width: 100%; }
+}
