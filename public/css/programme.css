@@ -300,6 +300,7 @@
   user-select: none;
 }
 .programme .cell.empty { background: #fff; font-weight: 400; color: transparent; cursor: cell; }
+.programme .cell.is-selected { outline: 2px solid var(--navy); outline-offset: -2px; box-shadow: inset 0 0 0 1px #fff; }
 .programme .cell.dragging { opacity: 0.45; outline: 2px dashed var(--blue); }
 .programme .cell.drop-target { outline: 2px solid var(--gold); outline-offset: -2px; box-shadow: inset 0 0 0 2px rgba(196, 163, 90, 0.35); }
 .programme .cell.paint-preview { outline: 2px solid var(--blue); outline-offset: -2px; filter: brightness(0.97); }

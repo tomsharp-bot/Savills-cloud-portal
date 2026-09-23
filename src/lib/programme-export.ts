@@ -1,5 +1,6 @@
-import * as XLSX from "xlsx";
-import { projectWeeksOnGrid, teamPoolExcludingAdmins } from "./programme.js";
+import ExcelJS from "exceljs";
+import JSZip from "jszip";
+import { approxSurveysOnGrid, projectWeeksOnGrid } from "./programme.js";
 
 const MAX_WEEKS = 200;
 const MAX_PEOPLE = 800;
@@ -9,6 +10,108 @@ const MAX_CELL = 80;
 const MAX_NOTE = 500;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const FONT_NAME = "Aptos";
+const FONT_SIZE = 10;
+const ZOOM = 80;
+
+/** ARGB colours taken from public/css/programme.css and public/css/app.css. */
+const NAVY = "FF0B1F33";
+const WHITE = "FFFFFFFF";
+const TEXT = "FF1C2430";
+const MUTED = "FF5C6B7A";
+const BLUE = "FF1A4B7C";
+const BORDER = "FFD5DDE5";
+const ACTIVE_BG = "FFF0F3F6";
+const SURVEYOR_BG = "FFF7F9FB";
+const ADMIN_SIDE_BG = "FFE8EEF5";
+const ADMIN_NAME_BG = "FFEEF3F8";
+const PROJ_HEADER_BG = "FFFAFBFC";
+
+const GRID: Partial<ExcelJS.Borders> = {
+  top: { style: "thin", color: { argb: BORDER } },
+  left: { style: "thin", color: { argb: BORDER } },
+  bottom: { style: "thin", color: { argb: BORDER } },
+  right: { style: "thin", color: { argb: BORDER } },
+};
+
+type Look = {
+  bg: string;
+  fg: string;
+  bold?: boolean;
+  italic?: boolean;
+  align?: "left" | "center" | "right";
+};
+
+type Paint = { bg: string; fg: string; bold?: boolean; italic?: boolean };
+
+/** Same class names and hex values as the on-screen programme matrix. */
+const PAINT: Record<string, Paint> = {
+  "c-MTVH": { bg: "FFCFE2F3", fg: "FF0B3A5C", bold: true },
+  "c-Onward": { bg: "FFD9EAD3", fg: "FF1E3D1A", bold: true },
+  "c-LFHA": { bg: "FFFCE5CD", fg: "FF6B3F00", bold: true },
+  "c-Vico": { bg: "FFD0E2FF", fg: "FF1A2F6B", bold: true },
+  "c-Cornwall": { bg: "FFEAD1DC", fg: "FF5B2340", bold: true },
+  "c-BPHA": { bg: "FFD9D2E9", fg: "FF3D2A5C", bold: true },
+  "c-A2D": { bg: "FFC9DAF8", fg: "FF1C4587", bold: true },
+  "c-OTHER": { bg: "FFFFF2CC", fg: "FF5C4A00", bold: true },
+  "c-Awaiting": { bg: "FFF4CCCC", fg: "FF660000", bold: true },
+  "c-Holiday": { bg: "FFEEEEEE", fg: "FFC62828", bold: true },
+  "c-Festive": { bg: "FFEEEEEE", fg: "FFC62828", bold: true },
+  "c-note": { bg: "FFF3F3F3", fg: "FF555555", italic: true },
+  "c-Southern": { bg: "FFD0E8D8", fg: "FF1A3D28", bold: true },
+  "c-Flagship": { bg: "FFFDE9D0", fg: "FF6B3F00", bold: true },
+  "c-Radius": { bg: "FFDDE8F7", fg: "FF1C3558", bold: true },
+  "c-Saxon": { bg: "FFE8D9F0", fg: "FF3D2A5C", bold: true },
+  "c-Bristol": { bg: "FFD9F0EE", fg: "FF1A4540", bold: true },
+};
+
+/** Insertion order matches PROJECT_STYLE in public/js/programme.js. */
+const PROJECT_STYLE: { name: string; cls: string }[] = [
+  { name: "MTVH", cls: "c-MTVH" },
+  { name: "Onward", cls: "c-Onward" },
+  { name: "LFHA 2026", cls: "c-LFHA" },
+  { name: "LFHA", cls: "c-LFHA" },
+  { name: "Vico 2026", cls: "c-Vico" },
+  { name: "Vico", cls: "c-Vico" },
+  { name: "Holiday", cls: "c-Holiday" },
+  { name: "Festive Period", cls: "c-Festive" },
+  { name: "OTHER WORK", cls: "c-OTHER" },
+  { name: "Cornwall 2026 Ph2", cls: "c-Cornwall" },
+  { name: "Cornwall", cls: "c-Cornwall" },
+  { name: "BPHA 2026 ACQ", cls: "c-BPHA" },
+  { name: "BPHA ACQ", cls: "c-BPHA" },
+  { name: "A2D Ph4", cls: "c-A2D" },
+  { name: "Awaiting Start", cls: "c-Awaiting" },
+  { name: "Southern Blocks", cls: "c-Southern" },
+  { name: "Flagship", cls: "c-Flagship" },
+  { name: "Radius Ph1", cls: "c-Radius" },
+  { name: "Saxon Weald Ph 4", cls: "c-Saxon" },
+  { name: "Bristol Ph2", cls: "c-Bristol" },
+];
+
+const EXTRA = [
+  "c-MTVH",
+  "c-Onward",
+  "c-LFHA",
+  "c-Vico",
+  "c-Cornwall",
+  "c-BPHA",
+  "c-A2D",
+  "c-Southern",
+  "c-Flagship",
+  "c-Radius",
+  "c-Saxon",
+  "c-Bristol",
+];
+
+const HOLIDAY = /holiday|festive|leave|annual leave|bank holiday/i;
+
+const HEADER: Look = { bg: NAVY, fg: WHITE, bold: true, align: "center" };
+const PROJ_HEADER: Look = { bg: PROJ_HEADER_BG, fg: NAVY, bold: true, align: "left" };
+const PLAIN: Look = { bg: WHITE, fg: TEXT, align: "left" };
+const PLAIN_BOLD: Look = { bg: WHITE, fg: TEXT, bold: true, align: "left" };
+const LEAD: Look = { bg: WHITE, fg: BLUE, bold: true, align: "left" };
 
 export type ProgrammeExportPerson = {
   name: string;
@@ -171,55 +274,152 @@ export function parseProgrammeExport(body: unknown): ProgrammeExportInput | null
   };
 }
 
-export function buildProgrammeWorkbook(input: ProgrammeExportInput, now = new Date()): ProgrammeWorkbook {
+/** Mirrors classForName() in public/js/programme.js. */
+function classForName(name: string): string {
+  const exact = PROJECT_STYLE.find((item) => item.name === name);
+  if (exact) return exact.cls;
+  if (HOLIDAY.test(name)) return "c-Holiday";
+  if (/^A2Dominion\b/i.test(name)) return "c-A2D";
+  for (const item of PROJECT_STYLE) {
+    if (name.startsWith(item.name) || item.name.startsWith(name)) return item.cls;
+  }
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 33 + name.charCodeAt(i)) >>> 0;
+  return EXTRA[hash % EXTRA.length];
+}
+
+function paintFor(name: string): Paint {
+  return PAINT[classForName(name)] || PAINT["c-note"];
+}
+
+function weekLook(value: string): Look {
+  if (!value) return { bg: WHITE, fg: TEXT, align: "center" };
+  const paint = paintFor(value);
+  return { bg: paint.bg, fg: paint.fg, bold: paint.bold, italic: paint.italic, align: "center" };
+}
+
+function projectLook(name: string): Look {
+  const paint = paintFor(name);
+  return { bg: paint.bg, fg: paint.fg, bold: paint.bold ?? true, italic: paint.italic, align: "left" };
+}
+
+function styleCell(cell: ExcelJS.Cell, look: Look, border: boolean): void {
+  cell.font = {
+    name: FONT_NAME,
+    size: FONT_SIZE,
+    bold: !!look.bold,
+    italic: !!look.italic,
+    color: { argb: look.fg },
+  };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: look.bg },
+  };
+  cell.alignment = { vertical: "middle", horizontal: look.align ?? "left", wrapText: false };
+  if (border) cell.border = GRID;
+}
+
+function writeRow(sheet: ExcelJS.Worksheet, values: (string | number)[], looks: Look[], border = true): void {
+  const row = sheet.addRow(values);
+  values.forEach((_, index) => styleCell(row.getCell(index + 1), looks[index], border));
+}
+
+function setWidths(sheet: ExcelJS.Worksheet, widths: number[]): void {
+  widths.forEach((width, index) => {
+    sheet.getColumn(index + 1).width = width;
+  });
+}
+
+function addSheet(wb: ExcelJS.Workbook, name: string): ExcelJS.Worksheet {
+  return wb.addWorksheet(name, {
+    views: [{ state: "normal", zoomScale: ZOOM, zoomScaleNormal: ZOOM }],
+  });
+}
+
+/**
+ * ExcelJS always records Calibri 11 as font 0 (the Normal style). Point that
+ * slot at Aptos 10 and drop the theme scheme so Excel does not substitute Calibri.
+ */
+async function aptosNormalFont(buffer: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const entry = zip.file("xl/styles.xml");
+  if (!entry) return buffer;
+  const xml = await entry.async("string");
+  const patched = xml.replace(/<font>[\s\S]*?<\/font>/, (font) => {
+    if (!font.includes("Calibri")) return font;
+    return font
+      .replace(/<sz val="11"\/>/, '<sz val="10"/>')
+      .replace(/<name val="Calibri"\/>/, '<name val="Aptos"/>')
+      .replace(/<scheme val="minor"\/>/, "");
+  });
+  zip.file("xl/styles.xml", patched);
+  return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+}
+
+export async function buildProgrammeWorkbook(input: ProgrammeExportInput, now = new Date()): Promise<ProgrammeWorkbook> {
   const title = programmeExportStamp(now);
   const filename = `${title}.xlsx`;
-  const adminNames = input.people.filter((person) => person.role === "admin").map((person) => person.name);
-  const team = teamPoolExcludingAdmins(input.team, adminNames);
   const onBoard = input.people.filter((person) => person.active);
+  const weekLabels = input.weeks.map(weekColumnLabel);
+  // input.agency and input.team are still accepted by the parser; they are not written to a sheet.
 
-  const programmeRows: (string | number)[][] = [
-    [title],
-    ["Active", "Role", "Surveyor", "F/E", ...input.weeks.map(weekColumnLabel)],
-  ];
+  const wb = new ExcelJS.Workbook();
+  wb.title = title;
+
+  const programme = addSheet(wb, "Programme");
+  writeRow(programme, [title], [{ bg: WHITE, fg: NAVY, bold: true, align: "left" }], false);
+  const programmeHeader = ["Active", "Surveyor", "F/E", ...weekLabels];
+  writeRow(
+    programme,
+    programmeHeader,
+    programmeHeader.map(() => HEADER)
+  );
   for (const person of onBoard) {
-    programmeRows.push([
-      "Yes",
-      person.role === "admin" ? "Admin" : "Surveyor",
-      person.name,
-      person.flag,
-      ...person.weeks,
-    ]);
+    const admin = person.role === "admin";
+    const identity: Look[] = admin
+      ? [
+          { bg: ADMIN_SIDE_BG, fg: NAVY, align: "center" },
+          { bg: ADMIN_NAME_BG, fg: MUTED, italic: true, align: "left" },
+          { bg: ADMIN_SIDE_BG, fg: MUTED, bold: true, align: "center" },
+        ]
+      : [
+          { bg: ACTIVE_BG, fg: NAVY, align: "center" },
+          { bg: SURVEYOR_BG, fg: NAVY, bold: true, align: "left" },
+          { bg: ACTIVE_BG, fg: MUTED, bold: true, align: "center" },
+        ];
+    writeRow(
+      programme,
+      ["Yes", person.name, person.flag, ...person.weeks],
+      [...identity, ...person.weeks.map(weekLook)]
+    );
   }
+  setWidths(programme, [10, 24, 8, ...input.weeks.map(() => 14)]);
 
-  const poolRows: (string | number)[][] = [["Pool", "Name", "F/E"]];
-  for (const person of input.agency) poolRows.push(["Agency — not on a project", person.name, person.flag]);
-  for (const person of team) poolRows.push(["Team — not currently live", person.name, person.flag]);
-
-  const projectRows: (string | number)[][] = [
-    ["Project", "Stock", "Survey types", "Project manager", "Nr of Weeks"],
-  ];
+  const projects = addSheet(wb, "Current projects");
+  const projectHeader = ["Project", "Stock", "Survey types", "Project manager", "Nr of Weeks", "Approx surveys"];
+  writeRow(
+    projects,
+    projectHeader,
+    projectHeader.map(() => PROJ_HEADER)
+  );
   for (const project of input.projects) {
-    projectRows.push([
-      project.project,
-      project.numbers,
-      project.surveyTypes,
-      project.lead,
-      projectWeeksOnGrid(project.project, onBoard),
-    ]);
+    writeRow(
+      projects,
+      [
+        project.project,
+        project.numbers,
+        project.surveyTypes,
+        project.lead,
+        projectWeeksOnGrid(project.project, onBoard),
+        approxSurveysOnGrid(project.project, onBoard),
+      ],
+      [projectLook(project.project), PLAIN_BOLD, PLAIN, LEAD, PLAIN_BOLD, PLAIN_BOLD]
+    );
   }
+  setWidths(projects, [28, 12, 36, 22, 14, 16]);
 
-  const wb = XLSX.utils.book_new();
-  wb.Props = { Title: title };
-  const programme = XLSX.utils.aoa_to_sheet(programmeRows);
-  programme["!cols"] = [{ wch: 10 }, { wch: 12 }, { wch: 24 }, { wch: 8 }, ...input.weeks.map(() => ({ wch: 14 }))];
-  const pools = XLSX.utils.aoa_to_sheet(poolRows);
-  pools["!cols"] = [{ wch: 28 }, { wch: 24 }, { wch: 8 }];
-  const projects = XLSX.utils.aoa_to_sheet(projectRows);
-  projects["!cols"] = [{ wch: 28 }, { wch: 12 }, { wch: 36 }, { wch: 22 }, { wch: 14 }];
-  XLSX.utils.book_append_sheet(wb, programme, "Programme");
-  XLSX.utils.book_append_sheet(wb, pools, "Pools");
-  XLSX.utils.book_append_sheet(wb, projects, "Current projects");
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const raw = await wb.xlsx.writeBuffer();
+  const buffer = await aptosNormalFont(Buffer.from(raw));
   return { filename, title, buffer };
 }

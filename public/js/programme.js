@@ -42,6 +42,7 @@
     if (!name) return "c-note";
     if (PROJECT_STYLE[name]) return PROJECT_STYLE[name];
     if (isHoliday(name)) return "c-Holiday";
+    if (/^A2Dominion\b/i.test(name)) return "c-A2D";
     var keys = Object.keys(PROJECT_STYLE);
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
@@ -50,16 +51,42 @@
     return hashClass(name);
   }
 
+  var SHORT_LABELS = {
+    "Festive Period": "Festive",
+    "Cornwall 2026 Ph2": "Cornwall",
+    "BPHA 2026 ACQ": "BPHA ACQ",
+    "LFHA 2026": "LFHA",
+    "Vico 2026": "Vico",
+    "OTHER WORK": "Other",
+    "Awaiting Start": "Awaiting",
+    "A2Dominion 2026 - Ph4": "A2D Ph4",
+    "Saxon Weald Ph 4": "Saxon",
+    "Radius Ph1": "Radius"
+  };
+
+  // Keep in step with programmeShortLabel() in src/lib/programme.ts.
   function shortLabel(v) {
-    if (v === "Festive Period") return "Festive";
-    if (v === "Cornwall 2026 Ph2") return "Cornwall";
-    if (v === "BPHA 2026 ACQ") return "BPHA ACQ";
-    if (v === "LFHA 2026") return "LFHA";
-    if (v === "Vico 2026") return "Vico";
-    if (v === "OTHER WORK") return "Other";
-    if (v === "Awaiting Start") return "Awaiting";
-    if (v.length > 12) return v.slice(0, 11) + "…";
-    return v;
+    var value = String(v || "").replace(/\s+/g, " ").trim();
+    if (!value) return "";
+    if (SHORT_LABELS[value]) return SHORT_LABELS[value];
+    if (value.length <= 12) return value;
+    var phaseMatch = /\bPh(?:ase)?\s*(\d+)\b/i.exec(value);
+    var phase = phaseMatch ? "Ph" + phaseMatch[1] : "";
+    var client = value
+      .replace(/\b20\d{2}\b/g, " ")
+      .replace(/\bPh(?:ase)?\s*\d+\b/gi, " ")
+      .replace(/[-–—]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^A2Dominion\b/i, "A2D");
+    var head = (client.split(" ").filter(Boolean)[0]) || "";
+    var label = phase ? (head + " " + phase).trim() : client;
+    if (label.length > 12) {
+      label = phase && head
+        ? (head.slice(0, Math.max(1, 11 - phase.length)) + " " + phase).trim()
+        : label.slice(0, 11) + "…";
+    }
+    return label || value.slice(0, 11) + "…";
   }
 
   function styleFor(val) {
@@ -102,6 +129,10 @@
     return !!(admins || adminCanonSet())[canon(name)];
   }
 
+  // Distinct week columns on the main grid. Matches projectWeeksOnGrid on the server.
+  // Two people in the same week count as one tile. One tile ≈ 40 surveys.
+  var SURVEYS_PER_WEEK = 40;
+
   function weeksOccupied(projectName) {
     var key = canon(projectName);
     if (!key) return 0;
@@ -121,7 +152,10 @@
 
   function refreshWeekCounts() {
     document.querySelectorAll("#projCurrent td.nr-weeks").forEach(function (td) {
-      td.textContent = String(weeksOccupied(td.getAttribute("data-project") || ""));
+      var n = weeksOccupied(td.getAttribute("data-project") || "");
+      td.textContent = String(n);
+      var approx = td.parentNode && td.parentNode.querySelector("td.approx-surveys");
+      if (approx) approx.textContent = String(n * SURVEYS_PER_WEEK);
     });
   }
 
@@ -221,22 +255,14 @@
     var ordered = [];
     function add(name) {
       var n = String(name || "").trim();
-      if (!n || seen.has(n)) return;
-      seen.add(n);
+      var key = canon(n);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
       ordered.push(n);
     }
     var P = DATA.projects || {};
     (P.current || []).forEach(function (p) { add(p.project); });
     (P.upcoming || []).forEach(function (p) { add(p.project); });
-    (P.completed || []).forEach(function (p) { add(p.project); });
-    ["Holiday", "Festive Period", "OTHER WORK"].forEach(add);
-    function scan(list) {
-      (list || []).forEach(function (r) {
-        (r.weeks || []).forEach(function (v) { if (v) add(v); });
-      });
-    }
-    scan(DATA.rows);
-    scan(DATA.admins);
     return ordered;
   }
 
@@ -254,13 +280,14 @@
       if (isHoliday(name)) tile.classList.add("leave");
       tile.textContent = st.short || name;
       tile.title = name + " — drag onto a surveyor week to stamp";
+      tile.setAttribute("aria-label", name);
       tile.draggable = true;
       tile.dataset.project = name;
       palette.appendChild(tile);
     });
     var hint = document.createElement("span");
     hint.className = "palette-hint";
-    hint.textContent = "Drag a coloured tile onto the grid to assign that project. Drag cells to move existing blocks.";
+    hint.textContent = "Current and Upcoming only. The short name is the stamp; hover for the full project. Drag a grid tile across cells to copy it.";
     palette.appendChild(hint);
   }
   buildPalette();
@@ -351,6 +378,19 @@
   thead.appendChild(hr);
 
   var rowStore = [];
+  var selectedCell = null;
+
+  function clearSelection() {
+    if (selectedCell) selectedCell.classList.remove("is-selected");
+    selectedCell = null;
+  }
+
+  function selectCell(span) {
+    clearSelection();
+    if (!span || !span.dataset.value) return;
+    selectedCell = span;
+    span.classList.add("is-selected");
+  }
 
   function paintCell(span, val, personName, wi) {
     var st = styleFor(val);
@@ -361,7 +401,7 @@
     span.dataset.wi = String(wi);
     var wk = fmtWeek(DATA.weeks[wi]).label;
     if (val) {
-      span.title = (personName || "Admin") + " · wc " + wk + " · " + val + " (drag to move)";
+      span.title = (personName || "Admin") + " · wc " + wk + " · " + val + " (drag to copy, Delete to clear)";
       span.draggable = true;
     } else {
       span.title = (personName || "Admin") + " · wc " + wk + " (drop a project here)";
@@ -445,6 +485,7 @@
   }
 
   function rebuildMatrix() {
+    clearSelection();
     readTicksFromDomIntoMap();
     tbody.innerHTML = "";
     rowStore = [];
@@ -487,7 +528,7 @@
 
   function fillProjTable(tbodyId, list, opts) {
     opts = opts || {};
-    var cols = opts.weeks ? 5 : 4;
+    var cols = opts.weeks ? 6 : 4;
     var tb = document.querySelector("#" + tbodyId + " tbody");
     if (!tb) return;
     tb.innerHTML = "";
@@ -501,8 +542,10 @@
     list.forEach(function (p) {
       var tr = document.createElement("tr");
       var cls = classForName(p.project);
+      var occupied = opts.weeks ? weeksOccupied(p.project) : 0;
       var weeksCell = opts.weeks
-        ? '<td class="num nr-weeks" data-project="' + esc(p.project) + '">' + weeksOccupied(p.project) + "</td>"
+        ? '<td class="num nr-weeks" data-project="' + esc(p.project) + '">' + occupied + "</td>"
+          + '<td class="num approx-surveys" data-project="' + esc(p.project) + '">' + (occupied * SURVEYS_PER_WEEK) + "</td>"
         : "";
       tr.innerHTML =
         '<td><span class="pill ' + cls + '">' + esc(p.project) + "</span></td>" +
@@ -580,14 +623,23 @@
     drag = null;
   });
 
+  function copyTileOnto(span, value, sourceStore, sourceWi) {
+    if (!span) return;
+    var store = +span.dataset.store;
+    var wi = +span.dataset.wi;
+    if (store === sourceStore && wi === sourceWi) return;
+    if (span.dataset.value === value) return;
+    setAssignment(store, wi, value);
+  }
+
   tbody.addEventListener("dragstart", function (e) {
     var span = cellSpanFromEvent(e);
     if (!span || !span.draggable || !span.dataset.value) { e.preventDefault(); return; }
     drag = { fromPalette: false, store: +span.dataset.store, wi: +span.dataset.wi, value: span.dataset.value };
     span.classList.add("dragging");
     e.dataTransfer.setData("text/plain", span.dataset.value);
-    e.dataTransfer.effectAllowed = "copyMove";
-    showToast("Moving “" + span.dataset.value + "”. Hold Shift to paint a run.");
+    e.dataTransfer.effectAllowed = "copy";
+    showToast("Copying “" + span.dataset.value + "”. Drag across cells to fill them.");
   });
   tbody.addEventListener("dragend", function () {
     clearDropMarks();
@@ -597,13 +649,15 @@
     var span = cellSpanFromEvent(e);
     if (!span || drag == null) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = (drag.fromPalette || e.shiftKey) ? "copy" : "move";
+    e.dataTransfer.dropEffect = "copy";
+    if (!drag.fromPalette && !e.shiftKey) copyTileOnto(span, drag.value, drag.store, drag.wi);
     clearDropMarks();
     if (!drag.fromPalette) {
       var src = tbody.querySelector('span.cell[data-store="' + drag.store + '"][data-wi="' + drag.wi + '"]');
       if (src) src.classList.add("dragging");
     }
-    span.classList.add("drop-target");
+    var live = tbody.querySelector('span.cell[data-store="' + span.dataset.store + '"][data-wi="' + span.dataset.wi + '"]') || span;
+    live.classList.add("drop-target");
     if (e.shiftKey) {
       var store = +span.dataset.store;
       var wi = +span.dataset.wi;
@@ -628,18 +682,40 @@
       if (ans == null) { clearDropMarks(); drag = null; return; }
       weeks = Math.max(1, Math.min(40, parseInt(ans, 10) || 1));
     }
-    if (fromPalette || !same) {
-      if (!fromPalette && !e.shiftKey) setAssignment(drag.store, drag.wi, "");
+    if (fromPalette || e.shiftKey) {
       for (var i = 0; i < weeks; i++) {
         var wi = destWi + i;
         if (wi >= DATA.weeks.length) break;
         setAssignment(destStore, wi, value);
       }
-      var who = rowStore[destStore] ? rowStore[destStore].name : "";
-      showToast((fromPalette ? "Stamped " : (e.shiftKey ? "Painted " : "Moved ")) + "“" + value + "” → " + who);
+    } else if (!same) {
+      copyTileOnto(span, value, drag.store, drag.wi);
+    }
+    var who = rowStore[destStore] ? rowStore[destStore].name : "";
+    if (fromPalette || e.shiftKey || !same) {
+      showToast((fromPalette ? "Stamped " : "Copied ") + "“" + value + "” → " + who);
     }
     clearDropMarks();
     drag = null;
+  });
+
+  tbody.addEventListener("click", function (e) {
+    selectCell(cellSpanFromEvent(e));
+  });
+  document.addEventListener("mousedown", function (e) {
+    var t = e.target;
+    if (!t || !t.closest || !t.closest("#matrix")) clearSelection();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Delete" && e.key !== "Backspace") return;
+    var t = e.target;
+    if (t && t.closest && t.closest("input, textarea, select, [contenteditable='true']")) return;
+    if (!selectedCell || !selectedCell.isConnected || !selectedCell.dataset.value) return;
+    e.preventDefault();
+    var store = +selectedCell.dataset.store;
+    var wi = +selectedCell.dataset.wi;
+    clearSelection();
+    setAssignment(store, wi, "");
   });
 
   var brush = null;

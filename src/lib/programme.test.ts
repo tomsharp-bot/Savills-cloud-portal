@@ -8,6 +8,8 @@ import {
   canonName,
   isHolidayLabel,
   parseSavedBoard,
+  approxSurveysOnGrid,
+  programmeShortLabel,
   projectWeeksOnGrid,
   resolveProgramme,
   seededSurveyTypes,
@@ -37,10 +39,20 @@ describe("programme page controls", () => {
     const page = readFileSync(join(process.cwd(), "views/projects-programme.ejs"), "utf8");
     assert.match(page, /id="btnExcel">Export Excel/);
     assert.match(page, />Nr of Weeks</);
+    assert.match(page, />Approx surveys</);
     assert.doesNotMatch(page, /Export PDF|btnPdf/);
     const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
     assert.match(script, /BHC Programme/);
     assert.match(script, /isAdminName/);
+    assert.match(script, /approx-surveys/);
+    assert.match(script, /SURVEYS_PER_WEEK = 40/);
+    assert.match(script, /A2Dominion 2026 - Ph4/);
+    const palette = script.slice(script.indexOf("function collectPaletteProjects"), script.indexOf("function buildPalette"));
+    assert.match(palette, /P\.current/);
+    assert.match(palette, /P\.upcoming/);
+    assert.doesNotMatch(palette, /completed|Holiday|OTHER WORK/);
+    assert.match(script, /e\.key !== "Delete" && e\.key !== "Backspace"/);
+    assert.doesNotMatch(script, /Moved /);
   });
 });
 
@@ -201,6 +213,18 @@ describe("boardFromClient", () => {
   });
 });
 
+describe("programmeShortLabel", () => {
+  it("keeps short project names and shortens long Current/Upcoming names", () => {
+    assert.equal(programmeShortLabel("Onward"), "Onward");
+    assert.equal(programmeShortLabel("LFHA 2026"), "LFHA");
+    assert.equal(programmeShortLabel("Vico 2026"), "Vico");
+    assert.equal(programmeShortLabel("Cornwall 2026 Ph2"), "Cornwall");
+    assert.equal(programmeShortLabel("A2Dominion 2026 - Ph4"), "A2D Ph4");
+    assert.equal(programmeShortLabel("A2Dominion 2027 - Ph2"), "A2D Ph2");
+    assert.equal(programmeShortLabel("  "), "");
+  });
+});
+
 describe("projectWeeksOnGrid", () => {
   it("counts distinct weeks on the main grid, including admin rows that are on the board", () => {
     const people = [
@@ -214,6 +238,9 @@ describe("projectWeeksOnGrid", () => {
     assert.equal(projectWeeksOnGrid("Holiday", people), 1);
     assert.equal(projectWeeksOnGrid("Missing", people), 0);
     assert.equal(projectWeeksOnGrid("Onward", [{ weeks: ["Onward"], active: false }]), 0);
+    assert.equal(approxSurveysOnGrid("Onward", people), 80);
+    assert.equal(approxSurveysOnGrid("Holiday", people), 40);
+    assert.equal(approxSurveysOnGrid("Missing", people), 0);
   });
 });
 

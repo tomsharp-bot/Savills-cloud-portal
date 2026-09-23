@@ -94,7 +94,7 @@ programmeRouter.post("/export", async (req: Request, res: Response) => {
     res.status(400).json({ error: "Export payload was not valid." });
     return;
   }
-  const workbook = buildProgrammeWorkbook(parsed);
+  const workbook = await buildProgrammeWorkbook(parsed);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", programmeContentDisposition(workbook.filename));
   res.send(workbook.buffer);
