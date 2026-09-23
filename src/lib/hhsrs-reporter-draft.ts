@@ -654,35 +654,89 @@ function mapHazardName(hazard: string, template: TemplateId): string {
   return mapped;
 }
 
+const ISSUE_WORD =
+  /\b(?:loose|broken|damaged|damage|exposed|exposing|exposure|missing|cracked|crack|mould|mold|damp|leak(?:ing)?|unsafe|live|socket|wire|wiring|cable|fault|hazard|detached|collapsed|not working|trip)\b/i;
+
+/** Keep the surveyor’s own factual sentences. Do not add or swap descriptive words. */
+export function siteNotesFromSurveyor(text: string, address: string): string {
+  const source = text.replace(/\s+/g, " ").trim();
+  if (!source) throw new DraftError("Add the short hazard description.");
+  const kept: string[] = [];
+  for (const part of source.split(/\n+|(?<=[.!?])\s+/)) {
+    const factual = factualSentence(part, address);
+    if (factual) kept.push(factual);
+  }
+  if (!kept.length) throw new DraftError("Add the short hazard description.");
+  return kept.join(" ");
+}
+
+function factualSentence(part: string, address: string): string {
+  let sentence = part.trim();
+  sentence = sentence.replace(
+    /^(?:one of our surveyors has visited\b[^,.]{0,80}[,.]?\s*|following (?:our|my|the) visit(?: to [^,.]{0,80})?[,.]?\s*|during (?:our|my|the) (?:survey|visit)(?: to [^,.]{0,80})?[,.]?\s*)/i,
+    ""
+  );
+  sentence = sentence.replace(
+    /\s*(?:,?\s*)?(?:and\s+)?(?:we have recorded|this has been recorded|I have recorded|please arrange|please action|please see the attached|see attached)\b[\s\S]*$/i,
+    ""
+  );
+  sentence = sentence.replace(/^[,; ]+|[,; ]+$/g, "").trim();
+  if (!sentence || isDroppedSurveyorAside(sentence, address)) return "";
+  if (!/[.!?]$/.test(sentence)) sentence += ".";
+  return sentence[0].toUpperCase() + sentence.slice(1);
+}
+
+function isDroppedSurveyorAside(sentence: string, address: string): boolean {
+  if (
+    /^(?:hi all|hello|dear\b|good (?:morning|afternoon)|kind regards|many thanks|thank you|thanks)\b/i.test(sentence) ||
+    /\b(?:one of our surveyors|a surveyor)\b.{0,50}\b(?:visited|attended|inspected)\b/i.test(sentence) ||
+    /\b(?:I|we)\s+(?:have\s+)?(?:visited|attended|inspected)\b/i.test(sentence) ||
+    /\b(?:during|following|on)\s+(?:our|my|the)\s+visit\b/i.test(sentence)
+  ) {
+    return true;
+  }
+  if (
+    /\b(?:photo|photograph|image|picture)s?\b/i.test(sentence) &&
+    /\b(?:attached|enclosed|attachment|included)\b/i.test(sentence)
+  ) {
+    return true;
+  }
+  if (
+    /\b(?:on the HHSRS|for your (?:information|attention|action)|this email is|has been (?:logged|recorded|raised)|please (?:arrange|action|advise|note)|kind regards)\b/i.test(
+      sentence
+    )
+  ) {
+    return true;
+  }
+  return isAddressRestatement(sentence, address);
+}
+
+function isAddressRestatement(sentence: string, address: string): boolean {
+  if (ISSUE_WORD.test(sentence)) return false;
+  const norm = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/^(?:address|property|re|regarding|location)\s*[:\-]?\s*/i, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const note = norm(sentence);
+  const where = norm(address);
+  if (!note || !where) return false;
+  return note === where || note.includes(where) || (where.includes(note) && note.length >= 8);
+}
+
 export function baseProjectDraft(data: DraftCase, photos: string[]): { subject: string; body: string } {
   const template = templateId(data.project);
   if (!template) throw new DraftError("No client email template has been supplied for this project yet.");
   const address = formatAddress(data.address || "");
   if (!address) throw new DraftError("Add the property address before preparing the client email.");
 
-  let description = data.descriptionReady
-    ? (data.description || "").trim()
-    : clientDescription(data.description || "", data.hazard || "");
-
-  if (/\b(?:From|To|Cc|Subject):|<[^<>]*@[^<>]*>/i.test(description)) {
+  const rawNotes = (data.description || "").trim();
+  if (/\b(?:From|To|Cc|Subject):|<[^<>]*@[^<>]*>/i.test(rawNotes)) {
     throw new DraftError("Keep only the fault and location in the hazard description.");
   }
-
-  if (
-    template === "Vico Homes" &&
-    !data.descriptionReady &&
-    data.hazard !== "Entry By Intruders" &&
-    data.hazard !== "Electrical Hazards"
-  ) {
-    const observation = correctReportSpelling(data.description || "")
-      .trim()
-      .split(/(?<=[.!?])\s+/, 2)[0];
-    if (!/\bthroughout the property\b/i.test(observation)) {
-      description = tidyHazardSentence(
-        observation.replace(/\b(?:substantial|extensive|significant|severe)\s+/gi, "")
-      );
-    }
-  }
+  const description = siteNotesFromSurveyor(rawNotes, address);
 
   if (!description) throw new DraftError("Add the short hazard description.");
   if (splitVulnerabilities(description)[1]) {

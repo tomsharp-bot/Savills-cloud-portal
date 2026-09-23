@@ -86,7 +86,7 @@ describe("HHSRS Reporter projectDraft", () => {
         "• UPRN: 100123",
         "• Hazard: Electrical Hazards",
         "• Rating: High",
-        "• Site notes: The light fitting in the lounge is damaged.",
+        "• Site notes: Damaged light fitting in lounge.",
         "• Survey date: 2026-09-20",
       ].join("\n")
     );
@@ -97,7 +97,8 @@ describe("HHSRS Reporter projectDraft", () => {
   it("keeps BPHA subject and omits the surveyor-visit intro", () => {
     const draft = projectDraft({ ...base, project: "BPHA East 2026" }, ["a"]);
     assert.equal(draft.subject, "BPHA - HHSRS – 1 high street, EX1 1AA");
-    assert.match(draft.body, /• Site notes: The light fitting in the lounge is damaged\./);
+    assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
+    assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /Attached is a photo/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
@@ -125,6 +126,32 @@ describe("HHSRS Reporter projectDraft", () => {
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
   });
+
+  it("keeps only the surveyor’s factual sentence from Campion House waffle", () => {
+    const draft = projectDraft(
+      {
+        ...base,
+        address: "Campion House",
+        uprn: "",
+        surveyDate: "",
+        description: [
+          "One of our surveyors has visited Campion House.",
+          "Attached is a photo taken from the property.",
+          "There is a loose socket to the communal area on the 6th floor, exposing the live parts within.",
+          "We have recorded this as High for Electrical Hazards on the HHSRS.",
+          "Please arrange for this to be actioned.",
+        ].join(" "),
+      },
+      ["lounge.jpg"]
+    );
+    const notes = draft.body.split("\n").find((line) => line.startsWith("• Site notes:"));
+    assert.equal(
+      notes,
+      "• Site notes: There is a loose socket to the communal area on the 6th floor, exposing the live parts within."
+    );
+    assert.match(draft.body, /• Address: Campion House/);
+    assert.doesNotMatch(notes || "", /Campion House|photo|surveyor|HHSRS|arrange/i);
+  });
 });
 
 describe("HHSRS Reporter draftFromSubmission", () => {
@@ -141,7 +168,8 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       photoCount: 0,
     });
     assert.equal(draft.subject, "Demo Housing - HHSRS – 1 High Street, EX1 1AA");
-    assert.match(draft.body, /The light fitting in the lounge is damaged\./);
+    assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
+    assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
   });
 
   it("uses an office-edited client description verbatim when supplied", () => {
