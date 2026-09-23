@@ -168,5 +168,6 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(css, /transform-origin:\s*(?:right|center)/);
     assert.doesNotMatch(css, /photo-thumb:(?:first|last|nth)-child[\s\S]{0,180}transform-origin/);
     assert.match(css, /btn-photo-fallback/);
+    assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*450px/);
   });
 });
