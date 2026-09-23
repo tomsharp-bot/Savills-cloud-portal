@@ -437,6 +437,43 @@ export function projectWeeksOnGrid(
 /** One occupied week column on the main grid stands for about this many surveys. */
 export const APPROX_SURVEYS_PER_WEEK = 40;
 
+const PROGRAMME_SHORT_LABELS: Record<string, string> = {
+  "Festive Period": "Festive",
+  "Cornwall 2026 Ph2": "Cornwall",
+  "BPHA 2026 ACQ": "BPHA ACQ",
+  "LFHA 2026": "LFHA",
+  "Vico 2026": "Vico",
+  "OTHER WORK": "Other",
+  "Awaiting Start": "Awaiting",
+  "A2Dominion 2026 - Ph4": "A2D Ph4",
+  "Saxon Weald Ph 4": "Saxon",
+  "Radius Ph1": "Radius",
+};
+
+/** Visible programme stamp. The stored project name stays the full Project Progress name. */
+export function programmeShortLabel(name: string): string {
+  const value = String(name || "").replace(/\s+/g, " ").trim();
+  if (!value) return "";
+  const known = PROGRAMME_SHORT_LABELS[value];
+  if (known) return known;
+  if (value.length <= 12) return value;
+  const phaseMatch = /\bPh(?:ase)?\s*(\d+)\b/i.exec(value);
+  const phase = phaseMatch ? `Ph${phaseMatch[1]}` : "";
+  const client = value
+    .replace(/\b20\d{2}\b/g, " ")
+    .replace(/\bPh(?:ase)?\s*\d+\b/gi, " ")
+    .replace(/[-–—]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^A2Dominion\b/i, "A2D");
+  const head = client.split(" ").filter(Boolean)[0] || "";
+  let label = phase ? `${head} ${phase}`.trim() : client;
+  if (label.length > 12) {
+    label = phase && head ? `${head.slice(0, Math.max(1, 11 - phase.length))} ${phase}`.trim() : `${label.slice(0, 11)}…`;
+  }
+  return label || `${value.slice(0, 11)}…`;
+}
+
 /** Approx surveys = distinct on-grid week columns for the project × 40. */
 export function approxSurveysOnGrid(
   projectName: string,
@@ -498,7 +535,7 @@ export function programmeNotes(usingPersonnelAdmins: boolean): {
     projectsCaption:
       "Current, Upcoming, and the last 5 Completed projects come from Project Progress. Project manager is the name stored on the project. Survey types start from that project's survey-type ticks and stay editable here.",
     dndNote:
-      "Drag a project cell onto another surveyor/week to place it (1 week). Hold Shift while dropping to paint a run of weeks. Alt+drag paints across cells. Holiday and Festive stay red text.",
+      "Top stamps are Current and Upcoming projects only. Drag a stamp onto a week, or drag an existing grid tile across cells to copy it. Click a tile and press Delete or Backspace to clear it. Shift+drop still paints a run of weeks.",
   };
 }
 

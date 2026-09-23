@@ -279,6 +279,7 @@ function classForName(name: string): string {
   const exact = PROJECT_STYLE.find((item) => item.name === name);
   if (exact) return exact.cls;
   if (HOLIDAY.test(name)) return "c-Holiday";
+  if (/^A2Dominion\b/i.test(name)) return "c-A2D";
   for (const item of PROJECT_STYLE) {
     if (name.startsWith(item.name) || item.name.startsWith(name)) return item.cls;
   }

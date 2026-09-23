@@ -9,6 +9,7 @@ import {
   isHolidayLabel,
   parseSavedBoard,
   approxSurveysOnGrid,
+  programmeShortLabel,
   projectWeeksOnGrid,
   resolveProgramme,
   seededSurveyTypes,
@@ -45,6 +46,13 @@ describe("programme page controls", () => {
     assert.match(script, /isAdminName/);
     assert.match(script, /approx-surveys/);
     assert.match(script, /SURVEYS_PER_WEEK = 40/);
+    assert.match(script, /A2Dominion 2026 - Ph4/);
+    const palette = script.slice(script.indexOf("function collectPaletteProjects"), script.indexOf("function buildPalette"));
+    assert.match(palette, /P\.current/);
+    assert.match(palette, /P\.upcoming/);
+    assert.doesNotMatch(palette, /completed|Holiday|OTHER WORK/);
+    assert.match(script, /e\.key !== "Delete" && e\.key !== "Backspace"/);
+    assert.doesNotMatch(script, /Moved /);
   });
 });
 
@@ -202,6 +210,18 @@ describe("boardFromClient", () => {
     assert.equal(boardFromClient({ surveyors: [], admins: [] }), null);
     assert.equal(boardFromClient(null), null);
     assert.equal(parseSavedBoard({ version: 2 }), null);
+  });
+});
+
+describe("programmeShortLabel", () => {
+  it("keeps short project names and shortens long Current/Upcoming names", () => {
+    assert.equal(programmeShortLabel("Onward"), "Onward");
+    assert.equal(programmeShortLabel("LFHA 2026"), "LFHA");
+    assert.equal(programmeShortLabel("Vico 2026"), "Vico");
+    assert.equal(programmeShortLabel("Cornwall 2026 Ph2"), "Cornwall");
+    assert.equal(programmeShortLabel("A2Dominion 2026 - Ph4"), "A2D Ph4");
+    assert.equal(programmeShortLabel("A2Dominion 2027 - Ph2"), "A2D Ph2");
+    assert.equal(programmeShortLabel("  "), "");
   });
 });
 

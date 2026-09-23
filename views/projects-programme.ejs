@@ -15,7 +15,7 @@
     <div class="head">
       <div>
         <h1>Projects Programme</h1>
-        <p class="intro">Surveyor × week-commencing matrix. Tick <strong>Active</strong> then hit <strong>Refresh</strong> to show or hide people on the board (Agency F·E goes to the agency pool; others go to the team pool). Drag a project stamp onto a week, or drag a block to move it. Surveyor names stay fixed. The three tables underneath are live Project Progress projects.</p>
+        <p class="intro">Surveyor × week-commencing matrix. Tick <strong>Active</strong> then hit <strong>Refresh</strong> to show or hide people on the board (Agency F·E goes to the agency pool; others go to the team pool). The stamps along the top are Current and Upcoming projects. Drag a stamp onto a week, or drag a grid tile across cells to copy it. Click a tile and press Delete or Backspace to clear it. Surveyor names stay fixed. The three tables underneath are live Project Progress projects.</p>
       </div>
       <div class="head-actions">
         <button type="button" class="btn btn-primary" id="btnExcel">Export Excel</button>
@@ -24,7 +24,7 @@
     </div>
 
     <div class="toolbar">
-      <span class="hint" id="dndHint">Tick Active (left of the name), then Refresh to update the board. Drag a palette tile to stamp a project onto a week (Shift+drop paints a run). Drag cells to move. Alt+drag paints across cells.</span>
+      <span class="hint" id="dndHint">Tick Active (left of the name), then Refresh to update the board. Drag a Current or Upcoming stamp onto a week (Shift+drop paints a run). Drag a grid tile across cells to copy it. Click a tile, then Delete or Backspace to clear it.</span>
       <span class="meta"><span id="meta"></span> <span id="saveState"></span></span>
     </div>
 
@@ -47,7 +47,7 @@
           <% } else { %>
           Yellow separator and placeholder admin rows until Personnel has admins.
           <% } %>
-          Holiday / Festive Period cells use <span class="leave-sample">red text</span> on a muted fill. Drag palette tiles to stamp a project; drag cells to move blocks. Surveyor names stay put.
+          Holiday / Festive Period cells use <span class="leave-sample">red text</span> on a muted fill. Drag a stamp onto the grid, or drag a grid tile to copy it. Click a tile and press Delete or Backspace to clear that cell. Surveyor names stay put.
         </p>
         <p class="note-f">Active sits left of the name. F / E marks agency. Untick Active and Refresh to move someone into the pools below; tick and Refresh to bring them back. Empty weeks stay blank.</p>
       </div>
