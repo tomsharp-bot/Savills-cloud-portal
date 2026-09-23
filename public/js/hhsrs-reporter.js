@@ -289,7 +289,78 @@
     grid.appendChild(card);
   }
 
+  function photoPreviewEl() {
+    var preview = $("rv-photo-preview");
+    if (preview) return preview;
+    preview = document.createElement("div");
+    preview.id = "rv-photo-preview";
+    preview.className = "photo-float-preview";
+    preview.hidden = true;
+    preview.setAttribute("aria-hidden", "true");
+    var img = document.createElement("img");
+    img.alt = "";
+    preview.appendChild(img);
+    document.body.appendChild(preview);
+    return preview;
+  }
+
+  function hidePhotoPreview() {
+    var preview = $("rv-photo-preview");
+    if (preview) preview.hidden = true;
+  }
+
+  function showPhotoPreview(card) {
+    if (!card) return;
+    var source = card.querySelector("img");
+    if (!source || !source.getAttribute("src")) {
+      hidePhotoPreview();
+      return;
+    }
+    var preview = photoPreviewEl();
+    var img = preview.querySelector("img");
+    if (img.getAttribute("src") !== source.src) img.src = source.src;
+    var rect = card.getBoundingClientRect();
+    preview.hidden = false;
+    preview.style.left = Math.round(rect.right + 8) + "px";
+    preview.style.top = Math.round(rect.top) + "px";
+  }
+
+  function thumbFromEvent(target) {
+    return target && target.closest ? target.closest(".case-photo-thumb, .email-photo-thumb") : null;
+  }
+
+  function wirePhotoPreview(root) {
+    if (!root || root.dataset.previewWired === "1") return;
+    root.dataset.previewWired = "1";
+    root.addEventListener("pointerover", function (e) {
+      var card = thumbFromEvent(e.target);
+      if (card && root.contains(card)) showPhotoPreview(card);
+    });
+    root.addEventListener("pointerout", function (e) {
+      var card = thumbFromEvent(e.target);
+      if (!card || !root.contains(card)) return;
+      var next = thumbFromEvent(e.relatedTarget);
+      if (next && root.contains(next)) {
+        showPhotoPreview(next);
+        return;
+      }
+      hidePhotoPreview();
+    });
+    root.addEventListener("focusin", function (e) {
+      var card = thumbFromEvent(e.target);
+      if (card && root.contains(card)) showPhotoPreview(card);
+    });
+    root.addEventListener("focusout", function (e) {
+      var card = thumbFromEvent(e.target);
+      if (!card) return;
+      var next = thumbFromEvent(e.relatedTarget);
+      if (next) showPhotoPreview(next);
+      else hidePhotoPreview();
+    });
+  }
+
   function renderCaseThumbs() {
+    hidePhotoPreview();
     var grid = $("rv-photo-thumbs");
     updatePhotosModeUi();
     if (!grid) return;
@@ -319,6 +390,7 @@
   }
 
   function renderEmailThumbs() {
+    hidePhotoPreview();
     var grid = $("rv-email-photo-thumbs");
     if (!grid) return;
     grid.innerHTML = "";
@@ -443,6 +515,8 @@
     var fileInput = $("rv-photo-file");
     var dropzone = $("rv-photos-dropzone");
     var dlBtn = $("btn-download-photos");
+    wirePhotoPreview(caseGrid);
+    wirePhotoPreview(emailGrid);
     if (caseGrid) {
       caseGrid.addEventListener("click", function (e) {
         var rem = e.target.closest("[data-remove-photo]");

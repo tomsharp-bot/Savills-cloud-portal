@@ -1628,18 +1628,33 @@ body.hhsrs-reporter {
   overflow: hidden;
   display: block;
   flex: 0 0 auto;
-  transform-origin: left top;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 .hhsrs-reporter .case-photo-thumb:hover,
 .hhsrs-reporter .case-photo-thumb:focus-within,
 .hhsrs-reporter .email-photo-thumb:hover,
 .hhsrs-reporter .email-photo-thumb:focus-within {
-  z-index: 30;
   border-color: var(--blue);
+}
+.hhsrs-reporter .photo-float-preview {
+  position: fixed;
+  z-index: 80;
+  width: 192px;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid var(--blue);
+  border-radius: 8px;
+  background: #fff;
   box-shadow: 0 10px 26px rgba(11, 31, 51, 0.28);
-  transform: scale(2);
-  transform-origin: left top;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hhsrs-reporter .photo-float-preview[hidden] { display: none !important; }
+.hhsrs-reporter .photo-float-preview img {
+  display: block;
+  width: 192px;
+  height: 144px;
+  object-fit: cover;
 }
 .hhsrs-reporter .photo-thumb img {
   display: block;
