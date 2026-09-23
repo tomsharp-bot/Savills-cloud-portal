@@ -143,7 +143,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(js, /function stubDraft/);
     assert.match(css, /#rv-case-panel\.is-drafted/);
     assert.match(css, /btn-create-email:hover/);
-    assert.match(css, /transform-origin: left center/);
+    assert.match(css, /transform-origin: left top/);
+    assert.doesNotMatch(css, /transform-origin:\s*(?:right|center)/);
+    assert.doesNotMatch(css, /photo-thumb:(?:first|last|nth)-child[\s\S]{0,180}transform-origin/);
     assert.match(css, /btn-photo-fallback/);
   });
 });

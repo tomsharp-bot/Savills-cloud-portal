@@ -1624,6 +1624,18 @@ body.hhsrs-reporter {
   overflow: hidden;
   display: block;
   flex: 0 0 auto;
+  transform-origin: left top;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.hhsrs-reporter .case-photo-thumb:hover,
+.hhsrs-reporter .case-photo-thumb:focus-within,
+.hhsrs-reporter .email-photo-thumb:hover,
+.hhsrs-reporter .email-photo-thumb:focus-within {
+  z-index: 30;
+  border-color: var(--blue);
+  box-shadow: 0 10px 26px rgba(11, 31, 51, 0.28);
+  transform: scale(2);
+  transform-origin: left top;
 }
 .hhsrs-reporter .photo-thumb img {
   display: block;
@@ -1716,18 +1728,7 @@ body.hhsrs-reporter {
 .hhsrs-reporter .email-empty-hint[hidden] { display: none !important; }
 .hhsrs-reporter .email-photo-tools { margin-top: 0.85rem; }
 .hhsrs-reporter .email-photo-tools[hidden] { display: none !important; }
-.hhsrs-reporter .email-photo-thumb {
-  cursor: grab;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
-}
-.hhsrs-reporter .email-photo-thumb:hover,
-.hhsrs-reporter .email-photo-thumb:focus-within {
-  z-index: 30;
-  border-color: var(--blue);
-  box-shadow: 0 10px 26px rgba(11, 31, 51, 0.28);
-  transform: scale(2);
-  transform-origin: left center;
-}
+.hhsrs-reporter .email-photo-thumb { cursor: grab; }
 .hhsrs-reporter .email-photo-thumb:active { cursor: grabbing; }
 .hhsrs-reporter .photos-drag-hint {
   margin: 0.55rem 0 0;
