@@ -415,6 +415,7 @@ export function teamPoolExcludingAdmins<T extends { name: string }>(
  * Distinct week columns where an on-board person has this project.
  * People with active === false are off the main grid and do not count.
  * Missing active means on the board, matching the programme tick default.
+ * Two people assigned in the same week count as one tile.
  */
 export function projectWeeksOnGrid(
   projectName: string,
@@ -431,6 +432,17 @@ export function projectWeeksOnGrid(
     }
   }
   return hit.size;
+}
+
+/** One occupied week column on the main grid stands for about this many surveys. */
+export const APPROX_SURVEYS_PER_WEEK = 40;
+
+/** Approx surveys = distinct on-grid week columns for the project × 40. */
+export function approxSurveysOnGrid(
+  projectName: string,
+  people: readonly { weeks?: readonly string[]; active?: boolean }[]
+): number {
+  return projectWeeksOnGrid(projectName, people) * APPROX_SURVEYS_PER_WEEK;
 }
 
 export function surveyTypesForSave(seeded: string, text: unknown): { text: string; clear: boolean } | null {

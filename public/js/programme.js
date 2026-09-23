@@ -102,6 +102,10 @@
     return !!(admins || adminCanonSet())[canon(name)];
   }
 
+  // Distinct week columns on the main grid. Matches projectWeeksOnGrid on the server.
+  // Two people in the same week count as one tile. One tile ≈ 40 surveys.
+  var SURVEYS_PER_WEEK = 40;
+
   function weeksOccupied(projectName) {
     var key = canon(projectName);
     if (!key) return 0;
@@ -121,7 +125,10 @@
 
   function refreshWeekCounts() {
     document.querySelectorAll("#projCurrent td.nr-weeks").forEach(function (td) {
-      td.textContent = String(weeksOccupied(td.getAttribute("data-project") || ""));
+      var n = weeksOccupied(td.getAttribute("data-project") || "");
+      td.textContent = String(n);
+      var approx = td.parentNode && td.parentNode.querySelector("td.approx-surveys");
+      if (approx) approx.textContent = String(n * SURVEYS_PER_WEEK);
     });
   }
 
@@ -487,7 +494,7 @@
 
   function fillProjTable(tbodyId, list, opts) {
     opts = opts || {};
-    var cols = opts.weeks ? 5 : 4;
+    var cols = opts.weeks ? 6 : 4;
     var tb = document.querySelector("#" + tbodyId + " tbody");
     if (!tb) return;
     tb.innerHTML = "";
@@ -501,8 +508,10 @@
     list.forEach(function (p) {
       var tr = document.createElement("tr");
       var cls = classForName(p.project);
+      var occupied = opts.weeks ? weeksOccupied(p.project) : 0;
       var weeksCell = opts.weeks
-        ? '<td class="num nr-weeks" data-project="' + esc(p.project) + '">' + weeksOccupied(p.project) + "</td>"
+        ? '<td class="num nr-weeks" data-project="' + esc(p.project) + '">' + occupied + "</td>"
+          + '<td class="num approx-surveys" data-project="' + esc(p.project) + '">' + (occupied * SURVEYS_PER_WEEK) + "</td>"
         : "";
       tr.innerHTML =
         '<td><span class="pill ' + cls + '">' + esc(p.project) + "</span></td>" +

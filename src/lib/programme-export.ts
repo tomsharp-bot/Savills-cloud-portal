@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
-import { projectWeeksOnGrid } from "./programme.js";
+import { approxSurveysOnGrid, projectWeeksOnGrid } from "./programme.js";
 
 const MAX_WEEKS = 200;
 const MAX_PEOPLE = 800;
@@ -396,7 +396,7 @@ export async function buildProgrammeWorkbook(input: ProgrammeExportInput, now = 
   setWidths(programme, [10, 24, 8, ...input.weeks.map(() => 14)]);
 
   const projects = addSheet(wb, "Current projects");
-  const projectHeader = ["Project", "Stock", "Survey types", "Project manager", "Nr of Weeks"];
+  const projectHeader = ["Project", "Stock", "Survey types", "Project manager", "Nr of Weeks", "Approx surveys"];
   writeRow(
     projects,
     projectHeader,
@@ -411,11 +411,12 @@ export async function buildProgrammeWorkbook(input: ProgrammeExportInput, now = 
         project.surveyTypes,
         project.lead,
         projectWeeksOnGrid(project.project, onBoard),
+        approxSurveysOnGrid(project.project, onBoard),
       ],
-      [projectLook(project.project), PLAIN_BOLD, PLAIN, LEAD, PLAIN_BOLD]
+      [projectLook(project.project), PLAIN_BOLD, PLAIN, LEAD, PLAIN_BOLD, PLAIN_BOLD]
     );
   }
-  setWidths(projects, [28, 12, 36, 22, 14]);
+  setWidths(projects, [28, 12, 36, 22, 14, 16]);
 
   const raw = await wb.xlsx.writeBuffer();
   const buffer = await aptosNormalFont(Buffer.from(raw));

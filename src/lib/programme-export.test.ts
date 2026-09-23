@@ -143,9 +143,16 @@ describe("programme Excel export", () => {
     assert.equal(projects.getCell("D2").value, "Greg Kowalski");
     assert.equal(projects.getCell("D2").font?.color?.argb, "FF1A4B7C");
     assert.equal(projects.getCell("D2").font?.bold, true);
+    assert.equal(projects.getCell("E1").value, "Nr of Weeks");
+    assert.equal(projects.getCell("F1").value, "Approx surveys");
     assert.equal(projects.getCell("E2").value, 1);
+    assert.equal(projects.getCell("F2").value, 40);
     assert.equal(projects.getCell("E3").value, 1);
+    assert.equal(projects.getCell("F3").value, 40);
     assert.equal(projects.getCell("E4").value, 0);
+    assert.equal(projects.getCell("F4").value, 0);
+    assert.equal(projects.getCell("F2").font?.name, "Aptos");
+    assert.equal(projects.getCell("F2").font?.size, 10);
     assert.equal(projects.getCell("C2").value, "Condition Only");
 
     for (const sheet of wb.worksheets) {

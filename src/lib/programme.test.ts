@@ -8,6 +8,7 @@ import {
   canonName,
   isHolidayLabel,
   parseSavedBoard,
+  approxSurveysOnGrid,
   projectWeeksOnGrid,
   resolveProgramme,
   seededSurveyTypes,
@@ -37,10 +38,13 @@ describe("programme page controls", () => {
     const page = readFileSync(join(process.cwd(), "views/projects-programme.ejs"), "utf8");
     assert.match(page, /id="btnExcel">Export Excel/);
     assert.match(page, />Nr of Weeks</);
+    assert.match(page, />Approx surveys</);
     assert.doesNotMatch(page, /Export PDF|btnPdf/);
     const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
     assert.match(script, /BHC Programme/);
     assert.match(script, /isAdminName/);
+    assert.match(script, /approx-surveys/);
+    assert.match(script, /SURVEYS_PER_WEEK = 40/);
   });
 });
 
@@ -214,6 +218,9 @@ describe("projectWeeksOnGrid", () => {
     assert.equal(projectWeeksOnGrid("Holiday", people), 1);
     assert.equal(projectWeeksOnGrid("Missing", people), 0);
     assert.equal(projectWeeksOnGrid("Onward", [{ weeks: ["Onward"], active: false }]), 0);
+    assert.equal(approxSurveysOnGrid("Onward", people), 80);
+    assert.equal(approxSurveysOnGrid("Holiday", people), 40);
+    assert.equal(approxSurveysOnGrid("Missing", people), 0);
   });
 });
 
