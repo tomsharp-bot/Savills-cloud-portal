@@ -17,7 +17,7 @@ A public **HHSRS site reporting** form lives on this same app at **root paths** 
 
 Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site-form` (or `http://localhost:3000/HHSRS-site-form` locally). No login for surveyors in v1. Photos store on disk under `uploads/hhsrs-site-form/{submissionId}/` until Spaces is wired. Up to **4 photos**, **each photo up to 40MB** (JPEG, PNG, WebP, HEIC/HEIF). The browser compresses JPEG/PNG/WebP before upload when it can.
 
-On **New issue**, surveyors enter a postcode and house number or name and tap **Find address**. The server calls Ideal Postcodes (`IDEAL_POSTCODES_API_KEY`, never sent to the browser) and fills **full address** and **UPRN**. Several matches show a short pick-list. Both fields stay editable. House number is lookup-only and is not stored. Until the key is set, Find address reports that lookup is not configured.
+On **New issue**, surveyors can enter a postcode and house number or name and tap **Find address**. That lookup is optional. The server calls Ideal Postcodes (`IDEAL_POSTCODES_API_KEY`, never sent to the browser) and can fill **full address** and **UPRN**. Several matches show a short pick-list. Full address and UPRN stay required and editable, including when lookup fails, returns nothing, or the surveyor prefers to type them. House number is for lookup only: it is not required and is not stored. Until the key is set, Find address reports that lookup is not configured.
 
 ## What this app does
 

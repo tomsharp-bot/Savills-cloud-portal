@@ -281,6 +281,12 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /Saxon Weald: all damp and mould/);
     assert.match(form.body, /id="clear-form"/);
     assert.match(form.body, /id="houseNumber"/);
+    assert.match(form.body, /House number \/ name</);
+    assert.doesNotMatch(form.body, /House number \/ name \*/);
+    assert.doesNotMatch(form.body, /id="houseNumber"[^>]*\brequired\b/);
+    assert.doesNotMatch(form.body, /id="fullAddress"[^>]*\b(?:readonly|disabled)\b/);
+    assert.doesNotMatch(form.body, /id="uprn"[^>]*\b(?:readonly|disabled)\b/);
+    assert.match(form.body, /You can always type or edit the full address and UPRN/);
     assert.match(form.body, /id="btn-find-address"/);
     assert.match(form.body, /Find address/);
     assert.match(form.body, /data-address-lookup="\/HHSRS-site-form\/address-lookup"/);

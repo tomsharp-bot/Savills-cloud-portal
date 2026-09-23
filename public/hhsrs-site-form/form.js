@@ -31,10 +31,20 @@
     matchList.replaceChildren();
   }
 
+  function keepAddressEditable() {
+    ["fullAddress", "uprn"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.readOnly = false;
+      el.disabled = false;
+    });
+  }
+
   function applyMatch(match) {
     var address = document.getElementById("fullAddress");
     var uprn = document.getElementById("uprn");
     var postcode = document.getElementById("postcode");
+    keepAddressEditable();
     if (address) {
       address.value = match.line || "";
       address.classList.remove("is-invalid");
@@ -129,7 +139,7 @@
           showMatches(matches);
           return;
         }
-        setFindStatus("No matching address. Check the postcode and house number, or type the address.", "err");
+        setFindStatus("No matching address. Type the full address and UPRN yourself.", "err");
       })
       .catch(function () {
         setFindStatus("Could not look up that address. Check your connection or type the address.", "err");
@@ -189,6 +199,7 @@
     var open = visitReady();
     if (details) details.hidden = !open;
     if (hint) hint.hidden = open;
+    if (open) keepAddressEditable();
     syncProjectExtras();
   }
 

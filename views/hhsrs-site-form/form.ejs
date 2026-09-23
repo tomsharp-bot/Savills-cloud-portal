@@ -64,12 +64,12 @@
           <% if (errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
         </div>
         <div>
-          <label for="houseNumber">House number / name *</label>
+          <label for="houseNumber">House number / name</label>
           <input id="houseNumber" type="text" autocomplete="off" placeholder="e.g. 12 or Flat 12" />
         </div>
       </div>
       <div class="find-row">
-        <p class="hhsrs-hint">Ideal Postcodes lookup fills address and UPRN when found.</p>
+        <p class="hhsrs-hint">Optional. Find address can fill the fields below. You can always type or edit the full address and UPRN.</p>
         <button type="button" class="hhsrs-btn-find" id="btn-find-address">Find address</button>
       </div>
       <p class="find-status" id="find-status" aria-live="polite"></p>
