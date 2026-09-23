@@ -23,7 +23,7 @@
         </ul>
       </div>
     <% } %>
-    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>">
+    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>" data-address-lookup="<%= hhsrsUrl('/address-lookup') %>">
       <% if (draft) { %><input type="hidden" name="draftId" value="<%= draft.id %>" /><% } %>
 
       <label for="projectId">Project *</label>
@@ -39,21 +39,35 @@
       <input id="surveyDate" name="surveyDate" type="date" required value="<%= values.surveyDate %>" class="<%= errors.surveyDate ? 'is-invalid' : '' %>" />
       <% if (errors.surveyDate) { %><p class="field-error"><%= errors.surveyDate %></p><% } %>
 
-      <label for="uprn">UPRN *</label>
-      <input id="uprn" name="uprn" type="text" required autocomplete="off" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" />
-      <% if (errors.uprn) { %><p class="field-error"><%= errors.uprn %></p><% } %>
+      <label for="surveyorName">Surveyor name *</label>
+      <input id="surveyorName" name="surveyorName" type="text" required autocomplete="name" value="<%= values.surveyorName %>" class="<%= errors.surveyorName ? 'is-invalid' : '' %>" />
+      <% if (errors.surveyorName) { %><p class="field-error"><%= errors.surveyorName %></p><% } %>
+
+      <div class="field-row">
+        <div>
+          <label for="postcode">Postcode *</label>
+          <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" placeholder="e.g. EX23 8JZ" value="<%= values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" />
+          <% if (errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
+        </div>
+        <div>
+          <label for="houseNumber">House number / name *</label>
+          <input id="houseNumber" type="text" autocomplete="off" placeholder="e.g. 12 or Flat 12" />
+        </div>
+      </div>
+      <div class="find-row">
+        <p class="hhsrs-hint">Ideal Postcodes lookup fills address and UPRN when found.</p>
+        <button type="button" class="hhsrs-btn-find" id="btn-find-address">Find address</button>
+      </div>
+      <p class="find-status" id="find-status" aria-live="polite"></p>
+      <ul class="match-list" id="match-list" hidden></ul>
 
       <label for="fullAddress">Full address *</label>
       <input id="fullAddress" name="fullAddress" type="text" required autocomplete="street-address" value="<%= values.fullAddress %>" class="<%= errors.fullAddress ? 'is-invalid' : '' %>" />
       <% if (errors.fullAddress) { %><p class="field-error"><%= errors.fullAddress %></p><% } %>
 
-      <label for="postcode">Postcode *</label>
-      <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" value="<%= values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" />
-      <% if (errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
-
-      <label for="surveyorName">Surveyor name *</label>
-      <input id="surveyorName" name="surveyorName" type="text" required autocomplete="name" value="<%= values.surveyorName %>" class="<%= errors.surveyorName ? 'is-invalid' : '' %>" />
-      <% if (errors.surveyorName) { %><p class="field-error"><%= errors.surveyorName %></p><% } %>
+      <label for="uprn">UPRN *</label>
+      <input id="uprn" name="uprn" type="text" required autocomplete="off" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" />
+      <% if (errors.uprn) { %><p class="field-error"><%= errors.uprn %></p><% } %>
 
       <label for="category">HHSRS category *</label>
       <select id="category" name="category" required class="<%= errors.category ? 'is-invalid' : '' %>">

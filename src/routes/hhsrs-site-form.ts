@@ -1,6 +1,7 @@
 import path from "node:path";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
+import { allowAddressLookup, lookupIdealPostcodes } from "../lib/ideal-postcodes.js";
 import { prisma } from "../lib/prisma.js";
 import { isProduction } from "../config.js";
 import { HHSRS_CATEGORIES, HHSRS_RATINGS } from "../lib/hhsrs-categories.js";
@@ -133,6 +134,40 @@ hhsrsSiteFormRouter.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 hhsrsSiteFormRouter.use("/assets", express.static(assetsDir));
+
+function lookupInput(req: Request): { postcode: string; house: string } {
+  const body = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {};
+  const query = req.query as Record<string, unknown>;
+  const source: Record<string, unknown> = req.method === "GET" ? query : { ...query, ...body };
+  const read = (value: unknown): string => (Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""));
+  const house = read(source.house);
+  return {
+    postcode: read(source.postcode),
+    house: house || read(source.query),
+  };
+}
+
+async function addressLookup(req: Request, res: Response): Promise<void> {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  if (!allowAddressLookup(ip)) {
+    res.status(429).json({ error: "Too many address lookups. Wait a moment and try again." });
+    return;
+  }
+  const { postcode, house } = lookupInput(req);
+  const result = await lookupIdealPostcodes({
+    postcode,
+    house,
+    apiKey: process.env.IDEAL_POSTCODES_API_KEY,
+  });
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json({ matches: result.matches });
+}
+
+hhsrsSiteFormRouter.get("/address-lookup", addressLookup);
+hhsrsSiteFormRouter.post("/address-lookup", addressLookup);
 
 hhsrsSiteFormRouter.get("/", async (_req: Request, res: Response) => {
   await sweepOldDrafts();

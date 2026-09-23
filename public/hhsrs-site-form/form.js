@@ -12,6 +12,147 @@
   var MAX_EDGE = 2048;
   var JPEG_QUALITY = 0.82;
   var SKIP_UNDER_BYTES = 2 * 1024 * 1024;
+
+  var findBtn = document.getElementById("btn-find-address");
+  var findStatus = document.getElementById("find-status");
+  var matchList = document.getElementById("match-list");
+  var lookupUrl = form ? form.getAttribute("data-address-lookup") || "" : "";
+  var lookupBusy = false;
+
+  function setFindStatus(text, kind) {
+    if (!findStatus) return;
+    findStatus.textContent = text || "";
+    findStatus.className = "find-status" + (kind ? " is-" + kind : "");
+  }
+
+  function clearMatches() {
+    if (!matchList) return;
+    matchList.hidden = true;
+    matchList.replaceChildren();
+  }
+
+  function applyMatch(match) {
+    var address = document.getElementById("fullAddress");
+    var uprn = document.getElementById("uprn");
+    var postcode = document.getElementById("postcode");
+    if (address) {
+      address.value = match.line || "";
+      address.classList.remove("is-invalid");
+    }
+    if (uprn) {
+      uprn.value = match.uprn || "";
+      uprn.classList.remove("is-invalid");
+    }
+    if (postcode && match.postcode) {
+      postcode.value = match.postcode;
+      postcode.classList.remove("is-invalid");
+    }
+    clearMatches();
+    setFindStatus("Address found.", "ok");
+  }
+
+  function showMatches(matches) {
+    if (!matchList) return;
+    matchList.replaceChildren();
+    matches.forEach(function (match) {
+      var li = document.createElement("li");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      var label = match.line || "Address";
+      if (match.uprn) label += " · UPRN " + match.uprn;
+      btn.textContent = label;
+      btn.addEventListener("click", function () {
+        applyMatch(match);
+      });
+      li.appendChild(btn);
+      matchList.appendChild(li);
+    });
+    matchList.hidden = false;
+  }
+
+  function findAddress() {
+    if (!findBtn || lookupBusy) return;
+    var postcodeEl = document.getElementById("postcode");
+    var houseEl = document.getElementById("houseNumber");
+    var postcode = postcodeEl ? String(postcodeEl.value || "").trim() : "";
+    var house = houseEl ? String(houseEl.value || "").trim() : "";
+    clearMatches();
+    if (!postcode || !house) {
+      setFindStatus("Enter postcode and house number / name first.", "err");
+      return;
+    }
+    if (!lookupUrl) {
+      setFindStatus("Address lookup is not available.", "err");
+      return;
+    }
+    lookupBusy = true;
+    findBtn.disabled = true;
+    setFindStatus("Looking up address…", "");
+    var url =
+      lookupUrl +
+      "?postcode=" +
+      encodeURIComponent(postcode) +
+      "&house=" +
+      encodeURIComponent(house);
+    fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (res) {
+        return res.json().then(
+          function (data) {
+            return { status: res.status, data: data || {} };
+          },
+          function () {
+            return { status: res.status, data: {} };
+          }
+        );
+      })
+      .then(function (result) {
+        var data = result.data || {};
+        if (result.status === 503 || result.status === 501) {
+          setFindStatus(data.error || "Address lookup is not configured.", "err");
+          return;
+        }
+        if (result.status === 429) {
+          setFindStatus(data.error || "Too many lookups. Wait a moment and try again.", "err");
+          return;
+        }
+        if (!result.status || result.status >= 400) {
+          setFindStatus(data.error || "Could not look up that address.", "err");
+          return;
+        }
+        var matches = Array.isArray(data.matches) ? data.matches : [];
+        if (matches.length === 1) {
+          applyMatch(matches[0]);
+          return;
+        }
+        if (matches.length > 1) {
+          setFindStatus("Pick the matching address:", "");
+          showMatches(matches);
+          return;
+        }
+        setFindStatus("No matching address. Check the postcode and house number, or type the address.", "err");
+      })
+      .catch(function () {
+        setFindStatus("Could not look up that address. Check your connection or type the address.", "err");
+      })
+      .then(function () {
+        lookupBusy = false;
+        if (findBtn) findBtn.disabled = false;
+      });
+  }
+
+  if (findBtn) findBtn.addEventListener("click", findAddress);
+
+  function onLookupEnter(e) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    findAddress();
+  }
+
+  ["postcode", "houseNumber"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("keydown", onLookupEnter);
+  });
+
   if (!input || !newGrid) return;
 
   function existingCount() {
@@ -200,9 +341,10 @@
   var clearBtn = document.getElementById("clear-form");
   var FIELD_IDS = [
     "projectId",
-    "uprn",
-    "fullAddress",
+    "houseNumber",
     "postcode",
+    "fullAddress",
+    "uprn",
     "surveyorName",
     "category",
     "rating",
@@ -231,6 +373,8 @@
     renderNew();
     if (existing) existing.innerHTML = "";
     setStatus("");
+    clearMatches();
+    setFindStatus("", "");
     if (form) form.removeAttribute("data-photos-ready");
     var submit = form && form.querySelector('button[type="submit"]');
     if (submit) {

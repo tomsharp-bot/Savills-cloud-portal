@@ -60,3 +60,8 @@ services:
       - key: SPACES_SECRET
         type: SECRET
         scope: RUN_TIME
+      # Ideal Postcodes key for HHSRS Find address. Set the value in the App Platform UI.
+      # Declared here so the name is part of the spec; do not paste the key into this file.
+      - key: IDEAL_POSTCODES_API_KEY
+        type: SECRET
+        scope: RUN_TIME

@@ -273,17 +273,31 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
     assert.match(form.body, /data-max-file-mb="40"/);
     assert.match(form.body, /id="clear-form"/);
+    assert.match(form.body, /id="houseNumber"/);
+    assert.match(form.body, /id="btn-find-address"/);
+    assert.match(form.body, /Find address/);
+    assert.match(form.body, /data-address-lookup="\/HHSRS-site-form\/address-lookup"/);
+    assert.ok(
+      form.body.indexOf('id="postcode"') < form.body.indexOf('id="fullAddress"') &&
+        form.body.indexOf('id="fullAddress"') < form.body.indexOf('id="uprn"'),
+      "Property fields run postcode, full address, then UPRN"
+    );
+    assert.doesNotMatch(form.body, /name="houseNumber"/);
     assert.match(form.body, /hhsrs-btn-secondary/);
     assert.match(form.body, /type="button"[^>]*>Clear Form</);
     const reviewIdx = form.body.indexOf(">Review<");
     const clearIdx = form.body.indexOf(">Clear Form<");
     assert.ok(reviewIdx !== -1 && clearIdx > reviewIdx, "Clear Form sits under Review on the new-issue form");
     assert.match(css.body, /\.hhsrs-btn-secondary/);
+    assert.match(css.body, /\.hhsrs-btn-find/);
+    assert.match(css.body, /\.match-list/);
 
     const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
     assert.equal(js.status, 200);
     assert.match(js.body, /Clear the form\? This cannot be undone\./);
     assert.match(js.body, /Europe\/London/);
+    assert.match(js.body, /btn-find-address/);
+    assert.match(js.body, /address-lookup/);
   });
 
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
@@ -355,6 +369,30 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(review.body, />Edit</);
     assert.match(review.body, />Cancel</);
     assert.doesNotMatch(review.body, /Clear Form/);
+  });
+
+  it("returns a JSON error when address lookup is not configured", async () => {
+    const previous = process.env.IDEAL_POSTCODES_API_KEY;
+    delete process.env.IDEAL_POSTCODES_API_KEY;
+    try {
+      const app = createApp({ basePath: "/projectprogress" });
+      const missing = await request(app, "GET", "/HHSRS-site-form/address-lookup?postcode=SE1+2AA");
+      assert.equal(missing.status, 400);
+      assert.equal(JSON.parse(missing.body).error, "Enter a postcode and house number or name.");
+
+      const unconfigured = await request(
+        app,
+        "GET",
+        "/HHSRS-site-form/address-lookup?postcode=SE1+2AA&house=12"
+      );
+      assert.equal(unconfigured.status, 503);
+      const payload = JSON.parse(unconfigured.body);
+      assert.equal(payload.error, "Address lookup is not configured.");
+      assert.equal(JSON.stringify(payload).includes("api_key"), false);
+    } finally {
+      if (previous === undefined) delete process.env.IDEAL_POSTCODES_API_KEY;
+      else process.env.IDEAL_POSTCODES_API_KEY = previous;
+    }
   });
 
   it("returns validation errors on Review without saving", async () => {
