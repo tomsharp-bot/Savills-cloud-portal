@@ -4,6 +4,7 @@
   const projectValue = isFilled
     ? ((matchedProject && matchedProject.name) || row.projectName)
     : "";
+  const casePhotos = Array.isArray(photos) ? photos : [];
 %>
 
 <div class="page-header">
@@ -28,31 +29,85 @@
   <% } else { %>
     <button type="button" class="btn btn-primary" id="btn-mark-actioned" disabled title="Open a waiting case from Pending Issues first">Mark as actioned → Main Log</button>
   <% } %>
+  <a class="btn btn-create-email" id="btn-create-plain-email" href="<%= reporterBase %>/review?compose=1">Create new email</a>
 </section>
 
 <div id="review-workspace">
-  <% if (isFilled) { %>
-  <form method="post" action="<%= reporterBase %>/review/<%= row.id %>" id="rv-save-form">
-    <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
-    <input type="hidden" name="status" value="<%= row.status === 'new' ? 'in_review' : row.status %>" />
-  <% } %>
-
-  <div class="review-project-first">
-    <label for="rv-project">Project</label>
-    <select id="rv-project" name="projectNameDisplay" aria-describedby="rv-project-hint" <%= isFilled ? "" : "" %>>
-      <option value="">Select a project…</option>
-      <% demoProjects.forEach((p) => { %>
-        <option value="<%= p.name %>" <%= projectValue === p.name ? "selected" : "" %>><%= p.name %></option>
-      <% }) %>
-      <% if (isFilled && !matchedProject) { %>
-        <option value="<%= row.projectName %>" selected><%= row.projectName %></option>
+  <section class="panel waiting-urgent rv-pending-strip <%= alsoWaiting.length ? '' : 'is-clear' %>" id="rv-also-waiting" aria-label="Other pending issues">
+    <details id="rv-also-details">
+      <summary class="panel-head received-head rv-pending-summary">
+        <div class="rv-pending-summary-left">
+          <span class="rv-pending-chevron" aria-hidden="true">▶</span>
+          <h2><span class="urgent-icon" aria-hidden="true">!</span> Other pending issues</h2>
+        </div>
+        <span class="count count-received"><%= alsoWaiting.length %> <%= alsoWaiting.length === 1 ? "waiting" : "waiting" %></span>
+      </summary>
+      <% if (!alsoWaiting.length) { %>
+        <p class="waiting-empty-msg" id="rv-also-empty">No other pending issues — you’re up to date.</p>
+      <% } else { %>
+        <div class="table-wrap" id="rv-also-table-wrap">
+          <table class="landing-table" id="rv-also-table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Address</th>
+                <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
+                <th>Category</th>
+                <th>Rating</th>
+                <th>Received</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% alsoWaiting.forEach((r) => {
+                const ago = formatTimeAgo(r.createdAt);
+              %>
+                <tr>
+                  <td><span class="project-pill"><%= r.projectName %></span></td>
+                  <td><strong><%= r.fullAddress %></strong></td>
+                  <%- include("partials/photo-att-cell", { count: photoAttachmentCount(r.photoPaths) }) %>
+                  <td><%= r.category %></td>
+                  <td class="<%= ratingDisplayClass(r.rating) %>"><%= r.rating %></td>
+                  <td>
+                    <span class="<%= ago.urgent ? 'time-ago-urgent' : '' %>"><%= ago.relative %></span>
+                    <span class="time-ago-abs"><%= ago.absolute %></span>
+                  </td>
+                  <td><a class="btn-review-create" href="<%= reporterBase %>/review/<%= r.id %>">Review Case</a></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
       <% } %>
-    </select>
-    <p class="review-project-hint" id="rv-project-hint">Choose the project first. Extra fields and the email draft follow its rules.</p>
-  </div>
+    </details>
+  </section>
+
+  <section class="panel review-project-first" id="rv-project-block" aria-label="Project">
+    <div class="panel-head review-head">
+      <h2>Project</h2>
+    </div>
+    <div class="review-project-body">
+      <label for="rv-project">Project</label>
+      <select id="rv-project" name="projectNameDisplay" aria-describedby="rv-project-hint">
+        <option value="">Select a project…</option>
+        <% demoProjects.forEach((p) => { %>
+          <option value="<%= p.name %>" <%= projectValue === p.name ? "selected" : "" %>><%= p.name %></option>
+        <% }) %>
+        <% if (isFilled && !matchedProject) { %>
+          <option value="<%= row.projectName %>" selected><%= row.projectName %></option>
+        <% } %>
+      </select>
+      <p class="review-project-hint" id="rv-project-hint">Choose the project first. Extra fields and the email draft follow its rules.</p>
+    </div>
+  </section>
 
   <div class="review-grid">
-    <section class="panel" aria-label="Case details">
+    <section class="panel panel-overflow-visible" id="rv-case-panel" aria-label="Case details">
+      <% if (isFilled) { %>
+      <form method="post" action="<%= reporterBase %>/review/<%= row.id %>" id="rv-save-form">
+        <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
+        <input type="hidden" name="status" value="<%= row.status === 'new' ? 'in_review' : row.status %>" />
+      <% } %>
       <div class="panel-head review-head">
         <h2 id="rv-case-heading">Case details</h2>
         <span class="count count-review" id="rv-case-badge"><%= isFilled ? "Case" : "Blank" %></span>
@@ -193,27 +248,43 @@
           <% if (isFilled) { %>
             <label for="rv-internal-notes">Internal notes</label>
             <textarea id="rv-internal-notes" name="internalNotes" style="min-height:72px"><%= row.internalNotes %></textarea>
-
-            <% if (photos.length) { %>
-              <p class="review-project-hint" style="margin-top:0.75rem">Photos — attach these in Outlook when you send.</p>
-              <div class="photo-strip">
-                <% photos.forEach((p) => { const name = String(p).split("/").pop(); %>
-                  <a href="<%= reporterBase + '/' + row.id + '/photos/' + encodeURIComponent(name) %>" target="_blank" rel="noreferrer">
-                    <img src="<%= reporterBase + '/' + row.id + '/photos/' + encodeURIComponent(name) %>" alt="<%= name %>" />
-                  </a>
-                <% }) %>
-              </div>
-            <% } %>
-
-            <div class="actions-row" style="margin:1rem 0 0;padding:0;border:0;background:transparent;box-shadow:none">
-              <button type="submit" class="btn btn-primary">Save review</button>
-            </div>
           <% } %>
+
+          <div class="photos-block <%= isFilled ? '' : 'is-blank-mode' %>" id="rv-photos-block">
+            <div class="photos-head">
+              <label>Photos <span class="photos-sub" id="rv-photos-sub">(up to 4)</span></label>
+              <span class="photos-count" id="rv-photos-count" aria-live="polite"><%= casePhotos.length %> / 4</span>
+            </div>
+            <div class="photo-thumbs case-photo-thumbs" id="rv-photo-thumbs" aria-label="Case photos">
+              <% casePhotos.forEach((p) => { %>
+                <div class="photo-thumb case-photo-thumb" data-photo-id="<%= p.id %>">
+                  <img src="<%= p.url %>" alt="<%= p.caption %>" draggable="false" />
+                  <span class="photo-caption"><%= p.caption %></span>
+                </div>
+              <% }) %>
+            </div>
+            <div class="photos-add-row" id="rv-photos-add-row" <%= isFilled ? "hidden" : "" %>>
+              <label class="photos-dropzone" id="rv-photos-dropzone" for="rv-photo-file">
+                <span>Add photo</span>
+                <span class="photos-drop-hint">Drop an image here, or browse (up to 4)</span>
+              </label>
+              <input type="file" id="rv-photo-file" accept="image/*" hidden multiple />
+            </div>
+          </div>
         </fieldset>
+        <div class="generate-email-row">
+          <button type="button" class="btn btn-primary" id="btn-generate-email" <%= isFilled ? "" : "disabled" %>>Generate email</button>
+          <button type="button" class="btn btn-ghost" id="btn-amend-case" hidden>Amend case details</button>
+          <% if (isFilled) { %>
+            <button type="submit" class="btn btn-ghost">Save review</button>
+          <% } %>
+          <span class="review-project-hint" id="rv-generate-note">Choose a project, complete the case details, then generate the email.</span>
+        </div>
       </div>
+      <% if (isFilled) { %></form><% } %>
     </section>
 
-    <section class="panel" aria-label="Client email draft">
+    <section class="panel email-draft-panel" aria-label="Client email draft">
       <div class="panel-head neutral">
         <h2>Client email draft</h2>
         <span class="count count-review" id="rv-email-badge">Draft</span>
@@ -222,52 +293,36 @@
       <form class="email-form" id="rv-email-form" onsubmit="return false;">
         <div class="field-with-copy">
           <label for="rv-email-to">To</label>
-          <input id="rv-email-to" type="text" placeholder="Select a project for recipients…" value="<%= draftTo || '' %>" />
+          <input id="rv-email-to" type="text" placeholder="Select a project for recipients…" value="" />
           <button type="button" class="btn-copy" data-copy="rv-email-to">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-cc">Cc</label>
-          <input id="rv-email-cc" type="text" placeholder="optional" value="<%= draftCc || '' %>" />
+          <input id="rv-email-cc" type="text" placeholder="optional" value="" />
           <button type="button" class="btn-copy" data-copy="rv-email-cc">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-subject">Subject</label>
-          <input id="rv-email-subject" type="text" placeholder="Subject" value="<%= draftSubject || '' %>" />
+          <input id="rv-email-subject" type="text" placeholder="Subject" value="" />
           <button type="button" class="btn-copy" data-copy="rv-email-subject">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-body">Body</label>
-          <textarea id="rv-email-body" placeholder="Draft email…"><%= draftBody || "" %></textarea>
+          <textarea id="rv-email-body" placeholder="Draft email…"></textarea>
           <button type="button" class="btn-copy" data-copy="rv-email-body">Copy</button>
+        </div>
+        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint">Fill case details, then click Generate email below Case details.</p>
+        <div id="rv-email-photos" class="email-photo-tools" hidden>
+          <div class="photo-thumbs email-photo-thumbs" id="rv-email-photo-thumbs" aria-label="Drag case photos into your email draft"></div>
+          <p class="photos-drag-hint" id="rv-photos-hint">Drag a photo into your email draft. If that doesn’t work, download the photo.</p>
+          <div class="photos-fallback">
+            <button type="button" class="btn btn-sm btn-photo-fallback" id="btn-download-photos" disabled>Download photos</button>
+          </div>
         </div>
         <p class="review-project-hint" style="margin-top:0.75rem">Copy into Outlook, attach photos, then send. Use <strong>Mark as actioned → Main Log</strong> when done.</p>
       </form>
     </section>
   </div>
-
-  <% if (isFilled) { %></form><% } %>
-
-  <section class="panel" aria-label="Also waiting" id="rv-also-waiting" style="margin-top:1rem">
-    <div class="panel-head received-head">
-      <h2>Also in Pending Issues</h2>
-      <span class="count count-received"><%= alsoWaiting.length %> <%= alsoWaiting.length === 1 ? "case" : "cases" %></span>
-    </div>
-    <ul class="queue-list" id="rv-also-list">
-      <% if (!alsoWaiting.length) { %>
-        <li><div>No other waiting cases.</div></li>
-      <% } else { %>
-        <% alsoWaiting.forEach((r) => { %>
-          <li>
-            <div>
-              <span class="addr"><%= r.fullAddress %></span>
-              · <%= r.category %> · <%= r.rating %> · <%= r.surveyorName %> · <%= r.projectName %>
-            </div>
-            <a class="link-action" href="<%= reporterBase %>/review/<%= r.id %>">Open</a>
-          </li>
-        <% }) %>
-      <% } %>
-    </ul>
-  </section>
 </div>
 
 <p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>

@@ -25,6 +25,7 @@
           <tr>
             <th>Project</th>
             <th>Address</th>
+            <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
             <th>UPRN</th>
             <th>Surveyor</th>
             <th>Category</th>
@@ -40,6 +41,7 @@
             <tr>
               <td><span class="project-pill"><%= row.projectName %></span></td>
               <td><strong><%= row.fullAddress %></strong></td>
+              <%- include("partials/photo-att-cell", { count: photoAttachmentCount(row.photoPaths) }) %>
               <td><span style="color:var(--muted)"><%= row.uprn %></span></td>
               <td><%= row.surveyorName %></td>
               <td><%= row.category %></td>
@@ -49,7 +51,7 @@
                 <span class="time-ago-abs"><%= ago.absolute %></span>
               </td>
               <td>
-                <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review and create</a>
+                <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review Case</a>
               </td>
             </tr>
           <% }) %>

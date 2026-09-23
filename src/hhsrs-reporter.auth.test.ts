@@ -135,6 +135,12 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(blank.body, /Review and create/);
     assert.match(blank.body, /Select a project/);
     assert.match(blank.body, /Mark as actioned/);
+    assert.match(blank.body, /Create new email/);
+    assert.match(blank.body, /id="btn-generate-email"/);
+    assert.match(blank.body, /id="btn-amend-case"/);
+    assert.match(blank.body, /Fill case details, then click Generate email below Case details/);
+    assert.match(blank.body, /id="rv-email-photos"[^>]*hidden/);
+    assert.doesNotMatch(blank.body, /class="side-brand"/);
     assert.doesNotMatch(blank.body, /Send pack/);
     assert.doesNotMatch(blank.body, /Preview PDF/);
     assert.doesNotMatch(blank.body, /Save draft/);
@@ -255,7 +261,7 @@ describe("HHSRS Reporter auth and queue", () => {
         category: "Electrical Hazards",
         rating: "High",
         comment: "damaged light fitting in lounge",
-        photoPaths: [],
+        photoPaths: ["hhsrs-site-form/placeholder/lounge.jpg"],
         status: "new",
       },
     });
@@ -269,16 +275,52 @@ describe("HHSRS Reporter auth and queue", () => {
       const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /Client email draft/);
-      assert.match(page.body, /The light fitting in the lounge is damaged/);
+      assert.match(page.body, /• Site notes: Damaged light fitting in lounge/);
+      assert.doesNotMatch(page.body, /The light fitting in the lounge is damaged/);
       assert.match(page.body, /Demo Housing - HHSRS/);
       assert.match(page.body, /Mark as actioned/);
       assert.match(page.body, /btn-copy/);
+      assert.match(page.body, /<textarea id="rv-email-body"[^>]*>\s*<\/textarea>/);
+      assert.match(page.body, /case-photo-thumb/);
+      assert.match(page.body, /photos\/lounge\.jpg/);
+      assert.match(page.body, /id="rv-email-photos"[^>]*hidden/);
+      const photosAt = page.body.indexOf('id="rv-photos-block"');
+      const generateAt = page.body.indexOf('id="btn-generate-email"');
+      assert.ok(photosAt > 0 && generateAt > photosAt);
+      assert.equal(page.body.slice(photosAt, generateAt).includes("Download photos"), false);
+
+      const dash = await request(app, "GET", "/HHSRSreporter", { cookie });
+      assert.match(dash.body, /photo-att-col/);
+      assert.match(dash.body, /1 photo attached/);
+      assert.doesNotMatch(dash.body, /class="side-brand"/);
+
+      const drafted = await request(app, "POST", "/HHSRSreporter/draft.json", {
+        cookie,
+        contentType: "application/json",
+        body: JSON.stringify({
+          caseId: row.id,
+          projectName: "Demo Housing",
+          address: "1 High Street, EX1 1AA",
+          uprn: row.uprn,
+          hazard: "Electrical Hazards",
+          rating: "High",
+          notes: "damaged light fitting in lounge",
+          photoCount: 1,
+          includeCause: true,
+        }),
+      });
+      assert.equal(drafted.status, 200);
+      const payload = JSON.parse(drafted.body) as { ok: boolean; subject: string; body: string };
+      assert.equal(payload.ok, true);
+      assert.match(payload.subject, /Demo Housing - HHSRS/);
+      assert.match(payload.body, /• Site notes: Damaged light fitting in lounge\./);
+      assert.doesNotMatch(payload.body, /The light fitting in the lounge is damaged/);
     } finally {
       await prisma.hhsrsSiteSubmission.delete({ where: { id: row.id } });
     }
   });
 
-  it("generates a BPHA draft that keeps surveyor-visit intro wording", async (t) => {
+  it("generates a BPHA draft as bullets without the surveyor-visit intro", async (t) => {
     if (!dbReady) {
       t.skip("Postgres with seeded users is not available");
       return;
@@ -305,8 +347,10 @@ describe("HHSRS Reporter auth and queue", () => {
       const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /BPHA - HHSRS/);
-      assert.match(page.body, /One of our surveyors has visited/);
-      assert.match(page.body, /There is mould in the cupboard in the hallway/);
+      assert.match(page.body, /• Site notes: Black mould in cupboard in hallway/);
+      assert.doesNotMatch(page.body, /There is mould in the cupboard in the hallway/);
+      assert.doesNotMatch(page.body, /One of our surveyors has visited/);
+      assert.doesNotMatch(page.body, /on the HHSRS/);
       assert.match(page.body, /data-extra="calls"/);
     } finally {
       await prisma.hhsrsSiteSubmission.delete({ where: { id: row.id } });
