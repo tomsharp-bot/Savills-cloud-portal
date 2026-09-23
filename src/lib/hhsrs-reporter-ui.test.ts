@@ -110,6 +110,27 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
 
+    const attempted = mergeReviewDraftFields(
+      { ...row, callOutcome: "Attempted", callNotes: "Voicemail full" },
+      {
+        projectName: "Onward 2026",
+        address: "1 High Street, EX1 1AA",
+        notes: "Exposed wire to hallway ceiling.",
+        hazard: "Electrical Hazards",
+        rating: "High",
+        callOutcome: "Attempted",
+        clientCallReference: "",
+        callNotes: "Voicemail full",
+        onwardTopic: "Electrical",
+        cat1Confirmed: true,
+        includeCause: true,
+        photoCount: 0,
+      }
+    );
+    const attemptedDraft = draftEmailFromReviewFields(attempted);
+    assert.match(attemptedDraft.body, /• Onward call: Voicemail full/);
+    assert.doesNotMatch(attemptedDraft.body, /couldn't get through/i);
+
     const edited = mergeReviewDraftFields(row, {
       notes: "Loose socket in the kitchen.",
       rating: "High",
@@ -162,6 +183,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(pending, /photo-att-col/);
     assert.match(pending, /Review Case/);
     assert.doesNotMatch(sidebar, /side-brand/);
+    assert.match(review, /id="rv-call-notes" name="callNotes"/);
+    assert.match(review, /row\.callNotes/);
+    assert.match(js, /callNotes:/);
     assert.match(js, /function amendCaseDetails/);
     assert.match(js, /caseLocked = true/);
     assert.match(js, /DownloadURL/);

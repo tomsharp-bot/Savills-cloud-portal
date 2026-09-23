@@ -4,6 +4,7 @@
   var newGrid = document.getElementById("new-photos");
   var existing = document.getElementById("existing-photos");
   var statusEl = document.getElementById("photo-status");
+  var minPhotos = form ? parseInt(form.getAttribute("data-min-photos") || "1", 10) : 1;
   var max = form ? parseInt(form.getAttribute("data-max-photos") || "4", 10) : 4;
   var maxBytes = form
     ? parseInt(form.getAttribute("data-max-file-bytes") || String(40 * 1024 * 1024), 10)
@@ -12,10 +13,235 @@
   var MAX_EDGE = 2048;
   var JPEG_QUALITY = 0.82;
   var SKIP_UNDER_BYTES = 2 * 1024 * 1024;
+
+  var findBtn = document.getElementById("btn-find-address");
+  var findStatus = document.getElementById("find-status");
+  var matchList = document.getElementById("match-list");
+  var lookupUrl = form ? form.getAttribute("data-address-lookup") || "" : "";
+  var lookupBusy = false;
+
+  function setFindStatus(text, kind) {
+    if (!findStatus) return;
+    findStatus.textContent = text || "";
+    findStatus.className = "find-status" + (kind ? " is-" + kind : "");
+  }
+
+  function clearMatches() {
+    if (!matchList) return;
+    matchList.hidden = true;
+    matchList.replaceChildren();
+  }
+
+  function keepAddressEditable() {
+    ["fullAddress", "uprn"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.readOnly = false;
+      el.disabled = false;
+    });
+  }
+
+  function applyMatch(match) {
+    var address = document.getElementById("fullAddress");
+    var uprn = document.getElementById("uprn");
+    var postcode = document.getElementById("postcode");
+    keepAddressEditable();
+    if (address) {
+      address.value = match.line || "";
+      address.classList.remove("is-invalid");
+    }
+    if (uprn) {
+      uprn.value = match.uprn || "";
+      uprn.classList.remove("is-invalid");
+    }
+    if (postcode && match.postcode) {
+      postcode.value = match.postcode;
+      postcode.classList.remove("is-invalid");
+    }
+    clearMatches();
+    setFindStatus("Address found.", "ok");
+  }
+
+  function showMatches(matches) {
+    if (!matchList) return;
+    matchList.replaceChildren();
+    matches.forEach(function (match) {
+      var li = document.createElement("li");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      var label = match.line || "Address";
+      if (match.uprn) label += " · UPRN " + match.uprn;
+      btn.textContent = label;
+      btn.addEventListener("click", function () {
+        applyMatch(match);
+      });
+      li.appendChild(btn);
+      matchList.appendChild(li);
+    });
+    matchList.hidden = false;
+  }
+
+  function findAddress() {
+    if (!findBtn || lookupBusy) return;
+    var postcodeEl = document.getElementById("postcode");
+    var houseEl = document.getElementById("houseNumber");
+    var postcode = postcodeEl ? String(postcodeEl.value || "").trim() : "";
+    var house = houseEl ? String(houseEl.value || "").trim() : "";
+    clearMatches();
+    if (!postcode || !house) {
+      setFindStatus("Enter postcode and house number / name first.", "err");
+      return;
+    }
+    if (!lookupUrl) {
+      setFindStatus("Address lookup is not available.", "err");
+      return;
+    }
+    lookupBusy = true;
+    findBtn.disabled = true;
+    setFindStatus("Looking up address…", "");
+    var url =
+      lookupUrl +
+      "?postcode=" +
+      encodeURIComponent(postcode) +
+      "&house=" +
+      encodeURIComponent(house);
+    fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (res) {
+        return res.json().then(
+          function (data) {
+            return { status: res.status, data: data || {} };
+          },
+          function () {
+            return { status: res.status, data: {} };
+          }
+        );
+      })
+      .then(function (result) {
+        var data = result.data || {};
+        if (result.status === 503 || result.status === 501) {
+          setFindStatus(data.error || "Address lookup is not configured.", "err");
+          return;
+        }
+        if (result.status === 429) {
+          setFindStatus(data.error || "Too many lookups. Wait a moment and try again.", "err");
+          return;
+        }
+        if (!result.status || result.status >= 400) {
+          setFindStatus(data.error || "Could not look up that address.", "err");
+          return;
+        }
+        var matches = Array.isArray(data.matches) ? data.matches : [];
+        if (matches.length === 1) {
+          applyMatch(matches[0]);
+          return;
+        }
+        if (matches.length > 1) {
+          setFindStatus("Pick the matching address:", "");
+          showMatches(matches);
+          return;
+        }
+        setFindStatus("No matching address. Type the full address and UPRN yourself.", "err");
+      })
+      .catch(function () {
+        setFindStatus("Could not look up that address. Check your connection or type the address.", "err");
+      })
+      .then(function () {
+        lookupBusy = false;
+        if (findBtn) findBtn.disabled = false;
+      });
+  }
+
+  if (findBtn) findBtn.addEventListener("click", findAddress);
+
+  function onLookupEnter(e) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    findAddress();
+  }
+
+  ["postcode", "houseNumber"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("keydown", onLookupEnter);
+  });
+
+  function visitReady() {
+    var project = document.getElementById("projectId");
+    var date = document.getElementById("surveyDate");
+    var name = document.getElementById("surveyorName");
+    return !!(
+      project && String(project.value || "").trim() &&
+      date && String(date.value || "").trim() &&
+      name && String(name.value || "").trim()
+    );
+  }
+
+  function syncProjectExtras() {
+    var project = document.getElementById("projectId");
+    var opt = project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
+    var flags = {
+      calls: !!(opt && opt.getAttribute("data-calls") === "1"),
+      onward: !!(opt && opt.getAttribute("data-onward") === "1"),
+      saxon: !!(opt && opt.getAttribute("data-saxon") === "1"),
+      online: !!(opt && opt.getAttribute("data-online") === "1"),
+    };
+    var nodes = document.querySelectorAll(".project-extra");
+    for (var i = 0; i < nodes.length; i++) {
+      var key = nodes[i].getAttribute("data-extra") || "";
+      var show = !!flags[key];
+      nodes[i].hidden = !show;
+      var inputs = nodes[i].querySelectorAll("input, textarea, select");
+      for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !show;
+    }
+  }
+
+  function updateVisitGate() {
+    var details = document.getElementById("issue-details");
+    var hint = document.getElementById("visit-gate-hint");
+    var open = visitReady();
+    if (details) details.hidden = !open;
+    if (hint) hint.hidden = open;
+    if (open) keepAddressEditable();
+    syncProjectExtras();
+    syncCallUnreached();
+  }
+
+  function syncCallUnreached() {
+    var box = document.getElementById("callUnreached");
+    var wrap = document.getElementById("call-unreached-note");
+    var note = document.getElementById("callUnreachedNote");
+    var calls = document.querySelector('.project-extra[data-extra="calls"]');
+    var callsShown = !!(calls && !calls.hidden);
+    var on = !!(box && box.checked && callsShown);
+    if (wrap) wrap.hidden = !on;
+    if (note) note.disabled = !on;
+  }
+
+  var callBox = document.getElementById("callUnreached");
+  if (callBox) callBox.addEventListener("change", syncCallUnreached);
+
+  ["projectId", "surveyDate", "surveyorName"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", updateVisitGate);
+    el.addEventListener("change", updateVisitGate);
+  });
+  updateVisitGate();
+
   if (!input || !newGrid) return;
 
   function existingCount() {
     return existing ? existing.querySelectorAll("[data-existing]").length : 0;
+  }
+
+  function visibleRequiredMissing() {
+    if (!form) return false;
+    var nodes = form.querySelectorAll("input[required], textarea[required], select[required]");
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (el.disabled || (el.closest && el.closest("[hidden]"))) continue;
+      if (!String(el.value || "").trim()) return true;
+    }
+    return false;
   }
 
   function syncFiles(files) {
@@ -163,6 +389,17 @@
     form.addEventListener("submit", function (e) {
       if (form.getAttribute("data-photos-ready") === "1") return;
       var files = currentFiles();
+      var total = existingCount() + files.length;
+      if (total < minPhotos && !visibleRequiredMissing()) {
+        e.preventDefault();
+        setStatus(minPhotos === 1 ? "Add at least 1 photo." : "Add at least " + minPhotos + " photos.");
+        return;
+      }
+      if (total > max) {
+        e.preventDefault();
+        setStatus("Add " + minPhotos + " to " + max + " photos.");
+        return;
+      }
       if (!files.length) return;
       e.preventDefault();
       var btn = form.querySelector('button[type="submit"]');
@@ -200,15 +437,17 @@
   var clearBtn = document.getElementById("clear-form");
   var FIELD_IDS = [
     "projectId",
-    "uprn",
-    "fullAddress",
+    "houseNumber",
     "postcode",
+    "fullAddress",
+    "uprn",
     "surveyorName",
     "category",
     "rating",
     "comment",
     "clientCallReference",
     "otherDetails",
+    "callUnreachedNote",
   ];
 
   function todayLondonDate() {
@@ -231,6 +470,13 @@
     renderNew();
     if (existing) existing.innerHTML = "";
     setStatus("");
+    clearMatches();
+    setFindStatus("", "");
+    var cat1 = document.getElementById("cat1Confirmed");
+    if (cat1) cat1.checked = false;
+    var callUnreached = document.getElementById("callUnreached");
+    if (callUnreached) callUnreached.checked = false;
+    updateVisitGate();
     if (form) form.removeAttribute("data-photos-ready");
     var submit = form && form.querySelector('button[type="submit"]');
     if (submit) {

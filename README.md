@@ -15,7 +15,9 @@ A public **HHSRS site reporting** form lives on this same app at **root paths** 
 - Admin Reporter (signed-in admin): `/HHSRSreporter` (alias `/HHSRSreporting`)
 - Admin read-only intake list: `/projectprogress/hhsrs-submissions`
 
-Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site-form` (or `http://localhost:3000/HHSRS-site-form` locally). No login for surveyors in v1. Photos store on disk under `uploads/hhsrs-site-form/{submissionId}/` until Spaces is wired. Up to **4 photos**, **each photo up to 40MB** (JPEG, PNG, WebP, HEIC/HEIF). The browser compresses JPEG/PNG/WebP before upload when it can.
+Open the form in a phone browser at `https://savillscloudportal.co.uk/HHSRS-site-form` (or `http://localhost:3000/HHSRS-site-form` locally). No login for surveyors in v1. Photos store on disk under `uploads/hhsrs-site-form/{submissionId}/` until Spaces is wired. **1 to 4 photos**, **each photo up to 40MB** (JPEG, PNG, WebP, HEIC/HEIF). The browser compresses JPEG/PNG/WebP before upload when it can. Once project, survey date and surveyor name are filled, every remaining box is required, including any other details. House number stays lookup-only. Projects that need a client call reference require that reference, or a tick for Couldn't get through plus a note of why it is blank. That path stores a blank call reference, call outcome **Attempted**, and the note as call notes. Reporter Review and Generate email use those fields on the existing Call outcome bullet.
+
+On **New issue**, surveyors can enter a postcode and house number or name and tap **Find address**. That lookup is optional. The server calls Ideal Postcodes (`IDEAL_POSTCODES_API_KEY`, never sent to the browser) and can fill **full address** and **UPRN**. Several matches show a short pick-list. Full address and UPRN stay required and editable, including when lookup fails, returns nothing, or the surveyor prefers to type them. House number is for lookup only: it is not required and is not stored. Until the key is set, Find address reports that lookup is not configured.
 
 ## What this app does
 
@@ -117,6 +119,7 @@ Set these in **App Settings → App-Level / web component Environment Variables*
 | `SPACES_KEY` | **Yes (production)** | Spaces access key. **Set in the App Platform UI as a secret.** Do not commit it. Reference document uploads fail until this is set. |
 | `SPACES_SECRET` | **Yes (production)** | Spaces secret key. **Set in the App Platform UI as a secret.** Do not commit it. |
 | `REQUIRE_SPACES` | No | `true` in `.do/app.yaml`. Production also forces Spaces because `NODE_ENV=production`. Set `true` on any non-production app that must not use local disk. |
+| `IDEAL_POSTCODES_API_KEY` | No (Find address stays off until set) | Ideal Postcodes key (`ak_…`). **Set in the App Platform UI as an encrypted secret** (App-Level or the web component → Environment Variables). Server-only: `GET /HHSRS-site-form/address-lookup`. Do not commit it and do not expose it to the browser. Without it, Find address returns HTTP 503 and the form says lookup is not configured. |
 
 Never commit real keys. The spec file only declares the names.
 

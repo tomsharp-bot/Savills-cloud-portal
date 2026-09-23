@@ -10,7 +10,7 @@
   </header>
   <main class="hhsrs-shell hhsrs-form-shell">
     <h1>New issue</h1>
-    <p class="hhsrs-lead">All fields marked * are required. Photos are optional (up to <%= maxPhotos %>).</p>
+    <p class="hhsrs-lead">All fields marked * are required. Add <%= minPhotos %> to <%= maxPhotos %> photos.</p>
     <% const errList = Object.values(errors).filter(Boolean); %>
     <% if (formError || errList.length) { %>
       <div class="hhsrs-errors" role="alert">
@@ -23,38 +23,67 @@
         </ul>
       </div>
     <% } %>
-    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>">
+    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-min-photos="<%= minPhotos %>" data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>" data-address-lookup="<%= hhsrsUrl('/address-lookup') %>">
       <% if (draft) { %><input type="hidden" name="draftId" value="<%= draft.id %>" /><% } %>
+      <% const visitReady = !!(values.projectId && values.surveyDate && String(values.surveyorName || "").trim()); %>
+      <% const selectedProject = projects.find((p) => p.id === values.projectId); %>
+      <% const flags = selectedProject ? selectedProject.flags : { calls: false, onward: false, saxon: false, online: false }; %>
 
-      <label for="projectId">Project *</label>
-      <select id="projectId" name="projectId" required class="<%= errors.projectId ? 'is-invalid' : '' %>">
-        <option value=""><%= projects.length ? "Select an active project" : "No active projects found" %></option>
-        <% projects.forEach((p) => { %>
-          <option value="<%= p.id %>" <%= values.projectId === p.id ? "selected" : "" %>><%= p.name %></option>
-        <% }) %>
-      </select>
-      <% if (errors.projectId) { %><p class="field-error"><%= errors.projectId %></p><% } %>
+      <div id="visit-fields">
+        <h2 class="hhsrs-sub">Project &amp; visit</h2>
+        <label for="projectId">Project *</label>
+        <select id="projectId" name="projectId" required class="<%= errors.projectId ? 'is-invalid' : '' %>">
+          <option value=""><%= projects.length ? "Select an active project" : "No active projects found" %></option>
+          <% projects.forEach((p) => { %>
+            <option value="<%= p.id %>" <%= values.projectId === p.id ? "selected" : "" %><%= p.flags.calls ? " data-calls=\"1\"" : "" %><%= p.flags.onward ? " data-onward=\"1\"" : "" %><%= p.flags.saxon ? " data-saxon=\"1\"" : "" %><%= p.flags.online ? " data-online=\"1\"" : "" %>><%= p.name %></option>
+          <% }) %>
+        </select>
+        <% if (errors.projectId) { %><p class="field-error"><%= errors.projectId %></p><% } %>
 
-      <label for="surveyDate">Survey date *</label>
-      <input id="surveyDate" name="surveyDate" type="date" required value="<%= values.surveyDate %>" class="<%= errors.surveyDate ? 'is-invalid' : '' %>" />
-      <% if (errors.surveyDate) { %><p class="field-error"><%= errors.surveyDate %></p><% } %>
+        <div class="field-row">
+          <div>
+            <label for="surveyDate">Survey date *</label>
+            <input id="surveyDate" name="surveyDate" type="date" required value="<%= values.surveyDate %>" class="<%= errors.surveyDate ? 'is-invalid' : '' %>" />
+            <% if (errors.surveyDate) { %><p class="field-error"><%= errors.surveyDate %></p><% } %>
+          </div>
+          <div>
+            <label for="surveyorName">Surveyor name *</label>
+            <input id="surveyorName" name="surveyorName" type="text" required autocomplete="name" value="<%= values.surveyorName %>" class="<%= errors.surveyorName ? 'is-invalid' : '' %>" />
+            <% if (errors.surveyorName) { %><p class="field-error"><%= errors.surveyorName %></p><% } %>
+          </div>
+        </div>
+        <p class="hhsrs-hint" id="visit-gate-hint" <%= visitReady ? "hidden" : "" %>>Fill project, survey date and surveyor name to continue.</p>
+      </div>
 
-      <label for="uprn">UPRN *</label>
-      <input id="uprn" name="uprn" type="text" required autocomplete="off" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" />
-      <% if (errors.uprn) { %><p class="field-error"><%= errors.uprn %></p><% } %>
+      <div id="issue-details" <%= visitReady ? "" : "hidden" %>>
+      <h2 class="hhsrs-sub">Property</h2>
+      <div class="field-row">
+        <div>
+          <label for="postcode">Postcode *</label>
+          <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" placeholder="e.g. EX23 8JZ" value="<%= values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" />
+          <% if (errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
+        </div>
+        <div>
+          <label for="houseNumber">House number / name</label>
+          <input id="houseNumber" type="text" autocomplete="off" placeholder="e.g. 12 or Flat 12" />
+        </div>
+      </div>
+      <div class="find-row">
+        <p class="hhsrs-hint">Optional. Find address can fill the fields below. You can always type or edit the full address and UPRN.</p>
+        <button type="button" class="hhsrs-btn-find" id="btn-find-address">Find address</button>
+      </div>
+      <p class="find-status" id="find-status" aria-live="polite"></p>
+      <ul class="match-list" id="match-list" hidden></ul>
 
       <label for="fullAddress">Full address *</label>
       <input id="fullAddress" name="fullAddress" type="text" required autocomplete="street-address" value="<%= values.fullAddress %>" class="<%= errors.fullAddress ? 'is-invalid' : '' %>" />
       <% if (errors.fullAddress) { %><p class="field-error"><%= errors.fullAddress %></p><% } %>
 
-      <label for="postcode">Postcode *</label>
-      <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" value="<%= values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" />
-      <% if (errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
+      <label for="uprn">UPRN *</label>
+      <input id="uprn" name="uprn" type="text" required autocomplete="off" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" />
+      <% if (errors.uprn) { %><p class="field-error"><%= errors.uprn %></p><% } %>
 
-      <label for="surveyorName">Surveyor name *</label>
-      <input id="surveyorName" name="surveyorName" type="text" required autocomplete="name" value="<%= values.surveyorName %>" class="<%= errors.surveyorName ? 'is-invalid' : '' %>" />
-      <% if (errors.surveyorName) { %><p class="field-error"><%= errors.surveyorName %></p><% } %>
-
+      <h2 class="hhsrs-sub">Hazard</h2>
       <label for="category">HHSRS category *</label>
       <select id="category" name="category" required class="<%= errors.category ? 'is-invalid' : '' %>">
         <option value="">Select a category</option>
@@ -77,14 +106,42 @@
       <textarea id="comment" name="comment" required rows="5" class="<%= errors.comment ? 'is-invalid' : '' %>"><%= values.comment %></textarea>
       <% if (errors.comment) { %><p class="field-error"><%= errors.comment %></p><% } %>
 
-      <label for="clientCallReference">Client call reference (if required)</label>
-      <input id="clientCallReference" name="clientCallReference" type="text" value="<%= values.clientCallReference %>" />
+      <h2 class="hhsrs-sub">Extra details</h2>
+      <div class="project-extra" data-extra="calls" <%= flags.calls ? "" : "hidden" %>>
+        <label for="clientCallReference">Client call reference *</label>
+        <input id="clientCallReference" name="clientCallReference" type="text" value="<%= values.clientCallReference %>" class="<%= errors.clientCallReference ? 'is-invalid' : '' %>" <%= flags.calls ? "" : "disabled" %> />
+        <% if (errors.clientCallReference) { %><p class="field-error"><%= errors.clientCallReference %></p><% } %>
+        <label class="hhsrs-check" for="callUnreached">
+          <input id="callUnreached" name="callUnreached" type="checkbox" value="true" <%= values.callUnreached ? "checked" : "" %> <%= flags.calls ? "" : "disabled" %> />
+          <span>Couldn't get through</span>
+        </label>
+        <div id="call-unreached-note" <%= values.callUnreached && flags.calls ? "" : "hidden" %>>
+          <label for="callUnreachedNote">Why is the call reference blank? *</label>
+          <textarea id="callUnreachedNote" name="callUnreachedNote" rows="3" class="<%= errors.callUnreachedNote ? 'is-invalid' : '' %>" <%= flags.calls && values.callUnreached ? "" : "disabled" %>><%= values.callUnreachedNote || "" %></textarea>
+          <% if (errors.callUnreachedNote) { %><p class="field-error"><%= errors.callUnreachedNote %></p><% } %>
+        </div>
+        <p class="hhsrs-hint">Required for this project. Leave it blank only if you tick Couldn't get through and say why.</p>
+      </div>
+      <div class="project-extra" data-extra="onward" <%= flags.onward ? "" : "hidden" %>>
+        <label class="hhsrs-check" for="cat1Confirmed">
+          <input id="cat1Confirmed" name="cat1Confirmed" type="checkbox" value="true" <%= values.cat1Confirmed ? "checked" : "" %> <%= flags.onward ? "" : "disabled" %> />
+          <span>Category 1 confirmed</span>
+        </label>
+        <p class="hhsrs-hint">Onward: confirm Category 1 before this is reported as CAT1. Include the call reference.</p>
+      </div>
+      <div class="project-extra" data-extra="saxon" <%= flags.saxon ? "" : "hidden" %>>
+        <p class="hhsrs-hint" id="saxon-damp-note">Saxon Weald: all damp and mould is phoned in. Email only if Severe, and include the call reference.</p>
+      </div>
+      <div class="project-extra" data-extra="online" <%= flags.online ? "" : "hidden" %>>
+        <p class="hhsrs-hint" id="cornwall-damp-note">Cornwall: any damp and mould needs Tom’s separate online form.</p>
+      </div>
 
-      <label for="otherDetails">Any other details</label>
-      <textarea id="otherDetails" name="otherDetails" rows="4"><%= values.otherDetails %></textarea>
+      <label for="otherDetails">Any other details *</label>
+      <textarea id="otherDetails" name="otherDetails" required rows="4" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
+      <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
 
       <fieldset class="hhsrs-photos">
-        <legend>Photos <span class="optional">(optional, max <%= maxPhotos %>)</span></legend>
+        <legend>Photos <span class="optional">(required, <%= minPhotos %> to <%= maxPhotos %>)</span></legend>
         <p class="hhsrs-hint"><%= photoHint %></p>
         <p id="photo-status" class="hhsrs-hint" hidden></p>
         <% if (errors.photos) { %><p class="field-error"><%= errors.photos %></p><% } %>
@@ -107,6 +164,7 @@
 
       <button class="hhsrs-btn hhsrs-btn-primary" type="submit">Review</button>
       <button id="clear-form" class="hhsrs-btn hhsrs-btn-secondary" type="button">Clear Form</button>
+      </div>
     </form>
   </main>
   <script src="<%= hhsrsUrl('/assets/form.js') %>"></script>

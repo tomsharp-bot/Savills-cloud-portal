@@ -122,6 +122,7 @@ describe("HHSRS Reporter projectDraft", () => {
       "Onward 2026 – HHSRS CAT1 (Electrical) – UPRN 100123 - 1 high street, EX1 1AA"
     );
     assert.match(draft.body, /• Onward call reference: CR-99/);
+    assert.doesNotMatch(draft.body, /• Onward call:/);
     assert.match(draft.body, /• Survey date: 2026-09-20/);
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
@@ -172,6 +173,46 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
   });
 
+  it("puts a couldn't-get-through note on the existing Attempted call bullet", () => {
+    const onward = draftFromSubmission({
+      projectName: "Onward 2026",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      category: "Electrical Hazards",
+      rating: "High",
+      comment: "ignored",
+      clientDescription: "Exposed wire to hallway ceiling.",
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "Voicemail full",
+      onwardTopic: "Electrical",
+      cat1Confirmed: true,
+      photoCount: 0,
+    });
+    assert.match(onward.body, /• Onward call: Voicemail full/);
+    assert.doesNotMatch(onward.body, /Onward call reference/);
+    assert.doesNotMatch(onward.body, /Call reference: couldn't get through/i);
+
+    const saxon = draftFromSubmission({
+      projectName: "Saxon Weald 2026 Phase 4",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      category: "Damp & Mould Growth",
+      rating: "High",
+      comment: "Visible mould in bathroom.",
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "Voicemail full",
+      photoCount: 1,
+    });
+    assert.match(saxon.body, /• Call: Voicemail full/);
+    assert.doesNotMatch(saxon.body, /Call reference/);
+  });
+
   it("uses an office-edited client description verbatim when supplied", () => {
     const draft = draftFromSubmission({
       projectName: "Demo Housing",
@@ -211,6 +252,7 @@ describe("HHSRS Reporter helpers", () => {
       clientDescription: "",
       clientCallReference: "",
       callOutcome: "",
+      callNotes: "",
       workOrder: "",
       suspectedCause: "",
       includeCause: true,

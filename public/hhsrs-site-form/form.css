@@ -51,6 +51,20 @@ body.hhsrs-body {
 }
 .hhsrs-lead { margin: 0 0 22px; color: var(--muted); line-height: 1.45; }
 .hhsrs-sub { margin: 22px 0 10px; font-size: 1.1rem; color: var(--navy); }
+#visit-fields > .hhsrs-sub { margin-top: 0; }
+.hhsrs-form label.hhsrs-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 700;
+}
+.hhsrs-form label.hhsrs-check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: 0;
+  margin: 0.15rem 0 0;
+  flex: none;
+}
 .hhsrs-btn {
   display: block;
   width: 100%;
@@ -179,7 +193,6 @@ body.hhsrs-body {
   .hhsrs-home { font-size: 0.95rem; }
   .hhsrs-review dd, .hhsrs-form select { overflow-wrap: anywhere; }
 }
-
 /* Landing only — do not restyle the form, review, or thanks pages. */
 body.hhsrs-landing {
   --red: #ce171e;
@@ -316,4 +329,72 @@ body.hhsrs-landing {
   }
   .hhsrs-landing .hhsrs-land-top h1 { font-size: 1.15rem; }
   .hhsrs-landing .hhsrs-land-action { padding: 28px 16px 32px; }
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 520px) {
+  .field-row { grid-template-columns: 1fr; }
+}
+.find-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+.find-row .hhsrs-hint { margin: 0; }
+.hhsrs-btn-find {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--navy);
+  color: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hhsrs-btn-find:hover { filter: brightness(1.12); }
+.hhsrs-btn-find:disabled { opacity: 0.65; cursor: wait; }
+.find-status {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+.find-status.is-ok { color: #1b7a4e; font-weight: 600; }
+.find-status.is-err { color: var(--danger); font-weight: 600; }
+.match-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.match-list:not([hidden]) {
+  display: grid;
+  gap: 6px;
+}
+.match-list button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--navy);
+  cursor: pointer;
+}
+.match-list button:hover,
+.match-list button:focus {
+  border-color: var(--yellow);
+  background: #fffceb;
 }

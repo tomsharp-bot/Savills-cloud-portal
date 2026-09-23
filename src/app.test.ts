@@ -82,7 +82,7 @@ function hhsrsReviewFields(): Record<string, string> {
     rating: "High",
     comment: "Visible mould in bathroom.",
     clientCallReference: "",
-    otherDetails: "",
+    otherDetails: "No access issues.",
   };
 }
 
@@ -266,24 +266,58 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /Demo current project \(local\)/);
     assert.match(form.body, /name="surveyDate"/);
     assert.match(form.body, /HHSRS category/);
-    assert.match(form.body, /Client call reference \(if required\)/);
-    assert.match(form.body, /Any other details/);
+    assert.match(form.body, /Client call reference \*/);
+    assert.match(form.body, /Couldn't get through/);
+    assert.match(form.body, /Any other details \*/);
+    assert.match(form.body, /required, 1 to 4/);
+    assert.doesNotMatch(form.body, /Photos are optional/);
     assert.match(form.body, /action="\/HHSRS-site-form\/review"/);
     assert.match(form.body, /each photo up to 40MB/i);
     assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
     assert.match(form.body, /data-max-file-mb="40"/);
+    assert.match(form.body, /Project &amp; visit/);
+    assert.match(form.body, /id="issue-details" hidden/);
+    assert.match(form.body, /id="visit-gate-hint"/);
+    assert.match(form.body, /data-extra="onward"/);
+    assert.match(form.body, /data-extra="saxon"/);
+    assert.match(form.body, /Category 1 confirmed/);
+    assert.match(form.body, /Saxon Weald: all damp and mould/);
     assert.match(form.body, /id="clear-form"/);
+    assert.match(form.body, /id="houseNumber"/);
+    assert.match(form.body, /House number \/ name</);
+    assert.doesNotMatch(form.body, /House number \/ name \*/);
+    assert.doesNotMatch(form.body, /id="houseNumber"[^>]*\brequired\b/);
+    assert.doesNotMatch(form.body, /id="fullAddress"[^>]*\b(?:readonly|disabled)\b/);
+    assert.doesNotMatch(form.body, /id="uprn"[^>]*\b(?:readonly|disabled)\b/);
+    assert.match(form.body, /You can always type or edit the full address and UPRN/);
+    assert.match(form.body, /id="btn-find-address"/);
+    assert.match(form.body, /Find address/);
+    assert.match(form.body, /data-address-lookup="\/HHSRS-site-form\/address-lookup"/);
+    assert.ok(
+      form.body.indexOf('id="postcode"') < form.body.indexOf('id="fullAddress"') &&
+        form.body.indexOf('id="fullAddress"') < form.body.indexOf('id="uprn"'),
+      "Property fields run postcode, full address, then UPRN"
+    );
+    assert.doesNotMatch(form.body, /name="houseNumber"/);
     assert.match(form.body, /hhsrs-btn-secondary/);
     assert.match(form.body, /type="button"[^>]*>Clear Form</);
     const reviewIdx = form.body.indexOf(">Review<");
     const clearIdx = form.body.indexOf(">Clear Form<");
     assert.ok(reviewIdx !== -1 && clearIdx > reviewIdx, "Clear Form sits under Review on the new-issue form");
     assert.match(css.body, /\.hhsrs-btn-secondary/);
+    assert.match(css.body, /\.hhsrs-btn-find/);
+    assert.match(css.body, /\.match-list/);
 
     const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
     assert.equal(js.status, 200);
     assert.match(js.body, /Clear the form\? This cannot be undone\./);
     assert.match(js.body, /Europe\/London/);
+    assert.match(js.body, /btn-find-address/);
+    assert.match(js.body, /address-lookup/);
+    assert.match(js.body, /updateVisitGate/);
+    assert.match(js.body, /data-onward/);
+    assert.match(js.body, /callUnreached/);
+    assert.match(js.body, /Add at least 1 photo/);
   });
 
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
@@ -328,20 +362,15 @@ describe("HHSRS site form at domain-root paths", () => {
     const form = await request(app, "GET", "/HHSRS-site-form/new");
     assert.match(form.body, /Demo current project \(local\)/);
 
-    const body = [
-      "projectId=hhsrs-demo-current",
-      "surveyDate=2026-09-20",
-      "uprn=100123",
-      "fullAddress=1+High+Street",
-      "postcode=EX1+1AA",
-      "surveyorName=Alex+Surveyor",
-      "category=" + encodeURIComponent("Damp & Mould Growth"),
-      "rating=High",
-      "comment=" + encodeURIComponent("Visible mould in bathroom."),
-      "clientCallReference=",
-      "otherDetails=",
-    ].join("&");
-    const reviewPost = await request(app, "POST", "/HHSRS-site-form/review", { body });
+    const missingPhoto = multipartForm(hhsrsReviewFields());
+    const blocked = await request(app, "POST", "/HHSRS-site-form/review", missingPhoto);
+    assert.equal(blocked.status, 200);
+    assert.match(blocked.body, /Add at least 1 photo/);
+
+    const upload = multipartForm(hhsrsReviewFields(), [
+      { field: "photos", filename: "room.jpg", type: "image/jpeg", data: fakeJpeg(128) },
+    ]);
+    const reviewPost = await request(app, "POST", "/HHSRS-site-form/review", upload);
     assert.equal(reviewPost.status, 302);
     assert.match(reviewPost.location, /^\/HHSRS-site-form\/review\?draft=/);
     assert.doesNotMatch(reviewPost.location, /projectprogress/);
@@ -351,10 +380,57 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(review.body, /Review issue/);
     assert.match(review.body, /Damp &amp; Mould Growth/);
     assert.match(review.body, /Visible mould in bathroom/);
+    assert.match(review.body, /No access issues/);
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);
     assert.match(review.body, />Cancel</);
     assert.doesNotMatch(review.body, /Clear Form/);
+  });
+
+  it("keeps the rest of the form hidden until project, date and surveyor are filled", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const closed = await request(app, "GET", "/HHSRS-site-form/new");
+    assert.match(closed.body, /id="issue-details" hidden/);
+
+    const body = [
+      "projectId=hhsrs-demo-current",
+      "surveyDate=2026-09-20",
+      "surveyorName=Alex+Surveyor",
+      "uprn=",
+      "fullAddress=",
+      "postcode=",
+      "comment=",
+    ].join("&");
+    const opened = await request(app, "POST", "/HHSRS-site-form/review", { body });
+    assert.equal(opened.status, 200);
+    assert.match(opened.body, /Please fix the following/);
+    assert.doesNotMatch(opened.body, /id="issue-details" hidden/);
+    assert.match(opened.body, /id="visit-gate-hint" hidden/);
+    assert.match(opened.body, /value="Alex Surveyor"/);
+  });
+
+  it("returns a JSON error when address lookup is not configured", async () => {
+    const previous = process.env.IDEAL_POSTCODES_API_KEY;
+    delete process.env.IDEAL_POSTCODES_API_KEY;
+    try {
+      const app = createApp({ basePath: "/projectprogress" });
+      const missing = await request(app, "GET", "/HHSRS-site-form/address-lookup?postcode=SE1+2AA");
+      assert.equal(missing.status, 400);
+      assert.equal(JSON.parse(missing.body).error, "Enter a postcode and house number or name.");
+
+      const unconfigured = await request(
+        app,
+        "GET",
+        "/HHSRS-site-form/address-lookup?postcode=SE1+2AA&house=12"
+      );
+      assert.equal(unconfigured.status, 503);
+      const payload = JSON.parse(unconfigured.body);
+      assert.equal(payload.error, "Address lookup is not configured.");
+      assert.equal(JSON.stringify(payload).includes("api_key"), false);
+    } finally {
+      if (previous === undefined) delete process.env.IDEAL_POSTCODES_API_KEY;
+      else process.env.IDEAL_POSTCODES_API_KEY = previous;
+    }
   });
 
   it("returns validation errors on Review without saving", async () => {

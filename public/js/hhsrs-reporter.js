@@ -578,6 +578,7 @@
       notes: ($("rv-notes") && $("rv-notes").value) || "",
       callOutcome: ($("rv-call-status") && $("rv-call-status").value) || "",
       clientCallReference: ($("rv-call-ref") && $("rv-call-ref").value) || "",
+      callNotes: ($("rv-call-notes") && $("rv-call-notes").value) || "",
       suspectedCause: ($("rv-cause") && $("rv-cause").value) || "",
       includeCause: !!($("rv-include-cause") && $("rv-include-cause").checked),
       vulnerabilities: ($("rv-vulnerabilities") && $("rv-vulnerabilities").value) || "",

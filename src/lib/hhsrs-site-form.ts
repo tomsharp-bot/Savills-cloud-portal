@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isHhsrsCategory, isHhsrsRating } from "./hhsrs-categories.js";
+import { matchDemoProject } from "./hhsrs-reporter-projects.js";
 
 export const HHSRS_SITE_FORM_PATH = "/HHSRS-site-form";
+export const HHSRS_MIN_PHOTOS = 1;
 export const HHSRS_MAX_PHOTOS = 4;
 /** Per-photo cap. 40MB covers typical iPhone HEIC / high-res JPEG. */
 export const HHSRS_MAX_FILE_MB = 40;
@@ -36,7 +38,13 @@ export function hhsrsPhotoSizeError(): string {
 }
 
 export function hhsrsPhotoHint(): string {
-  return `JPEG, PNG, WebP or HEIC. Each photo up to ${HHSRS_MAX_FILE_MB}MB.`;
+  return `JPEG, PNG, WebP or HEIC. Add ${HHSRS_MIN_PHOTOS} to ${HHSRS_MAX_PHOTOS} photos. Each photo up to ${HHSRS_MAX_FILE_MB}MB.`;
+}
+
+export function hhsrsPhotoCountError(total: number): string | undefined {
+  if (total < HHSRS_MIN_PHOTOS) return `Add at least ${HHSRS_MIN_PHOTOS} photo.`;
+  if (total > HHSRS_MAX_PHOTOS) return `Add ${HHSRS_MIN_PHOTOS} to ${HHSRS_MAX_PHOTOS} photos.`;
+  return undefined;
 }
 
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -60,7 +68,51 @@ export type HhsrsFormValues = {
   comment: string;
   clientCallReference: string;
   otherDetails: string;
+  /** Onward only. Unchecked or hidden extras are stored as false. */
+  cat1Confirmed: boolean;
+  /** Draft-only. True when the surveyor could not obtain a required call reference. */
+  callUnreached: boolean;
+  /** Draft-only. Why the call reference is blank. Stored as call notes on submit. */
+  callUnreachedNote: string;
 };
+
+/** Which Extra details blocks apply to a live project name. */
+export type SiteFormProjectFlags = {
+  calls: boolean;
+  onward: boolean;
+  saxon: boolean;
+  online: boolean;
+};
+
+export function siteFormProjectFlags(projectName: string): SiteFormProjectFlags {
+  const matched = matchDemoProject(projectName);
+  return {
+    calls: Boolean(matched?.extras.calls),
+    onward: Boolean(matched?.extras.onward),
+    saxon: Boolean(matched && /^saxon\b/i.test(matched.name)),
+    online: Boolean(matched?.extras.online_form),
+  };
+}
+
+function readFlag(body: Record<string, unknown>, name: string): boolean {
+  const raw = body[name];
+  return raw === true || raw === "true" || raw === "on" || raw === "yes";
+}
+
+/** Map a completed "couldn't get through" answer onto the Reporter call fields. */
+export function siteSubmissionCallFields(
+  values: Pick<HhsrsFormValues, "clientCallReference" | "callUnreached" | "callUnreachedNote">
+): { clientCallReference: string; callOutcome: "" | "Attempted"; callNotes: string } {
+  const note = String(values.callUnreachedNote || "").trim();
+  if (values.callUnreached && note) {
+    return { clientCallReference: "", callOutcome: "Attempted", callNotes: note };
+  }
+  return {
+    clientCallReference: String(values.clientCallReference || "").trim(),
+    callOutcome: "",
+    callNotes: "",
+  };
+}
 
 export type HhsrsFormData = HhsrsFormValues & {
   projectName: string;
@@ -100,6 +152,9 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     comment: "",
     clientCallReference: "",
     otherDetails: "",
+    cat1Confirmed: false,
+    callUnreached: false,
+    callUnreachedNote: "",
   };
 }
 
@@ -117,6 +172,9 @@ export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues 
     comment: field("comment"),
     clientCallReference: field("clientCallReference"),
     otherDetails: field("otherDetails"),
+    cat1Confirmed: readFlag(body, "cat1Confirmed"),
+    callUnreached: readFlag(body, "callUnreached"),
+    callUnreachedNote: field("callUnreachedNote"),
   };
 }
 
@@ -174,11 +232,29 @@ export function validateHhsrsForm(
   if (!values.rating) errors.rating = "Select a rating.";
   else if (!isHhsrsRating(values.rating)) errors.rating = "Select Low, Medium or High.";
   if (!values.comment) errors.comment = "Enter a comment.";
+  if (!String(values.otherDetails || "").trim()) errors.otherDetails = "Enter any other details.";
+  const flags = siteFormProjectFlags(activeProject?.name || "");
+  const callUnreached = Boolean(values.callUnreached);
+  const callNote = String(values.callUnreachedNote || "").trim();
+  if (flags.calls && !String(values.clientCallReference || "").trim()) {
+    if (!callUnreached) {
+      errors.clientCallReference =
+        "Enter the client call reference, or tick Couldn't get through and say why.";
+    } else if (!callNote) {
+      errors.callUnreachedNote = "Say why you couldn't get through.";
+    }
+  }
   if (Object.keys(errors).length) return { ok: false, errors };
+  const skippedCall = flags.calls && callUnreached && Boolean(callNote);
   return {
     ok: true,
     data: {
       ...values,
+      clientCallReference: skippedCall ? "" : String(values.clientCallReference || "").trim(),
+      otherDetails: String(values.otherDetails || "").trim(),
+      callUnreached: skippedCall,
+      callUnreachedNote: skippedCall ? callNote : "",
+      cat1Confirmed: flags.onward && Boolean(values.cat1Confirmed),
       projectName: activeProject!.name,
     },
   };
@@ -188,9 +264,8 @@ export function validatePhotos(
   incoming: { originalname: string; mimetype: string; size: number }[],
   existingCount: number
 ): string | undefined {
-  if (incoming.length + existingCount > HHSRS_MAX_PHOTOS) {
-    return `You can attach up to ${HHSRS_MAX_PHOTOS} photos.`;
-  }
+  const countError = hhsrsPhotoCountError(incoming.length + existingCount);
+  if (countError) return countError;
   for (const file of incoming) {
     if (file.size > HHSRS_MAX_FILE_BYTES) {
       return hhsrsPhotoSizeError();

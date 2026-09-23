@@ -1,6 +1,7 @@
 import path from "node:path";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
+import { allowAddressLookup, lookupIdealPostcodes } from "../lib/ideal-postcodes.js";
 import { prisma } from "../lib/prisma.js";
 import { isProduction } from "../config.js";
 import { HHSRS_CATEGORIES, HHSRS_RATINGS } from "../lib/hhsrs-categories.js";
@@ -11,6 +12,7 @@ import {
   HHSRS_MAX_FILE_BYTES,
   HHSRS_MAX_FILE_MB,
   HHSRS_MAX_PHOTOS,
+  HHSRS_MIN_PHOTOS,
   HHSRS_SITE_FORM_PATH,
   hhsrsMulterLimits,
   hhsrsPhotoHint,
@@ -29,6 +31,8 @@ import {
   type HhsrsFieldErrors,
   type HhsrsFormValues,
   validateHhsrsForm,
+  siteFormProjectFlags,
+  siteSubmissionCallFields,
   validatePhotos,
   writeDraft,
 } from "../lib/hhsrs-site-form.js";
@@ -52,7 +56,7 @@ function uploadPhotos(req: Request, res: Response, next: NextFunction): void {
         code === "LIMIT_FILE_SIZE"
           ? hhsrsPhotoSizeError()
           : code === "LIMIT_UNEXPECTED_FILE" || code === "LIMIT_FILE_COUNT"
-            ? `You can attach up to ${HHSRS_MAX_PHOTOS} photos.`
+            ? `Add ${HHSRS_MIN_PHOTOS} to ${HHSRS_MAX_PHOTOS} photos.`
             : "Could not upload photos.";
     }
     next();
@@ -117,9 +121,13 @@ function renderForm(
     values: opts.values,
     errors: opts.errors || {},
     draft: opts.draft || null,
-    projects: opts.projects,
+    projects: opts.projects.map((project) => ({
+      ...project,
+      flags: siteFormProjectFlags(project.name),
+    })),
     formError: opts.formError || "",
     maxPhotos: HHSRS_MAX_PHOTOS,
+    minPhotos: HHSRS_MIN_PHOTOS,
     maxFileMb: HHSRS_MAX_FILE_MB,
     maxFileBytes: HHSRS_MAX_FILE_BYTES,
     photoHint: hhsrsPhotoHint(),
@@ -133,6 +141,40 @@ hhsrsSiteFormRouter.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 hhsrsSiteFormRouter.use("/assets", express.static(assetsDir));
+
+function lookupInput(req: Request): { postcode: string; house: string } {
+  const body = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {};
+  const query = req.query as Record<string, unknown>;
+  const source: Record<string, unknown> = req.method === "GET" ? query : { ...query, ...body };
+  const read = (value: unknown): string => (Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""));
+  const house = read(source.house);
+  return {
+    postcode: read(source.postcode),
+    house: house || read(source.query),
+  };
+}
+
+async function addressLookup(req: Request, res: Response): Promise<void> {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  if (!allowAddressLookup(ip)) {
+    res.status(429).json({ error: "Too many address lookups. Wait a moment and try again." });
+    return;
+  }
+  const { postcode, house } = lookupInput(req);
+  const result = await lookupIdealPostcodes({
+    postcode,
+    house,
+    apiKey: process.env.IDEAL_POSTCODES_API_KEY,
+  });
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json({ matches: result.matches });
+}
+
+hhsrsSiteFormRouter.get("/address-lookup", addressLookup);
+hhsrsSiteFormRouter.post("/address-lookup", addressLookup);
 
 hhsrsSiteFormRouter.get("/", async (_req: Request, res: Response) => {
   await sweepOldDrafts();
@@ -246,11 +288,22 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
   }
   const active = await findActiveProject(draft.projectId);
   const checked = validateHhsrsForm(draft, active);
-  if (!checked.ok) {
+  const photoError = validatePhotos([], draft.photos.length);
+  if (!checked.ok || photoError) {
     const projects = await loadActiveProjects();
-    renderForm(res, { values: draft, errors: checked.errors, draft, projects });
+    renderForm(res, {
+      values: draft,
+      errors: {
+        ...(checked.ok ? {} : checked.errors),
+        ...(photoError ? { photos: photoError } : {}),
+      },
+      draft,
+      projects,
+      formError: photoError && checked.ok ? photoError : "",
+    });
     return;
   }
+  const call = siteSubmissionCallFields(checked.data);
   const created = await prisma.hhsrsSiteSubmission.create({
     data: {
       projectId: checked.data.projectId,
@@ -263,8 +316,11 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
       category: checked.data.category,
       rating: checked.data.rating,
       comment: checked.data.comment,
-      clientCallReference: checked.data.clientCallReference,
+      clientCallReference: call.clientCallReference,
+      callOutcome: call.callOutcome,
+      callNotes: call.callNotes,
       otherDetails: checked.data.otherDetails,
+      cat1Confirmed: checked.data.cat1Confirmed,
       photoPaths: [],
     },
   });

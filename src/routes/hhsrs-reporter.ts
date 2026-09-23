@@ -663,6 +663,7 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
     clientDescription: update.clientDescription,
     clientCallReference: update.clientCallReference,
     callOutcome: update.callOutcome,
+    callNotes: update.callNotes,
     workOrder: update.workOrder,
     suspectedCause: update.suspectedCause,
     includeCause: update.includeCause,
