@@ -167,6 +167,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(js, /function stubDraft/);
     assert.match(css, /#rv-case-panel\.is-drafted/);
     assert.match(css, /btn-create-email:hover/);
+    assert.match(css, /\.photos-block\s*\{[^}]*margin-top:\s*1\.35rem/);
     assert.match(css, /\.photo-float-preview[\s\S]*pointer-events:\s*none/);
     assert.doesNotMatch(css, /\.photo-thumb:hover[\s\S]{0,240}transform:\s*scale\(/);
     assert.doesNotMatch(css, /\.email-photo-thumb:hover[\s\S]{0,240}transform:\s*scale\(/);

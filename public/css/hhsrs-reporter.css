@@ -1576,7 +1576,7 @@ body.hhsrs-reporter {
 .hhsrs-reporter .blank-case-form,
 .hhsrs-reporter .case-fields { overflow: visible; }
 .hhsrs-reporter .photos-block {
-  margin-top: 0.35rem;
+  margin-top: 1.35rem;
   padding: 0.85rem 0.9rem;
   background: var(--blue-light);
   border: 1px solid #c5d6e8;
