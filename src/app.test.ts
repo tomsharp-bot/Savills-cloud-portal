@@ -239,10 +239,19 @@ describe("HHSRS site form at domain-root paths", () => {
     const res = await request(app, "GET", "/HHSRS-site-form");
     assert.equal(res.status, 200);
     assert.match(res.body, /Savills HHSRS Site Reporting/);
-    assert.match(res.body, /Click Here For New Issue Form/);
+    assert.match(res.body, /HHSRS Site Reporting/);
+    assert.match(res.body, /Housing · Survey reporting/);
+    assert.match(res.body, /Raise a new site issue from your phone\. No login required\./);
+    assert.match(res.body, /Report new issue/);
+    assert.doesNotMatch(res.body, /Click Here For New Issue Form/);
     assert.match(res.body, /href="\/HHSRS-site-form\/new"/);
     assert.match(res.body, /href="\/HHSRS-site-form\/assets\/form.css"/);
+    assert.match(res.body, /src="\/HHSRS-site-form\/assets\/houses-alt-calm\.jpg"/);
     assert.doesNotMatch(res.body, /\/projectprogress\/HHSRS-site-form/);
+
+    const photo = await request(app, "GET", "/HHSRS-site-form/assets/houses-alt-calm.jpg");
+    assert.equal(photo.status, 200);
+    assert.match(photo.contentType, /jpeg/);
   });
 
   it("serves CSS and the new-issue form at root paths", async () => {

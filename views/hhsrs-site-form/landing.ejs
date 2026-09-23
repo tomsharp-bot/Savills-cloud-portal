@@ -3,15 +3,22 @@
 <head>
   <%- include("partials/head") %>
 </head>
-<body class="hhsrs-body">
-  <header class="hhsrs-top">
-    <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
-    <p class="hhsrs-brand">Savills</p>
-  </header>
-  <main class="hhsrs-shell">
-    <h1>Savills HHSRS Site Reporting</h1>
-    <p class="hhsrs-lead">Raise a new site issue from your phone. No login required.</p>
-    <a class="hhsrs-btn hhsrs-btn-primary" href="<%= hhsrsUrl('/new') %>">Click Here For New Issue Form</a>
-  </main>
+<body class="hhsrs-body hhsrs-landing">
+  <div class="hhsrs-stage">
+    <header class="hhsrs-land-top">
+      <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
+      <div>
+        <p class="hhsrs-eyebrow">Housing · Survey reporting</p>
+        <h1>HHSRS Site Reporting</h1>
+      </div>
+    </header>
+    <section class="hhsrs-land-action">
+      <p class="hhsrs-land-lead">Raise a new site issue from your phone. No login required.</p>
+      <a class="hhsrs-land-cta" href="<%= hhsrsUrl('/new') %>">Report new issue</a>
+    </section>
+    <div class="hhsrs-land-visual">
+      <img alt="Residential street" src="<%= hhsrsUrl('/assets/houses-alt-calm.jpg') %>" />
+    </div>
+  </div>
 </body>
 </html>

@@ -179,3 +179,141 @@ body.hhsrs-body {
   .hhsrs-home { font-size: 0.95rem; }
   .hhsrs-review dd, .hhsrs-form select { overflow-wrap: anywhere; }
 }
+
+/* Landing only — do not restyle the form, review, or thanks pages. */
+body.hhsrs-landing {
+  --red: #ce171e;
+  --grey-top: #e8ecef;
+  --panel: #f4f7fa;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  background: var(--navy);
+  color: var(--navy);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.hhsrs-landing .hhsrs-stage {
+  width: min(960px, 100%);
+  background: #fff;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 48px);
+  min-height: calc(100dvh - 48px);
+}
+.hhsrs-landing .hhsrs-land-top {
+  background: var(--grey-top);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.hhsrs-landing .hhsrs-logo {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+}
+.hhsrs-landing .hhsrs-logo svg {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+}
+.hhsrs-landing .hhsrs-eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hhsrs-landing .hhsrs-land-top h1 {
+  display: block;
+  margin: 4px 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+}
+.hhsrs-landing .hhsrs-land-action {
+  flex: 0 0 auto;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 36px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+.hhsrs-landing .hhsrs-land-lead {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: var(--navy);
+  font-weight: 600;
+}
+.hhsrs-landing .hhsrs-land-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  min-height: 52px;
+  padding: 14px 32px;
+  border-radius: 12px;
+  background: var(--yellow);
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-decoration: none;
+  border: 0;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+}
+.hhsrs-landing .hhsrs-land-cta::after {
+  content: "↗";
+  color: var(--red);
+}
+.hhsrs-landing .hhsrs-land-visual {
+  flex: 1;
+  min-height: 280px;
+  background: #d8e2eb;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+.hhsrs-landing .hhsrs-land-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 45%;
+  display: block;
+}
+@media (min-width: 800px) {
+  .hhsrs-landing .hhsrs-stage { min-height: 640px; }
+  .hhsrs-landing .hhsrs-land-top { padding: 24px 28px; }
+  .hhsrs-landing .hhsrs-land-top h1 { font-size: 1.45rem; }
+  .hhsrs-landing .hhsrs-land-action { padding: 44px 32px 48px; }
+  .hhsrs-landing .hhsrs-land-lead { font-size: 1.15rem; }
+  .hhsrs-landing .hhsrs-land-visual { min-height: 360px; }
+}
+@media (max-width: 430px) {
+  .hhsrs-landing .hhsrs-land-top {
+    gap: 12px;
+    padding: 16px;
+  }
+  .hhsrs-landing .hhsrs-logo,
+  .hhsrs-landing .hhsrs-logo svg {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+  }
+  .hhsrs-landing .hhsrs-land-top h1 { font-size: 1.15rem; }
+  .hhsrs-landing .hhsrs-land-action { padding: 28px 16px 32px; }
+}
