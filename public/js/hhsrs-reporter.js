@@ -139,49 +139,29 @@
     }
   }
 
-  function stubDraft(projectCfg) {
-    var toEl = $("rv-email-to");
-    var ccEl = $("rv-email-cc");
-    var subEl = $("rv-email-subject");
-    var bodyEl = $("rv-email-body");
-    if (!projectCfg) {
-      if (toEl && !toEl.dataset.userEdited) toEl.value = "";
-      if (ccEl && !ccEl.dataset.userEdited) ccEl.value = "";
-      if (subEl && !subEl.dataset.userEdited) subEl.value = "";
-      if (bodyEl && !bodyEl.dataset.userEdited) bodyEl.value = "";
-      return;
-    }
-    if (toEl && !toEl.dataset.userEdited) toEl.value = (projectCfg.to || []).join("; ");
-    if (ccEl && !ccEl.dataset.userEdited) ccEl.value = (projectCfg.cc || []).join("; ");
+  var MAX_CASE_PHOTOS = 4;
+  var casePhotos = [];
+  var photoSeq = 0;
+  var emailGenerated = false;
+  var caseLocked = false;
+  var DRAG_HINT = "Drag a photo into your email draft. If that doesn’t work, download the photo.";
 
-    // Filled cases keep server draft unless user cleared / no server draft
-    if (cfg.mode === "filled" && cfg.serverDraft && (cfg.serverDraft.subject || cfg.serverDraft.body)) {
-      if (subEl && !subEl.dataset.userEdited && !subEl.value) subEl.value = cfg.serverDraft.subject || "";
-      if (bodyEl && !bodyEl.dataset.userEdited && !bodyEl.value) bodyEl.value = cfg.serverDraft.body || "";
-      return;
-    }
-    if (cfg.mode === "filled") return;
-
-    var address = (($("rv-address") && $("rv-address").value) || "").trim() || "[address]";
-    var hazard = (($("rv-hazard") && $("rv-hazard").value) || "").trim() || "[hazard]";
-    var rating = (($("rv-rating") && $("rv-rating").value) || "").trim() || "[rating]";
-    var notes = (($("rv-notes") && $("rv-notes").value) || "").trim();
-    var description = notes || "There is a reported hazard at the property.";
-    var subject = projectCfg.name + " - HHSRS – " + address;
-    if (projectCfg.template === "BPHA") subject = "BPHA - HHSRS – " + address;
-    if (projectCfg.template === "Cornwall") subject = "Cornwall 2026 - HHSRS – " + address;
-    if (projectCfg.template === "Vico Homes") {
-      subject =
-        "Vico Homes - HHSRS" + (/damp|mould|mold/i.test(hazard) ? " D&M" : "") + " - " + address;
-    }
-    var lines = [
-      "Hi all,",
-      "",
-      "One of our surveyors has visited " + address + ".",
-      description + " We have recorded this as " + rating + " for " + hazard + " on the HHSRS.",
-    ];
-    if (subEl && !subEl.dataset.userEdited) subEl.value = subject;
-    if (bodyEl && !bodyEl.dataset.userEdited) bodyEl.value = lines.join("\n");
+  function clearEmailDraft() {
+    ["rv-email-to", "rv-email-cc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.value = "";
+      delete el.dataset.userEdited;
+    });
+    emailGenerated = false;
+    caseLocked = false;
+    var hint = $("rv-email-empty-hint");
+    if (hint) hint.hidden = false;
+    var badge = $("rv-email-badge");
+    if (badge) badge.textContent = "Draft";
+    var note = $("rv-generate-note");
+    if (note) note.textContent = "Choose a project, complete the case details, then generate the email.";
+    syncCaseLock();
   }
 
   function applyProjectChange(opts) {
@@ -190,10 +170,12 @@
     var projectCfg = matchProject(name);
     var fields = $("rv-case-fields");
     var hint = $("rv-project-hint");
+    var generateBtn = $("btn-generate-email");
     if (fields) {
       if (!name && cfg.mode !== "filled") fields.setAttribute("disabled", "disabled");
       else fields.removeAttribute("disabled");
     }
+    if (generateBtn) generateBtn.disabled = !name;
     if (hint) {
       hint.textContent = projectCfg
         ? projectCfg.hint
@@ -201,7 +183,452 @@
     }
     fillRatingOptions(projectCfg ? projectCfg.ratingScheme : "NEW", opts.keepRating);
     setExtraVisibility(projectCfg);
-    if (!opts.skipDraft) stubDraft(projectCfg);
+    if (!opts.skipDraft) clearEmailDraft();
+  }
+
+  function nextPhotoId() {
+    photoSeq += 1;
+    return "ph-" + photoSeq;
+  }
+
+  function revokePhotoUrl(photo) {
+    if (photo && photo.blobUrl && String(photo.blobUrl).indexOf("blob:") === 0) {
+      try { URL.revokeObjectURL(photo.blobUrl); } catch (e) {}
+    }
+  }
+
+  function photoDragFilename(photo) {
+    var base = (photo && (photo.name || photo.caption) || "photo").replace(/\.[^.]+$/, "");
+    base = String(base).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "photo";
+    var ext = "png";
+    if (photo && photo.name && /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(photo.name)) {
+      ext = photo.name.split(".").pop().toLowerCase();
+      if (ext === "jpeg") ext = "jpg";
+    } else if (photo && photo.mime && /jpeg|jpg/i.test(photo.mime)) {
+      ext = "jpg";
+    }
+    return base + "." + ext;
+  }
+
+  function photoMime(photo) {
+    if (photo && photo.mime) return photo.mime;
+    var name = (photo && photo.name) || "";
+    if (/\.jpe?g$/i.test(name)) return "image/jpeg";
+    if (/\.gif$/i.test(name)) return "image/gif";
+    if (/\.webp$/i.test(name)) return "image/webp";
+    if (/\.heic$/i.test(name)) return "image/heic";
+    if (/\.heif$/i.test(name)) return "image/heif";
+    return "image/png";
+  }
+
+  function absolutePhotoUrl(photo) {
+    if (photo && photo.blobUrl) return photo.blobUrl;
+    if (!photo || !photo.url) return "";
+    try { return new URL(photo.url, window.location.href).href; } catch (e) { return photo.url; }
+  }
+
+  function prefetchPhoto(photo) {
+    if (!photo || !photo.url || photo.blob) return;
+    fetch(photo.url, { credentials: "same-origin" })
+      .then(function (res) { return res.ok ? res.blob() : null; })
+      .then(function (blob) {
+        if (!blob) return;
+        photo.blob = blob;
+        photo.mime = blob.type || photo.mime;
+        if (!photo.blobUrl) photo.blobUrl = URL.createObjectURL(blob);
+      })
+      .catch(function () {});
+  }
+
+  function findCasePhoto(id) {
+    for (var i = 0; i < casePhotos.length; i++) {
+      if (casePhotos[i].id === id) return casePhotos[i];
+    }
+    return null;
+  }
+
+  function updatePhotosModeUi() {
+    var block = $("rv-photos-block");
+    var addRow = $("rv-photos-add-row");
+    var isBlank = cfg.mode !== "filled";
+    if (block) block.classList.toggle("is-blank-mode", isBlank);
+    if (addRow) addRow.hidden = !isBlank;
+    var drop = $("rv-photos-dropzone");
+    if (drop) drop.classList.toggle("is-disabled", casePhotos.length >= MAX_CASE_PHOTOS);
+    var countEl = $("rv-photos-count");
+    if (countEl) countEl.textContent = casePhotos.length + " / " + MAX_CASE_PHOTOS;
+  }
+
+  function appendThumb(grid, photo, opts) {
+    var card = document.createElement("div");
+    card.className = "photo-thumb " + (opts.email ? "email-photo-thumb" : "case-photo-thumb");
+    card.setAttribute("data-photo-id", photo.id);
+    if (opts.email) {
+      card.draggable = true;
+      card.tabIndex = 0;
+      card.title = "Drag into your email draft to attach";
+    }
+    if (opts.removable) {
+      var rem = document.createElement("button");
+      rem.type = "button";
+      rem.className = "photo-remove";
+      rem.setAttribute("data-remove-photo", photo.id);
+      rem.setAttribute("aria-label", "Remove photo");
+      rem.textContent = "×";
+      card.appendChild(rem);
+    }
+    var img = document.createElement("img");
+    img.src = photo.blobUrl || photo.url || "";
+    img.alt = photo.caption || photo.name || "Photo";
+    img.draggable = false;
+    card.appendChild(img);
+    var cap = document.createElement("span");
+    cap.className = "photo-caption";
+    cap.textContent = photo.caption || photo.name || "Photo";
+    card.appendChild(cap);
+    grid.appendChild(card);
+  }
+
+  function renderCaseThumbs() {
+    var grid = $("rv-photo-thumbs");
+    updatePhotosModeUi();
+    if (!grid) return;
+    grid.innerHTML = "";
+    var canRemove = cfg.mode !== "filled";
+    casePhotos.forEach(function (photo) {
+      appendThumb(grid, photo, { email: false, removable: canRemove });
+    });
+    if (caseLocked) setEmailPhotoTools(true);
+  }
+
+  function syncCaseLock() {
+    var panel = $("rv-case-panel");
+    if (panel) panel.classList.toggle("is-drafted", caseLocked);
+    var photos = $("rv-photos-block");
+    if (photos) photos.hidden = caseLocked;
+    var amend = $("btn-amend-case");
+    if (amend) amend.hidden = !caseLocked;
+    setEmailPhotoTools(caseLocked);
+  }
+
+  function amendCaseDetails() {
+    caseLocked = false;
+    syncCaseLock();
+    var note = $("rv-generate-note");
+    if (note) note.textContent = "Case details unlocked. Edit them, then Generate email again to refresh the draft.";
+  }
+
+  function renderEmailThumbs() {
+    var grid = $("rv-email-photo-thumbs");
+    if (!grid) return;
+    grid.innerHTML = "";
+    casePhotos.forEach(function (photo) {
+      appendThumb(grid, photo, { email: true, removable: false });
+    });
+  }
+
+  function setEmailPhotoTools(show) {
+    var box = $("rv-email-photos");
+    if (!box) return;
+    var visible = Boolean(show) && casePhotos.length > 0;
+    box.hidden = !visible;
+    var dl = $("btn-download-photos");
+    if (dl) dl.disabled = !visible;
+    if (visible) renderEmailThumbs();
+    else {
+      var grid = $("rv-email-photo-thumbs");
+      if (grid) grid.innerHTML = "";
+    }
+  }
+
+  function resetCasePhotos(list) {
+    casePhotos.forEach(revokePhotoUrl);
+    casePhotos = [];
+    (list || []).forEach(function (p, i) {
+      if (casePhotos.length >= MAX_CASE_PHOTOS) return;
+      var photo = {
+        id: (p && p.id) || ("surveyor-" + (i + 1)),
+        name: (p && p.name) || ("photo-" + (i + 1)),
+        caption: (p && (p.caption || p.name)) || "Photo",
+        url: (p && p.url) || "",
+        mime: "",
+        blob: null,
+        blobUrl: "",
+      };
+      casePhotos.push(photo);
+      prefetchPhoto(photo);
+    });
+    renderCaseThumbs();
+  }
+
+  function addCasePhoto(photo) {
+    if (casePhotos.length >= MAX_CASE_PHOTOS) return false;
+    casePhotos.push(photo);
+    renderCaseThumbs();
+    return true;
+  }
+
+  function removeCasePhoto(id) {
+    var kept = [];
+    casePhotos.forEach(function (photo) {
+      if (photo.id === id) revokePhotoUrl(photo);
+      else kept.push(photo);
+    });
+    casePhotos = kept;
+    renderCaseThumbs();
+  }
+
+  function readImageFiles(fileList) {
+    if (cfg.mode === "filled" || !fileList || !fileList.length) return;
+    var remaining = MAX_CASE_PHOTOS - casePhotos.length;
+    if (remaining <= 0) return;
+    var files = [];
+    for (var i = 0; i < fileList.length && files.length < remaining; i++) {
+      if (fileList[i] && /^image\//.test(fileList[i].type || "")) files.push(fileList[i]);
+    }
+    files.forEach(function (file) {
+      var url = URL.createObjectURL(file);
+      var base = (file.name || "photo").replace(/\.[^.]+$/, "");
+      addCasePhoto({
+        id: nextPhotoId(),
+        name: file.name || "photo.png",
+        caption: base || "Photo",
+        mime: file.type || "image/png",
+        blob: file,
+        blobUrl: url,
+        url: url,
+      });
+    });
+  }
+
+  function setPhotoDragData(dt, photo) {
+    if (!dt || !photo) return;
+    var url = absolutePhotoUrl(photo);
+    var fname = photoDragFilename(photo);
+    var mime = photoMime(photo);
+    dt.effectAllowed = "copy";
+    try { dt.setData("DownloadURL", mime + ":" + fname + ":" + url); } catch (e1) {}
+    try { dt.setData("text/uri-list", url); } catch (e2) {}
+    try { dt.setData("text/plain", url); } catch (e3) {}
+    try { dt.setData(mime, url); } catch (e4) {}
+    if (photo.blob && dt.items && dt.items.add) {
+      try {
+        dt.items.add(new File([photo.blob], fname, { type: mime }));
+      } catch (e5) {}
+    }
+  }
+
+  function downloadCasePhotos() {
+    if (!casePhotos.length) return;
+    casePhotos.forEach(function (p, idx) {
+      var url = absolutePhotoUrl(p);
+      if (!url) return;
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = photoDragFilename(p);
+      a.style.display = "none";
+      document.body.appendChild(a);
+      setTimeout(function () {
+        a.click();
+        setTimeout(function () {
+          if (a.parentNode) a.parentNode.removeChild(a);
+        }, 500);
+      }, idx * 180);
+    });
+  }
+
+  function wirePhotoInteractions() {
+    var caseGrid = $("rv-photo-thumbs");
+    var emailGrid = $("rv-email-photo-thumbs");
+    var fileInput = $("rv-photo-file");
+    var dropzone = $("rv-photos-dropzone");
+    var dlBtn = $("btn-download-photos");
+    if (caseGrid) {
+      caseGrid.addEventListener("click", function (e) {
+        var rem = e.target.closest("[data-remove-photo]");
+        if (!rem) return;
+        removeCasePhoto(rem.getAttribute("data-remove-photo"));
+      });
+    }
+    if (emailGrid) {
+      emailGrid.addEventListener("dragstart", function (e) {
+        var card = e.target.closest(".email-photo-thumb[data-photo-id]");
+        if (!card || !e.dataTransfer) return;
+        var photo = findCasePhoto(card.getAttribute("data-photo-id"));
+        if (!photo) return;
+        setPhotoDragData(e.dataTransfer, photo);
+        try {
+          var img = card.querySelector("img");
+          if (img) e.dataTransfer.setDragImage(img, 40, 30);
+        } catch (e6) {}
+      });
+    }
+    if (dlBtn) dlBtn.addEventListener("click", downloadCasePhotos);
+    if (fileInput) {
+      fileInput.addEventListener("change", function () {
+        readImageFiles(fileInput.files);
+        fileInput.value = "";
+      });
+    }
+    if (dropzone) {
+      dropzone.addEventListener("dragenter", function (e) {
+        e.preventDefault();
+        dropzone.classList.add("is-dragover");
+      });
+      dropzone.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+        dropzone.classList.add("is-dragover");
+      });
+      dropzone.addEventListener("dragleave", function () {
+        dropzone.classList.remove("is-dragover");
+      });
+      dropzone.addEventListener("drop", function (e) {
+        e.preventDefault();
+        dropzone.classList.remove("is-dragover");
+        if (casePhotos.length >= MAX_CASE_PHOTOS) return;
+        readImageFiles(e.dataTransfer && e.dataTransfer.files);
+      });
+    }
+  }
+
+  function collectDraftPayload() {
+    return {
+      caseId: cfg.caseId || "",
+      projectName: ($("rv-project") && $("rv-project").value) || "",
+      address: ($("rv-address") && $("rv-address").value) || "",
+      uprn: ($("rv-uprn") && $("rv-uprn").value) || "",
+      surveyDate: ($("rv-survey-date") && $("rv-survey-date").value) || "",
+      hazard: ($("rv-hazard") && $("rv-hazard").value) || "",
+      rating: ($("rv-rating") && $("rv-rating").value) || "",
+      notes: ($("rv-notes") && $("rv-notes").value) || "",
+      callOutcome: ($("rv-call-status") && $("rv-call-status").value) || "",
+      clientCallReference: ($("rv-call-ref") && $("rv-call-ref").value) || "",
+      suspectedCause: ($("rv-cause") && $("rv-cause").value) || "",
+      includeCause: !!($("rv-include-cause") && $("rv-include-cause").checked),
+      vulnerabilities: ($("rv-vulnerabilities") && $("rv-vulnerabilities").value) || "",
+      escalation: ($("rv-escalation") && $("rv-escalation").value) || "",
+      onwardTopic: ($("rv-onward-topic") && $("rv-onward-topic").value) || "",
+      cat1Confirmed: !!($("rv-cat1") && $("rv-cat1").checked),
+      workOrder: ($("rv-work-order") && $("rv-work-order").value) || "",
+      photoCount: casePhotos.length,
+    };
+  }
+
+  function fillDraftFields(draft) {
+    var toEl = $("rv-email-to");
+    var ccEl = $("rv-email-cc");
+    var subEl = $("rv-email-subject");
+    var bodyEl = $("rv-email-body");
+    if (toEl) toEl.value = draft.to || "";
+    if (ccEl) ccEl.value = draft.cc || "";
+    if (subEl) subEl.value = draft.subject || "";
+    if (bodyEl) bodyEl.value = draft.body || "";
+    var hint = $("rv-email-empty-hint");
+    if (hint) hint.hidden = true;
+    var badge = $("rv-email-badge");
+    if (badge) badge.textContent = "Generated";
+    emailGenerated = true;
+    caseLocked = true;
+    syncCaseLock();
+  }
+
+  function generateEmail() {
+    var name = ($("rv-project") && $("rv-project").value) || "";
+    var note = $("rv-generate-note");
+    var btn = $("btn-generate-email");
+    if (!name) {
+      if (note) note.textContent = "Choose a project, complete the case details, then generate the email.";
+      return;
+    }
+    if (btn) btn.disabled = true;
+    fetch((cfg.base || "/HHSRSreporter") + "/draft.json", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(collectDraftPayload()),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        }).catch(function () {
+          return { ok: false, data: null };
+        });
+      })
+      .then(function (result) {
+        var data = result && result.data;
+        if (!result.ok || !data || !data.ok) {
+          if (note) note.textContent = (data && data.error) || "Could not prepare the client email.";
+          return;
+        }
+        ["rv-email-to", "rv-email-cc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+          var el = $(id);
+          if (el) delete el.dataset.userEdited;
+        });
+        fillDraftFields(data);
+        if (note) note.textContent = "Email generated. Case details are locked — Amend case details to edit, then Generate email again.";
+      })
+      .catch(function () {
+        if (note) note.textContent = "Could not prepare the client email. Check the case details and try again.";
+      })
+      .then(function () {
+        if (btn) btn.disabled = !(($("rv-project") && $("rv-project").value) || "");
+      });
+  }
+
+  function clearBlankReview() {
+    ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-notes", "rv-call-ref", "rv-call-notes", "rv-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"].forEach(function (id) {
+      var el = $(id);
+      if (el && !el.readOnly) el.value = "";
+    });
+    if ($("rv-call-status")) $("rv-call-status").value = "";
+    if ($("rv-onward-topic")) $("rv-onward-topic").value = "";
+    if ($("rv-survey-date") && $("rv-survey-date").type !== "text") $("rv-survey-date").value = "";
+    if ($("rv-cat1")) $("rv-cat1").checked = false;
+    if ($("rv-include-cause")) $("rv-include-cause").checked = true;
+    if ($("rv-rating")) $("rv-rating").value = "";
+    if ($("rv-project")) $("rv-project").value = "";
+    var badge = $("review-mode-badge");
+    if (badge) {
+      badge.textContent = "New case";
+      badge.classList.remove("is-filled");
+    }
+    var caseBadge = $("rv-case-badge");
+    if (caseBadge) caseBadge.textContent = "Blank";
+    var sub = $("review-subtitle");
+    if (sub) {
+      sub.hidden = true;
+      sub.textContent = "";
+    }
+    cfg.mode = "blank";
+    cfg.caseId = "";
+    resetCasePhotos([]);
+    applyProjectChange();
+  }
+
+  function pingCaseDetailsToTop() {
+    var details = $("rv-also-details");
+    if (details) details.open = false;
+    setTimeout(function () {
+      var anchor = $("rv-project-block") || $("review-workspace");
+      if (!anchor) return;
+      function stickyTopOffset() {
+        var topbar = document.querySelector(".topbar");
+        if (!topbar) return 0;
+        var cs = window.getComputedStyle(topbar);
+        if (cs.position !== "sticky" && cs.position !== "fixed") return 0;
+        return Math.ceil(topbar.getBoundingClientRect().height);
+      }
+      function park() {
+        var offset = stickyTopOffset();
+        var rect = anchor.getBoundingClientRect();
+        var delta = rect.top - offset;
+        if (Math.abs(delta) > 0.5) window.scrollBy(0, delta);
+      }
+      anchor.scrollIntoView({ behavior: "auto", block: "start" });
+      park();
+      requestAnimationFrame(park);
+    }, 60);
   }
 
   ["rv-email-to", "rv-email-cc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
@@ -230,26 +657,64 @@
         if (m) projectSel.value = m.name;
       }
     }
-    applyProjectChange({ keepRating: keep, skipDraft: cfg.mode === "filled" });
+    applyProjectChange({ keepRating: keep, skipDraft: true });
   }
 
-  ["rv-hazard", "rv-address", "rv-notes", "rv-rating"].forEach(function (id) {
-    var el = $(id);
-    if (!el) return;
-    el.addEventListener("change", function () {
-      if (cfg.mode === "blank") {
-        var name = ($("rv-project") && $("rv-project").value) || "";
-        stubDraft(matchProject(name));
-        setExtraVisibility(matchProject(name));
+  var hazardEl = $("rv-hazard");
+  if (hazardEl) {
+    var refreshExtras = function () {
+      var name = ($("rv-project") && $("rv-project").value) || "";
+      setExtraVisibility(matchProject(name));
+    };
+    hazardEl.addEventListener("change", refreshExtras);
+    hazardEl.addEventListener("input", refreshExtras);
+  }
+
+  if ($("rv-photo-thumbs") || $("rv-email-photos")) {
+    wirePhotoInteractions();
+    resetCasePhotos(Array.isArray(cfg.casePhotos) ? cfg.casePhotos : []);
+    caseLocked = false;
+    syncCaseLock();
+  }
+
+  var generateBtn = $("btn-generate-email");
+  if (generateBtn) generateBtn.addEventListener("click", generateEmail);
+  var amendBtn = $("btn-amend-case");
+  if (amendBtn) amendBtn.addEventListener("click", amendCaseDetails);
+
+  var createBtn = $("btn-create-plain-email");
+  if (createBtn) {
+    createBtn.addEventListener("click", function (e) {
+      if (cfg.mode !== "filled" && $("rv-project")) {
+        e.preventDefault();
+        clearBlankReview();
+        pingCaseDetailsToTop();
+        return;
       }
+      try { sessionStorage.setItem("hhsrs-reporter-ping-project", "1"); } catch (err) {}
     });
-    el.addEventListener("input", function () {
-      if (cfg.mode === "blank") {
-        var name = ($("rv-project") && $("rv-project").value) || "";
-        stubDraft(matchProject(name));
+  }
+
+  if ($("rv-project-block")) {
+    var ping = cfg.mode === "filled";
+    var compose = /(?:\?|&)compose=1(?:&|$)/.test(window.location.search);
+    try {
+      if (sessionStorage.getItem("hhsrs-reporter-ping-project") === "1") {
+        ping = true;
+        sessionStorage.removeItem("hhsrs-reporter-ping-project");
       }
-    });
-  });
+    } catch (err) {}
+    if (compose) ping = true;
+    if (ping) {
+      pingCaseDetailsToTop();
+      if (compose && window.history && window.history.replaceState) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+  }
+
+  var hintEl = $("rv-photos-hint");
+  if (hintEl && !hintEl.textContent) hintEl.textContent = DRAG_HINT;
 
   /* Live new-hazard toast. Baseline is the pending ids rendered with this page
      (plus ids already seen in this tab). Later polls toast anything new.

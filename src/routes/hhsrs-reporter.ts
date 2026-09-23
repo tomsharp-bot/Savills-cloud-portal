@@ -17,11 +17,16 @@ import {
   formatTimeAgo,
   formatWorkspaceDate,
   isHhsrsCaseStatus,
+  draftEmailFromReviewFields,
+  mergeReviewDraftFields,
+  photoAttachmentCount,
   photoNames,
   ratingDisplayClass,
   readReporterUpdate,
+  reporterCasePhotos,
   statusLabel,
   tryDraftFromRow,
+  type ReporterCasePhoto,
   type ReporterSummary,
 } from "../lib/hhsrs-reporter.js";
 import {
@@ -51,6 +56,7 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
   res.locals.formatDocDate = formatDocDate;
   res.locals.formatWorkspaceDate = formatWorkspaceDate;
   res.locals.ratingDisplayClass = ratingDisplayClass;
+  res.locals.photoAttachmentCount = photoAttachmentCount;
   res.locals.siteFormPublicUrl = SITE_FORM_PUBLIC_URL;
   res.locals.logoUrl = "/hhsrs-reporter/savills-logo.svg";
   // Logo is served from portal static; prefer baseUrl when available.
@@ -238,7 +244,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     }),
     user: req.user,
     row: null,
-    photos: [] as string[],
+    photos: [] as ReporterCasePhoto[],
     draftSubject: "",
     draftBody: "",
     draftTo: "",
@@ -269,7 +275,7 @@ function renderReview(
     alsoWaiting: NonNullable<Awaited<ReturnType<typeof loadCase>>>[];
   }
 ): void {
-  const photos = photoNames(row);
+  const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH);
   const draft = tryDraftFromRow(row);
   const matched = matchDemoProject(row.projectName);
   const flash = takeFlash(req);
@@ -316,6 +322,25 @@ async function reviewContext(excludeId?: string) {
   ]);
   return { summary, alsoWaiting };
 }
+
+hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const caseId = String(body.caseId || "").trim();
+  const row = caseId ? await loadCase(caseId) : null;
+  if (caseId && !row) {
+    res.status(404).json({ ok: false, error: "Case not found." });
+    return;
+  }
+  try {
+    const fields = mergeReviewDraftFields(row, body);
+    const draft = draftEmailFromReviewFields(fields);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, ...draft });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not prepare the client email.";
+    res.status(400).json({ ok: false, error: message });
+  }
+});
 
 hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
   const row = await loadCase(req.params.id);

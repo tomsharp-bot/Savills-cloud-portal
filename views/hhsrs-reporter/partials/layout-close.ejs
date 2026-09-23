@@ -23,6 +23,8 @@
         : ((typeof matchedProject !== 'undefined' && matchedProject) ? matchedProject.name : '')
     ) %>,
     mode: <%- JSON.stringify(typeof mode !== 'undefined' ? mode : activeNav) %>,
+    caseId: <%- JSON.stringify(typeof row !== 'undefined' && row ? row.id : '') %>,
+    casePhotos: <%- JSON.stringify(typeof photos !== 'undefined' ? photos : []) %>,
     initialPendingIds: <%- JSON.stringify(typeof initialPendingIds !== 'undefined' ? initialPendingIds : null) %>,
     alertsPollMs: 30000,
     serverDraft: <%- JSON.stringify({

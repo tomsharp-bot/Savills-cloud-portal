@@ -1,9 +1,14 @@
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   formatTimeAgo,
   ratingDisplayClass,
   actionedStatusLabel,
+  photoAttachmentCount,
+  reporterCasePhotos,
+  mergeReviewDraftFields,
+  draftEmailFromReviewFields,
 } from "./hhsrs-reporter.js";
 import { matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
 
@@ -45,5 +50,100 @@ describe("HHSRS Reporter UI helpers", () => {
 
   it("exposes the public site-form URL for Admin copy", () => {
     assert.equal(SITE_FORM_PUBLIC_URL, "https://savillscloudportal.co.uk/HHSRS-site-form");
+  });
+
+  it("counts surveyor photos from photoPaths", () => {
+    assert.equal(photoAttachmentCount(null), 0);
+    assert.equal(photoAttachmentCount(["hhsrs-site-form/a/one.jpg", "  "]), 1);
+    assert.equal(photoAttachmentCount(["a.jpg", "b.jpg"]), 2);
+  });
+
+  it("builds review photo urls from stored paths", () => {
+    const photos = reporterCasePhotos(
+      { id: "case 1", photoPaths: ["hhsrs-site-form/case 1/stair nosing.jpg", "x/two.png", "c", "d", "e"] },
+      "/HHSRSreporter"
+    );
+    assert.equal(photos.length, 4);
+    assert.equal(photos[0].name, "stair nosing.jpg");
+    assert.equal(photos[0].url, "/HHSRSreporter/case%201/photos/stair%20nosing.jpg");
+  });
+
+  it("keeps surveyor wording until notes are edited, then drafts on request", () => {
+    const row = {
+      projectName: "Demo Housing",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "123",
+      surveyDate: "2026-09-20",
+      category: "Electrical Hazards",
+      rating: "High",
+      comment: "damaged light fitting in lounge",
+      clientDescription: "",
+      clientCallReference: "",
+      callOutcome: "",
+      workOrder: "",
+      suspectedCause: "",
+      includeCause: true,
+      vulnerabilities: "",
+      escalation: "",
+      onwardTopic: "",
+      cat1Confirmed: false,
+      photoPaths: ["hhsrs-site-form/x/a.jpg", "hhsrs-site-form/x/b.jpg"],
+    };
+    const unchanged = mergeReviewDraftFields(row, {
+      projectName: "Demo Housing",
+      address: "1 High Street, EX1 1AA",
+      notes: "damaged light fitting in lounge",
+      hazard: "Electrical Hazards",
+      rating: "High",
+      photoCount: 2,
+      includeCause: true,
+    });
+    assert.equal(unchanged.clientDescription, "");
+    assert.equal(unchanged.postcode, "EX1 1AA");
+    const draft = draftEmailFromReviewFields(unchanged);
+    assert.match(draft.subject, /Demo Housing - HHSRS/);
+    assert.match(draft.body, /The light fitting in the lounge is damaged/);
+    assert.match(draft.body, /Attached are photos taken from/);
+
+    const edited = mergeReviewDraftFields(row, {
+      notes: "Loose socket in the kitchen.",
+      rating: "High",
+      includeCause: true,
+    });
+    assert.equal(edited.clientDescription, "Loose socket in the kitchen.");
+    assert.match(draftEmailFromReviewFields(edited).body, /Loose socket in the kitchen/);
+  });
+
+  it("keeps email photos and amend lock out of the case photo box", () => {
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const sidebar = readFileSync("views/hhsrs-reporter/partials/sidebar.ejs", "utf8");
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const photosAt = review.indexOf('id="rv-photos-block"');
+    const generateAt = review.indexOf('id="btn-generate-email"');
+    const emailPhotosAt = review.indexOf('id="rv-email-photos"');
+    const downloadAt = review.indexOf('id="btn-download-photos"');
+    assert.ok(photosAt > 0 && generateAt > photosAt);
+    assert.ok(emailPhotosAt > generateAt && downloadAt > emailPhotosAt);
+    assert.equal(review.slice(photosAt, generateAt).includes("btn-download-photos"), false);
+    assert.equal(review.slice(photosAt, generateAt).includes("Drag a photo"), false);
+    assert.match(review, /id="rv-email-photos"[^>]*hidden/);
+    assert.match(review, /id="btn-amend-case"[^>]*hidden/);
+    assert.match(review, /id="btn-create-plain-email"/);
+    assert.match(review, /Create new email/);
+    assert.match(review, /value=""/);
+    assert.match(pending, /photo-att-col/);
+    assert.match(pending, /Review Case/);
+    assert.doesNotMatch(sidebar, /side-brand/);
+    assert.match(js, /function amendCaseDetails/);
+    assert.match(js, /caseLocked = true/);
+    assert.match(js, /DownloadURL/);
+    assert.doesNotMatch(js, /function stubDraft/);
+    assert.match(css, /#rv-case-panel\.is-drafted/);
+    assert.match(css, /btn-create-email:hover/);
+    assert.match(css, /transform-origin: left center/);
+    assert.match(css, /btn-photo-fallback/);
   });
 });

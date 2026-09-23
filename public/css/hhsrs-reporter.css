@@ -1477,3 +1477,278 @@ body.hhsrs-reporter {
 #po-panel-total[hidden],
 #po-panel-project[hidden],
 .po-by-block[hidden] { display: none !important; }
+
+/* === Review: create email, photo column, generate-then-drag === */
+.hhsrs-reporter .actions-row .btn-create-email {
+  margin-left: auto;
+  background: #eef5fb;
+  color: var(--navy);
+  border: 1px solid #c5d6e8;
+  font-weight: 700;
+  box-shadow: 0 1px 0 rgba(11, 31, 51, 0.06);
+}
+.hhsrs-reporter .actions-row .btn-create-email:hover {
+  background: var(--savills-yellow);
+  border-color: var(--savills-yellow-dark);
+  color: var(--navy);
+}
+.hhsrs-reporter .photo-att-cell {
+  width: 2.4rem;
+  text-align: center;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+.hhsrs-reporter .landing-table thead th.photo-att-col {
+  width: 2.4rem;
+  text-align: center;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+.hhsrs-reporter .photo-att-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 6px;
+  background: var(--blue-light);
+  color: var(--blue);
+  vertical-align: middle;
+}
+.hhsrs-reporter .photo-att-icon svg { width: 0.85rem; height: 0.85rem; display: block; }
+.hhsrs-reporter .photo-att-icon .photo-att-count {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.hhsrs-reporter #review-workspace { padding-bottom: 85vh; }
+.hhsrs-reporter #rv-project-block { scroll-margin-top: 0; }
+.hhsrs-reporter .review-project-first.panel { padding: 0; overflow: hidden; }
+.hhsrs-reporter .review-project-body { padding: 1rem 1.15rem 1.1rem; }
+.hhsrs-reporter .rv-pending-strip { margin: 0 0 1rem; }
+.hhsrs-reporter .rv-pending-strip > details > summary.rv-pending-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.hhsrs-reporter .rv-pending-strip > details > summary.rv-pending-summary::-webkit-details-marker { display: none; }
+.hhsrs-reporter .rv-pending-strip > details > summary.rv-pending-summary::marker { content: ""; }
+.hhsrs-reporter .rv-pending-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.hhsrs-reporter .rv-pending-summary h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.hhsrs-reporter .rv-pending-chevron {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.7rem;
+  font-weight: 800;
+  transition: transform 0.15s ease;
+}
+.hhsrs-reporter .rv-pending-strip details[open] .rv-pending-chevron { transform: rotate(90deg); }
+.hhsrs-reporter .rv-pending-strip .waiting-empty-msg { display: none; margin: 0; padding: 0.9rem 1.1rem; }
+.hhsrs-reporter .rv-pending-strip.is-clear .waiting-empty-msg { display: block; }
+.hhsrs-reporter .rv-pending-strip.is-clear .table-wrap { display: none; }
+.hhsrs-reporter .review-grid,
+.hhsrs-reporter .panel.panel-overflow-visible,
+.hhsrs-reporter .panel.email-draft-panel,
+.hhsrs-reporter .blank-case-form,
+.hhsrs-reporter .case-fields { overflow: visible; }
+.hhsrs-reporter .photos-block {
+  margin-top: 0.35rem;
+  padding: 0.85rem 0.9rem;
+  background: var(--blue-light);
+  border: 1px solid #c5d6e8;
+  border-radius: 10px;
+}
+.hhsrs-reporter .photos-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+.hhsrs-reporter .photos-head label {
+  margin: 0;
+  color: var(--navy);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.hhsrs-reporter .photos-sub { font-weight: 600; color: var(--muted); font-size: 0.75rem; }
+.hhsrs-reporter .photos-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--blue);
+  background: #fff;
+  border: 1px solid #b8cce0;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+}
+.hhsrs-reporter .photo-thumbs { min-height: 2rem; }
+.hhsrs-reporter .case-photo-thumbs:empty::before {
+  content: "No photos on this case.";
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.hhsrs-reporter .photos-block.is-blank-mode .case-photo-thumbs:empty::before {
+  content: "No photos yet — add up to 4.";
+}
+.hhsrs-reporter .photo-thumb {
+  position: relative;
+  width: 96px;
+  height: auto;
+  border-radius: 8px;
+  background: #fff;
+  border: 1.5px solid #b8cce0;
+  box-shadow: 0 1px 3px rgba(11, 31, 51, 0.08);
+  overflow: hidden;
+  display: block;
+  flex: 0 0 auto;
+}
+.hhsrs-reporter .photo-thumb img {
+  display: block;
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+}
+.hhsrs-reporter .photo-thumb .photo-caption {
+  display: block;
+  padding: 0.28rem 0.35rem 0.35rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #fff;
+}
+.hhsrs-reporter .case-photo-thumb { cursor: default; }
+.hhsrs-reporter .photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(11, 31, 51, 0.72);
+  color: #fff;
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-weight: 700;
+  z-index: 2;
+}
+.hhsrs-reporter .photo-remove:hover { background: var(--savills-red); }
+.hhsrs-reporter .photos-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: stretch;
+  margin-top: 0.65rem;
+}
+.hhsrs-reporter .photos-add-row[hidden] { display: none !important; }
+.hhsrs-reporter .photos-block:not(.is-blank-mode) .photos-add-row { display: none !important; }
+.hhsrs-reporter .photos-dropzone {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1.5px dashed #7a9bb8;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--blue);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  margin: 0;
+}
+.hhsrs-reporter .photos-dropzone:hover,
+.hhsrs-reporter .photos-dropzone.is-dragover { border-color: var(--blue); background: #f0f6fb; }
+.hhsrs-reporter .photos-dropzone.is-disabled { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+.hhsrs-reporter .photos-drop-hint { font-size: 0.6875rem; font-weight: 600; color: var(--muted); }
+.hhsrs-reporter .generate-email-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.hhsrs-reporter .generate-email-row .review-project-hint { margin: 0; }
+.hhsrs-reporter #rv-case-panel.is-drafted #rv-case-fields {
+  opacity: 0.45;
+  filter: grayscale(0.65);
+  pointer-events: none;
+  user-select: none;
+}
+.hhsrs-reporter #rv-photos-block[hidden],
+.hhsrs-reporter #btn-amend-case[hidden] { display: none !important; }
+.hhsrs-reporter .email-empty-hint[hidden] { display: none !important; }
+.hhsrs-reporter .email-photo-tools { margin-top: 0.85rem; }
+.hhsrs-reporter .email-photo-tools[hidden] { display: none !important; }
+.hhsrs-reporter .email-photo-thumb {
+  cursor: grab;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.hhsrs-reporter .email-photo-thumb:hover,
+.hhsrs-reporter .email-photo-thumb:focus-within {
+  z-index: 30;
+  border-color: var(--blue);
+  box-shadow: 0 10px 26px rgba(11, 31, 51, 0.28);
+  transform: scale(2);
+  transform-origin: left center;
+}
+.hhsrs-reporter .email-photo-thumb:active { cursor: grabbing; }
+.hhsrs-reporter .photos-drag-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--navy);
+}
+.hhsrs-reporter .photos-fallback {
+  margin-top: 0.9rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed #c5d6e8;
+}
+.hhsrs-reporter .btn-photo-fallback {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  box-shadow: none;
+}
+.hhsrs-reporter .btn-photo-fallback:hover {
+  background: #f7f9fb;
+  color: var(--navy);
+  border-color: #c5d0da;
+}

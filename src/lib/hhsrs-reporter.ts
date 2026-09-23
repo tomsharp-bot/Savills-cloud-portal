@@ -1,5 +1,6 @@
 import type { HhsrsSiteSubmission } from "@prisma/client";
 import { draftFromSubmission, type SubmissionDraftInput } from "./hhsrs-reporter-draft.js";
+import { matchDemoProject } from "./hhsrs-reporter-projects.js";
 
 export const HHSRS_REPORTER_PATH = "/HHSRSreporter";
 export const HHSRS_REPORTER_ALIAS = "/HHSRSreporting";
@@ -45,6 +46,166 @@ export function statusLabel(status: string): string {
 
 export function photoNames(row: Pick<HhsrsSiteSubmission, "photoPaths">): string[] {
   return Array.isArray(row.photoPaths) ? row.photoPaths.map(String) : [];
+}
+
+/** How many surveyor photos are stored on a site-form row. Derived from photoPaths — no extra column. */
+export function photoAttachmentCount(photoPaths: unknown): number {
+  if (!Array.isArray(photoPaths)) return 0;
+  return photoPaths.filter((item) => String(item || "").trim()).length;
+}
+
+export type ReporterCasePhoto = {
+  id: string;
+  name: string;
+  caption: string;
+  url: string;
+};
+
+/** Up to four surveyor photos for the Review Case strip. URLs hit the existing photo route. */
+export function reporterCasePhotos(
+  row: { id: string; photoPaths: unknown },
+  reporterBase: string
+): ReporterCasePhoto[] {
+  const paths = Array.isArray(row.photoPaths) ? row.photoPaths.map((item) => String(item)) : [];
+  return paths.slice(0, 4).map((stored, index) => {
+    const name = stored.split("/").filter(Boolean).pop() || `photo-${index + 1}`;
+    const caption = name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") || `Photo ${index + 1}`;
+    return {
+      id: `surveyor-${index + 1}`,
+      name,
+      caption,
+      url: `${reporterBase}/${encodeURIComponent(row.id)}/photos/${encodeURIComponent(name)}`,
+    };
+  });
+}
+
+export type ReviewDraftSource = {
+  projectName: string;
+  fullAddress: string;
+  postcode: string;
+  uprn: string;
+  surveyDate: string;
+  category: string;
+  rating: string;
+  comment: string;
+  clientDescription: string;
+  clientCallReference: string;
+  callOutcome: string;
+  workOrder: string;
+  suspectedCause: string;
+  includeCause: boolean;
+  vulnerabilities: string;
+  escalation: string;
+  onwardTopic: string;
+  cat1Confirmed: boolean;
+  photoPaths: unknown;
+};
+
+export type ReviewDraftFields = SubmissionDraftInput;
+
+function postedString(body: Record<string, unknown>, key: string): string {
+  return String(body[key] ?? "").trim();
+}
+
+function postedFlag(value: unknown, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  if (value === false || value === "false" || value === "0" || value === "off") return false;
+  return value === true || value === "true" || value === "1" || value === "on";
+}
+
+function postedPhotoCount(body: Record<string, unknown>, fallback: number): number {
+  if (body.photoCount === undefined || body.photoCount === null || body.photoCount === "") return fallback;
+  const n = Number(body.photoCount);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(4, Math.floor(n));
+}
+
+/**
+ * Turn the Review form into the existing submission draft input.
+ * Unedited surveyor notes stay as the comment so the template rewrite still runs.
+ * Edited notes are treated as the office client description.
+ */
+export function mergeReviewDraftFields(
+  row: ReviewDraftSource | null,
+  body: Record<string, unknown>
+): ReviewDraftFields {
+  const postedProject = postedString(body, "projectName");
+  const postedAddress = postedString(body, "address");
+  const postedNotes = postedString(body, "notes");
+  const postedRating = postedString(body, "rating");
+
+  if (!row) {
+    return {
+      projectName: postedProject,
+      fullAddress: postedAddress,
+      postcode: "",
+      uprn: postedString(body, "uprn"),
+      surveyDate: postedString(body, "surveyDate"),
+      category: postedString(body, "hazard"),
+      rating: postedRating,
+      comment: postedNotes,
+      clientDescription: "",
+      clientCallReference: postedString(body, "clientCallReference"),
+      callOutcome: postedString(body, "callOutcome"),
+      workOrder: postedString(body, "workOrder"),
+      suspectedCause: postedString(body, "suspectedCause"),
+      includeCause: postedFlag(body.includeCause, true),
+      vulnerabilities: postedString(body, "vulnerabilities"),
+      escalation: postedString(body, "escalation"),
+      onwardTopic: postedString(body, "onwardTopic"),
+      cat1Confirmed: postedFlag(body.cat1Confirmed, false),
+      photoCount: postedPhotoCount(body, 0),
+    };
+  }
+
+  const matched = matchDemoProject(row.projectName);
+  const projectUnchanged =
+    !postedProject ||
+    postedProject === row.projectName ||
+    Boolean(matched && postedProject === matched.name);
+  const shownAddress = row.postcode ? `${row.fullAddress}, ${row.postcode}` : row.fullAddress;
+  const addressUnchanged = !postedAddress || postedAddress === shownAddress;
+  const shownNotes = (row.clientDescription || row.comment).trim();
+  const notesUnchanged = postedNotes === shownNotes;
+
+  return {
+    projectName: projectUnchanged ? row.projectName : postedProject,
+    fullAddress: addressUnchanged ? row.fullAddress : postedAddress,
+    postcode: addressUnchanged ? row.postcode : "",
+    uprn: postedString(body, "uprn") || row.uprn,
+    surveyDate: postedString(body, "surveyDate") || row.surveyDate,
+    category: postedString(body, "hazard") || row.category,
+    rating: postedRating || row.rating,
+    comment: row.comment,
+    clientDescription: notesUnchanged ? row.clientDescription : postedNotes,
+    clientCallReference:
+      body.clientCallReference === undefined ? row.clientCallReference : postedString(body, "clientCallReference"),
+    callOutcome: body.callOutcome === undefined ? row.callOutcome : postedString(body, "callOutcome"),
+    workOrder: body.workOrder === undefined ? row.workOrder : postedString(body, "workOrder"),
+    suspectedCause: body.suspectedCause === undefined ? row.suspectedCause : postedString(body, "suspectedCause"),
+    includeCause: postedFlag(body.includeCause, row.includeCause),
+    vulnerabilities: body.vulnerabilities === undefined ? row.vulnerabilities : postedString(body, "vulnerabilities"),
+    escalation: body.escalation === undefined ? row.escalation : postedString(body, "escalation"),
+    onwardTopic: body.onwardTopic === undefined ? row.onwardTopic : postedString(body, "onwardTopic"),
+    cat1Confirmed: postedFlag(body.cat1Confirmed, row.cat1Confirmed),
+    photoCount: postedPhotoCount(body, photoAttachmentCount(row.photoPaths)),
+  };
+}
+
+export function draftEmailFromReviewFields(fields: ReviewDraftFields): {
+  to: string;
+  cc: string;
+  subject: string;
+  body: string;
+} {
+  const matched = matchDemoProject(fields.projectName);
+  const draft = draftFromSubmission(fields);
+  return {
+    to: matched ? matched.to.join("; ") : "",
+    cc: matched ? matched.cc.join("; ") : "",
+    subject: draft.subject,
+    body: draft.body,
+  };
 }
 
 export function submissionDraftInput(
