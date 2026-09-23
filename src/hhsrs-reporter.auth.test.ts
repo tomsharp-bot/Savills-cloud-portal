@@ -106,6 +106,10 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(admin.body, /Pending issues/);
     assert.match(admin.body, /side-tabs/);
     assert.match(admin.body, /HOUSING · SURVEY REPORTING/);
+    assert.match(admin.body, /id="hhsrs-alert-toast"/);
+    assert.match(admin.body, /class="alert-toast"/);
+    assert.match(admin.body, /Enable desktop alerts/);
+    assert.match(admin.body, /initialPendingIds/);
 
     const surveyorCookie = await login(app, "peter.m", "PeterMay2468", "/projectprogress");
     const surveyor = await request(app, "GET", "/HHSRSreporter", { cookie: surveyorCookie });
@@ -145,6 +149,79 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(adminPage.body, /Surveyor site form link/);
     assert.match(adminPage.body, /https:\/\/savillscloudportal\.co\.uk\/HHSRS-site-form/);
     assert.match(adminPage.body, /Copy link/);
+    assert.match(adminPage.body, /Enable desktop alerts/);
+    assert.match(adminPage.body, /id="hhsrs-alert-toast"/);
+  });
+
+  it("returns pending hazard ids to admins and hides them from other roles", async (t) => {
+    if (!dbReady) {
+      t.skip("Postgres with seeded users is not available");
+      return;
+    }
+    const { prisma } = await import("./lib/prisma.js");
+    const row = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        projectName: "Alert Homes",
+        surveyDate: "2026-09-22",
+        uprn: "reporter-alert-" + Date.now(),
+        fullAddress: "9 Harbour Road",
+        postcode: "EX23 8AB",
+        surveyorName: "Sam Surveyor",
+        category: "Damp & Mould Growth",
+        rating: "High",
+        comment: "black mould behind the wardrobe",
+        photoPaths: [],
+        status: "new",
+      },
+    });
+    const actioned = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        projectName: "Alert Homes",
+        surveyDate: "2026-09-22",
+        uprn: "reporter-alert-done-" + Date.now(),
+        fullAddress: "10 Harbour Road",
+        postcode: "EX23 8AB",
+        surveyorName: "Sam Surveyor",
+        category: "Electrical Hazards",
+        rating: "Low",
+        comment: "already actioned",
+        photoPaths: [],
+        status: "email_sent",
+      },
+    });
+    try {
+      const app = createApp({ basePath: "" });
+      const adminCookie = await login(app, "phil.m", "PhilMoon2468");
+      const anon = await request(app, "GET", "/HHSRSreporter/pending-alerts.json");
+      assert.equal(anon.status, 302);
+
+      const surveyorCookie = await login(app, "peter.m", "PeterMay2468");
+      const surveyor = await request(app, "GET", "/HHSRSreporter/pending-alerts.json", {
+        cookie: surveyorCookie,
+      });
+      assert.equal(surveyor.status, 403);
+      assert.match(surveyor.body, /Admin only/);
+
+      const alerts = await request(app, "GET", "/HHSRSreporter/pending-alerts.json", {
+        cookie: adminCookie,
+      });
+      assert.equal(alerts.status, 200);
+      const payload = JSON.parse(alerts.body) as {
+        pending: Array<{ id: string; fullAddress: string; summary: string; projectName: string }>;
+      };
+      const match = payload.pending.find((item) => item.id === row.id);
+      assert.ok(match, "new pending submission is in the poll payload");
+      assert.equal(match?.fullAddress, "9 Harbour Road");
+      assert.equal(match?.projectName, "Alert Homes");
+      assert.match(match?.summary || "", /Damp & Mould Growth/);
+      assert.match(match?.summary || "", /black mould behind the wardrobe/);
+      assert.equal(
+        payload.pending.some((item) => item.id === actioned.id),
+        false
+      );
+    } finally {
+      await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: { in: [row.id, actioned.id] } } });
+    }
   });
 
   it("opens a case and generates a Standard draft from the submission", async (t) => {

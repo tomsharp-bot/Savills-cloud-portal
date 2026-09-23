@@ -30,6 +30,7 @@ import {
   SITE_FORM_PUBLIC_URL,
   matchDemoProject,
 } from "../lib/hhsrs-reporter-projects.js";
+import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
 
 export const hhsrsReporterRouter = Router();
 
@@ -57,6 +58,31 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
     res.locals.reporterJsUrl = "/js/hhsrs-reporter.js";
     res.locals.portalHomeUrl = "/admin";
     res.locals.logoutUrl = "/logout";
+  }
+  next();
+});
+
+/** Ids already on screen when this Reporter page was rendered. Null if the lookup failed. */
+hhsrsReporterRouter.use(async (req: Request, res: Response, next) => {
+  res.locals.initialPendingIds = null;
+  const skip =
+    req.path.endsWith(".json") ||
+    req.path.endsWith(".csv") ||
+    req.path.includes("/photos/");
+  if (skip) {
+    next();
+    return;
+  }
+  try {
+    const rows = await prisma.hhsrsSiteSubmission.findMany({
+      where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: { id: true },
+    });
+    res.locals.initialPendingIds = rows.map((row) => row.id);
+  } catch {
+    res.locals.initialPendingIds = null;
   }
   next();
 });
@@ -122,6 +148,36 @@ function csvEscape(value: string): string {
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
+
+/* ---------- Lightweight poll for new pending hazards ---------- */
+hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Response) => {
+  const rows = await prisma.hhsrsSiteSubmission.findMany({
+    where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      projectName: true,
+      fullAddress: true,
+      category: true,
+      rating: true,
+      comment: true,
+      createdAt: true,
+    },
+  });
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    pending: rows.map((row) => ({
+      id: row.id,
+      projectName: row.projectName,
+      fullAddress: row.fullAddress,
+      category: row.category,
+      rating: row.rating,
+      summary: pendingAlertSummary(row),
+      createdAt: row.createdAt.toISOString(),
+    })),
+  });
+});
 
 /* ---------- Pending Issues ---------- */
 hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
