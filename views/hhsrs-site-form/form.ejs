@@ -10,7 +10,7 @@
   </header>
   <main class="hhsrs-shell hhsrs-form-shell">
     <h1>New issue</h1>
-    <p class="hhsrs-lead">All fields marked * are required. Photos are optional (up to <%= maxPhotos %>).</p>
+    <p class="hhsrs-lead">All fields marked * are required. Add <%= minPhotos %> to <%= maxPhotos %> photos.</p>
     <% const errList = Object.values(errors).filter(Boolean); %>
     <% if (formError || errList.length) { %>
       <div class="hhsrs-errors" role="alert">
@@ -23,7 +23,7 @@
         </ul>
       </div>
     <% } %>
-    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>" data-address-lookup="<%= hhsrsUrl('/address-lookup') %>">
+    <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-min-photos="<%= minPhotos %>" data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>" data-address-lookup="<%= hhsrsUrl('/address-lookup') %>">
       <% if (draft) { %><input type="hidden" name="draftId" value="<%= draft.id %>" /><% } %>
       <% const visitReady = !!(values.projectId && values.surveyDate && String(values.surveyorName || "").trim()); %>
       <% const selectedProject = projects.find((p) => p.id === values.projectId); %>
@@ -108,8 +108,19 @@
 
       <h2 class="hhsrs-sub">Extra details</h2>
       <div class="project-extra" data-extra="calls" <%= flags.calls ? "" : "hidden" %>>
-        <label for="clientCallReference">Client call reference (if required)</label>
-        <input id="clientCallReference" name="clientCallReference" type="text" value="<%= values.clientCallReference %>" <%= flags.calls ? "" : "disabled" %> />
+        <label for="clientCallReference">Client call reference *</label>
+        <input id="clientCallReference" name="clientCallReference" type="text" value="<%= values.clientCallReference %>" class="<%= errors.clientCallReference ? 'is-invalid' : '' %>" <%= flags.calls ? "" : "disabled" %> />
+        <% if (errors.clientCallReference) { %><p class="field-error"><%= errors.clientCallReference %></p><% } %>
+        <label class="hhsrs-check" for="callUnreached">
+          <input id="callUnreached" name="callUnreached" type="checkbox" value="true" <%= values.callUnreached ? "checked" : "" %> <%= flags.calls ? "" : "disabled" %> />
+          <span>Couldn't get through</span>
+        </label>
+        <div id="call-unreached-note" <%= values.callUnreached && flags.calls ? "" : "hidden" %>>
+          <label for="callUnreachedNote">Why is the call reference blank? *</label>
+          <textarea id="callUnreachedNote" name="callUnreachedNote" rows="3" class="<%= errors.callUnreachedNote ? 'is-invalid' : '' %>" <%= flags.calls && values.callUnreached ? "" : "disabled" %>><%= values.callUnreachedNote || "" %></textarea>
+          <% if (errors.callUnreachedNote) { %><p class="field-error"><%= errors.callUnreachedNote %></p><% } %>
+        </div>
+        <p class="hhsrs-hint">Required for this project. Leave it blank only if you tick Couldn't get through and say why.</p>
       </div>
       <div class="project-extra" data-extra="onward" <%= flags.onward ? "" : "hidden" %>>
         <label class="hhsrs-check" for="cat1Confirmed">
@@ -125,11 +136,12 @@
         <p class="hhsrs-hint" id="cornwall-damp-note">Cornwall: any damp and mould needs Tom’s separate online form.</p>
       </div>
 
-      <label for="otherDetails">Any other details</label>
-      <textarea id="otherDetails" name="otherDetails" rows="4"><%= values.otherDetails %></textarea>
+      <label for="otherDetails">Any other details *</label>
+      <textarea id="otherDetails" name="otherDetails" required rows="4" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
+      <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
 
       <fieldset class="hhsrs-photos">
-        <legend>Photos <span class="optional">(optional, max <%= maxPhotos %>)</span></legend>
+        <legend>Photos <span class="optional">(required, <%= minPhotos %> to <%= maxPhotos %>)</span></legend>
         <p class="hhsrs-hint"><%= photoHint %></p>
         <p id="photo-status" class="hhsrs-hint" hidden></p>
         <% if (errors.photos) { %><p class="field-error"><%= errors.photos %></p><% } %>

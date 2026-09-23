@@ -22,7 +22,10 @@
       <div><dt>Rating</dt><dd><%= draft.rating %></dd></div>
       <div><dt>Comment</dt><dd class="prewrap"><%= draft.comment %></dd></div>
       <% if (draft.cat1Confirmed) { %><div><dt>Category 1 confirmed</dt><dd>Yes</dd></div><% } %>
-      <div><dt>Client call reference (if required)</dt><dd><%= draft.clientCallReference || "—" %></dd></div>
+      <div><dt>Client call reference</dt><dd><%= draft.clientCallReference || "—" %></dd></div>
+      <% if (draft.callUnreached) { %>
+        <div><dt>Couldn't get through</dt><dd class="prewrap"><%= draft.callUnreachedNote || "—" %></dd></div>
+      <% } %>
       <div><dt>Any other details</dt><dd class="prewrap"><%= draft.otherDetails || "—" %></dd></div>
     </dl>
     <h2 class="hhsrs-sub">Photos</h2>

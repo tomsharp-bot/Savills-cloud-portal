@@ -82,7 +82,7 @@ function hhsrsReviewFields(): Record<string, string> {
     rating: "High",
     comment: "Visible mould in bathroom.",
     clientCallReference: "",
-    otherDetails: "",
+    otherDetails: "No access issues.",
   };
 }
 
@@ -266,8 +266,11 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /Demo current project \(local\)/);
     assert.match(form.body, /name="surveyDate"/);
     assert.match(form.body, /HHSRS category/);
-    assert.match(form.body, /Client call reference \(if required\)/);
-    assert.match(form.body, /Any other details/);
+    assert.match(form.body, /Client call reference \*/);
+    assert.match(form.body, /Couldn't get through/);
+    assert.match(form.body, /Any other details \*/);
+    assert.match(form.body, /required, 1 to 4/);
+    assert.doesNotMatch(form.body, /Photos are optional/);
     assert.match(form.body, /action="\/HHSRS-site-form\/review"/);
     assert.match(form.body, /each photo up to 40MB/i);
     assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
@@ -313,6 +316,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /address-lookup/);
     assert.match(js.body, /updateVisitGate/);
     assert.match(js.body, /data-onward/);
+    assert.match(js.body, /callUnreached/);
+    assert.match(js.body, /Add at least 1 photo/);
   });
 
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
@@ -357,20 +362,15 @@ describe("HHSRS site form at domain-root paths", () => {
     const form = await request(app, "GET", "/HHSRS-site-form/new");
     assert.match(form.body, /Demo current project \(local\)/);
 
-    const body = [
-      "projectId=hhsrs-demo-current",
-      "surveyDate=2026-09-20",
-      "uprn=100123",
-      "fullAddress=1+High+Street",
-      "postcode=EX1+1AA",
-      "surveyorName=Alex+Surveyor",
-      "category=" + encodeURIComponent("Damp & Mould Growth"),
-      "rating=High",
-      "comment=" + encodeURIComponent("Visible mould in bathroom."),
-      "clientCallReference=",
-      "otherDetails=",
-    ].join("&");
-    const reviewPost = await request(app, "POST", "/HHSRS-site-form/review", { body });
+    const missingPhoto = multipartForm(hhsrsReviewFields());
+    const blocked = await request(app, "POST", "/HHSRS-site-form/review", missingPhoto);
+    assert.equal(blocked.status, 200);
+    assert.match(blocked.body, /Add at least 1 photo/);
+
+    const upload = multipartForm(hhsrsReviewFields(), [
+      { field: "photos", filename: "room.jpg", type: "image/jpeg", data: fakeJpeg(128) },
+    ]);
+    const reviewPost = await request(app, "POST", "/HHSRS-site-form/review", upload);
     assert.equal(reviewPost.status, 302);
     assert.match(reviewPost.location, /^\/HHSRS-site-form\/review\?draft=/);
     assert.doesNotMatch(reviewPost.location, /projectprogress/);
@@ -380,6 +380,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(review.body, /Review issue/);
     assert.match(review.body, /Damp &amp; Mould Growth/);
     assert.match(review.body, /Visible mould in bathroom/);
+    assert.match(review.body, /No access issues/);
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);
     assert.match(review.body, />Cancel</);

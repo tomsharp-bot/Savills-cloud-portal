@@ -12,6 +12,7 @@ import {
   HHSRS_MAX_FILE_BYTES,
   HHSRS_MAX_FILE_MB,
   HHSRS_MAX_PHOTOS,
+  HHSRS_MIN_PHOTOS,
   HHSRS_SITE_FORM_PATH,
   hhsrsMulterLimits,
   hhsrsPhotoHint,
@@ -31,6 +32,7 @@ import {
   type HhsrsFormValues,
   validateHhsrsForm,
   siteFormProjectFlags,
+  submissionOtherDetails,
   validatePhotos,
   writeDraft,
 } from "../lib/hhsrs-site-form.js";
@@ -54,7 +56,7 @@ function uploadPhotos(req: Request, res: Response, next: NextFunction): void {
         code === "LIMIT_FILE_SIZE"
           ? hhsrsPhotoSizeError()
           : code === "LIMIT_UNEXPECTED_FILE" || code === "LIMIT_FILE_COUNT"
-            ? `You can attach up to ${HHSRS_MAX_PHOTOS} photos.`
+            ? `Add ${HHSRS_MIN_PHOTOS} to ${HHSRS_MAX_PHOTOS} photos.`
             : "Could not upload photos.";
     }
     next();
@@ -125,6 +127,7 @@ function renderForm(
     })),
     formError: opts.formError || "",
     maxPhotos: HHSRS_MAX_PHOTOS,
+    minPhotos: HHSRS_MIN_PHOTOS,
     maxFileMb: HHSRS_MAX_FILE_MB,
     maxFileBytes: HHSRS_MAX_FILE_BYTES,
     photoHint: hhsrsPhotoHint(),
@@ -285,9 +288,19 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
   }
   const active = await findActiveProject(draft.projectId);
   const checked = validateHhsrsForm(draft, active);
-  if (!checked.ok) {
+  const photoError = validatePhotos([], draft.photos.length);
+  if (!checked.ok || photoError) {
     const projects = await loadActiveProjects();
-    renderForm(res, { values: draft, errors: checked.errors, draft, projects });
+    renderForm(res, {
+      values: draft,
+      errors: {
+        ...(checked.ok ? {} : checked.errors),
+        ...(photoError ? { photos: photoError } : {}),
+      },
+      draft,
+      projects,
+      formError: photoError && checked.ok ? photoError : "",
+    });
     return;
   }
   const created = await prisma.hhsrsSiteSubmission.create({
@@ -303,7 +316,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
       rating: checked.data.rating,
       comment: checked.data.comment,
       clientCallReference: checked.data.clientCallReference,
-      otherDetails: checked.data.otherDetails,
+      otherDetails: submissionOtherDetails(checked.data),
       cat1Confirmed: checked.data.cat1Confirmed,
       photoPaths: [],
     },

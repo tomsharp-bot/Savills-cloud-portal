@@ -4,6 +4,7 @@
   var newGrid = document.getElementById("new-photos");
   var existing = document.getElementById("existing-photos");
   var statusEl = document.getElementById("photo-status");
+  var minPhotos = form ? parseInt(form.getAttribute("data-min-photos") || "1", 10) : 1;
   var max = form ? parseInt(form.getAttribute("data-max-photos") || "4", 10) : 4;
   var maxBytes = form
     ? parseInt(form.getAttribute("data-max-file-bytes") || String(40 * 1024 * 1024), 10)
@@ -201,7 +202,22 @@
     if (hint) hint.hidden = open;
     if (open) keepAddressEditable();
     syncProjectExtras();
+    syncCallUnreached();
   }
+
+  function syncCallUnreached() {
+    var box = document.getElementById("callUnreached");
+    var wrap = document.getElementById("call-unreached-note");
+    var note = document.getElementById("callUnreachedNote");
+    var calls = document.querySelector('.project-extra[data-extra="calls"]');
+    var callsShown = !!(calls && !calls.hidden);
+    var on = !!(box && box.checked && callsShown);
+    if (wrap) wrap.hidden = !on;
+    if (note) note.disabled = !on;
+  }
+
+  var callBox = document.getElementById("callUnreached");
+  if (callBox) callBox.addEventListener("change", syncCallUnreached);
 
   ["projectId", "surveyDate", "surveyorName"].forEach(function (id) {
     var el = document.getElementById(id);
@@ -215,6 +231,17 @@
 
   function existingCount() {
     return existing ? existing.querySelectorAll("[data-existing]").length : 0;
+  }
+
+  function visibleRequiredMissing() {
+    if (!form) return false;
+    var nodes = form.querySelectorAll("input[required], textarea[required], select[required]");
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (el.disabled || (el.closest && el.closest("[hidden]"))) continue;
+      if (!String(el.value || "").trim()) return true;
+    }
+    return false;
   }
 
   function syncFiles(files) {
@@ -362,6 +389,17 @@
     form.addEventListener("submit", function (e) {
       if (form.getAttribute("data-photos-ready") === "1") return;
       var files = currentFiles();
+      var total = existingCount() + files.length;
+      if (total < minPhotos && !visibleRequiredMissing()) {
+        e.preventDefault();
+        setStatus(minPhotos === 1 ? "Add at least 1 photo." : "Add at least " + minPhotos + " photos.");
+        return;
+      }
+      if (total > max) {
+        e.preventDefault();
+        setStatus("Add " + minPhotos + " to " + max + " photos.");
+        return;
+      }
       if (!files.length) return;
       e.preventDefault();
       var btn = form.querySelector('button[type="submit"]');
@@ -409,6 +447,7 @@
     "comment",
     "clientCallReference",
     "otherDetails",
+    "callUnreachedNote",
   ];
 
   function todayLondonDate() {
@@ -435,6 +474,8 @@
     setFindStatus("", "");
     var cat1 = document.getElementById("cat1Confirmed");
     if (cat1) cat1.checked = false;
+    var callUnreached = document.getElementById("callUnreached");
+    if (callUnreached) callUnreached.checked = false;
     updateVisitGate();
     if (form) form.removeAttribute("data-photos-ready");
     var submit = form && form.querySelector('button[type="submit"]');
