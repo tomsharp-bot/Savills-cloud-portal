@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isHhsrsCategory, isHhsrsRating } from "./hhsrs-categories.js";
+import { matchDemoProject } from "./hhsrs-reporter-projects.js";
 
 export const HHSRS_SITE_FORM_PATH = "/HHSRS-site-form";
 export const HHSRS_MAX_PHOTOS = 4;
@@ -60,7 +61,32 @@ export type HhsrsFormValues = {
   comment: string;
   clientCallReference: string;
   otherDetails: string;
+  /** Onward only. Unchecked or hidden extras are stored as false. */
+  cat1Confirmed: boolean;
 };
+
+/** Which Extra details blocks apply to a live project name. */
+export type SiteFormProjectFlags = {
+  calls: boolean;
+  onward: boolean;
+  saxon: boolean;
+  online: boolean;
+};
+
+export function siteFormProjectFlags(projectName: string): SiteFormProjectFlags {
+  const matched = matchDemoProject(projectName);
+  return {
+    calls: Boolean(matched?.extras.calls),
+    onward: Boolean(matched?.extras.onward),
+    saxon: Boolean(matched && /^saxon\b/i.test(matched.name)),
+    online: Boolean(matched?.extras.online_form),
+  };
+}
+
+function readCat1Confirmed(body: Record<string, unknown>): boolean {
+  const raw = body.cat1Confirmed;
+  return raw === true || raw === "true" || raw === "on" || raw === "yes";
+}
 
 export type HhsrsFormData = HhsrsFormValues & {
   projectName: string;
@@ -100,6 +126,7 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     comment: "",
     clientCallReference: "",
     otherDetails: "",
+    cat1Confirmed: false,
   };
 }
 
@@ -117,6 +144,7 @@ export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues 
     comment: field("comment"),
     clientCallReference: field("clientCallReference"),
     otherDetails: field("otherDetails"),
+    cat1Confirmed: readCat1Confirmed(body),
   };
 }
 
@@ -175,10 +203,12 @@ export function validateHhsrsForm(
   else if (!isHhsrsRating(values.rating)) errors.rating = "Select Low, Medium or High.";
   if (!values.comment) errors.comment = "Enter a comment.";
   if (Object.keys(errors).length) return { ok: false, errors };
+  const flags = siteFormProjectFlags(activeProject?.name || "");
   return {
     ok: true,
     data: {
       ...values,
+      cat1Confirmed: flags.onward && values.cat1Confirmed,
       projectName: activeProject!.name,
     },
   };

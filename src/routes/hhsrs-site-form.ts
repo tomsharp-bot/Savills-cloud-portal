@@ -30,6 +30,7 @@ import {
   type HhsrsFieldErrors,
   type HhsrsFormValues,
   validateHhsrsForm,
+  siteFormProjectFlags,
   validatePhotos,
   writeDraft,
 } from "../lib/hhsrs-site-form.js";
@@ -118,7 +119,10 @@ function renderForm(
     values: opts.values,
     errors: opts.errors || {},
     draft: opts.draft || null,
-    projects: opts.projects,
+    projects: opts.projects.map((project) => ({
+      ...project,
+      flags: siteFormProjectFlags(project.name),
+    })),
     formError: opts.formError || "",
     maxPhotos: HHSRS_MAX_PHOTOS,
     maxFileMb: HHSRS_MAX_FILE_MB,
@@ -300,6 +304,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
       comment: checked.data.comment,
       clientCallReference: checked.data.clientCallReference,
       otherDetails: checked.data.otherDetails,
+      cat1Confirmed: checked.data.cat1Confirmed,
       photoPaths: [],
     },
   });

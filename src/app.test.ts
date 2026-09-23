@@ -272,6 +272,13 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /each photo up to 40MB/i);
     assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
     assert.match(form.body, /data-max-file-mb="40"/);
+    assert.match(form.body, /Project &amp; visit/);
+    assert.match(form.body, /id="issue-details" hidden/);
+    assert.match(form.body, /id="visit-gate-hint"/);
+    assert.match(form.body, /data-extra="onward"/);
+    assert.match(form.body, /data-extra="saxon"/);
+    assert.match(form.body, /Category 1 confirmed/);
+    assert.match(form.body, /Saxon Weald: all damp and mould/);
     assert.match(form.body, /id="clear-form"/);
     assert.match(form.body, /id="houseNumber"/);
     assert.match(form.body, /id="btn-find-address"/);
@@ -298,6 +305,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /Europe\/London/);
     assert.match(js.body, /btn-find-address/);
     assert.match(js.body, /address-lookup/);
+    assert.match(js.body, /updateVisitGate/);
+    assert.match(js.body, /data-onward/);
   });
 
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
@@ -369,6 +378,28 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(review.body, />Edit</);
     assert.match(review.body, />Cancel</);
     assert.doesNotMatch(review.body, /Clear Form/);
+  });
+
+  it("keeps the rest of the form hidden until project, date and surveyor are filled", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const closed = await request(app, "GET", "/HHSRS-site-form/new");
+    assert.match(closed.body, /id="issue-details" hidden/);
+
+    const body = [
+      "projectId=hhsrs-demo-current",
+      "surveyDate=2026-09-20",
+      "surveyorName=Alex+Surveyor",
+      "uprn=",
+      "fullAddress=",
+      "postcode=",
+      "comment=",
+    ].join("&");
+    const opened = await request(app, "POST", "/HHSRS-site-form/review", { body });
+    assert.equal(opened.status, 200);
+    assert.match(opened.body, /Please fix the following/);
+    assert.doesNotMatch(opened.body, /id="issue-details" hidden/);
+    assert.match(opened.body, /id="visit-gate-hint" hidden/);
+    assert.match(opened.body, /value="Alex Surveyor"/);
   });
 
   it("returns a JSON error when address lookup is not configured", async () => {

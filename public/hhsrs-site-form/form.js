@@ -153,6 +153,53 @@
     if (el) el.addEventListener("keydown", onLookupEnter);
   });
 
+  function visitReady() {
+    var project = document.getElementById("projectId");
+    var date = document.getElementById("surveyDate");
+    var name = document.getElementById("surveyorName");
+    return !!(
+      project && String(project.value || "").trim() &&
+      date && String(date.value || "").trim() &&
+      name && String(name.value || "").trim()
+    );
+  }
+
+  function syncProjectExtras() {
+    var project = document.getElementById("projectId");
+    var opt = project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
+    var flags = {
+      calls: !!(opt && opt.getAttribute("data-calls") === "1"),
+      onward: !!(opt && opt.getAttribute("data-onward") === "1"),
+      saxon: !!(opt && opt.getAttribute("data-saxon") === "1"),
+      online: !!(opt && opt.getAttribute("data-online") === "1"),
+    };
+    var nodes = document.querySelectorAll(".project-extra");
+    for (var i = 0; i < nodes.length; i++) {
+      var key = nodes[i].getAttribute("data-extra") || "";
+      var show = !!flags[key];
+      nodes[i].hidden = !show;
+      var inputs = nodes[i].querySelectorAll("input, textarea, select");
+      for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !show;
+    }
+  }
+
+  function updateVisitGate() {
+    var details = document.getElementById("issue-details");
+    var hint = document.getElementById("visit-gate-hint");
+    var open = visitReady();
+    if (details) details.hidden = !open;
+    if (hint) hint.hidden = open;
+    syncProjectExtras();
+  }
+
+  ["projectId", "surveyDate", "surveyorName"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", updateVisitGate);
+    el.addEventListener("change", updateVisitGate);
+  });
+  updateVisitGate();
+
   if (!input || !newGrid) return;
 
   function existingCount() {
@@ -375,6 +422,9 @@
     setStatus("");
     clearMatches();
     setFindStatus("", "");
+    var cat1 = document.getElementById("cat1Confirmed");
+    if (cat1) cat1.checked = false;
+    updateVisitGate();
     if (form) form.removeAttribute("data-photos-ready");
     var submit = form && form.querySelector('button[type="submit"]');
     if (submit) {

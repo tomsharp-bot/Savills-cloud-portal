@@ -15,6 +15,7 @@ import {
   keepRequestedPhotos,
   listKeepPhotoNames,
   readHhsrsValues,
+  siteFormProjectFlags,
   todayLondonDate,
   validateHhsrsForm,
   validatePhotos,
@@ -104,7 +105,29 @@ describe("validateHhsrsForm", () => {
     assert.equal(values.projectId, "proj-1");
     assert.equal(values.uprn, "1001");
     assert.equal(values.surveyDate, todayLondonDate());
+    assert.equal(values.cat1Confirmed, false);
     assert.match(todayLondonDate(), /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(readHhsrsValues({ cat1Confirmed: "true" }).cat1Confirmed, true);
+  });
+
+  it("keeps Category 1 only for Onward and flags Saxon and call extras", () => {
+    const onward = validateHhsrsForm({ ...valid, cat1Confirmed: true }, { id: "proj-1", name: "Onward 2026" });
+    assert.equal(onward.ok, true);
+    if (onward.ok) assert.equal(onward.data.cat1Confirmed, true);
+
+    const other = validateHhsrsForm({ ...valid, cat1Confirmed: true }, project);
+    assert.equal(other.ok, true);
+    if (other.ok) assert.equal(other.data.cat1Confirmed, false);
+
+    assert.equal(siteFormProjectFlags("Onward Liverpool 2026").onward, true);
+    assert.equal(siteFormProjectFlags("Onward Liverpool 2026").calls, true);
+    assert.equal(siteFormProjectFlags("Onward Liverpool 2026").saxon, false);
+    assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").saxon, true);
+    assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").calls, true);
+    assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").onward, false);
+    assert.equal(siteFormProjectFlags("Cornwall 2026 Ph2").online, true);
+    assert.equal(siteFormProjectFlags("Gateway 2026").calls, false);
+    assert.equal(siteFormProjectFlags("Demo current project (local)").onward, false);
   });
 });
 
