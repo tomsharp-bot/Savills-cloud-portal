@@ -32,7 +32,7 @@ import {
   type HhsrsFormValues,
   validateHhsrsForm,
   siteFormProjectFlags,
-  submissionOtherDetails,
+  siteSubmissionCallFields,
   validatePhotos,
   writeDraft,
 } from "../lib/hhsrs-site-form.js";
@@ -303,6 +303,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
     });
     return;
   }
+  const call = siteSubmissionCallFields(checked.data);
   const created = await prisma.hhsrsSiteSubmission.create({
     data: {
       projectId: checked.data.projectId,
@@ -315,8 +316,10 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
       category: checked.data.category,
       rating: checked.data.rating,
       comment: checked.data.comment,
-      clientCallReference: checked.data.clientCallReference,
-      otherDetails: submissionOtherDetails(checked.data),
+      clientCallReference: call.clientCallReference,
+      callOutcome: call.callOutcome,
+      callNotes: call.callNotes,
+      otherDetails: checked.data.otherDetails,
       cat1Confirmed: checked.data.cat1Confirmed,
       photoPaths: [],
     },

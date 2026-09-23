@@ -7,8 +7,6 @@ import { matchDemoProject } from "./hhsrs-reporter-projects.js";
 export const HHSRS_SITE_FORM_PATH = "/HHSRS-site-form";
 export const HHSRS_MIN_PHOTOS = 1;
 export const HHSRS_MAX_PHOTOS = 4;
-/** Stored on the submission inside other details. Drafts keep the note separate. */
-export const CALL_UNREACHED_PREFIX = "Couldn't get through: ";
 /** Per-photo cap. 40MB covers typical iPhone HEIC / high-res JPEG. */
 export const HHSRS_MAX_FILE_MB = 40;
 export const HHSRS_MAX_FILE_BYTES = HHSRS_MAX_FILE_MB * 1024 * 1024;
@@ -74,7 +72,7 @@ export type HhsrsFormValues = {
   cat1Confirmed: boolean;
   /** Draft-only. True when the surveyor could not obtain a required call reference. */
   callUnreached: boolean;
-  /** Draft-only. Why the call reference is blank. Copied into otherDetails on submit. */
+  /** Draft-only. Why the call reference is blank. Stored as call notes on submit. */
   callUnreachedNote: string;
 };
 
@@ -101,29 +99,19 @@ function readFlag(body: Record<string, unknown>, name: string): boolean {
   return raw === true || raw === "true" || raw === "on" || raw === "yes";
 }
 
-export function otherDetailsWithoutCallNote(otherDetails: string): string {
-  return String(otherDetails || "")
-    .split(/\r?\n/)
-    .filter((line) => !line.trim().startsWith(CALL_UNREACHED_PREFIX))
-    .join("\n")
-    .trim();
-}
-
-/** Append the why-blank note once. Safe to call again on text that already contains the prefix. */
-export function otherDetailsWithCallNote(
-  values: Pick<HhsrsFormValues, "otherDetails" | "callUnreached" | "callUnreachedNote">
-): string {
-  const base = otherDetailsWithoutCallNote(values.otherDetails);
+/** Map a completed "couldn't get through" answer onto the Reporter call fields. */
+export function siteSubmissionCallFields(
+  values: Pick<HhsrsFormValues, "clientCallReference" | "callUnreached" | "callUnreachedNote">
+): { clientCallReference: string; callOutcome: "" | "Attempted"; callNotes: string } {
   const note = String(values.callUnreachedNote || "").trim();
-  if (!values.callUnreached || !note) return base;
-  const line = `${CALL_UNREACHED_PREFIX}${note}`;
-  return base ? `${base}\n${line}` : line;
-}
-
-export function submissionOtherDetails(
-  values: Pick<HhsrsFormValues, "otherDetails" | "callUnreached" | "callUnreachedNote">
-): string {
-  return otherDetailsWithCallNote(values);
+  if (values.callUnreached && note) {
+    return { clientCallReference: "", callOutcome: "Attempted", callNotes: note };
+  }
+  return {
+    clientCallReference: String(values.clientCallReference || "").trim(),
+    callOutcome: "",
+    callNotes: "",
+  };
 }
 
 export type HhsrsFormData = HhsrsFormValues & {
@@ -257,14 +245,15 @@ export function validateHhsrsForm(
     }
   }
   if (Object.keys(errors).length) return { ok: false, errors };
+  const skippedCall = flags.calls && callUnreached && Boolean(callNote);
   return {
     ok: true,
     data: {
       ...values,
-      clientCallReference: String(values.clientCallReference || "").trim(),
+      clientCallReference: skippedCall ? "" : String(values.clientCallReference || "").trim(),
       otherDetails: String(values.otherDetails || "").trim(),
-      callUnreached: flags.calls && callUnreached,
-      callUnreachedNote: flags.calls && callUnreached ? callNote : "",
+      callUnreached: skippedCall,
+      callUnreachedNote: skippedCall ? callNote : "",
       cat1Confirmed: flags.onward && Boolean(values.cat1Confirmed),
       projectName: activeProject!.name,
     },

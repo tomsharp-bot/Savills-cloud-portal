@@ -896,6 +896,7 @@ export type SubmissionDraftInput = {
   clientDescription?: string;
   clientCallReference?: string;
   callOutcome?: string;
+  callNotes?: string;
   workOrder?: string;
   suspectedCause?: string;
   includeCause?: boolean;
@@ -922,6 +923,7 @@ export function submissionToDraftCase(input: SubmissionDraftInput): DraftCase {
     surveyDate: input.surveyDate,
     callStatus,
     callRef: input.clientCallReference || "",
+    callNotes: input.callNotes || "",
     workOrder: input.workOrder || "",
     suspectedCause: input.suspectedCause || "",
     includeCause: input.includeCause !== false,

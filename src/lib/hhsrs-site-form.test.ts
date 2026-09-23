@@ -17,7 +17,7 @@ import {
   listKeepPhotoNames,
   readHhsrsValues,
   siteFormProjectFlags,
-  submissionOtherDetails,
+  siteSubmissionCallFields,
   todayLondonDate,
   validateHhsrsForm,
   validatePhotos,
@@ -168,25 +168,37 @@ describe("validateHhsrsForm", () => {
       assert.equal(unreached.data.clientCallReference, "");
       assert.equal(unreached.data.callUnreached, true);
       assert.equal(unreached.data.callUnreachedNote, "Voicemail full.");
-      assert.equal(unreached.data.otherDetails.includes("Couldn't get through"), false);
-      assert.equal(
-        submissionOtherDetails(unreached.data),
-        "No access issues.\nCouldn't get through: Voicemail full."
-      );
-      assert.equal(
-        submissionOtherDetails({
-          ...unreached.data,
-          otherDetails: submissionOtherDetails(unreached.data),
-        }),
-        "No access issues.\nCouldn't get through: Voicemail full."
-      );
+      assert.equal(unreached.data.otherDetails, "No access issues.");
+      assert.deepEqual(siteSubmissionCallFields(unreached.data), {
+        clientCallReference: "",
+        callOutcome: "Attempted",
+        callNotes: "Voicemail full.",
+      });
+    }
+
+    const refAndSkip = validateHhsrsForm(
+      { ...valid, clientCallReference: "CR-9", callUnreached: true, callUnreachedNote: "Voicemail full." },
+      onward
+    );
+    assert.equal(refAndSkip.ok, true);
+    if (refAndSkip.ok) {
+      assert.deepEqual(siteSubmissionCallFields(refAndSkip.data), {
+        clientCallReference: "",
+        callOutcome: "Attempted",
+        callNotes: "Voicemail full.",
+      });
     }
 
     const gateway = validateHhsrsForm(valid, { id: "g", name: "Gateway 2026" });
     assert.equal(gateway.ok, true);
     if (gateway.ok) {
       assert.equal(gateway.data.callUnreached, false);
-      assert.equal(submissionOtherDetails(gateway.data), "No access issues.");
+      assert.equal(gateway.data.otherDetails, "No access issues.");
+      assert.deepEqual(siteSubmissionCallFields(gateway.data), {
+        clientCallReference: "",
+        callOutcome: "",
+        callNotes: "",
+      });
     }
   });
 });

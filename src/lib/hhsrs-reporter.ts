@@ -91,6 +91,7 @@ export type ReviewDraftSource = {
   clientDescription: string;
   clientCallReference: string;
   callOutcome: string;
+  callNotes?: string;
   workOrder: string;
   suspectedCause: string;
   includeCause: boolean;
@@ -147,6 +148,7 @@ export function mergeReviewDraftFields(
       clientDescription: "",
       clientCallReference: postedString(body, "clientCallReference"),
       callOutcome: postedString(body, "callOutcome"),
+      callNotes: postedString(body, "callNotes"),
       workOrder: postedString(body, "workOrder"),
       suspectedCause: postedString(body, "suspectedCause"),
       includeCause: postedFlag(body.includeCause, true),
@@ -181,6 +183,7 @@ export function mergeReviewDraftFields(
     clientCallReference:
       body.clientCallReference === undefined ? row.clientCallReference : postedString(body, "clientCallReference"),
     callOutcome: body.callOutcome === undefined ? row.callOutcome : postedString(body, "callOutcome"),
+    callNotes: body.callNotes === undefined ? row.callNotes || "" : postedString(body, "callNotes"),
     workOrder: body.workOrder === undefined ? row.workOrder : postedString(body, "workOrder"),
     suspectedCause: body.suspectedCause === undefined ? row.suspectedCause : postedString(body, "suspectedCause"),
     includeCause: postedFlag(body.includeCause, row.includeCause),
@@ -222,6 +225,7 @@ export function submissionDraftInput(
     | "clientDescription"
     | "clientCallReference"
     | "callOutcome"
+    | "callNotes"
     | "workOrder"
     | "suspectedCause"
     | "includeCause"
@@ -244,6 +248,7 @@ export function submissionDraftInput(
     clientDescription: row.clientDescription,
     clientCallReference: row.clientCallReference,
     callOutcome: row.callOutcome,
+    callNotes: row.callNotes,
     workOrder: row.workOrder,
     suspectedCause: row.suspectedCause,
     includeCause: row.includeCause,
@@ -357,6 +362,7 @@ export function readReporterUpdate(body: Record<string, unknown>): {
   clientDescription: string;
   clientCallReference: string;
   callOutcome: string;
+  callNotes: string;
   workOrder: string;
   suspectedCause: string;
   includeCause: boolean;
@@ -374,6 +380,7 @@ export function readReporterUpdate(body: Record<string, unknown>): {
     clientDescription: field("clientDescription"),
     clientCallReference: field("clientCallReference"),
     callOutcome: field("callOutcome"),
+    callNotes: field("callNotes"),
     workOrder: field("workOrder"),
     suspectedCause: field("suspectedCause"),
     includeCause: (() => {

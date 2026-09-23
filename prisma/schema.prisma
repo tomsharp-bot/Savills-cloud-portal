@@ -314,6 +314,8 @@ model HhsrsSiteSubmission {
   clientDescription    String    @default("")
   /// Call outcome for templates that need it (Onward etc.): Completed | Attempted | Not yet called | Not required | ""
   callOutcome          String    @default("")
+  /// Why a call was attempted but not completed. Reporter Review and Generate email read this as Call notes.
+  callNotes            String    @default("")
   workOrder            String    @default("")
   suspectedCause       String    @default("")
   includeCause         Boolean   @default(true)

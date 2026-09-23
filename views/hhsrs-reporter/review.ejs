@@ -180,7 +180,7 @@
             </div>
             <div>
               <label for="rv-call-notes">Call notes (optional)</label>
-              <input id="rv-call-notes" type="text" placeholder="e.g. unable to get through" autocomplete="off" />
+              <input id="rv-call-notes" name="callNotes" type="text" value="<%= isFilled ? (row.callNotes || '') : '' %>" placeholder="e.g. unable to get through" autocomplete="off" />
             </div>
           </div>
 
