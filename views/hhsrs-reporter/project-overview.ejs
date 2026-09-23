@@ -1,0 +1,211 @@
+<%- include("partials/layout-open") %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-section-title">Project overview</h2>
+    <p class="subtitle">Totals across programmes, or drill into one project. Archive when a project is complete.</p>
+  </div>
+  <div class="header-meta">
+    <strong>Programmes</strong>
+    <%= overview.totals.activeProjects %> active
+  </div>
+</div>
+
+<div id="po-overview">
+  <div class="po-toolbar" role="group" aria-label="Overview mode">
+    <div class="po-mode" id="po-mode">
+      <label class="is-on"><input type="radio" name="po-view-mode" value="total" checked /> Total overview</label>
+      <label><input type="radio" name="po-view-mode" value="project" /> By project</label>
+    </div>
+    <div class="po-project-pick" id="po-project-pick" hidden>
+      <label for="po-project-select">Project</label>
+      <select id="po-project-select" aria-label="Select project">
+        <% if (!overview.active.length) { %>
+          <option value="">No active projects</option>
+        <% } %>
+        <% overview.active.forEach((row) => { %>
+          <option value="<%= row.name %>"><%= row.name %></option>
+        <% }) %>
+      </select>
+    </div>
+  </div>
+
+  <p class="po-toast" id="po-toast" <%= poToast ? "" : "hidden" %> role="status"><%= poToast || "" %></p>
+
+  <div id="po-panel-total">
+    <div class="po-stats" aria-label="Totals across programmes">
+      <div class="po-stat-card"><span class="po-stat-label">Active projects</span><span class="po-stat-value"><%= overview.totals.activeProjects %></span></div>
+      <div class="po-stat-card"><span class="po-stat-label">Waiting issues</span><span class="po-stat-value"><%= overview.totals.waiting %></span></div>
+      <div class="po-stat-card"><span class="po-stat-label">Completed</span><span class="po-stat-value"><%= overview.totals.completed %></span></div>
+      <div class="po-stat-card"><span class="po-stat-label">Archived</span><span class="po-stat-value"><%= overview.totals.archived %></span></div>
+    </div>
+
+    <section class="panel" aria-label="Active projects">
+      <div class="panel-head review-head">
+        <h2>Active projects</h2>
+        <span class="count count-review"><%= overview.active.length %></span>
+      </div>
+      <% if (!overview.active.length) { %>
+        <p class="po-empty">No active projects.</p>
+      <% } else { %>
+        <div class="po-table-wrap">
+          <table class="po-table po-table--active">
+            <colgroup>
+              <col class="po-col-project" />
+              <col class="po-col-completed" />
+              <col class="po-col-waiting" />
+              <col class="po-col-status" />
+              <col class="po-col-archive" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="po-col-project">Project</th>
+                <th class="po-col-completed">Completed</th>
+                <th class="po-col-waiting">Waiting</th>
+                <th class="po-col-status">Status</th>
+                <th class="po-col-archive">Archive</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% overview.active.forEach((row) => { %>
+                <tr class="<%= row.canArchive ? 'is-clear' : '' %>">
+                  <td class="po-col-project"><strong class="po-ellipsis" title="<%= row.name %>"><%= row.name %></strong></td>
+                  <td class="po-col-completed"><%= row.completed %></td>
+                  <td class="po-col-waiting"><%= row.waiting %></td>
+                  <td class="po-col-status">
+                    <% if (row.status === "Complete") { %>
+                      <span class="po-status is-clear">Complete</span>
+                    <% } else { %>
+                      <span class="po-status is-progress">In progress</span>
+                    <% } %>
+                  </td>
+                  <td class="po-col-archive">
+                    <% if (row.canArchive) { %>
+                      <button type="button" class="btn btn-ghost btn-sm" data-archive-project="<%= row.name %>">Archive</button>
+                    <% } else { %>
+                      <button type="button" class="btn btn-ghost btn-sm" disabled title="Archive when project is complete.">Archive</button>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+  </div>
+
+  <div id="po-panel-project" hidden>
+    <% if (!overview.active.length) { %>
+      <p class="po-empty">Select a project to see its stats.</p>
+    <% } %>
+    <% overview.active.forEach((row, index) => { %>
+      <div class="po-by-block" data-project="<%= row.name %>" <%= index === 0 ? "" : "hidden" %>>
+        <div class="po-stats" aria-label="Stats for <%= row.name %>">
+          <div class="po-stat-card"><span class="po-stat-label">Completed</span><span class="po-stat-value"><%= row.completed %></span></div>
+          <div class="po-stat-card"><span class="po-stat-label">Waiting</span><span class="po-stat-value"><%= row.waiting %></span></div>
+          <div class="po-stat-card"><span class="po-stat-label">Status</span><span class="po-stat-value po-stat-value--text"><%= row.status %></span></div>
+          <div class="po-stat-card"><span class="po-stat-label">Rating scheme</span><span class="po-stat-value po-stat-value--text"><%= row.ratingScheme %></span></div>
+        </div>
+        <section class="panel" aria-label="Selected project details">
+          <div class="panel-head review-head">
+            <h2><%= row.name %></h2>
+            <span class="count count-review"><%= row.status %></span>
+          </div>
+          <div class="po-table-wrap">
+            <table class="po-table po-table--by">
+              <colgroup>
+                <col class="po-col-project" />
+                <col class="po-col-template" />
+                <col class="po-col-completed" />
+                <col class="po-col-waiting" />
+                <col class="po-col-status" />
+                <col class="po-col-archive" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="po-col-project">Project</th>
+                  <th class="po-col-template">Template</th>
+                  <th class="po-col-completed">Completed</th>
+                  <th class="po-col-waiting">Waiting</th>
+                  <th class="po-col-status">Status</th>
+                  <th class="po-col-archive">Archive</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="<%= row.canArchive ? 'is-clear' : '' %>">
+                  <td class="po-col-project"><strong class="po-ellipsis" title="<%= row.name %>"><%= row.name %></strong></td>
+                  <td class="po-col-template"><span class="po-ellipsis" title="<%= row.template %>"><%= row.template %></span></td>
+                  <td class="po-col-completed"><%= row.completed %></td>
+                  <td class="po-col-waiting"><%= row.waiting %></td>
+                  <td class="po-col-status">
+                    <% if (row.status === "Complete") { %>
+                      <span class="po-status is-clear">Complete</span>
+                    <% } else { %>
+                      <span class="po-status is-progress">In progress</span>
+                    <% } %>
+                  </td>
+                  <td class="po-col-archive">
+                    <% if (row.canArchive) { %>
+                      <button type="button" class="btn btn-ghost btn-sm" data-archive-project="<%= row.name %>">Archive</button>
+                    <% } else { %>
+                      <button type="button" class="btn btn-ghost btn-sm" disabled title="Archive when project is complete.">Archive</button>
+                    <% } %>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    <% }) %>
+  </div>
+
+  <% if (overview.archived.length) { %>
+    <details class="panel po-archived-details" aria-label="Archived projects" id="po-archived-section">
+      <summary class="panel-head archived-head po-archived-summary">
+        <span class="po-archived-summary-left">
+          <span class="po-archived-chevron" aria-hidden="true"></span>
+          <h2>Archived projects</h2>
+        </span>
+        <span class="count count-archived"><%= overview.archived.length %></span>
+      </summary>
+      <div class="po-archived-body">
+        <ul class="po-archived-list">
+          <% overview.archived.forEach((row) => { %>
+            <li>
+              <div>
+                <p class="po-archived-name"><%= row.name %></p>
+                <div class="po-archived-meta"><%= row.completed %> completed · Archived</div>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" data-restore-project="<%= row.name %>">Restore</button>
+            </li>
+          <% }) %>
+        </ul>
+        <p class="po-empty">Restore reverses archive. History stays in Main Log.</p>
+      </div>
+    </details>
+  <% } %>
+
+  <div class="po-confirm" id="po-archive-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="po-archive-confirm-title">
+    <div class="po-confirm-card">
+      <h3 id="po-archive-confirm-title">Archive this project?</h3>
+      <p id="po-archive-confirm-text">It will move to Archived. You can restore it later.</p>
+      <div class="po-confirm-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="po-archive-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="po-archive-ok">Archive</button>
+      </div>
+    </div>
+  </div>
+
+  <form id="po-archive-form" method="post" action="<%= reporterBase %>/project-overview/archive" hidden>
+    <input type="hidden" name="projectName" id="po-archive-project-name" value="" />
+  </form>
+  <form id="po-restore-form" method="post" action="<%= reporterBase %>/project-overview/restore" hidden>
+    <input type="hidden" name="projectName" id="po-restore-project-name" value="" />
+  </form>
+</div>
+
+<p class="footer-note">Project overview · Colin roster until project settings are live</p>
+
+<%- include("partials/layout-close") %>

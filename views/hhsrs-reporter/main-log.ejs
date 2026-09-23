@@ -17,9 +17,9 @@
 </section>
 
 <section class="panel" aria-label="Main Log archive">
-  <div class="panel-head dealt-head">
+  <div class="panel-head review-head">
     <h2>Main Log archive</h2>
-    <span class="count count-dealt"><%= rows.length %> shown · <%= summary.mainLog %> total</span>
+    <span class="count count-review"><%= rows.length %> shown · <%= summary.mainLog %> total</span>
   </div>
   <form class="filter-bar" method="get" action="<%= reporterBase %>/main-log">
     <input type="search" name="q" value="<%= filters.q %>" placeholder="Search address, UPRN, project…" aria-label="Search main log" />

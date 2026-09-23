@@ -37,7 +37,9 @@ describe("HHSRS Reporter UI helpers", () => {
   it("matches demo project rules by name prefix", () => {
     assert.equal(matchDemoProject("Onward Liverpool 2026")?.template, "Onward");
     assert.equal(matchDemoProject("Vico Homes East")?.extras.vulnerabilities, true);
-    assert.equal(matchDemoProject("BPHA East 2026")?.name, "BPHA 2026");
+    assert.equal(matchDemoProject("BPHA East 2026")?.name, "BPHA 2026 ACQ");
+    assert.match(matchDemoProject("Saxon Weald 2026 Phase 4")?.hint || "", /damp and mould/);
+    assert.doesNotMatch(matchDemoProject("Saxon Weald 2026 Phase 4")?.hint || "", /D&M/);
     assert.equal(matchDemoProject("Unknown Client"), null);
   });
 

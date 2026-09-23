@@ -335,6 +335,15 @@ model HhsrsSiteSubmission {
   @@index([status])
 }
 
+/// Office archive flag for HHSRS Reporter → Project overview.
+/// Colin seed-archived names stay archived until a row sets archived to false.
+model HhsrsReporterProjectArchive {
+  name      String   @id
+  archived  Boolean  @default(true)
+  completed Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
 /// Shared reference library (admins + surveyors). Not project-scoped and never shown to clients.
 /// Production bytes live only in Spaces (spacesKey set). An empty spacesKey is local-dev disk
 /// and is not read or written when NODE_ENV=production or REQUIRE_SPACES=true.
