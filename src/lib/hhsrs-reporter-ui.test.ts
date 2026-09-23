@@ -125,6 +125,27 @@ describe("HHSRS Reporter UI helpers", () => {
     const generateAt = review.indexOf('id="btn-generate-email"');
     const emailPhotosAt = review.indexOf('id="rv-email-photos"');
     const downloadAt = review.indexOf('id="btn-download-photos"');
+    const caseFields = review.slice(review.indexOf('id="rv-case-fields"'), generateAt);
+    const photosInFields = caseFields.indexOf('id="rv-photos-block"');
+    for (const marker of [
+      'id="rv-uprn"',
+      'id="rv-address"',
+      'id="rv-hazard"',
+      'id="rv-rating"',
+      'id="rv-notes"',
+      'data-extra="calls"',
+      'data-extra="survey_date"',
+      'data-extra="onward"',
+      'data-extra="cause"',
+      'data-extra="vulnerabilities"',
+      'data-extra="escalation"',
+      'data-extra="work_order"',
+      'data-extra="online_form"',
+      'id="rv-internal-notes"',
+    ]) {
+      const at = caseFields.indexOf(marker);
+      assert.ok(at >= 0 && at < photosInFields, `${marker} sits above the case Photos block`);
+    }
     assert.ok(photosAt > 0 && generateAt > photosAt);
     assert.ok(emailPhotosAt > generateAt && downloadAt > emailPhotosAt);
     assert.equal(review.slice(photosAt, generateAt).includes("btn-download-photos"), false);
