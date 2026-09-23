@@ -81,7 +81,7 @@
       if (/^vico\b/i.test(name) && p.template === "Vico Homes") return p;
       if (lower.indexOf("cornwall") === 0 && p.template === "Cornwall") return p;
       if (lower.indexOf("bpha") === 0 && p.template === "BPHA") return p;
-      if (lower.indexOf("mtvh") === 0 && keys[i] === "MTVH") return p;
+      if (lower.indexOf("mtvh") !== -1 && p.name === "MTVH Pilot 2026") return p;
     }
     return null;
   }
@@ -546,4 +546,130 @@
     if (Date.now() - lastPollAt < 15000) return;
     pollPending();
   });
+
+  /* Project overview: Total / By project, archive confirm, restore. */
+  var poRoot = document.getElementById("po-overview");
+  if (poRoot && !poRoot.dataset.poWired) {
+    poRoot.dataset.poWired = "1";
+    var poMode = "total";
+    var pendingArchiveName = "";
+
+    function poToast(msg) {
+      var el = document.getElementById("po-toast");
+      if (!el) return;
+      el.hidden = false;
+      el.textContent = msg;
+      clearTimeout(poToast._t);
+      poToast._t = setTimeout(function () {
+        el.hidden = true;
+      }, 3500);
+    }
+
+    function syncPoMode() {
+      var pick = document.getElementById("po-project-pick");
+      var panelTotal = document.getElementById("po-panel-total");
+      var panelProject = document.getElementById("po-panel-project");
+      var labels = poRoot.querySelectorAll("#po-mode label");
+      for (var i = 0; i < labels.length; i++) {
+        var inp = labels[i].querySelector('input[name="po-view-mode"]');
+        var on = !!(inp && inp.checked && inp.value === poMode);
+        labels[i].classList.toggle("is-on", on);
+      }
+      if (pick) pick.hidden = poMode !== "project";
+      if (panelTotal) panelTotal.hidden = poMode !== "total";
+      if (panelProject) panelProject.hidden = poMode !== "project";
+    }
+
+    function showByProject(name) {
+      var blocks = poRoot.querySelectorAll(".po-by-block");
+      for (var i = 0; i < blocks.length; i++) {
+        blocks[i].hidden = blocks[i].getAttribute("data-project") !== name;
+      }
+    }
+
+    function closeArchiveConfirm() {
+      pendingArchiveName = "";
+      var modal = document.getElementById("po-archive-confirm");
+      if (modal) modal.hidden = true;
+    }
+
+    function openArchiveConfirm(name) {
+      pendingArchiveName = name;
+      var modal = document.getElementById("po-archive-confirm");
+      var textEl = document.getElementById("po-archive-confirm-text");
+      if (textEl) {
+        textEl.textContent =
+          "Archive “" + name + "”? It moves out of the active list. You can restore it later from Archived.";
+      }
+      if (modal) modal.hidden = false;
+    }
+
+    var modeInputs = poRoot.querySelectorAll('input[name="po-view-mode"]');
+    for (var mi = 0; mi < modeInputs.length; mi++) {
+      modeInputs[mi].addEventListener("change", function () {
+        poMode = this.value === "project" ? "project" : "total";
+        syncPoMode();
+      });
+    }
+
+    var poSelect = document.getElementById("po-project-select");
+    if (poSelect) {
+      poSelect.addEventListener("change", function () {
+        showByProject(poSelect.value || "");
+      });
+    }
+
+    var okBtn = document.getElementById("po-archive-ok");
+    var cancelBtn = document.getElementById("po-archive-cancel");
+    var modal = document.getElementById("po-archive-confirm");
+    if (okBtn) {
+      okBtn.addEventListener("click", function () {
+        var name = pendingArchiveName;
+        var form = document.getElementById("po-archive-form");
+        var input = document.getElementById("po-archive-project-name");
+        closeArchiveConfirm();
+        if (!name || !form || !input) return;
+        input.value = name;
+        form.submit();
+      });
+    }
+    if (cancelBtn) cancelBtn.addEventListener("click", closeArchiveConfirm);
+    if (modal) {
+      modal.addEventListener("click", function (e) {
+        if (e.target === modal) closeArchiveConfirm();
+      });
+    }
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") closeArchiveConfirm();
+    });
+
+    poRoot.addEventListener("click", function (e) {
+      var arch = e.target.closest("[data-archive-project]");
+      if (arch) {
+        if (arch.disabled) {
+          poToast("Project isn’t complete yet — archive when it is complete.");
+          return;
+        }
+        var name = arch.getAttribute("data-archive-project");
+        if (name) openArchiveConfirm(name);
+        return;
+      }
+      var rest = e.target.closest("[data-restore-project]");
+      if (!rest) return;
+      var restoreName = rest.getAttribute("data-restore-project");
+      var restoreForm = document.getElementById("po-restore-form");
+      var restoreInput = document.getElementById("po-restore-project-name");
+      if (!restoreName || !restoreForm || !restoreInput) return;
+      restoreInput.value = restoreName;
+      restoreForm.submit();
+    });
+
+    var existingToast = document.getElementById("po-toast");
+    if (existingToast && !existingToast.hidden && existingToast.textContent) {
+      setTimeout(function () {
+        existingToast.hidden = true;
+      }, 3500);
+    }
+    syncPoMode();
+  }
 })();

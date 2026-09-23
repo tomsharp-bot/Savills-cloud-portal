@@ -30,6 +30,13 @@ import {
   SITE_FORM_PUBLIC_URL,
   matchDemoProject,
 } from "../lib/hhsrs-reporter-projects.js";
+import {
+  ARCHIVE_INCOMPLETE_TOAST,
+  buildProjectOverview,
+  type ArchiveOverride,
+  type LiveProjectCounts,
+  type ProjectOverview,
+} from "../lib/hhsrs-reporter-overview.js";
 import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
 
 export const hhsrsReporterRouter = Router();
@@ -92,14 +99,21 @@ function flashOk(req: Request, message: string): void {
   req.session.flashOk = message;
 }
 
-function takeFlash(req: Request): { ok: string; err: string } {
+function flashPo(req: Request, message: string): void {
+  req.session = req.session || {};
+  req.session.flashPo = message;
+}
+
+function takeFlash(req: Request): { ok: string; err: string; po: string } {
   const ok = req.session?.flashOk || "";
   const err = req.session?.flashErr || "";
+  const po = req.session?.flashPo || "";
   if (req.session) {
     delete req.session.flashOk;
     delete req.session.flashErr;
+    delete req.session.flashPo;
   }
-  return { ok, err };
+  return { ok, err, po };
 }
 
 async function loadSummary(): Promise<ReporterSummary> {
@@ -127,7 +141,7 @@ async function loadCase(id: string) {
 }
 
 function shellLocals(opts: {
-  activeNav: "pending" | "review" | "main-log" | "admin";
+  activeNav: "pending" | "review" | "main-log" | "admin" | "project-overview";
   summary: ReporterSummary;
   title?: string;
   flashOk?: string;
@@ -407,6 +421,125 @@ hhsrsReporterRouter.get("/main-log/export.csv", async (req: Request, res: Respon
   res.send(lines.join("\n"));
 });
 
+async function loadLiveProjectCounts(): Promise<{
+  hasLiveSubmissions: boolean;
+  liveCounts: Record<string, LiveProjectCounts>;
+}> {
+  const rows = await prisma.hhsrsSiteSubmission.findMany({
+    select: { projectName: true, status: true },
+  });
+  const liveCounts: Record<string, LiveProjectCounts> = {};
+  for (const row of rows) {
+    const name = (row.projectName || "").trim();
+    if (!name) continue;
+    const bucket = liveCounts[name] || { waiting: 0, completed: 0 };
+    if ((HHSRS_WAITING_STATUSES as readonly string[]).includes(row.status)) bucket.waiting += 1;
+    else if ((HHSRS_ACTIONED_STATUSES as readonly string[]).includes(row.status)) bucket.completed += 1;
+    liveCounts[name] = bucket;
+  }
+  return { hasLiveSubmissions: rows.length > 0, liveCounts };
+}
+
+async function loadArchiveOverrides(): Promise<ArchiveOverride[]> {
+  try {
+    const rows = await prisma.hhsrsReporterProjectArchive.findMany();
+    return rows.map((row) => ({
+      name: row.name,
+      archived: row.archived,
+      completed: row.completed,
+    }));
+  } catch (err) {
+    console.error("HHSRS project archive lookup failed", err);
+    return [];
+  }
+}
+
+async function loadProjectOverview(): Promise<ProjectOverview> {
+  const [live, overrides] = await Promise.all([loadLiveProjectCounts(), loadArchiveOverrides()]);
+  return buildProjectOverview({ ...live, overrides });
+}
+
+/* ---------- Project overview ---------- */
+hhsrsReporterRouter.get("/project-overview", async (req: Request, res: Response) => {
+  const [summary, overview] = await Promise.all([loadSummary(), loadProjectOverview()]);
+  const flash = takeFlash(req);
+  res.render("hhsrs-reporter/project-overview", {
+    ...shellLocals({
+      activeNav: "project-overview",
+      summary,
+      title: "Project overview — HHSRS Reporter",
+      flashOk: flash.ok,
+      flashErr: flash.err,
+    }),
+    user: req.user,
+    overview,
+    poToast: flash.po,
+  });
+});
+
+hhsrsReporterRouter.post("/project-overview/archive", async (req: Request, res: Response) => {
+  const name = String(req.body?.projectName || "").trim();
+  const back = `${HHSRS_REPORTER_PATH}/project-overview`;
+  if (!name) {
+    flashPo(req, "Choose a project to archive.");
+    res.redirect(back);
+    return;
+  }
+  const overview = await loadProjectOverview();
+  const row = overview.active.find((item) => item.name === name);
+  if (!row) {
+    flashPo(req, "That project is not on the active list.");
+    res.redirect(back);
+    return;
+  }
+  if (!row.canArchive) {
+    flashPo(req, ARCHIVE_INCOMPLETE_TOAST);
+    res.redirect(back);
+    return;
+  }
+  try {
+    await prisma.hhsrsReporterProjectArchive.upsert({
+      where: { name },
+      create: { name, archived: true, completed: row.completed },
+      update: { archived: true, completed: row.completed },
+    });
+    flashPo(req, `${name} archived. Use Restore under Archived to reverse it.`);
+  } catch (err) {
+    console.error("HHSRS project archive failed", err);
+    flashPo(req, "Could not archive that project. Try again once the database update is applied.");
+  }
+  res.redirect(back);
+});
+
+hhsrsReporterRouter.post("/project-overview/restore", async (req: Request, res: Response) => {
+  const name = String(req.body?.projectName || "").trim();
+  const back = `${HHSRS_REPORTER_PATH}/project-overview`;
+  if (!name) {
+    flashPo(req, "Choose a project to restore.");
+    res.redirect(back);
+    return;
+  }
+  const overview = await loadProjectOverview();
+  const row = overview.archived.find((item) => item.name === name);
+  if (!row) {
+    flashPo(req, "That project is not archived.");
+    res.redirect(back);
+    return;
+  }
+  try {
+    await prisma.hhsrsReporterProjectArchive.upsert({
+      where: { name },
+      create: { name, archived: false, completed: row.completed },
+      update: { archived: false, completed: row.completed },
+    });
+    flashPo(req, `${name} restored.`);
+  } catch (err) {
+    console.error("HHSRS project restore failed", err);
+    flashPo(req, "Could not restore that project. Try again once the database update is applied.");
+  }
+  res.redirect(back);
+});
+
 /* ---------- Admin ---------- */
 hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
   const summary = await loadSummary();
@@ -435,7 +568,7 @@ hhsrsReporterRouter.post("/review/:id/mark-actioned", async (req: Request, res: 
 /* Back-compat paths from PR #20 */
 hhsrsReporterRouter.get("/:id", async (req: Request, res: Response) => {
   const id = req.params.id;
-  if (["review", "main-log", "admin"].includes(id)) {
+  if (["review", "main-log", "admin", "project-overview"].includes(id)) {
     res.status(404).send("Not found.");
     return;
   }

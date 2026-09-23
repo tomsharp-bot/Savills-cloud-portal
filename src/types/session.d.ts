@@ -5,6 +5,7 @@ declare module "cookie-session" {
     userId?: string;
     flashOk?: string;
     flashErr?: string;
+    flashPo?: string;
     flashRefresh?: {
       projectId: string;
       addedCount: number;
