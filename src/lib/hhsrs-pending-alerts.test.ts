@@ -63,5 +63,9 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(js, /new Notification/);
     assert.match(js, /btn-enable-desktop-alerts/);
     assert.match(js, /is-visible/);
+    assert.match(js, /playAlertChime\(\)/);
+    assert.match(js, /AudioContext/);
+    assert.match(js, /unlockAlertSound/);
+    assert.doesNotMatch(js, /\.loop\s*=/);
   });
 });

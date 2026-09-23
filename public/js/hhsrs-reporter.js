@@ -320,6 +320,59 @@
     return (cfg.base || "/HHSRSreporter") + "/review/" + encodeURIComponent(id);
   }
 
+  var alertAudio = null;
+
+  function alertAudioContext() {
+    if (alertAudio) return alertAudio;
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    try {
+      alertAudio = new AudioCtx();
+    } catch (e) {
+      return null;
+    }
+    return alertAudio;
+  }
+
+  /* Browsers block audio until a gesture. Resume during that click so later
+     polls can chime. If resume fails, the toast still shows with no sound. */
+  function unlockAlertSound() {
+    var ctx = alertAudioContext();
+    if (!ctx || typeof ctx.resume !== "function") return;
+    try {
+      var pending = ctx.resume();
+      if (pending && typeof pending.catch === "function") pending.catch(function () {});
+    } catch (e) {
+      /* toast still shows */
+    }
+  }
+
+  function playTone(ctx, frequency, startAt, duration) {
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(frequency, startAt);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.04, startAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startAt);
+    osc.stop(startAt + duration + 0.02);
+  }
+
+  function playAlertChime() {
+    var ctx = alertAudioContext();
+    if (!ctx || ctx.state !== "running") return;
+    try {
+      var startAt = ctx.currentTime + 0.01;
+      playTone(ctx, 523.25, startAt, 0.16);
+      playTone(ctx, 659.25, startAt + 0.11, 0.2);
+    } catch (e) {
+      /* toast still shows */
+    }
+  }
+
   function showToast(fresh) {
     var toast = $("hhsrs-alert-toast");
     if (!toast || !fresh.length) return;
@@ -338,6 +391,7 @@
     if (body) body.textContent = text;
     if (open) open.href = reviewUrl(item.id);
     toast.classList.add("is-visible");
+    playAlertChime();
   }
 
   function desktopNotify(item) {
@@ -476,9 +530,12 @@
   var enableBtn = $("btn-enable-desktop-alerts");
   if (enableBtn) {
     enableBtn.addEventListener("click", function () {
+      unlockAlertSound();
       askNotificationPermission();
     });
   }
+  document.addEventListener("pointerdown", unlockAlertSound, true);
+  document.addEventListener("keydown", unlockAlertSound, true);
   paintNotifStatus();
 
   bootstrapSeen();
