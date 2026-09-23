@@ -178,6 +178,11 @@
   function syncProjectExtras() {
     var project = document.getElementById("projectId");
     var opt = project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
+    var label = document.getElementById("extra-project-label");
+    if (label) {
+      var name = opt && project && String(project.value || "").trim() ? String(opt.textContent || "").trim() : "";
+      label.textContent = name ? "· " + name : "";
+    }
     var flags = {
       calls: !!(opt && opt.getAttribute("data-calls") === "1"),
       onward: !!(opt && opt.getAttribute("data-onward") === "1"),
@@ -198,8 +203,15 @@
     var details = document.getElementById("issue-details");
     var hint = document.getElementById("visit-gate-hint");
     var open = visitReady();
+    var wasHidden = !!(details && details.hidden);
     if (details) details.hidden = !open;
     if (hint) hint.hidden = open;
+    if (open && wasHidden && details) {
+      details.classList.add("is-opening");
+      window.setTimeout(function () {
+        details.classList.remove("is-opening");
+      }, 320);
+    }
     if (open) keepAddressEditable();
     syncProjectExtras();
     syncCallUnreached();
