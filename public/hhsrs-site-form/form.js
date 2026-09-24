@@ -264,7 +264,7 @@
         return false;
       }
     }
-    return Boolean(val("otherDetails"));
+    return true;
   }
 
   function syncProjectExtras() {

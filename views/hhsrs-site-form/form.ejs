@@ -168,8 +168,8 @@
                   <p class="hhsrs-hint" id="cornwall-damp-note">Cornwall: any damp and mould needs Tom’s separate online form.</p>
                 </div>
 
-                <label for="otherDetails">Any other details *</label>
-                <textarea id="otherDetails" name="otherDetails" required rows="4" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
+                <label for="otherDetails">Any other details <span class="optional">(optional)</span></label>
+                <textarea id="otherDetails" name="otherDetails" rows="4" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
                 <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
               </div>
 

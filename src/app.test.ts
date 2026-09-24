@@ -271,7 +271,9 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /Couldn't get through/);
     assert.match(form.body, /No answer/);
     assert.match(form.body, /Engaged\/busy/);
-    assert.match(form.body, /Any other details \*/);
+    assert.match(form.body, /Any other details <span class="optional">\(optional\)<\/span>/);
+    assert.doesNotMatch(form.body, /Any other details \*/);
+    assert.doesNotMatch(form.body, /id="otherDetails"[^>]*\brequired\b/);
     assert.match(form.body, /min 1, max 4/);
     assert.doesNotMatch(form.body, /Photos are optional/);
     assert.match(form.body, /action="\/HHSRS-site-form\/review"/);

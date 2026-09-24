@@ -337,7 +337,7 @@ export function siteFormSectionState(
       callOk = Boolean(String(values.clientCallReference || "").trim());
     }
   }
-  const extras = hazard && callOk && Boolean(String(values.otherDetails || "").trim());
+  const extras = hazard && callOk;
   return { visit, property, hazard, extras };
 }
 
@@ -372,7 +372,6 @@ export function validateHhsrsForm(
   if (!values.rating) errors.rating = "Select a rating.";
   else if (!isHhsrsSiteFormRating(values.rating)) errors.rating = "Select a rating from the list.";
   if (!values.comment) errors.comment = "Enter a comment.";
-  if (!String(values.otherDetails || "").trim()) errors.otherDetails = "Enter any other details.";
   const flags = siteFormProjectFlags(activeProject?.name || "");
   const callUnreached = Boolean(values.callUnreached);
   const callReason = String(values.callRefBlankReason || "").trim();
