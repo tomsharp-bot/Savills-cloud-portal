@@ -15,7 +15,12 @@ import {
   nextFolderSequence,
   parsePhotoCodes,
   parseRenamedPhotoName,
+  parseUploadedPhotoName,
   photoObjectKey,
+  photoTooLargeMessage,
+  PHOTO_UPLOAD_MAX_BYTES,
+  uploadMimeAllowed,
+  uploadProjectPhoto,
   replaceCodeInList,
   uprnFromCode,
   withoutCodes,
@@ -150,6 +155,10 @@ describe("Spaces photo delete and rename", () => {
         calls.push(`copy ${from} -> ${to}`);
         return "copied";
       }),
+      put: overrides.put || (async (key, body) => {
+        calls.push(`put ${key} ${body.length}`);
+        return true;
+      }),
     };
   }
 
@@ -238,6 +247,96 @@ describe("photo lightbox markup", () => {
     assert.match(js, /data-folder-delete/);
     assert.match(js, /data-folder-rename/);
     assert.match(js, /data-folder-zip/);
+    assert.match(view, /id="poolUploadInput"/);
+    assert.match(view, /data-upload-zone/);
+    assert.match(view, /Upload photos/);
+    assert.match(view, /id="btnUploadRetry"/);
+    assert.match(view, /Retry failed/);
+    assert.match(js, /data-upload-zone/);
+    assert.match(js, /data-folder-id/);
+    assert.match(js, /uploadConcurrency/);
+    assert.match(js, /A photo with that name already exists in this project/);
+    assert.match(js, /const files = Array\.from\(input\.files \|\| \[\]\);\s*input\.value = "";/);
+  });
+});
+
+describe("photo upload names", () => {
+  it("uses the file stem as the photo code and keeps a safe extension", () => {
+    const jpeg = parseUploadedPhotoName("2245623-Kitchen-1.jpg");
+    assert.equal(jpeg.ok, true);
+    if (jpeg.ok) {
+      assert.equal(jpeg.name.code, "2245623-Kitchen-1");
+      assert.equal(jpeg.name.fileName, "2245623-Kitchen-1.jpg");
+      assert.equal(jpeg.name.ext, ".jpg");
+    }
+    const upper = parseUploadedPhotoName("IMG_1234.HEIC");
+    assert.equal(upper.ok, true);
+    if (upper.ok) {
+      assert.equal(upper.name.code, "IMG_1234");
+      assert.equal(upper.name.fileName, "IMG_1234.heic");
+      assert.equal(upper.name.ext, ".heic");
+    }
+    const jpegExt = parseUploadedPhotoName("room.JPEG");
+    assert.equal(jpegExt.ok, true);
+    if (jpegExt.ok) assert.equal(jpegExt.name.fileName, "room.jpg");
+    assert.equal(parseUploadedPhotoName("notes.txt").ok, false);
+    assert.equal(parseUploadedPhotoName("").ok, false);
+    assert.equal(parseUploadedPhotoName(".jpg").ok, false);
+    assert.equal(parseUploadedPhotoName("../secret.jpg").ok, false);
+    assert.equal(parseUploadedPhotoName("pool/secret.jpg").ok, false);
+    assert.equal(parseUploadedPhotoName("pool\\secret.jpg").ok, false);
+    assert.equal(uploadMimeAllowed("image/jpeg"), true);
+    assert.equal(uploadMimeAllowed(""), true);
+    assert.equal(uploadMimeAllowed("application/octet-stream"), true);
+    assert.equal(uploadMimeAllowed("text/html"), false);
+    assert.match(photoTooLargeMessage(), /40 MB/);
+    assert.equal(PHOTO_UPLOAD_MAX_BYTES, 40 * 1024 * 1024);
+  });
+
+  it("rejects an unsafe name, a non-image type, and an oversized file before storage", async () => {
+    const calls: string[] = [];
+    const storage: PhotoStorageOps & { calls: string[] } = {
+      calls,
+      configured: () => true,
+      remove: async () => true,
+      copy: async () => "copied",
+      put: async () => {
+        calls.push("put");
+        return true;
+      },
+    };
+    const pathName = await uploadProjectPhoto(
+      "proj",
+      { originalName: "../secret.jpg", buffer: Buffer.from("x") },
+      { kind: "pool" },
+      storage
+    );
+    assert.equal(pathName.ok, false);
+    if (!pathName.ok) assert.equal(pathName.status, 400);
+    const html = await uploadProjectPhoto(
+      "proj",
+      { originalName: "room.jpg", buffer: Buffer.from("x"), mime: "text/html" },
+      { kind: "pool" },
+      storage
+    );
+    assert.equal(html.ok, false);
+    const empty = await uploadProjectPhoto(
+      "proj",
+      { originalName: "room.jpg", buffer: Buffer.alloc(0) },
+      { kind: "pool" },
+      storage
+    );
+    assert.equal(empty.ok, false);
+    if (!empty.ok) assert.equal(empty.status, 400);
+    const huge = await uploadProjectPhoto(
+      "proj",
+      { originalName: "room.jpg", buffer: Buffer.alloc(PHOTO_UPLOAD_MAX_BYTES + 1) },
+      { kind: "pool" },
+      storage
+    );
+    assert.equal(huge.ok, false);
+    if (!huge.ok) assert.equal(huge.status, 413);
+    assert.equal(storage.calls.length, 0);
   });
 });
 

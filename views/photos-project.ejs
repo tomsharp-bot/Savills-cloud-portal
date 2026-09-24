@@ -51,8 +51,29 @@
       <button type="button" class="tab" role="tab" id="tab-folders" aria-controls="panel-folders" aria-selected="false" data-tab="folders">Photo Folders</button>
     </div>
 
+    <div id="uploadStatus" class="upload-status" hidden>
+      <div class="upload-status-head">
+        <p class="upload-status-summary" id="uploadStatusSummary" role="status" aria-live="polite">0 uploaded · 0 failed · 0 remaining</p>
+        <div class="upload-status-actions">
+          <button type="button" class="btn btn-sm" id="btnUploadContinue" hidden>Continue</button>
+          <button type="button" class="btn btn-sm" id="btnUploadRetry" hidden>Retry failed</button>
+          <button type="button" class="btn btn-sm" id="btnUploadStop" hidden>Stop</button>
+        </div>
+      </div>
+      <p class="upload-note" id="uploadStatusNote" hidden></p>
+      <ul class="upload-failures" id="uploadFailures"></ul>
+    </div>
+
     <div id="panel-pool" class="panel active" role="tabpanel" aria-labelledby="tab-pool">
-      <p class="hint-muted">Coloured placeholders until Spaces serves real thumbs. Photo codes are usually <strong>UPRN-room-seq</strong> (e.g. 2245623-Kitchen-1). Extracts <strong>copy</strong> code lists from here; the file itself stays one Spaces object. Select images to download a zip, rename one photo, or delete.</p>
+      <p class="hint-muted">Coloured placeholders until Spaces serves real thumbs. Photo codes are usually <strong>UPRN-room-seq</strong> (e.g. 2245623-Kitchen-1). Upload uses the file name as that code. Extracts <strong>copy</strong> code lists from here; the file itself stays one Spaces object. Select images to download a zip, rename one photo, or delete.</p>
+      <label class="upload-zone" data-upload-zone>
+        <input type="file" id="poolUploadInput" class="upload-input visually-hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple />
+        <span class="upload-zone-copy">
+          <strong>Upload photos</strong>
+          <span>Drag and drop images here, or browse. JPEG, PNG, WebP, or HEIC. Hundreds of files at once is fine.</span>
+          <span>The file name is the photo code (for example 2245623-Kitchen-1.jpg). A name already in this project is skipped.</span>
+        </span>
+      </label>
       <div class="pool-toolbar">
         <div class="pool-search">
           <label class="visually-hidden" for="poolSearch">Search Photos Pool</label>
@@ -71,7 +92,7 @@
 
     <div id="panel-folders" class="panel" role="tabpanel" aria-labelledby="tab-folders">
       <div class="folders-toolbar">
-        <p class="hint-muted" style="margin:0">Batch folders (and zip packs). Tick <strong>Client Access</strong> to show on Client · Completions. Click a folder name to expand its photos, then select them to download, rename, or delete.</p>
+        <p class="hint-muted" style="margin:0">Batch folders (and zip packs). Tick <strong>Client Access</strong> to show on Client · Completions. Click a folder name to expand its photos, then drop images into that folder or select them to download, rename, or delete.</p>
       </div>
       <div class="table-wrap">
         <table class="folders-table" aria-label="Photo Folders">

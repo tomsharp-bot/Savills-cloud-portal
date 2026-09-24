@@ -317,6 +317,26 @@
     };
   }
 
+  const UPLOAD_ACCEPT =
+    "image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif";
+  const UPLOAD_CONCURRENCY = Math.min(6, Math.max(1, Number(data.uploadConcurrency) || 4));
+  const UPLOAD_MAX_BYTES = Number(data.uploadMaxBytes) || 40 * 1024 * 1024;
+  const UPLOAD_FAILURES_SHOWN = 100;
+
+  function folderUploadHtml(folder) {
+    return (
+      '<label class="upload-zone folder-upload" data-upload-zone data-folder-id="' +
+      escapeHtml(folder.id) +
+      '">' +
+      '<input type="file" class="upload-input visually-hidden" accept="' +
+      UPLOAD_ACCEPT +
+      '" multiple />' +
+      '<span class="upload-zone-copy"><strong>Upload photos</strong>' +
+      "<span>Drag and drop images here, or browse. They are added to this folder and the Photos Pool. A name already in this project is skipped.</span></span>" +
+      "</label>"
+    );
+  }
+
   function folderPhotosHtml(folder) {
     const selecting = folderSelectId === folder.id;
     const n = selecting ? selectedFolderCodes.size : 0;
@@ -338,7 +358,7 @@
               (selected ? " checked" : "") +
               " />" +
               (meta.thumbUrl
-                ? '<img class="photo-thumb" src="' + meta.thumbUrl + '" alt="" />'
+                ? '<img class="photo-thumb" src="' + meta.thumbUrl + '" alt="" loading="lazy" />'
                 : '<div class="photo-thumb" aria-hidden="true"></div>') +
               '<div class="photo-name">' +
               escapeHtml(meta.fileName || code) +
@@ -349,6 +369,7 @@
           .join("")
       : '<span class="hint-muted">Empty folder</span>';
     return (
+      folderUploadHtml(folder) +
       '<div class="folder-photo-toolbar" data-folder-toolbar="' +
       escapeHtml(folder.id) +
       '">' +
@@ -946,6 +967,386 @@
       }
       closeDone();
     }
+  });
+
+  let uploadSession = null;
+  let gridRefreshTimer = null;
+  let lastUploadBatchKey = "";
+  let lastUploadBatchAt = 0;
+
+  function scopeKey(scope) {
+    return scope && scope.kind === "folder" ? "folder:" + scope.folderId : "pool";
+  }
+
+  function uploadApi(scope) {
+    if (scope && scope.kind === "folder") {
+      return data.clientAccessApiBase + "/" + scope.folderId + "/photos/upload";
+    }
+    return data.poolUploadApi;
+  }
+
+  function uploadTargetLabel(scope) {
+    if (scope && scope.kind === "folder") {
+      const folder = folders.find((f) => f.id === scope.folderId);
+      return folder ? folder.name : "Photo Folder";
+    }
+    return "Photos Pool";
+  }
+
+  function parseClientPhotoName(originalName) {
+    const raw = String(originalName || "").trim();
+    if (!raw) return { ok: false, error: "That file needs a name." };
+    if (/[/\\]/.test(raw) || raw.indexOf("..") !== -1) {
+      return { ok: false, error: "File name cannot include a path." };
+    }
+    const match = raw.match(/(\.[A-Za-z0-9]{1,8})$/);
+    if (!match) return { ok: false, error: "Photos must be JPEG, PNG, WebP, or HEIC." };
+    const ext = match[1].toLowerCase();
+    if (!/^\.(jpe?g|png|webp|heic|heif)$/.test(ext)) {
+      return { ok: false, error: "Photos must be JPEG, PNG, WebP, or HEIC." };
+    }
+    const code = raw.slice(0, -match[1].length).trim();
+    if (!code || code === "." || code === "..") return { ok: false, error: "That file needs a name." };
+    const storedExt = ext === ".jpeg" ? ".jpg" : ext;
+    return { ok: true, code: code, fileName: code + storedExt, key: normCode(code) };
+  }
+
+  function photoNameTaken(parsed) {
+    const fileName = parsed.fileName.toLowerCase();
+    return pool.some(
+      (p) => normCode(p.code) === parsed.key || String(p.fileName || "").toLowerCase() === fileName
+    );
+  }
+
+  function claimedUploadKeys(session) {
+    const keys = new Set();
+    session.queue.forEach((item) => keys.add(item.key));
+    session.inflight.forEach((key) => keys.add(key));
+    return keys;
+  }
+
+  function scheduleGridRefresh() {
+    if (gridRefreshTimer) return;
+    renderPhotoPool();
+    renderFolders();
+    gridRefreshTimer = setTimeout(() => {
+      gridRefreshTimer = null;
+    }, 500);
+  }
+
+  function flushGridRefresh() {
+    if (gridRefreshTimer) {
+      clearTimeout(gridRefreshTimer);
+      gridRefreshTimer = null;
+    }
+    renderPhotoPool();
+    renderFolders();
+  }
+
+  function mergeFolderCodes(existing, incoming) {
+    const next = Array.isArray(existing) ? existing.slice() : [];
+    const have = new Set(next.map(normCode));
+    (incoming || []).forEach((code) => {
+      const key = normCode(code);
+      if (!key || have.has(key)) return;
+      next.push(code);
+      have.add(key);
+    });
+    return next;
+  }
+
+  function applyUploadedPhoto(photo, scope, file) {
+    const next = Object.assign({}, photo);
+    if (file) next.thumbUrl = URL.createObjectURL(file);
+    const idx = pool.findIndex((p) => normCode(p.code) === normCode(next.code));
+    if (idx >= 0) pool[idx] = next;
+    else pool.push(next);
+    pool.sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+    if (scope && scope.kind === "folder") {
+      const folder = folders.find((f) => f.id === scope.folderId);
+      if (folder) {
+        folder.photoCodes = mergeFolderCodes(folder.photoCodes, [next.code]);
+        folder.contentsLabel = contentsLabelFor(folder);
+      }
+    }
+  }
+
+  function renderUploadStatus() {
+    const host = document.getElementById("uploadStatus");
+    const summary = document.getElementById("uploadStatusSummary");
+    const note = document.getElementById("uploadStatusNote");
+    const list = document.getElementById("uploadFailures");
+    const retry = document.getElementById("btnUploadRetry");
+    const cont = document.getElementById("btnUploadContinue");
+    const stop = document.getElementById("btnUploadStop");
+    if (!host || !summary || !list) return;
+    const session = uploadSession;
+    if (!session || (!session.running && !session.uploaded && !session.failed.length && !(session.held && session.held.length) && !session.notice)) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    const remaining = session.queue.length + session.inflight.size;
+    let text =
+      uploadTargetLabel(session.scope) +
+      " · " +
+      session.uploaded +
+      " uploaded · " +
+      session.failed.length +
+      " failed · " +
+      remaining +
+      " remaining";
+    if (!session.running && session.stopped && session.held.length) text += " · stopped";
+    summary.textContent = text;
+    if (note) {
+      note.hidden = !session.notice;
+      note.textContent = session.notice || "";
+    }
+    if (retry) retry.hidden = session.running || session.failed.length === 0;
+    if (cont) cont.hidden = session.running || session.held.length === 0;
+    if (stop) stop.hidden = !session.running;
+    const shown = session.failed.slice(0, UPLOAD_FAILURES_SHOWN);
+    const more = session.failed.length - shown.length;
+    list.innerHTML = shown
+      .map((item) => "<li><strong>" + escapeHtml(item.name) + "</strong> — " + escapeHtml(item.error) + "</li>")
+      .join("");
+    if (more > 0) {
+      list.innerHTML += "<li>" + more + " more failed. Retry still includes them.</li>";
+    }
+  }
+
+  function enqueueUploads(session, files) {
+    const claimed = claimedUploadKeys(session);
+    Array.from(files || []).forEach((file) => {
+      const name = file && file.name ? file.name : "Untitled";
+      const parsed = parseClientPhotoName(name);
+      if (!parsed.ok) {
+        session.failed.push({ name: name, error: parsed.error, file: file || null });
+        return;
+      }
+      if (!file.size) {
+        session.failed.push({ name: name, error: "That file is empty.", file: file });
+        return;
+      }
+      if (file.size > UPLOAD_MAX_BYTES) {
+        const mb = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024));
+        session.failed.push({ name: name, error: "That photo is larger than " + mb + " MB.", file: file });
+        return;
+      }
+      if (claimed.has(parsed.key)) {
+        session.failed.push({ name: name, error: "That file name is already in this upload.", file: file });
+        return;
+      }
+      if (photoNameTaken(parsed)) {
+        session.failed.push({
+          name: name,
+          error: "A photo with that name already exists in this project.",
+          file: file,
+        });
+        return;
+      }
+      claimed.add(parsed.key);
+      session.queue.push({ file: file, name: name, key: parsed.key });
+    });
+  }
+
+  function newUploadSession(scope) {
+    return {
+      scope: scope,
+      running: true,
+      stopped: false,
+      uploaded: 0,
+      failed: [],
+      queue: [],
+      held: [],
+      inflight: new Set(),
+      notice: "",
+    };
+  }
+
+  async function uploadOne(session, item) {
+    session.inflight.add(item.key);
+    const body = new FormData();
+    body.append("file", item.file, item.file.name);
+    try {
+      const res = await fetch(url(uploadApi(session.scope)), {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: body,
+      });
+      let json = {};
+      try {
+        json = await res.json();
+      } catch (err) {
+        json = {};
+      }
+      if (session !== uploadSession) return;
+      if (!res.ok || json.ok === false) {
+        const fallback = res.status === 403 ? "Admin only." : "Could not upload that photo.";
+        session.failed.push({ name: item.name, error: json.error || fallback, file: item.file });
+        return;
+      }
+      session.uploaded += 1;
+      applyUploadedPhoto(json.photo, session.scope, item.file);
+      if (json.folder && session.scope && session.scope.kind === "folder") {
+        const folder = folders.find((f) => f.id === json.folder.id);
+        if (folder && Array.isArray(json.folder.photoCodes)) {
+          folder.photoCodes = mergeFolderCodes(folder.photoCodes, json.folder.photoCodes);
+          folder.contentsLabel = contentsLabelFor(folder);
+        }
+      }
+      scheduleGridRefresh();
+    } catch (err) {
+      if (session !== uploadSession) return;
+      session.failed.push({
+        name: item.name,
+        error: "Could not upload that photo.",
+        file: item.file,
+      });
+    } finally {
+      session.inflight.delete(item.key);
+    }
+  }
+
+  function settleUpload(session) {
+    if (session !== uploadSession) return;
+    if (session.inflight.size > 0) return;
+    if (session.stopped) {
+      session.held = session.held.concat(session.queue);
+      session.queue = [];
+    }
+    if (session.queue.length && !session.stopped) return;
+    session.running = false;
+    flushGridRefresh();
+    renderUploadStatus();
+  }
+
+  function pumpUploads(session) {
+    if (session !== uploadSession || session.stopped) {
+      settleUpload(session);
+      return;
+    }
+    while (session.inflight.size < UPLOAD_CONCURRENCY && session.queue.length) {
+      const item = session.queue.shift();
+      uploadOne(session, item).then(() => {
+        if (session !== uploadSession) return;
+        renderUploadStatus();
+        if (session.queue.length && !session.stopped) pumpUploads(session);
+        else settleUpload(session);
+      });
+    }
+    renderUploadStatus();
+    if (!session.queue.length && session.inflight.size === 0) settleUpload(session);
+  }
+
+  function startUpload(fileList, scope) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const batchKey =
+      scopeKey(scope) +
+      ":" +
+      files.length +
+      ":" +
+      files.reduce((sum, file) => sum + (file.size || 0), 0) +
+      ":" +
+      (files[0] && files[0].name) +
+      ":" +
+      (files[0] && files[0].lastModified);
+    const now = Date.now();
+    if (batchKey === lastUploadBatchKey && now - lastUploadBatchAt < 800) return;
+    lastUploadBatchKey = batchKey;
+    lastUploadBatchAt = now;
+
+    const nextScope = scope && scope.kind === "folder" ? { kind: "folder", folderId: scope.folderId } : { kind: "pool" };
+    if (uploadSession && uploadSession.running) {
+      if (scopeKey(uploadSession.scope) !== scopeKey(nextScope)) {
+        uploadSession.notice = "Finish or stop the current upload before uploading to a different place.";
+        renderUploadStatus();
+        return;
+      }
+      uploadSession.notice = "";
+      enqueueUploads(uploadSession, files);
+      pumpUploads(uploadSession);
+      return;
+    }
+    const session = newUploadSession(nextScope);
+    uploadSession = session;
+    enqueueUploads(session, files);
+    if (!session.queue.length) session.running = false;
+    renderUploadStatus();
+    const status = document.getElementById("uploadStatus");
+    if (status && !status.hidden) status.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    pumpUploads(session);
+  }
+
+  function uploadScopeFromZone(zone) {
+    const folderId = zone && zone.getAttribute("data-folder-id");
+    return folderId ? { kind: "folder", folderId: folderId } : { kind: "pool" };
+  }
+
+  root.addEventListener("dragenter", (e) => {
+    const zone = e.target.closest && e.target.closest("[data-upload-zone]");
+    if (!zone || !root.contains(zone)) return;
+    e.preventDefault();
+    zone.classList.add("dragover");
+  });
+  root.addEventListener("dragover", (e) => {
+    const zone = e.target.closest && e.target.closest("[data-upload-zone]");
+    if (!zone || !root.contains(zone)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    zone.classList.add("dragover");
+  });
+  root.addEventListener("dragleave", (e) => {
+    const zone = e.target.closest && e.target.closest("[data-upload-zone]");
+    if (!zone || !root.contains(zone)) return;
+    if (e.relatedTarget && zone.contains(e.relatedTarget)) return;
+    zone.classList.remove("dragover");
+  });
+  root.addEventListener("drop", (e) => {
+    const zone = e.target.closest && e.target.closest("[data-upload-zone]");
+    if (!zone || !root.contains(zone)) return;
+    e.preventDefault();
+    zone.classList.remove("dragover");
+    startUpload(e.dataTransfer && e.dataTransfer.files, uploadScopeFromZone(zone));
+  });
+  root.addEventListener("change", (e) => {
+    const input = e.target;
+    if (!input.classList || !input.classList.contains("upload-input")) return;
+    const zone = input.closest("[data-upload-zone]");
+    // Copy first. Clearing the input empties the live FileList.
+    const files = Array.from(input.files || []);
+    input.value = "";
+    startUpload(files, uploadScopeFromZone(zone));
+  });
+
+  document.getElementById("btnUploadStop").addEventListener("click", () => {
+    if (!uploadSession || !uploadSession.running) return;
+    uploadSession.stopped = true;
+    uploadSession.notice = "";
+    renderUploadStatus();
+  });
+  document.getElementById("btnUploadContinue").addEventListener("click", () => {
+    const session = uploadSession;
+    if (!session || session.running || !session.held.length) return;
+    session.stopped = false;
+    session.running = true;
+    session.notice = "";
+    session.queue = session.held.slice();
+    session.held = [];
+    pumpUploads(session);
+  });
+  document.getElementById("btnUploadRetry").addEventListener("click", () => {
+    const session = uploadSession;
+    if (!session || session.running || !session.failed.length) return;
+    const files = session.failed.map((item) => item.file).filter(Boolean);
+    session.failed = [];
+    session.stopped = false;
+    session.running = true;
+    session.notice = "";
+    enqueueUploads(session, files);
+    if (!session.queue.length) session.running = false;
+    pumpUploads(session);
   });
 
   renderPhotoPool();

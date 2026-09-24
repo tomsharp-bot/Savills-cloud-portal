@@ -1,4 +1,5 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
+import multer from "multer";
 import { requireAdmin } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import {
@@ -12,17 +13,66 @@ import {
   listPhotoTiles,
   loadProjectPhotos,
   markFolderDownloaded,
+  PHOTO_UPLOAD_CONCURRENCY,
+  PHOTO_UPLOAD_MAX_BYTES,
   photoCodesOf,
+  photoTooLargeMessage,
   renameProjectPhoto,
   setFolderClientAccess,
   spacesHint,
+  uploadProjectPhoto,
   uprnFromCode,
+  type PhotoMutationScope,
 } from "../lib/photos.js";
 import { seededSurveyTypes } from "../lib/programme.js";
 import { spacesStatus } from "../lib/spaces.js";
 
 export const photosRouter = Router();
 photosRouter.use(requireAdmin);
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: PHOTO_UPLOAD_MAX_BYTES, files: 1 },
+});
+
+function acceptPhotoUpload(req: Request, res: Response, next: NextFunction): void {
+  photoUpload.single("file")(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    const code = typeof err === "object" && err && "code" in err ? String((err as { code?: unknown }).code) : "";
+    if (code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ ok: false, error: photoTooLargeMessage() });
+      return;
+    }
+    res.status(400).json({ ok: false, error: "Could not read that photo." });
+  });
+}
+
+async function handlePhotoUpload(req: Request, res: Response, scope: PhotoMutationScope): Promise<void> {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Project not found." });
+    return;
+  }
+  const file = req.file;
+  if (!file || !file.buffer) {
+    res.status(400).json({ ok: false, error: "Choose a photo to upload." });
+    return;
+  }
+  // Spaces keys are derived from the project and the file name. Ignore any client key.
+  const result = await uploadProjectPhoto(
+    project.id,
+    { originalName: file.originalname, buffer: file.buffer, mime: file.mimetype },
+    scope
+  );
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error });
+    return;
+  }
+  res.json({ ok: true, photo: result.photo, folder: result.folder });
+}
 
 async function surveyNoteMap(): Promise<Map<string, string>> {
   const notes = await prisma.programmeSurveyNote.findMany();
@@ -95,6 +145,9 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
       zipApi: `/photos/projects/${project.id}/pool/download-zip`,
       poolDeleteApi: `/photos/projects/${project.id}/pool/delete`,
       poolRenameApi: `/photos/projects/${project.id}/pool/rename`,
+      poolUploadApi: `/photos/projects/${project.id}/pool/upload`,
+      uploadConcurrency: PHOTO_UPLOAD_CONCURRENCY,
+      uploadMaxBytes: PHOTO_UPLOAD_MAX_BYTES,
     },
   });
 });
@@ -202,6 +255,10 @@ photosRouter.get("/projects/:id/pool/download-zip", async (req: Request, res: Re
   sendZip(res, filename, placeholderZipFiles("Photos Pool", ordered));
 });
 
+photosRouter.post("/projects/:id/pool/upload", acceptPhotoUpload, async (req: Request, res: Response) => {
+  await handlePhotoUpload(req, res, { kind: "pool" });
+});
+
 photosRouter.post("/projects/:id/pool/delete", async (req: Request, res: Response) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
   if (!project) {
@@ -234,6 +291,14 @@ photosRouter.post("/projects/:id/pool/rename", async (req: Request, res: Respons
   }
   res.json({ ok: true, photo: result.photo, previousCode: result.previousCode });
 });
+
+photosRouter.post(
+  "/projects/:id/folders/:folderId/photos/upload",
+  acceptPhotoUpload,
+  async (req: Request, res: Response) => {
+    await handlePhotoUpload(req, res, { kind: "folder", folderId: req.params.folderId });
+  }
+);
 
 photosRouter.post("/projects/:id/folders/:folderId/photos/delete", async (req: Request, res: Response) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });

@@ -1,9 +1,10 @@
-import type { PhotoFolder, PhotoFolderActivity, PhotoPoolItem, Project } from "@prisma/client";
+import type { PhotoFolder, PhotoFolderActivity, PhotoPoolItem, Prisma, Project } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { seededSurveyTypes } from "./programme.js";
 import {
   copySpacesObject,
   deleteSpacesObject,
+  putSpacesObject,
   spacesObjectKey,
   spacesRequired,
   spacesStatus,
@@ -576,11 +577,33 @@ function crc32(buf: Buffer): number {
 
 export const PHOTO_NAME_MAX = 120;
 export const PHOTO_DELETE_MAX = 500;
+/** One image per request. The browser uploads a few at a time. */
+export const PHOTO_UPLOAD_MAX_BYTES = 40 * 1024 * 1024;
+export const PHOTO_UPLOAD_CONCURRENCY = 4;
+export const PHOTO_UPLOAD_EXTS = ["jpg", "jpeg", "png", "webp", "heic", "heif"] as const;
+
+const PHOTO_UPLOAD_EXT_SET = new Set<string>(PHOTO_UPLOAD_EXTS.map((ext) => `.${ext}`));
+const PHOTO_UPLOAD_MIME_SET = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+]);
+
+export function photoTooLargeMessage(): string {
+  const mb = PHOTO_UPLOAD_MAX_BYTES / (1024 * 1024);
+  return `That photo is larger than ${mb} MB.`;
+}
 
 export type PhotoStorageOps = {
   configured: () => boolean;
   remove: (key: string) => Promise<boolean>;
   copy: (fromKey: string, toKey: string) => Promise<SpacesCopyResult>;
+  put: (key: string, body: Buffer, contentType: string) => Promise<boolean>;
 };
 
 export function defaultPhotoStorageOps(): PhotoStorageOps {
@@ -588,6 +611,7 @@ export function defaultPhotoStorageOps(): PhotoStorageOps {
     configured: () => spacesStatus().configured,
     remove: (key) => deleteSpacesObject(key),
     copy: (fromKey, toKey) => copySpacesObject(fromKey, toKey),
+    put: (key, body, contentType) => putSpacesObject(key, body, contentType),
   };
 }
 
@@ -952,6 +976,241 @@ export async function renameProjectPhoto(
     }
     return { ok: false, error: "Could not rename that photo.", status: 500 };
   }
+}
+
+export type UploadedPhotoName = {
+  code: string;
+  fileName: string;
+  ext: string;
+};
+
+/**
+ * Photo code is the file stem. The extension is kept on the file name and the Spaces key,
+ * matching pool rows such as code `2245623-Kitchen-1` and file `2245623-Kitchen-1.jpg`.
+ * `.jpeg` is stored as `.jpg`. Path segments are rejected rather than stripped.
+ */
+export function parseUploadedPhotoName(
+  originalName: string
+): { ok: true; name: UploadedPhotoName } | { ok: false; error: string } {
+  const raw = String(originalName || "").trim();
+  if (!raw) return { ok: false, error: "That file needs a name." };
+  if (raw.length > 200) return { ok: false, error: "File name is too long." };
+  if (/[\u0000-\u001f]/.test(raw)) return { ok: false, error: "File name cannot include control characters." };
+  if (/[/\\]/.test(raw) || raw.includes("..")) return { ok: false, error: "File name cannot include a path." };
+  const extMatch = raw.match(/(\.[A-Za-z0-9]{1,8})$/);
+  if (!extMatch) return { ok: false, error: "Photos must be JPEG, PNG, WebP, or HEIC." };
+  const ext = extMatch[1].toLowerCase();
+  if (!PHOTO_UPLOAD_EXT_SET.has(ext)) return { ok: false, error: "Photos must be JPEG, PNG, WebP, or HEIC." };
+  const storedExt = ext === ".jpeg" ? ".jpg" : ext;
+  const code = raw.slice(0, -extMatch[1].length).trim();
+  if (!code || code === "." || code === "..") return { ok: false, error: "That file needs a name." };
+  if (code.length > PHOTO_NAME_MAX) return { ok: false, error: "File name is too long." };
+  if (/[/\\]/.test(code) || code.includes("..")) return { ok: false, error: "File name cannot include a path." };
+  return { ok: true, name: { code, fileName: `${code}${storedExt}`, ext: storedExt } };
+}
+
+/** Empty or generic MIME is allowed. A declared non-image type is not. */
+export function uploadMimeAllowed(mime: string | undefined): boolean {
+  const type = String(mime || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (!type || type === "application/octet-stream") return true;
+  return PHOTO_UPLOAD_MIME_SET.has(type);
+}
+
+export function contentTypeForPhotoExt(ext: string): string {
+  switch (ext) {
+    case ".png":
+      return "image/png";
+    case ".webp":
+      return "image/webp";
+    case ".heic":
+      return "image/heic";
+    case ".heif":
+      return "image/heif";
+    default:
+      return "image/jpeg";
+  }
+}
+
+export type PhotoUploadFile = {
+  originalName: string;
+  buffer: Buffer;
+  mime?: string;
+};
+
+type PhotoDb = Prisma.TransactionClient | typeof prisma;
+
+function prismaErrorCode(err: unknown): string {
+  if (typeof err === "object" && err && "code" in err) return String((err as { code?: string }).code || "");
+  return "";
+}
+
+class UploadAbort extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function findPhotoNameClash(db: PhotoDb, projectId: string, code: string, fileName: string) {
+  return db.photoPoolItem.findFirst({
+    where: {
+      projectId,
+      OR: [
+        { code: { equals: code, mode: "insensitive" } },
+        { fileName: { equals: fileName, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true, code: true, spacesKey: true },
+  });
+}
+
+function folderPhotoLabel(count: number): string {
+  return `${count} photo${count === 1 ? "" : "s"}`;
+}
+
+async function rollbackUploadedPhoto(
+  projectId: string,
+  itemId: string,
+  code: string,
+  key: string,
+  ops: PhotoStorageOps
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.photoPoolItem.deleteMany({ where: { id: itemId, projectId } });
+    const folders = await tx.photoFolder.findMany({ where: { projectId } });
+    for (const folder of folders) {
+      const current = photoCodesOf(folder);
+      const next = withoutCodes(current, [code]);
+      if (next.length !== current.length) {
+        await tx.photoFolder.update({
+          where: { id: folder.id },
+          data: { photoCodes: next },
+        });
+      }
+    }
+  });
+  if (key) await ops.remove(key);
+}
+
+/**
+ * Store one image in the project pool. The Spaces key is always
+ * `photos/{projectId}/pool/{code}{ext}` from the file name — never a client-supplied key.
+ * An existing code or file name is left untouched. Folder uploads append that code to the
+ * folder list (extracts store codes, not a second object) and still create the pool row.
+ * The database row is written first so a failed put cannot overwrite an existing object;
+ * if the put fails, the new row and folder code are removed.
+ */
+export async function uploadProjectPhoto(
+  projectId: string,
+  file: PhotoUploadFile,
+  scope: PhotoMutationScope,
+  ops: PhotoStorageOps = defaultPhotoStorageOps()
+): Promise<
+  | {
+      ok: true;
+      photo: PhotoPoolView;
+      folder?: { id: string; photoCodes: string[]; contentsLabel: string };
+    }
+  | { ok: false; error: string; status: number }
+> {
+  const buffer = file.buffer;
+  if (!buffer || buffer.length === 0) return { ok: false, error: "That file is empty.", status: 400 };
+  if (buffer.length > PHOTO_UPLOAD_MAX_BYTES) {
+    return { ok: false, error: photoTooLargeMessage(), status: 413 };
+  }
+  const parsed = parseUploadedPhotoName(file.originalName);
+  if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
+  if (!uploadMimeAllowed(file.mime)) {
+    return { ok: false, error: "Photos must be JPEG, PNG, WebP, or HEIC.", status: 400 };
+  }
+
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+  if (!project) return { ok: false, error: "Project not found.", status: 404 };
+
+  const { code, fileName, ext } = parsed.name;
+  const key = photoObjectKey(projectId, code, ext);
+  if (!key || !isProjectPoolKey(projectId, key)) {
+    return { ok: false, error: "File name cannot include a path.", status: 400 };
+  }
+
+  if (scope.kind === "folder") {
+    const folder = await prisma.photoFolder.findFirst({
+      where: { id: scope.folderId, projectId },
+      select: { id: true, kind: true },
+    });
+    if (!folder) return { ok: false, error: "Folder not found.", status: 404 };
+    if (folder.kind === "zip") {
+      return { ok: false, error: "Upload into a photo folder, not a zip pack.", status: 400 };
+    }
+  }
+
+  const clash = await findPhotoNameClash(prisma, projectId, code, fileName);
+  if (clash) {
+    return { ok: false, error: "A photo with that name already exists in this project.", status: 409 };
+  }
+
+  if (!ops.configured()) return { ok: false, error: "Photo storage is not available.", status: 503 };
+
+  let created: { row: PhotoPoolItem; photoCodes?: string[]; folderId?: string };
+  try {
+    created = await prisma.$transaction(async (tx) => {
+      if (scope.kind === "folder") {
+        await tx.$queryRaw`SELECT id FROM "PhotoFolder" WHERE id = ${scope.folderId} AND "projectId" = ${projectId} FOR UPDATE`;
+        const folder = await tx.photoFolder.findFirst({ where: { id: scope.folderId, projectId } });
+        if (!folder) throw new UploadAbort(404, "Folder not found.");
+        if (folder.kind === "zip") throw new UploadAbort(400, "Upload into a photo folder, not a zip pack.");
+      }
+      const again = await findPhotoNameClash(tx, projectId, code, fileName);
+      if (again) throw new UploadAbort(409, "A photo with that name already exists in this project.");
+      const row = await tx.photoPoolItem.create({
+        data: { projectId, code, fileName, spacesKey: key },
+      });
+      if (scope.kind !== "folder") return { row };
+      const folder = await tx.photoFolder.findFirst({ where: { id: scope.folderId, projectId } });
+      if (!folder || folder.kind === "zip") throw new UploadAbort(404, "Folder not found.");
+      const current = photoCodesOf(folder);
+      const already = current.some((c) => normCode(c) === normCode(code));
+      const photoCodes = already ? current : [...current, row.code];
+      if (!already) {
+        await tx.photoFolder.update({
+          where: { id: folder.id },
+          data: { photoCodes },
+        });
+      }
+      return { row, photoCodes, folderId: folder.id };
+    });
+  } catch (err) {
+    if (err instanceof UploadAbort) return { ok: false, error: err.message, status: err.status };
+    if (prismaErrorCode(err) === "P2002") {
+      return { ok: false, error: "A photo with that name already exists in this project.", status: 409 };
+    }
+    if (prismaErrorCode(err) === "P2003") return { ok: false, error: "Project not found.", status: 404 };
+    return { ok: false, error: "Could not save that photo.", status: 500 };
+  }
+
+  const stored = await ops.put(key, buffer, contentTypeForPhotoExt(ext));
+  if (!stored) {
+    try {
+      await rollbackUploadedPhoto(projectId, created.row.id, code, key, ops);
+    } catch (err) {
+      console.error(`Photo upload rollback failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return { ok: false, error: "Could not store that photo.", status: 502 };
+  }
+
+  const folder =
+    created.folderId && created.photoCodes
+      ? {
+          id: created.folderId,
+          photoCodes: created.photoCodes,
+          contentsLabel: folderPhotoLabel(created.photoCodes.length),
+        }
+      : undefined;
+  return { ok: true, photo: toPoolView(created.row), folder };
 }
 
 export function spacesHint(): string {
