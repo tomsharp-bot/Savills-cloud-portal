@@ -109,6 +109,9 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(admin.body, /id="hhsrs-alert-toast"/);
     assert.match(admin.body, /class="alert-toast"/);
     assert.match(admin.body, /Enable desktop alerts/);
+    assert.match(admin.body, /Turn on desktop alerts/);
+    assert.doesNotMatch(admin.body, /Not now/);
+    assert.doesNotMatch(admin.body, /Desktop alerts ready/);
     assert.match(admin.body, /initialPendingIds/);
 
     const surveyorCookie = await login(app, "peter.m", "PeterMay2468", "/projectprogress");
@@ -170,6 +173,10 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(adminPage.body, /https:\/\/savillscloudportal\.co\.uk\/HHSRS-site-form/);
     assert.match(adminPage.body, /Copy link/);
     assert.match(adminPage.body, /Enable desktop alerts/);
+    assert.match(adminPage.body, /Desktop alerts are off/);
+    assert.match(adminPage.body, /Simulate alerts turned off/);
+    assert.doesNotMatch(adminPage.body, /Desktop alerts ready/);
+    assert.doesNotMatch(adminPage.body, /id="desktop-alerts-banner"/);
     assert.match(adminPage.body, /id="hhsrs-alert-toast"/);
   });
 

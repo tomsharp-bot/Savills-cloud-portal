@@ -948,7 +948,7 @@
   }
 
   function desktopNotify(item) {
-    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (!desktopAlertsOn()) return;
     var summary = item.summary || [item.category, item.rating].filter(Boolean).join(" · ");
     var body = [item.projectName, item.fullAddress, summary].filter(Boolean).join(" — ");
     try {
@@ -1027,52 +1027,111 @@
     return Notification.permission;
   }
 
-  var ALERTS_DISMISS_KEY = "hhsrs-desktop-alerts-dismissed";
+  var DA_ON_KEY = "hhsrsDesktopAlertsOn";
+  var DA_DECISION_KEY = "hhsrsDesktopAlertsDecision";
 
-  function alertsDismissed() {
+  function clearLegacyDesktopAlertsDismiss() {
     try {
-      return localStorage.getItem(ALERTS_DISMISS_KEY) === "1";
+      localStorage.removeItem("hhsrs-desktop-alerts-dismissed");
+    } catch (e) {
+      /* ignore private-mode storage failures */
+    }
+  }
+
+  function alertsSimulatedOff() {
+    try {
+      return localStorage.getItem(DA_ON_KEY) === "0";
     } catch (e) {
       return false;
     }
   }
 
+  function desktopAlertsDecision() {
+    try {
+      return localStorage.getItem(DA_DECISION_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function desktopAlertsOn() {
+    return notificationState() === "granted" && !alertsSimulatedOff();
+  }
+
+  function markDesktopAlertsOn() {
+    try {
+      localStorage.setItem(DA_ON_KEY, "1");
+      localStorage.setItem(DA_DECISION_KEY, "enabled");
+      localStorage.removeItem("hhsrs-desktop-alerts-dismissed");
+    } catch (e) {
+      /* permission can still be granted without storage */
+    }
+  }
+
+  function markDesktopAlertsSimulatedOff() {
+    try {
+      localStorage.setItem(DA_ON_KEY, "0");
+      localStorage.setItem(DA_DECISION_KEY, "enabled");
+      localStorage.removeItem("hhsrs-desktop-alerts-dismissed");
+    } catch (e) {
+      /* banner still follows the in-memory paint below */
+    }
+  }
+
   function paintNotifStatus() {
+    var on = desktopAlertsOn();
+    var perm = notificationState();
+    var banner = $("desktop-alerts-banner");
     var status = $("notif-status");
     var btn = $("btn-enable-desktop-alerts");
-    var banner = $("desktop-alerts-banner");
-    var perm = notificationState();
-    if (banner) {
-      if (alertsDismissed()) {
-        banner.hidden = true;
-      } else {
-        banner.hidden = false;
-        banner.classList.toggle("is-ready", perm === "granted");
-      }
-    }
+    if (banner) banner.hidden = on;
     if (status) {
       status.classList.remove("granted", "denied");
-      if (perm === "granted") {
-        status.textContent = "Desktop alerts on";
-        status.classList.add("granted");
-      } else if (perm === "denied") {
+      if (!on && perm === "denied") {
+        status.hidden = false;
         status.textContent = "Desktop alerts blocked. On-screen alerts still show.";
         status.classList.add("denied");
-      } else if (perm === "unsupported") {
+      } else if (!on && perm === "unsupported") {
+        status.hidden = false;
         status.textContent = "Desktop alerts are unavailable in this browser. On-screen alerts still show.";
       } else {
-        status.textContent = "On-screen alerts are on.";
+        status.hidden = true;
+        status.textContent = "";
       }
     }
     if (btn) {
-      if (perm === "granted") {
-        btn.textContent = "Desktop alerts on";
-        btn.disabled = true;
+      btn.textContent = "Enable desktop alerts";
+      btn.disabled = perm === "unsupported";
+    }
+
+    var dot = $("admin-alerts-dot");
+    var label = $("admin-alerts-status-text");
+    var badge = $("admin-alerts-badge");
+    var adminEnable = $("btn-admin-enable-desktop-alerts");
+    var simNote = $("admin-alerts-sim-note");
+    var hint = $("admin-alerts-hint");
+    if (dot) {
+      dot.classList.toggle("is-on", on);
+      dot.classList.toggle("is-off", !on);
+    }
+    if (label) label.textContent = on ? "Desktop alerts are on" : "Desktop alerts are off";
+    if (badge) badge.textContent = on ? "On" : "Off";
+    if (adminEnable) {
+      adminEnable.hidden = on;
+      adminEnable.disabled = perm === "unsupported";
+    }
+    if (simNote) simNote.hidden = !on;
+    if (hint) {
+      if (on) {
+        hint.textContent = "You'll get a Windows-style notification when a new site issue lands.";
+      } else if (perm === "denied") {
+        hint.textContent = "Desktop alerts are blocked in this browser. On-screen alerts still show. Allow notifications for this site, then enable again.";
       } else if (perm === "unsupported") {
-        btn.disabled = true;
+        hint.textContent = "This browser cannot show desktop alerts. On-screen alerts still show while HHSRS Reporter is open.";
+      } else if (alertsSimulatedOff() || desktopAlertsDecision() === "enabled") {
+        hint.textContent = "Alerts were turned off. Enable again — the prompt stays on Pending until you do.";
       } else {
-        btn.textContent = "Enable desktop alerts";
-        btn.disabled = false;
+        hint.textContent = "Desktop alerts are required. Enable here or from the prompt on Pending.";
       }
     }
   }
@@ -1086,6 +1145,7 @@
     function finish() {
       if (settled) return;
       settled = true;
+      if (notificationState() === "granted") markDesktopAlertsOn();
       paintNotifStatus();
     }
     try {
@@ -1098,27 +1158,32 @@
     }
   }
 
+  function enableDesktopAlerts() {
+    unlockAlertSound();
+    if (notificationState() === "granted") {
+      markDesktopAlertsOn();
+      paintNotifStatus();
+      return;
+    }
+    askNotificationPermission();
+  }
+
   var dismissBtn = $("hhsrs-toast-dismiss");
   if (dismissBtn) dismissBtn.addEventListener("click", hideToast);
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape") hideToast();
   });
 
+  clearLegacyDesktopAlertsDismiss();
   var enableBtn = $("btn-enable-desktop-alerts");
-  if (enableBtn) {
-    enableBtn.addEventListener("click", function () {
-      unlockAlertSound();
-      askNotificationPermission();
-    });
-  }
-  var notNowBtn = $("btn-desktop-alerts-not-now");
-  if (notNowBtn) {
-    notNowBtn.addEventListener("click", function () {
-      try {
-        localStorage.setItem(ALERTS_DISMISS_KEY, "1");
-      } catch (e) {}
-      var banner = $("desktop-alerts-banner");
-      if (banner) banner.hidden = true;
+  if (enableBtn) enableBtn.addEventListener("click", enableDesktopAlerts);
+  var adminEnableBtn = $("btn-admin-enable-desktop-alerts");
+  if (adminEnableBtn) adminEnableBtn.addEventListener("click", enableDesktopAlerts);
+  var simOffBtn = $("btn-admin-simulate-alerts-off");
+  if (simOffBtn) {
+    simOffBtn.addEventListener("click", function () {
+      markDesktopAlertsSimulatedOff();
+      paintNotifStatus();
     });
   }
   document.addEventListener("pointerdown", unlockAlertSound, true);
