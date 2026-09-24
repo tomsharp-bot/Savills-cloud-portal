@@ -10,9 +10,11 @@ import {
   isPhotoShareSecret,
   photoShareAddress,
   photoShareByCodeUrl,
+  photoShareCodesUrl,
   photoShareExpiresAt,
   photoShareHelpText,
   pickPoolPhotoByCode,
+  uniqueStoredPhotoCodes,
 } from "./photo-share.js";
 
 describe("photo share tokens", () => {
@@ -33,9 +35,13 @@ describe("photo share tokens", () => {
     assert.equal(address.includes("/projectprogress"), false);
     const byCode = photoShareByCodeUrl(address, "635569-Front Door1");
     assert.equal(byCode, `${address}/by-code/635569-Front%20Door1`);
+    assert.equal(photoShareCodesUrl(address), `${address}/codes`);
     const help = photoShareHelpText(address);
     assert.match(help, /Data Horizontal DW!F1/);
     assert.match(help, /\/by-code\//);
+    assert.match(help, /\/codes/);
+    assert.match(help, /"codes"/);
+    assert.match(help, /"count"/);
     assert.match(help, /does not sign you in/);
     assert.doesNotMatch(help, /screen-app|Photos Pool:/);
   });
@@ -60,6 +66,14 @@ describe("photo share tokens", () => {
       now
     );
     assert.deepEqual(live, { ok: true, projectId: "p1" });
+  });
+
+  it("keeps stored photo codes and drops only exact duplicates", () => {
+    assert.deepEqual(
+      uniqueStoredPhotoCodes(["UPRN-Kitchen-1", "UPRN-Kitchen-1", "uprn-kitchen-1", "UPRN-Hall-2"]),
+      ["UPRN-Kitchen-1", "uprn-kitchen-1", "UPRN-Hall-2"]
+    );
+    assert.deepEqual(uniqueStoredPhotoCodes([]), []);
   });
 
   it("matches a pool code exactly, then case-insensitively, and only returns that project's bytes", async () => {

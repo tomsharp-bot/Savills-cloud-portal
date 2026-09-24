@@ -646,7 +646,29 @@ describe("Photo Storage routes", () => {
     assert.equal(help.status, 200);
     assert.match(help.body, /Data Horizontal DW!F1/);
     assert.match(help.body, /\/by-code\//);
+    assert.match(help.body, /\/codes/);
     assert.doesNotMatch(help.body, /screen-app/);
+
+    const bogusCodes = await request(port, "GET", "/photos/share/not-a-real-token/codes");
+    assert.equal(bogusCodes.status, 401);
+    assert.match(bogusCodes.body, /not valid/);
+
+    const codesList = await request(port, "GET", `/photos/share/${secret}/codes`);
+    assert.equal(codesList.status, 200);
+    assert.match(codesList.contentType, /application\/json/);
+    assert.match(codesList.cacheControl, /no-store/);
+    assert.equal(codesList.nosniff, "nosniff");
+    const codesJson = JSON.parse(codesList.body) as { codes: string[]; count: number };
+    assert.ok(Array.isArray(codesJson.codes));
+    assert.equal(codesJson.count, codesJson.codes.length);
+    assert.equal(
+      codesJson.codes.find((code) => code.toUpperCase() === doorCode.toUpperCase()),
+      doorCode
+    );
+    assert.ok(codesJson.codes.includes(kitchenCode));
+    assert.ok(codesJson.codes.includes(clashCode));
+    assert.equal(codesJson.codes.includes(otherCode), false);
+    assert.doesNotMatch(codesList.body, /spacesKey|spaces:|https?:\/\//);
 
     const missing = await request(
       port,
@@ -701,6 +723,8 @@ describe("Photo Storage routes", () => {
     assert.equal(JSON.parse(revoked.body).active, false);
     const afterRevoke = await request(port, "GET", `/photos/share/${nextSecret}/by-code/${encodeURIComponent(doorCode)}`);
     assert.equal(afterRevoke.status, 403);
+    const codesAfterRevoke = await request(port, "GET", `/photos/share/${nextSecret}/codes`);
+    assert.equal(codesAfterRevoke.status, 403);
 
     const again = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share`, {
       cookie,
