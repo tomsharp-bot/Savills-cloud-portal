@@ -4,6 +4,7 @@ import { seededSurveyTypes } from "./programme.js";
 import {
   copySpacesObject,
   deleteSpacesObject,
+  fetchSpacesObject,
   putSpacesObject,
   spacesObjectKey,
   spacesRequired,
@@ -31,7 +32,7 @@ export type PhotoPoolView = {
   fileName: string;
   uprn: string;
   spacesKey: string;
-  /** data-URI or Spaces URL placeholder for coloured thumb */
+  /** Coloured SVG data URI, or an authenticated app path when a pool Spaces key is set. */
   thumbUrl: string;
 };
 
@@ -103,7 +104,7 @@ export function fileNameForCode(code: string): string {
   return `${String(code || "photo").trim()}.jpg`;
 }
 
-/** Deterministic coloured SVG thumb until Spaces serves real images. */
+/** Deterministic coloured SVG thumb for a pool row with no Spaces bytes. */
 export function placeholderThumbUrl(code: string): string {
   let h = 0;
   const s = String(code || "IMG");
@@ -122,6 +123,21 @@ export function placeholderThumbUrl(code: string): string {
     `<text x="128" y="102" text-anchor="middle" fill="rgba(11,31,51,.55)" font-family="Segoe UI,sans-serif" font-size="22" font-weight="700">${label}</text>` +
     `</svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+/** SVG bytes for the coloured placeholder, used when Spaces has no object to serve. */
+export function placeholderSvgBytes(code: string): Buffer {
+  const dataUrl = placeholderThumbUrl(code);
+  const encoded = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  return Buffer.from(decodeURIComponent(encoded), "utf8");
+}
+
+/**
+ * Authenticated portal path for one pool photo. This is not a Spaces URL:
+ * the bucket stays private and the browser only receives bytes through the admin session.
+ */
+export function poolPhotoImagePath(projectId: string, code: string): string {
+  return `/photos/projects/${encodeURIComponent(projectId)}/pool/${encodeURIComponent(code)}/image`;
 }
 
 function escapeXml(s: string): string {
@@ -197,13 +213,71 @@ export function formatActivityWhen(d: Date | null | undefined): string | null {
 }
 
 export function toPoolView(item: PhotoPoolItem): PhotoPoolView {
+  const spacesKey = item.spacesKey || "";
+  const storedHere = Boolean(spacesKey) && isProjectPoolKey(item.projectId, spacesKey);
   return {
     id: item.id,
     code: item.code,
     fileName: item.fileName || fileNameForCode(item.code),
     uprn: uprnFromCode(item.code),
-    spacesKey: item.spacesKey || "",
-    thumbUrl: placeholderThumbUrl(item.code),
+    spacesKey,
+    thumbUrl: storedHere ? poolPhotoImagePath(item.projectId, item.code) : placeholderThumbUrl(item.code),
+  };
+}
+
+export type PoolImageResult =
+  | {
+      ok: true;
+      body: Buffer;
+      contentType: string;
+      fileName: string;
+      /** True when the body is the coloured SVG because Spaces has no bytes. */
+      placeholder: boolean;
+    }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Load one pool photo for the admin image route.
+ * A key outside `photos/{projectId}/pool/` is refused and never fetched.
+ * Missing bytes fall back to the coloured placeholder.
+ */
+export async function readProjectPoolImage(
+  projectId: string,
+  code: string,
+  fetchObject: (key: string) => Promise<Buffer | null> = fetchSpacesObject
+): Promise<PoolImageResult> {
+  const wanted = String(code || "").trim();
+  if (!projectId || !wanted || /[/\\]/.test(wanted) || wanted.includes("..")) {
+    return { ok: false, status: 404, error: "Photo not found." };
+  }
+  const item = await prisma.photoPoolItem.findFirst({
+    where: { projectId, code: { equals: wanted, mode: "insensitive" } },
+  });
+  if (!item) return { ok: false, status: 404, error: "Photo not found." };
+
+  const key = String(item.spacesKey || "");
+  const fileName = item.fileName || fileNameForCode(item.code);
+  if (key && !isProjectPoolKey(projectId, key)) {
+    return { ok: false, status: 404, error: "Photo not found." };
+  }
+  if (key) {
+    const bytes = await fetchObject(key);
+    if (Buffer.isBuffer(bytes) && bytes.length > 0) {
+      return {
+        ok: true,
+        body: bytes,
+        contentType: contentTypeForPhotoExt(extensionOfKey(key)),
+        fileName,
+        placeholder: false,
+      };
+    }
+  }
+  return {
+    ok: true,
+    body: placeholderSvgBytes(item.code),
+    contentType: "image/svg+xml; charset=utf-8",
+    fileName,
+    placeholder: true,
   };
 }
 
@@ -1336,7 +1410,7 @@ export async function uploadProjectPhoto(
 export function spacesHint(): string {
   const s = spacesStatus();
   if (s.configured && spacesTargetOk(s)) {
-    return `Spaces connected (${s.bucket} / ${s.region}). Real image bytes can replace placeholders when object keys are set.`;
+    return `Spaces connected (${s.bucket} / ${s.region}). Pool photos with a Spaces key are shown through the portal.`;
   }
   if (s.configured) {
     return `Spaces connected (${s.bucket} / ${s.region}). Production file storage must use bucket cloud-portal-vault in lon1.`;

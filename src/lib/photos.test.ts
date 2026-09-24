@@ -17,7 +17,10 @@ import {
   parseRenamedPhotoName,
   parseUploadedPhotoName,
   photoObjectKey,
+  poolPhotoImagePath,
   photoTooLargeMessage,
+  placeholderThumbUrl,
+  toPoolView,
   PHOTO_UPLOAD_MAX_BYTES,
   uploadMimeAllowed,
   uploadProjectPhoto,
@@ -70,6 +73,61 @@ describe("folder naming", () => {
     assert.equal(buildFolderName(3, "Pictures Batch 3"), "3. Pictures Batch 3");
     assert.equal(buildFolderName(3, "3. Extra"), "3. Extra");
     assert.equal(buildFolderName(3, ""), null);
+  });
+});
+
+describe("pool photo thumbs", () => {
+  it("points thumbUrl at the authenticated app path when the Spaces key is in this project", () => {
+    const code = "2245623-Kitchen-1";
+    const view = toPoolView({
+      id: "row1",
+      projectId: "proj1",
+      code,
+      fileName: `${code}.jpg`,
+      spacesKey: "photos/proj1/pool/2245623-Kitchen-1.jpg",
+      createdAt: new Date(),
+    });
+    assert.equal(view.thumbUrl, "/photos/projects/proj1/pool/2245623-Kitchen-1/image");
+    assert.equal(view.thumbUrl, poolPhotoImagePath("proj1", code));
+    assert.equal(view.thumbUrl.includes("digitaloceanspaces.com"), false);
+    assert.equal(view.spacesKey, "photos/proj1/pool/2245623-Kitchen-1.jpg");
+  });
+
+  it("encodes the project and code and keeps a coloured placeholder when there is no pool object", () => {
+    assert.equal(
+      poolPhotoImagePath("proj 1", "Kitchen 1"),
+      "/photos/projects/proj%201/pool/Kitchen%201/image"
+    );
+    const empty = toPoolView({
+      id: "row2",
+      projectId: "proj1",
+      code: "2245623-Hall-1",
+      fileName: "2245623-Hall-1.jpg",
+      spacesKey: "",
+      createdAt: new Date(),
+    });
+    assert.equal(empty.thumbUrl, placeholderThumbUrl("2245623-Hall-1"));
+    assert.match(empty.thumbUrl, /^data:image\/svg\+xml/);
+    const foreign = toPoolView({
+      id: "row3",
+      projectId: "proj1",
+      code: "2245623-Roof-1",
+      fileName: "2245623-Roof-1.jpg",
+      spacesKey: "photos/other-project/pool/secret.jpg",
+      createdAt: new Date(),
+    });
+    assert.match(foreign.thumbUrl, /^data:image\/svg\+xml/);
+    assert.equal(foreign.thumbUrl.includes("/image"), false);
+  });
+
+  it("loads stored thumbs from the app URL and leaves blob and data sources alone", () => {
+    const js = readFileSync(join(process.cwd(), "public/js/photos.js"), "utf8");
+    assert.match(js, /function thumbSrc\(thumbUrl\)/);
+    assert.match(js, /data:\|blob:/);
+    assert.match(js, /img\.src = thumbSrc\(photo\.thumbUrl\)/);
+    assert.match(js, /img\.src = thumbSrc\(meta\.thumbUrl \|\| ""\)/);
+    assert.match(js, /escapeHtml\(thumbSrc\(meta\.thumbUrl\)\)/);
+    assert.match(js, /URL\.createObjectURL\(file\)/);
   });
 });
 

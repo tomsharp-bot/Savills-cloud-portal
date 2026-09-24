@@ -17,6 +17,7 @@ import {
   PHOTO_UPLOAD_MAX_BYTES,
   photoCodesOf,
   photoTooLargeMessage,
+  readProjectPoolImage,
   renameProjectPhoto,
   replaceProjectPhotoCodes,
   setFolderClientAccess,
@@ -24,6 +25,7 @@ import {
   uploadProjectPhoto,
   uprnFromCode,
   type PhotoMutationScope,
+  type PoolImageResult,
 } from "../lib/photos.js";
 import {
   activePhotoShareSummary,
@@ -34,10 +36,44 @@ import {
   revokePhotoShareTokens,
 } from "../lib/photo-share.js";
 import { seededSurveyTypes } from "../lib/programme.js";
-import { spacesStatus } from "../lib/spaces.js";
+import { fetchSpacesObject, spacesStatus } from "../lib/spaces.js";
 
 export const photosRouter = Router();
 photosRouter.use(requireAdmin);
+
+/** Tests set this to stub Spaces reads. Production leaves it unset. */
+export const POOL_IMAGE_READER = "poolImageReader";
+
+type PoolObjectReader = (key: string) => Promise<Buffer | null>;
+
+function poolObjectReader(req: Request): PoolObjectReader {
+  const custom = req.app.get(POOL_IMAGE_READER);
+  if (typeof custom === "function") return custom as PoolObjectReader;
+  return fetchSpacesObject;
+}
+
+function inlineDisposition(fileName: string): string {
+  const ascii =
+    String(fileName || "photo")
+      .replace(/[\r\n"]/g, "")
+      .replace(/[^\x20-\x7E]/g, "_")
+      .slice(0, 180) || "photo";
+  return `inline; filename="${ascii}"`;
+}
+
+function sendPoolImage(res: Response, image: PoolImageResult): void {
+  if (!image.ok) {
+    res.status(image.status).type("text/plain; charset=utf-8").send(image.error);
+    return;
+  }
+  res.setHeader("Content-Type", image.contentType);
+  res.setHeader("Content-Length", String(image.body.length));
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  res.setHeader("Cache-Control", image.placeholder ? "private, no-store" : "private, no-cache");
+  res.setHeader("Content-Disposition", inlineDisposition(image.fileName));
+  res.status(200).send(image.body);
+}
 
 const photoUpload = multer({
   storage: multer.memoryStorage(),
@@ -312,6 +348,11 @@ function sendZip(res: Response, filename: string, files: Array<{ name: string; b
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.send(zip);
 }
+
+photosRouter.get("/projects/:id/pool/:code/image", async (req: Request, res: Response) => {
+  const image = await readProjectPoolImage(req.params.id, req.params.code, poolObjectReader(req));
+  sendPoolImage(res, image);
+});
 
 photosRouter.get("/projects/:id/pool/download-zip", async (req: Request, res: Response) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });

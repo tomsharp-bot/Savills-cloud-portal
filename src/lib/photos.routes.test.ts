@@ -4,8 +4,9 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../app.js";
 import { prisma } from "./prisma.js";
-import { photoObjectKey, uploadProjectPhoto, type PhotoStorageOps } from "./photos.js";
+import { photoObjectKey, poolPhotoImagePath, uploadProjectPhoto, type PhotoStorageOps } from "./photos.js";
 import { hashPhotoShareSecret } from "./photo-share.js";
+import { POOL_IMAGE_READER } from "../routes/photos.js";
 import { spacesStatus } from "./spaces.js";
 
 async function listen(app: ReturnType<typeof createApp>): Promise<{ server: http.Server; port: number }> {
@@ -66,9 +67,20 @@ async function request(
     body,
     redirect: "manual",
   });
-  const text = await res.text();
+  const raw = Buffer.from(await res.arrayBuffer());
   const setCookie = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
-  return { status: res.status, body: text, setCookie, location: res.headers.get("location") };
+  return {
+    status: res.status,
+    body: raw.toString("utf8"),
+    raw,
+    contentType: res.headers.get("content-type") || "",
+    cacheControl: res.headers.get("cache-control") || "",
+    nosniff: res.headers.get("x-content-type-options") || "",
+    disposition: res.headers.get("content-disposition") || "",
+    corp: res.headers.get("cross-origin-resource-policy") || "",
+    setCookie,
+    location: res.headers.get("location"),
+  };
 }
 
 function cookieHeader(setCookie: string[]): string {
@@ -466,6 +478,8 @@ describe("Photo Storage routes", () => {
     assert.equal(pooled.photo.code, freshCode);
     assert.equal(pooled.photo.fileName, `${freshCode}.jpg`);
     assert.equal(pooled.photo.spacesKey, photoObjectKey(projectId, freshCode, ".jpg"));
+    assert.equal(pooled.photo.thumbUrl, poolPhotoImagePath(projectId, freshCode));
+    assert.equal(pooled.photo.thumbUrl.includes("digitaloceanspaces.com"), false);
     assert.equal(pooled.folder, undefined);
     createdIds.push(
       (await prisma.photoPoolItem.findFirst({ where: { projectId, code: freshCode } }))!.id
@@ -725,5 +739,193 @@ describe("Photo Storage routes", () => {
       body: { find: "   ", replace: "1", codes: [clashCode] },
     });
     assert.equal(emptyFind.status, 400);
+  });
+
+  it("serves a pool photo through an authenticated app URL and falls back when Spaces has no bytes", async (t) => {
+    let projectCount = 0;
+    try {
+      projectCount = await prisma.project.count();
+    } catch {
+      t.skip("Postgres not available");
+      return;
+    }
+    if (!projectCount) {
+      t.skip("No seeded projects");
+      return;
+    }
+
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const fetched: string[] = [];
+    const store = new Map<string, Buffer>();
+    const app = createApp({ basePath: "/projectprogress" });
+    app.set(POOL_IMAGE_READER, async (key: string) => {
+      fetched.push(key);
+      return store.get(key) ?? null;
+    });
+    const { server, port } = await listen(app);
+    t.after(() => server.close());
+
+    const anon = await request(port, "GET", "/projectprogress/photos/projects/missing/pool/nope/image");
+    assert.equal(anon.status, 302);
+    assert.match(anon.location || "", /\/login/);
+
+    const login = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "phil.m", password: "PhilMoon2468" },
+    });
+    assert.equal(login.status, 302);
+    const cookie = cookieHeader(login.setCookie);
+    const surveyorLogin = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "peter.m", password: "PeterMay2468" },
+    });
+    const surveyorCookie = cookieHeader(surveyorLogin.setCookie);
+
+    const landing = await request(port, "GET", "/projectprogress/photos", { cookie });
+    const m = landing.body.match(/href="\/projectprogress\/photos\/projects\/([^"]+)"/);
+    assert.ok(m, "expected a project tile link");
+    const projectId = m![1];
+    const stamp = Date.now().toString(36);
+    const code = `zz-live-${stamp}`;
+    const bareCode = `zz-bare-${stamp}`;
+    const foreignCode = `zz-foreign-img-${stamp}`;
+    const key = photoObjectKey(projectId, code, ".jpg");
+    if (!key) throw new Error("expected a pool key");
+    store.set(key, jpeg);
+
+    const live = await prisma.photoPoolItem.create({
+      data: { projectId, code, fileName: `${code}.jpg`, spacesKey: key },
+    });
+    const bare = await prisma.photoPoolItem.create({
+      data: { projectId, code: bareCode, fileName: `${bareCode}.png`, spacesKey: "" },
+    });
+    const foreign = await prisma.photoPoolItem.create({
+      data: {
+        projectId,
+        code: foreignCode,
+        fileName: `${foreignCode}.jpg`,
+        spacesKey: "photos/other-project/pool/secret.jpg",
+      },
+    });
+    t.after(async () => {
+      await prisma.photoPoolItem.deleteMany({ where: { id: { in: [live.id, bare.id, foreign.id] } } });
+    });
+
+    const denied = await request(
+      port,
+      "GET",
+      `/projectprogress/photos/projects/${projectId}/pool/${encodeURIComponent(code)}/image`,
+      { cookie: surveyorCookie }
+    );
+    assert.equal(denied.status, 403);
+
+    const imagePath = `/projectprogress${poolPhotoImagePath(projectId, code)}`;
+    const image = await request(port, "GET", imagePath, { cookie });
+    assert.equal(image.status, 200);
+    assert.match(image.contentType, /^image\/jpeg/);
+    assert.deepEqual(image.raw, jpeg);
+    assert.equal(image.nosniff, "nosniff");
+    assert.equal(image.corp, "same-origin");
+    assert.match(image.cacheControl, /private/);
+    assert.match(image.cacheControl, /no-cache/);
+    assert.doesNotMatch(image.cacheControl, /public/);
+    assert.match(image.disposition, /inline/);
+    assert.equal(image.body.includes("digitaloceanspaces.com"), false);
+    assert.equal(image.disposition.includes("photos/"), false);
+    assert.deepEqual(fetched, [key]);
+
+    const missingKey = photoObjectKey(projectId, `zz-missing-${stamp}`, ".png");
+    if (!missingKey) throw new Error("expected a missing pool key");
+    const missing = await prisma.photoPoolItem.create({
+      data: {
+        projectId,
+        code: `zz-missing-${stamp}`,
+        fileName: `zz-missing-${stamp}.png`,
+        spacesKey: missingKey,
+      },
+    });
+    t.after(async () => {
+      await prisma.photoPoolItem.deleteMany({ where: { id: missing.id } });
+    });
+    const fallback = await request(
+      port,
+      "GET",
+      `/projectprogress${poolPhotoImagePath(projectId, missing.code)}`,
+      { cookie }
+    );
+    assert.equal(fallback.status, 200);
+    assert.match(fallback.contentType, /image\/svg\+xml/);
+    assert.match(fallback.cacheControl, /no-store/);
+    assert.match(fallback.body, /<svg/);
+    assert.equal(fallback.body.includes("digitaloceanspaces.com"), false);
+    assert.ok(fetched.includes(missingKey));
+
+    const pngCode = `zz-png-${stamp}`;
+    const pngKey = photoObjectKey(projectId, pngCode, ".png");
+    if (!pngKey) throw new Error("expected a png pool key");
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    store.set(pngKey, png);
+    const pngRow = await prisma.photoPoolItem.create({
+      data: { projectId, code: pngCode, fileName: `${pngCode}.png`, spacesKey: pngKey },
+    });
+    t.after(async () => {
+      await prisma.photoPoolItem.deleteMany({ where: { id: pngRow.id } });
+    });
+    const pngImage = await request(port, "GET", `/projectprogress${poolPhotoImagePath(projectId, pngCode)}`, {
+      cookie,
+    });
+    assert.equal(pngImage.status, 200);
+    assert.match(pngImage.contentType, /^image\/png/);
+    assert.deepEqual(pngImage.raw, png);
+
+    const beforeBare = fetched.length;
+    const bareImage = await request(
+      port,
+      "GET",
+      `/projectprogress${poolPhotoImagePath(projectId, bareCode)}`,
+      { cookie }
+    );
+    assert.equal(bareImage.status, 200);
+    assert.match(bareImage.contentType, /image\/svg\+xml/);
+    assert.equal(fetched.length, beforeBare);
+
+    const beforeForeign = fetched.length;
+    const foreignImage = await request(
+      port,
+      "GET",
+      `/projectprogress${poolPhotoImagePath(projectId, foreignCode)}`,
+      { cookie }
+    );
+    assert.equal(foreignImage.status, 404);
+    assert.equal(fetched.length, beforeForeign);
+    assert.equal(fetched.includes("photos/other-project/pool/secret.jpg"), false);
+
+    const unknown = await request(
+      port,
+      "GET",
+      `/projectprogress${poolPhotoImagePath(projectId, "does-not-exist")}`,
+      { cookie }
+    );
+    assert.equal(unknown.status, 404);
+
+    const otherProject = await request(
+      port,
+      "GET",
+      `/projectprogress${poolPhotoImagePath("not-a-project", code)}`,
+      { cookie }
+    );
+    assert.equal(otherProject.status, 404);
+
+    const page = await request(port, "GET", `/projectprogress/photos/projects/${projectId}`, { cookie });
+    assert.equal(page.status, 200);
+    const bootMatch = page.body.match(/window\.__PHOTOS__ = (\{[\s\S]*?\});\s*<\/script>/);
+    assert.ok(bootMatch, "expected bootstrap JSON");
+    const boot = JSON.parse(bootMatch![1]);
+    const liveView = boot.pool.find((p: { code: string }) => p.code === code);
+    const bareView = boot.pool.find((p: { code: string }) => p.code === bareCode);
+    assert.ok(liveView);
+    assert.equal(liveView.thumbUrl, poolPhotoImagePath(projectId, code));
+    assert.match(liveView.thumbUrl, /^\/photos\/projects\//);
+    assert.equal(String(liveView.thumbUrl).includes("digitaloceanspaces.com"), false);
+    assert.ok(bareView);
+    assert.match(bareView.thumbUrl, /^data:image\/svg\+xml/);
   });
 });
