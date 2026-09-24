@@ -78,6 +78,7 @@ model Project {
   programmeSurveyNote  ProgrammeSurveyNote?
   photoPoolItems       PhotoPoolItem[]
   photoFolders         PhotoFolder[]
+  photoShareTokens     PhotoShareToken[]
 }
 
 /// Shared Projects Programme grid (one row). Cell text, Active ticks, and row order.
@@ -227,6 +228,22 @@ model PhotoPoolItem {
   createdAt DateTime @default(now())
 
   @@unique([projectId, code])
+  @@index([projectId])
+}
+
+/// Excel photo-share grant for one project's Photos Pool. The secret is not stored.
+/// Callers keep the plaintext once; lookup uses tokenHash.
+model PhotoShareToken {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdBy String    @default("")
+  createdAt DateTime  @default(now())
+  label     String    @default("")
+
   @@index([projectId])
 }
 

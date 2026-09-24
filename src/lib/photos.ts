@@ -978,6 +978,126 @@ export async function renameProjectPhoto(
   }
 }
 
+/**
+ * Replace every occurrence of `find` in a photo code. The extension is not part of the code.
+ * An empty find, a miss, or a result that does not change the code is skipped by the caller.
+ */
+export function replaceSubstringInCode(
+  code: string,
+  find: string,
+  replaceWith: string
+): { ok: true; code: string } | { ok: false; reason: string } {
+  const current = String(code || "");
+  if (!find) return { ok: false, reason: "Enter the text to find." };
+  if (!current.includes(find)) return { ok: false, reason: "Find text is not in that photo code." };
+  const next = current.split(find).join(replaceWith);
+  if (!next || next === current) return { ok: false, reason: "That change would leave the photo code the same." };
+  if (next.length > PHOTO_NAME_MAX) return { ok: false, reason: "The new photo code is too long." };
+  return { ok: true, code: next };
+}
+
+export type PhotoCodeReplaceRow = { from: string; to: string; photo: PhotoPoolView };
+export type PhotoCodeSkipRow = { code: string; reason: string };
+
+/**
+ * Find/replace on photo codes. Selected codes are the only targets.
+ * Each photo goes through the same rename path as a single rename, so Spaces and folder lists stay in step.
+ * A new code that already exists is skipped. Nothing is overwritten.
+ */
+export async function replaceProjectPhotoCodes(
+  projectId: string,
+  findRaw: string,
+  replaceRaw: string,
+  requested: string[],
+  scope: PhotoMutationScope,
+  ops: PhotoStorageOps = defaultPhotoStorageOps()
+): Promise<
+  | { ok: true; renamed: PhotoCodeReplaceRow[]; skipped: PhotoCodeSkipRow[] }
+  | { ok: false; error: string; status: number }
+> {
+  const find = String(findRaw ?? "").trim();
+  const replaceWith = String(replaceRaw ?? "").trim();
+  if (!find) return { ok: false, error: "Enter the text to find.", status: 400 };
+  if (find.length > PHOTO_NAME_MAX || replaceWith.length > PHOTO_NAME_MAX) {
+    return { ok: false, error: "Find or replace text is too long.", status: 400 };
+  }
+  if (/[\u0000-\u001f]/.test(find) || /[\u0000-\u001f]/.test(replaceWith)) {
+    return { ok: false, error: "Find or replace text cannot include control characters.", status: 400 };
+  }
+
+  const seen = new Set<string>();
+  const codes: string[] = [];
+  for (const raw of requested) {
+    const trimmed = String(raw ?? "").trim();
+    if (!trimmed) continue;
+    const key = normCode(trimmed);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    codes.push(trimmed);
+  }
+  if (!codes.length) return { ok: false, error: "No photos to change.", status: 400 };
+  if (codes.length > PHOTO_DELETE_MAX) return { ok: false, error: "Too many photos selected.", status: 400 };
+
+  if (scope.kind === "folder") {
+    const folder = await prisma.photoFolder.findFirst({
+      where: { id: scope.folderId, projectId },
+    });
+    if (!folder) return { ok: false, error: "Folder not found.", status: 404 };
+    if (folder.kind === "zip") {
+      return { ok: false, error: "Zip packs do not contain selectable photos.", status: 400 };
+    }
+  } else {
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!project) return { ok: false, error: "Project not found.", status: 404 };
+  }
+
+  const renamed: PhotoCodeReplaceRow[] = [];
+  const skipped: PhotoCodeSkipRow[] = [];
+  const outside =
+    scope.kind === "folder" ? "That photo is not in this folder." : "That photo is not in this pool.";
+
+  for (const code of codes) {
+    const pool = await prisma.photoPoolItem.findMany({ where: { projectId } });
+    let allowed: string[];
+    if (scope.kind === "folder") {
+      const folder = await prisma.photoFolder.findFirst({
+        where: { id: scope.folderId, projectId },
+      });
+      if (!folder || folder.kind === "zip") {
+        skipped.push({ code, reason: outside });
+        continue;
+      }
+      allowed = photoCodesOf(folder);
+    } else {
+      allowed = pool.map((p) => p.code);
+    }
+    const hit = allowed.find((c) => normCode(c) === normCode(code));
+    if (!hit) {
+      skipped.push({ code, reason: outside });
+      continue;
+    }
+    const item = pool.find((p) => normCode(p.code) === normCode(hit));
+    const current = item?.code || hit;
+    const planned = replaceSubstringInCode(current, find, replaceWith);
+    if (!planned.ok) {
+      skipped.push({ code: current, reason: planned.reason });
+      continue;
+    }
+    const result = await renameProjectPhoto(projectId, current, planned.code, scope, ops);
+    if (!result.ok) {
+      skipped.push({ code: current, reason: result.error });
+      continue;
+    }
+    if (result.photo.code === result.previousCode) {
+      skipped.push({ code: current, reason: "That change would leave the photo code the same." });
+      continue;
+    }
+    renamed.push({ from: result.previousCode, to: result.photo.code, photo: result.photo });
+  }
+
+  return { ok: true, renamed, skipped };
+}
+
 export type UploadedPhotoName = {
   code: string;
   fileName: string;

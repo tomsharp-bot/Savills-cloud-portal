@@ -18,12 +18,21 @@ import {
   photoCodesOf,
   photoTooLargeMessage,
   renameProjectPhoto,
+  replaceProjectPhotoCodes,
   setFolderClientAccess,
   spacesHint,
   uploadProjectPhoto,
   uprnFromCode,
   type PhotoMutationScope,
 } from "../lib/photos.js";
+import {
+  activePhotoShareSummary,
+  issuePhotoShareToken,
+  photoShareAddress,
+  photoShareByCodeUrl,
+  photoShareOrigin,
+  revokePhotoShareTokens,
+} from "../lib/photo-share.js";
 import { seededSurveyTypes } from "../lib/programme.js";
 import { spacesStatus } from "../lib/spaces.js";
 
@@ -123,6 +132,7 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
     ? String(notes.get(project.id) ?? "")
     : seededSurveyTypes(project);
   const { pool, folders } = await loadProjectPhotos(project.id);
+  const photoShare = await activePhotoShareSummary(project.id);
   const from = project.stage === "archive" ? "archived" : "current";
   res.render("photos-project", {
     title: `${project.name} — Photos`,
@@ -145,12 +155,92 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
       zipApi: `/photos/projects/${project.id}/pool/download-zip`,
       poolDeleteApi: `/photos/projects/${project.id}/pool/delete`,
       poolRenameApi: `/photos/projects/${project.id}/pool/rename`,
+      poolReplaceApi: `/photos/projects/${project.id}/pool/replace`,
       poolUploadApi: `/photos/projects/${project.id}/pool/upload`,
+      photoShareApi: `/photos/projects/${project.id}/photo-share`,
+      photoShare,
       uploadConcurrency: PHOTO_UPLOAD_CONCURRENCY,
       uploadMaxBytes: PHOTO_UPLOAD_MAX_BYTES,
     },
   });
 });
+
+function shareAddressPayload(req: Request, secret: string, expiresAt: Date, replaced: number) {
+  const address = photoShareAddress(photoShareOrigin(req.protocol, req.get("host") || ""), secret);
+  return {
+    ok: true,
+    address,
+    expiresAt: expiresAt.toISOString(),
+    byCodeExample: photoShareByCodeUrl(address, "635569-Front Door1"),
+    replaced,
+  };
+}
+
+photosRouter.post("/projects/:id/photo-share", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Project not found." });
+    return;
+  }
+  const issued = await issuePhotoShareToken({
+    projectId: project.id,
+    createdBy: req.user?.id || "",
+    label: String(req.body?.label ?? ""),
+    replaceExisting: false,
+  });
+  res.json(shareAddressPayload(req, issued.secret, issued.expiresAt, issued.replaced));
+});
+
+photosRouter.post("/projects/:id/photo-share/renew", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Project not found." });
+    return;
+  }
+  const issued = await issuePhotoShareToken({
+    projectId: project.id,
+    createdBy: req.user?.id || "",
+    label: String(req.body?.label ?? ""),
+    replaceExisting: true,
+  });
+  res.json(shareAddressPayload(req, issued.secret, issued.expiresAt, issued.replaced));
+});
+
+photosRouter.post("/projects/:id/photo-share/revoke", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Project not found." });
+    return;
+  }
+  const revoked = await revokePhotoShareTokens(project.id);
+  res.json({ ok: true, revoked, active: false });
+});
+
+async function handlePhotoReplace(req: Request, res: Response, scope: PhotoMutationScope): Promise<void> {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Project not found." });
+    return;
+  }
+  const result = await replaceProjectPhotoCodes(
+    project.id,
+    String(req.body?.find ?? ""),
+    String(req.body?.replace ?? ""),
+    readCodes(req.body),
+    scope
+  );
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error });
+    return;
+  }
+  res.json({
+    ok: true,
+    renamed: result.renamed,
+    skipped: result.skipped,
+    renamedCount: result.renamed.length,
+    skippedCount: result.skipped.length,
+  });
+}
 
 photosRouter.post("/projects/:id/extract", async (req: Request, res: Response) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
@@ -273,6 +363,10 @@ photosRouter.post("/projects/:id/pool/delete", async (req: Request, res: Respons
   res.json({ ok: true, deletedCodes: result.deletedCodes });
 });
 
+photosRouter.post("/projects/:id/pool/replace", async (req: Request, res: Response) => {
+  await handlePhotoReplace(req, res, { kind: "pool" });
+});
+
 photosRouter.post("/projects/:id/pool/rename", async (req: Request, res: Response) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
   if (!project) {
@@ -315,6 +409,10 @@ photosRouter.post("/projects/:id/folders/:folderId/photos/delete", async (req: R
     return;
   }
   res.json({ ok: true, deletedCodes: result.deletedCodes });
+});
+
+photosRouter.post("/projects/:id/folders/:folderId/photos/replace", async (req: Request, res: Response) => {
+  await handlePhotoReplace(req, res, { kind: "folder", folderId: req.params.folderId });
 });
 
 photosRouter.post("/projects/:id/folders/:folderId/photos/rename", async (req: Request, res: Response) => {

@@ -22,6 +22,7 @@ import {
   uploadMimeAllowed,
   uploadProjectPhoto,
   replaceCodeInList,
+  replaceSubstringInCode,
   uprnFromCode,
   withoutCodes,
   type PhotoStorageOps,
@@ -115,6 +116,21 @@ describe("photo rename names", () => {
     assert.equal(isProjectPoolKey(projectId, "photos/proj1/pool/2245623-Lounge-1.jpg"), true);
     assert.equal(isProjectPoolKey(projectId, "photos/other/pool/2245623-Lounge-1.jpg"), false);
     assert.equal(isProjectPoolKey(projectId, "photos/proj1/pool/../../secret.jpg"), false);
+  });
+});
+
+describe("photo code find and replace", () => {
+  it("replaces each occurrence and skips a miss or an empty find", () => {
+    const changed = replaceSubstringInCode("224466-Front Door1", "224466", "113355");
+    assert.deepEqual(changed, { ok: true, code: "113355-Front Door1" });
+    const all = replaceSubstringInCode("aa-aa", "a", "b");
+    assert.deepEqual(all, { ok: true, code: "bb-bb" });
+    const miss = replaceSubstringInCode("113355-Hall", "224466", "1");
+    assert.equal(miss.ok, false);
+    const empty = replaceSubstringInCode("224466-Hall", "", "1");
+    assert.equal(empty.ok, false);
+    const same = replaceSubstringInCode("224466-Hall", "nope", "1");
+    assert.equal(same.ok, false);
   });
 });
 
@@ -231,8 +247,15 @@ describe("photo lightbox markup", () => {
     assert.match(css, /\.lightbox-backdrop\s*\{[^}]*position:\s*fixed/s);
     assert.match(css, /\.lightbox-backdrop\s*\{[^}]*align-items:\s*center/s);
     assert.match(css, /\.lightbox-backdrop\s*\{[^}]*justify-content:\s*center/s);
-    assert.match(css, /width:\s*min\(1100px,\s*92vw\)/);
     assert.match(css, /max-height:\s*min\(78vh,\s*820px\)/);
+    assert.match(css, /\.lightbox-stage\s*\{[^}]*flex-direction:\s*row/s);
+    assert.match(css, /\.lightbox-rename\s*\{/);
+    assert.match(css, /#renameModal\s*\{[^}]*z-index:\s*500/s);
+    assert.match(view, /id="lightboxRenameInput"/);
+    assert.match(view, /class="lightbox-stage"/);
+    const renameBox = view.indexOf('id="lightboxRenameInput"');
+    const lightboxEnd = view.indexOf('id="renameModal"');
+    assert.ok(renameBox > lightbox && renameBox < lightboxEnd, "rename box sits inside the lightbox");
   });
 
   it("offers Delete and Rename beside Download zip, and keeps Rename to a single photo", () => {
@@ -257,6 +280,18 @@ describe("photo lightbox markup", () => {
     assert.match(js, /uploadConcurrency/);
     assert.match(js, /A photo with that name already exists in this project/);
     assert.match(js, /const files = Array\.from\(input\.files \|\| \[\]\);\s*input\.value = "";/);
+    assert.match(view, /id="btnPhotoShare"/);
+    assert.match(view, /Get photo sharing code/);
+    assert.match(view, /Data Horizontal DW!F1/);
+    assert.match(view, /id="poolFind"/);
+    assert.match(view, /id="poolReplaceWith"/);
+    assert.match(view, /id="btnPoolReplace"/);
+    assert.match(view, />Find this</);
+    assert.match(view, />Replace with</);
+    assert.match(js, /photo-code-input/);
+    assert.match(js, /commitCodeEdit/);
+    assert.match(js, /data-folder-replace-confirm/);
+    assert.match(js, /poolReplaceApi/);
   });
 });
 

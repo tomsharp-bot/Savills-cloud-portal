@@ -33,6 +33,16 @@
       </div>
     </div>
 
+    <section class="share-card" id="photoShareCard" aria-labelledby="photoShareHeading">
+      <h3 id="photoShareHeading">Excel photo sharing</h3>
+      <p class="hint-muted">Get a photo sharing code for this project. Paste it into Excel cell <strong>Data Horizontal DW!F1</strong>. It lasts 12 months and only lets Excel read Photos Pool images by their code. It does not sign anyone in to the portal.</p>
+      <p class="share-status" id="photoShareStatus"></p>
+      <div class="share-actions">
+        <button type="button" class="btn btn-primary" id="btnPhotoShare">Get photo sharing code</button>
+        <button type="button" class="btn" id="btnPhotoShareRevoke" hidden>Revoke photo sharing code</button>
+      </div>
+    </section>
+
     <div class="extract-card" id="extractCard">
       <h3>Create Photos Extract</h3>
       <p class="hint-muted">Paste photo codes (one per line, or comma / space separated). Matching codes are <strong>copied</strong> from the Photos Pool into a new numbered folder under Photo Folders. Missing codes are skipped.</p>
@@ -86,6 +96,17 @@
           <button type="button" class="btn" id="btnRenamePhoto" disabled title="Select one photo to rename">Rename</button>
           <p class="pool-select-hint" id="poolSelectHint" hidden><strong id="poolSelectCount">0</strong> selected</p>
         </div>
+      </div>
+      <div class="replace-bar" id="poolReplaceBar">
+        <p class="replace-title">Find and replace in photo codes</p>
+        <div class="replace-fields">
+          <label for="poolFind">Find this</label>
+          <input type="text" id="poolFind" maxlength="120" autocomplete="off" spellcheck="false" placeholder="e.g. 224466" />
+          <label for="poolReplaceWith">Replace with</label>
+          <input type="text" id="poolReplaceWith" maxlength="120" autocomplete="off" spellcheck="false" placeholder="e.g. 113355" />
+          <button type="button" class="btn" id="btnPoolReplace">Confirm</button>
+        </div>
+        <p class="replace-scope" id="poolReplaceScope"></p>
       </div>
       <div class="photo-grid" id="photoPool" role="list"></div>
     </div>
@@ -164,8 +185,21 @@
       </div>
       <button type="button" class="modal-close" id="btnCloseLightbox" aria-label="Close">×</button>
     </div>
-    <div class="lightbox-body">
-      <img id="lightboxImg" alt="" />
+    <div class="lightbox-stage">
+      <div class="lightbox-body">
+        <img id="lightboxImg" alt="" />
+      </div>
+      <form class="lightbox-rename" id="lightboxRenameForm">
+        <h4>Rename</h4>
+        <p class="hint-muted">The extension stays. Enter the new name only.</p>
+        <label for="lightboxRenameInput">New name</label>
+        <div class="name-prefix">
+          <input type="text" id="lightboxRenameInput" autocomplete="off" maxlength="140" spellcheck="false" />
+          <span class="prefix" id="lightboxRenameExt">.jpg</span>
+        </div>
+        <p class="err-msg" id="lightboxRenameErr">Enter a file name.</p>
+        <button type="submit" class="btn btn-primary" id="btnLightboxSaveName">Save name</button>
+      </form>
     </div>
     <div class="lightbox-foot">
       <button type="button" class="btn" id="btnLightboxRename">Rename</button>
@@ -206,6 +240,42 @@
     <div class="modal-foot">
       <button type="button" class="btn" id="btnCancelDelete">Cancel</button>
       <button type="button" class="btn btn-danger" id="btnConfirmDelete">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareModalTitle" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="shareModalTitle">Photo sharing code</h3>
+      <button type="button" class="modal-close" id="btnCloseShareModal" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-top:0">Paste this into Excel cell <strong>Data Horizontal DW!F1</strong>. It is shown once. Excel loads each photo from this address plus <strong>/by-code/</strong> and the photo code.</p>
+      <label for="shareAddress">Excel address</label>
+      <input type="text" id="shareAddress" readonly spellcheck="false" />
+      <p class="hint-muted" id="shareByCodeHint"></p>
+      <p class="share-status" id="shareCopyNote"></p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="btnShareCopyAgain">Copy again</button>
+      <button type="button" class="btn btn-primary" id="btnShareClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="replaceResultModal" role="dialog" aria-modal="true" aria-labelledby="replaceResultTitle" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="replaceResultTitle">Find and replace</h3>
+      <button type="button" class="modal-close" id="btnCloseReplaceResult" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="replaceResultSummary" style="margin-top:0"></p>
+      <ul class="summary-list" id="replaceResultSkipped"></ul>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-primary" id="btnReplaceResultOk">OK</button>
     </div>
   </div>
 </div>

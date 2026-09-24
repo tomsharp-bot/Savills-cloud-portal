@@ -27,6 +27,8 @@
   let highlightFolderId = null;
   let pendingExtract = null;
   let clientStripVisible = false;
+  let photoShare = data.photoShare || { active: false, activeCount: 0 };
+  const folderReplaceText = {};
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) =>
@@ -56,6 +58,57 @@
     });
   }
 
+  function poolReplaceTargets() {
+    const filtered = pool.filter((meta) => matchesPoolSearch(meta, poolSearchQuery));
+    if (poolSelectMode && selectedPoolCodes.size) {
+      return { codes: Array.from(selectedPoolCodes), scope: "selected" };
+    }
+    return {
+      codes: filtered.map((meta) => meta.code),
+      scope: poolSearchQuery.trim() ? "filtered" : "all",
+    };
+  }
+
+  function updatePoolReplaceScope() {
+    const el = document.getElementById("poolReplaceScope");
+    if (!el) return;
+    const targets = poolReplaceTargets();
+    const n = targets.codes.length;
+    const noun = n === 1 ? "photo" : "photos";
+    if (targets.scope === "selected") {
+      el.textContent =
+        "Scope: " + n + " selected " + noun + ". The search box is ignored while photos are selected.";
+    } else if (targets.scope === "filtered") {
+      el.textContent =
+        "Scope: " + n + " " + noun + " matching the search. Nothing is selected, so only these are changed.";
+    } else {
+      el.textContent =
+        "Scope: all " + n + " " + noun + " in the Photos Pool. Nothing is selected, so every pool photo is included.";
+    }
+  }
+
+  function folderReplaceTargets(folder) {
+    const codes = Array.isArray(folder.photoCodes) ? folder.photoCodes.slice() : [];
+    if (folderSelectId === folder.id && selectedFolderCodes.size) {
+      return { codes: Array.from(selectedFolderCodes), scope: "selected" };
+    }
+    return { codes: codes, scope: "all" };
+  }
+
+  function folderReplaceScopeLabel(folder) {
+    const targets = folderReplaceTargets(folder);
+    const n = targets.codes.length;
+    const noun = n === 1 ? "photo" : "photos";
+    if (targets.scope === "selected") return "Scope: " + n + " selected " + noun + " in this folder.";
+    return (
+      "Scope: all " +
+      n +
+      " " +
+      noun +
+      " in this folder. Nothing is selected, so every photo in the folder is included."
+    );
+  }
+
   function matchesPoolSearch(meta, q) {
     if (!q) return true;
     const s = q.trim().toLowerCase();
@@ -83,6 +136,7 @@
     if (dl) dl.disabled = !poolSelectMode || n === 0;
     const del = document.getElementById("btnDeletePhotos");
     const rename = document.getElementById("btnRenamePhoto");
+    updatePoolReplaceScope();
     if (del) del.disabled = !poolSelectMode || n === 0;
     // Rename stays disabled until exactly one image is selected.
     if (rename) {
@@ -145,7 +199,9 @@
     if (scope && scope.kind === "folder") {
       return data.clientAccessApiBase + "/" + scope.folderId + "/photos/" + action;
     }
-    return action === "delete" ? data.poolDeleteApi : data.poolRenameApi;
+    if (action === "delete") return data.poolDeleteApi;
+    if (action === "replace") return data.poolReplaceApi;
+    return data.poolRenameApi;
   }
 
   function removeCodesEverywhere(codes) {
@@ -201,6 +257,12 @@
         img.src = photo.thumbUrl;
         img.alt = photo.fileName;
       }
+      const renameInput = document.getElementById("lightboxRenameInput");
+      const renameExt = document.getElementById("lightboxRenameExt");
+      const renameErr = document.getElementById("lightboxRenameErr");
+      if (renameInput) renameInput.value = fileStem(photo.fileName);
+      if (renameExt) renameExt.textContent = fileExtension(photo.fileName);
+      if (renameErr) renameErr.classList.remove("show");
     }
   }
 
@@ -234,7 +296,148 @@
     const img = document.getElementById("lightboxImg");
     img.src = meta.thumbUrl || "";
     img.alt = meta.fileName;
+    const renameInput = document.getElementById("lightboxRenameInput");
+    const renameExt = document.getElementById("lightboxRenameExt");
+    const renameErr = document.getElementById("lightboxRenameErr");
+    if (renameInput) renameInput.value = fileStem(meta.fileName || meta.code);
+    if (renameExt) renameExt.textContent = fileExtension(meta.fileName || meta.code);
+    if (renameErr) renameErr.classList.remove("show");
     openModal("photoLightbox");
+  }
+
+  function photoCardHtml(meta, options) {
+    const selected = !!options.selected;
+    const code = options.code || meta.code;
+    const fileName = meta.fileName || meta.code;
+    const stem = escapeHtml(fileStem(fileName));
+    const ext = escapeHtml(fileExtension(fileName));
+    const thumb = meta.thumbUrl
+      ? '<img class="photo-thumb" src="' + meta.thumbUrl + '" alt="" loading="lazy" />'
+      : '<div class="photo-thumb" aria-hidden="true"></div>';
+    const uprn = options.showUprn
+      ? '<div class="photo-meta">UPRN ' + escapeHtml(meta.uprn || "") + "</div>"
+      : "";
+    return (
+      '<div class="photo-card' +
+      (selected ? " selected" : "") +
+      '" role="listitem" data-code="' +
+      escapeHtml(code) +
+      '"' +
+      (options.folderId ? ' data-folder-photo="' + escapeHtml(options.folderId) + '"' : "") +
+      ">" +
+      '<input type="checkbox" class="sel-check" tabindex="-1" aria-hidden="true"' +
+      (selected ? " checked" : "") +
+      " />" +
+      '<button type="button" class="photo-open" aria-label="' +
+      escapeHtml(fileName) +
+      '">' +
+      thumb +
+      "</button>" +
+      '<label class="photo-name-edit">' +
+      '<span class="visually-hidden">Photo code</span>' +
+      '<input type="text" class="photo-code-input" value="' +
+      stem +
+      '" maxlength="140" autocomplete="off" spellcheck="false" />' +
+      '<span class="photo-code-ext">' +
+      ext +
+      "</span></label>" +
+      uprn +
+      "</div>"
+    );
+  }
+
+  function bindPhotoCard(card, scope) {
+    const code = card.getAttribute("data-code");
+    const openBtn = card.querySelector(".photo-open");
+    const input = card.querySelector(".photo-code-input");
+    function activate(e) {
+      if (scope.kind === "folder") {
+        if (folderSelectId === scope.folderId) {
+          e.preventDefault();
+          if (selectedFolderCodes.has(code)) selectedFolderCodes.delete(code);
+          else selectedFolderCodes.add(code);
+          card.classList.toggle("selected", selectedFolderCodes.has(code));
+          const cb = card.querySelector(".sel-check");
+          if (cb) cb.checked = selectedFolderCodes.has(code);
+          updateFolderSelectUi(scope.folderId);
+          return;
+        }
+        openLightbox(folderPhotoMeta(code), scope);
+        return;
+      }
+      const meta = pool.find((p) => p.code === code);
+      if (poolSelectMode) {
+        e.preventDefault();
+        if (selectedPoolCodes.has(code)) selectedPoolCodes.delete(code);
+        else selectedPoolCodes.add(code);
+        card.classList.toggle("selected", selectedPoolCodes.has(code));
+        const cb = card.querySelector(".sel-check");
+        if (cb) cb.checked = selectedPoolCodes.has(code);
+        updateSelectUi();
+        return;
+      }
+      if (meta) openLightbox(meta, scope);
+    }
+    if (openBtn) openBtn.addEventListener("click", activate);
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".photo-name-edit, .photo-open")) return;
+      activate(e);
+    });
+    if (!input) return;
+    input.addEventListener("mousedown", (e) => e.stopPropagation());
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("focus", () => {
+      input.classList.remove("is-invalid");
+      input.removeAttribute("title");
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitCodeEdit(input, code, scope);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        const meta = scope.kind === "folder" ? folderPhotoMeta(code) : poolMetaFor(code);
+        input.value = meta ? fileStem(meta.fileName || meta.code) : input.value;
+        input.dataset.skipCommit = "1";
+        input.blur();
+      }
+    });
+    input.addEventListener("blur", () => {
+      if (input.dataset.skipCommit === "1") {
+        delete input.dataset.skipCommit;
+        return;
+      }
+      commitCodeEdit(input, code, scope);
+    });
+  }
+
+  async function commitCodeEdit(input, code, scope) {
+    if (!input || input.dataset.committing === "1" || mutateBusy) return;
+    const meta = scope.kind === "folder" ? folderPhotoMeta(code) : poolMetaFor(code);
+    if (!meta) return;
+    const stem = fileStem(meta.fileName || meta.code);
+    const next = input.value.trim();
+    if (!next || next === stem) {
+      input.value = stem;
+      input.classList.remove("is-invalid");
+      return;
+    }
+    input.dataset.committing = "1";
+    mutateBusy = true;
+    try {
+      const json = await postJson(mutationApi(scope, "rename"), { code: meta.code, name: next });
+      applyRename(json.previousCode, json.photo);
+      renderPhotoPool();
+      renderFolders();
+      renderCompletions();
+    } catch (err) {
+      input.value = stem;
+      input.classList.add("is-invalid");
+      input.title = err.message || "Could not rename that photo.";
+    } finally {
+      input.dataset.committing = "0";
+      mutateBusy = false;
+    }
   }
 
   function renderPhotoPool() {
@@ -251,50 +454,17 @@
       return;
     }
     host.innerHTML = filtered
-      .map((meta) => {
-        const checked = selectedPoolCodes.has(meta.code) ? " checked" : "";
-        const selClass = selectedPoolCodes.has(meta.code) ? " selected" : "";
-        return (
-          '<button type="button" class="photo-card' +
-          selClass +
-          '" role="listitem" data-code="' +
-          escapeHtml(meta.code) +
-          '" aria-label="' +
-          escapeHtml(meta.fileName) +
-          '">' +
-          '<input type="checkbox" class="sel-check" tabindex="-1" aria-hidden="true"' +
-          checked +
-          " />" +
-          '<img class="photo-thumb" src="' +
-          meta.thumbUrl +
-          '" alt="" loading="lazy" />' +
-          '<div class="photo-name">' +
-          escapeHtml(meta.fileName) +
-          "</div>" +
-          '<div class="photo-meta">UPRN ' +
-          escapeHtml(meta.uprn) +
-          "</div>" +
-          "</button>"
-        );
-      })
+      .map((meta) =>
+        photoCardHtml(meta, {
+          selected: selectedPoolCodes.has(meta.code),
+          code: meta.code,
+          showUprn: true,
+        })
+      )
       .join("");
 
     host.querySelectorAll(".photo-card").forEach((card) => {
-      card.addEventListener("click", (e) => {
-        const code = card.getAttribute("data-code");
-        const meta = pool.find((p) => p.code === code);
-        if (poolSelectMode) {
-          e.preventDefault();
-          if (selectedPoolCodes.has(code)) selectedPoolCodes.delete(code);
-          else selectedPoolCodes.add(code);
-          card.classList.toggle("selected", selectedPoolCodes.has(code));
-          const cb = card.querySelector(".sel-check");
-          if (cb) cb.checked = selectedPoolCodes.has(code);
-          updateSelectUi();
-          return;
-        }
-        if (meta) openLightbox(meta);
-      });
+      bindPhotoCard(card, { kind: "pool" });
     });
     updateSelectUi();
   }
@@ -345,29 +515,16 @@
       ? codes
           .map((code) => {
             const meta = folderPhotoMeta(code);
-            const selected = selecting && selectedFolderCodes.has(code);
-            return (
-              '<button type="button" class="photo-card' +
-              (selected ? " selected" : "") +
-              '" data-folder-photo="' +
-              escapeHtml(folder.id) +
-              '" data-code="' +
-              escapeHtml(code) +
-              '">' +
-              '<input type="checkbox" class="sel-check" tabindex="-1" aria-hidden="true"' +
-              (selected ? " checked" : "") +
-              " />" +
-              (meta.thumbUrl
-                ? '<img class="photo-thumb" src="' + meta.thumbUrl + '" alt="" loading="lazy" />'
-                : '<div class="photo-thumb" aria-hidden="true"></div>') +
-              '<div class="photo-name">' +
-              escapeHtml(meta.fileName || code) +
-              "</div>" +
-              "</button>"
-            );
+            return photoCardHtml(meta, {
+              selected: selecting && selectedFolderCodes.has(code),
+              code: code,
+              folderId: folder.id,
+              showUprn: false,
+            });
           })
           .join("")
       : '<span class="hint-muted">Empty folder</span>';
+    const savedReplace = folderReplaceText[folder.id] || { find: "", replace: "" };
     return (
       folderUploadHtml(folder) +
       '<div class="folder-photo-toolbar" data-folder-toolbar="' +
@@ -395,6 +552,22 @@
       n +
       "</strong> selected</p>" +
       "</div>" +
+      '<div class="replace-bar folder-replace" data-folder-replace="' +
+      escapeHtml(folder.id) +
+      '">' +
+      '<p class="replace-title">Find and replace in photo codes</p>' +
+      '<div class="replace-fields">' +
+      '<label>Find this <input type="text" data-folder-find maxlength="120" autocomplete="off" spellcheck="false" placeholder="e.g. 224466" value="' +
+      escapeHtml(savedReplace.find) +
+      '" /></label>' +
+      '<label>Replace with <input type="text" data-folder-replace-with maxlength="120" autocomplete="off" spellcheck="false" placeholder="e.g. 113355" value="' +
+      escapeHtml(savedReplace.replace) +
+      '" /></label>' +
+      '<button type="button" class="btn btn-sm" data-folder-replace-confirm>Confirm</button>' +
+      "</div>" +
+      '<p class="replace-scope" data-folder-replace-scope>' +
+      escapeHtml(folderReplaceScopeLabel(folder)) +
+      "</p></div>" +
       '<div class="folder-photos' +
       (selecting ? " select-mode" : "") +
       '" data-folder="' +
@@ -428,6 +601,11 @@
     }
     if (hint) hint.hidden = !on;
     if (countEl) countEl.textContent = String(n);
+    const folder = folders.find((f) => f.id === folderId);
+    const scopeText = document.querySelector(
+      '[data-folder-replace="' + CSS.escape(folderId) + '"] [data-folder-replace-scope]'
+    );
+    if (scopeText && folder) scopeText.textContent = folderReplaceScopeLabel(folder);
     const wrap = document.querySelector('.folder-photos[data-folder="' + CSS.escape(folderId) + '"]');
     if (wrap) wrap.classList.toggle("select-mode", on);
   }
@@ -566,22 +744,38 @@
     });
 
     body.querySelectorAll("[data-folder-photo]").forEach((card) => {
-      card.addEventListener("click", (e) => {
-        const folderId = card.getAttribute("data-folder-photo");
-        const code = card.getAttribute("data-code");
-        const meta = folderPhotoMeta(code);
-        if (folderSelectId === folderId) {
-          e.preventDefault();
-          if (selectedFolderCodes.has(code)) selectedFolderCodes.delete(code);
-          else selectedFolderCodes.add(code);
-          card.classList.toggle("selected", selectedFolderCodes.has(code));
-          const cb = card.querySelector(".sel-check");
-          if (cb) cb.checked = selectedFolderCodes.has(code);
-          updateFolderSelectUi(folderId);
-          return;
-        }
-        openLightbox(meta, { kind: "folder", folderId: folderId });
-      });
+      const folderId = card.getAttribute("data-folder-photo");
+      bindPhotoCard(card, { kind: "folder", folderId: folderId });
+    });
+
+    body.querySelectorAll("[data-folder-replace]").forEach((bar) => {
+      const folderId = bar.getAttribute("data-folder-replace");
+      const findInput = bar.querySelector("[data-folder-find]");
+      const replaceInput = bar.querySelector("[data-folder-replace-with]");
+      const confirmBtn = bar.querySelector("[data-folder-replace-confirm]");
+      function remember() {
+        folderReplaceText[folderId] = {
+          find: findInput ? findInput.value : "",
+          replace: replaceInput ? replaceInput.value : "",
+        };
+      }
+      if (findInput) findInput.addEventListener("input", remember);
+      if (replaceInput) replaceInput.addEventListener("input", remember);
+      if (confirmBtn) {
+        confirmBtn.addEventListener("click", () => {
+          remember();
+          const folder = folders.find((f) => f.id === folderId);
+          if (!folder) return;
+          const targets = folderReplaceTargets(folder);
+          runReplace(
+            { kind: "folder", folderId: folderId },
+            targets.codes,
+            folderReplaceScopeLabel(folder),
+            folderReplaceText[folderId].find,
+            folderReplaceText[folderId].replace
+          );
+        });
+      }
     });
   }
 
@@ -942,9 +1136,259 @@
   document.getElementById("btnCloseLightbox").addEventListener("click", closeLb);
   document.getElementById("btnLightboxOk").addEventListener("click", closeLb);
   document.getElementById("btnLightboxRename").addEventListener("click", () => {
-    if (!lightboxPhoto) return;
-    openRename(lightboxPhoto.meta, lightboxPhoto.scope);
+    const input = document.getElementById("lightboxRenameInput");
+    if (!input) return;
+    input.focus();
+    input.select();
   });
+  document.getElementById("lightboxRenameForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    confirmLightboxRename();
+  });
+
+  async function confirmLightboxRename() {
+    if (!lightboxPhoto || mutateBusy) return;
+    const input = document.getElementById("lightboxRenameInput");
+    const errEl = document.getElementById("lightboxRenameErr");
+    const name = input ? input.value.trim() : "";
+    if (!name) {
+      errEl.textContent = "Enter a file name.";
+      errEl.classList.add("show");
+      return;
+    }
+    errEl.classList.remove("show");
+    mutateBusy = true;
+    try {
+      const json = await postJson(mutationApi(lightboxPhoto.scope, "rename"), {
+        code: lightboxPhoto.meta.code,
+        name: name,
+      });
+      applyRename(json.previousCode, json.photo);
+      renderPhotoPool();
+      renderFolders();
+      renderCompletions();
+    } catch (err) {
+      errEl.textContent = err.message || "Could not rename that photo.";
+      errEl.classList.add("show");
+    } finally {
+      mutateBusy = false;
+    }
+  }
+
+  async function runReplace(scope, codes, scopeLabel, find, replaceWith) {
+    const findText = String(find || "").trim();
+    const replaceText = String(replaceWith || "").trim();
+    if (!findText) {
+      window.alert("Enter the text to find.");
+      return;
+    }
+    if (!codes.length) {
+      window.alert("No photos to change.");
+      return;
+    }
+    const noun = codes.length === 1 ? "photo" : "photos";
+    const withText = replaceText ? '"' + replaceText + '"' : "(nothing)";
+    const ok = window.confirm(
+      'Replace "' +
+        findText +
+        '" with ' +
+        withText +
+        " in " +
+        codes.length +
+        " " +
+        noun +
+        "?\n\n" +
+        scopeLabel +
+        "\n\nPhotos that would clash with an existing name are skipped."
+    );
+    if (!ok || mutateBusy) return;
+    mutateBusy = true;
+    try {
+      const json = await postJson(mutationApi(scope, "replace"), {
+        find: findText,
+        replace: replaceText,
+        codes: codes,
+      });
+      (json.renamed || []).forEach((row) => {
+        if (row && row.photo) applyRename(row.from, row.photo);
+      });
+      renderPhotoPool();
+      renderFolders();
+      renderCompletions();
+      showReplaceResult(json);
+    } catch (err) {
+      window.alert(err.message || "Could not replace those photo codes.");
+    } finally {
+      mutateBusy = false;
+    }
+  }
+
+  function showReplaceResult(json) {
+    const renamed = Number(json.renamedCount || (json.renamed || []).length || 0);
+    const skipped = Array.isArray(json.skipped) ? json.skipped : [];
+    const summary = document.getElementById("replaceResultSummary");
+    const list = document.getElementById("replaceResultSkipped");
+    const noun = renamed === 1 ? "photo" : "photos";
+    if (summary) summary.textContent = "Renamed " + renamed + " " + noun + ".";
+    if (list) {
+      const shown = skipped.slice(0, 8);
+      list.innerHTML = shown
+        .map((row) => "<li>" + escapeHtml(row.code) + " — " + escapeHtml(row.reason) + "</li>")
+        .join("");
+      if (skipped.length > shown.length) {
+        list.innerHTML += "<li>and " + (skipped.length - shown.length) + " more.</li>";
+      }
+      if (!skipped.length) list.innerHTML = "";
+    }
+    openModal("replaceResultModal");
+  }
+
+  function formatShareDate(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  }
+
+  function updateShareUi() {
+    const status = document.getElementById("photoShareStatus");
+    const btn = document.getElementById("btnPhotoShare");
+    const revoke = document.getElementById("btnPhotoShareRevoke");
+    const active = !!(photoShare && photoShare.active);
+    if (btn) btn.textContent = active ? "Copy a new photo sharing code" : "Get photo sharing code";
+    if (revoke) revoke.hidden = !active;
+    if (!status) return;
+    if (!active) {
+      status.textContent = "No photo sharing code is active.";
+      return;
+    }
+    const when = formatShareDate(photoShare.expiresAt);
+    const n = photoShare.activeCount || 1;
+    status.textContent =
+      n > 1
+        ? n +
+          " codes are active. The latest runs until " +
+          when +
+          ". Revoke stops every current code. Copy a new code if you need to paste one again — the old code is not stored."
+        : "A code is active until " +
+          when +
+          ". The code itself was shown once. Copy a new code if you need to paste it again — that stops the current one.";
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (err) {
+      return false;
+    }
+    return false;
+  }
+
+  async function showShareAddress(address, byCodeExample) {
+    const input = document.getElementById("shareAddress");
+    const hint = document.getElementById("shareByCodeHint");
+    const note = document.getElementById("shareCopyNote");
+    if (input) input.value = address;
+    if (hint) {
+      hint.textContent = byCodeExample
+        ? "Excel calls " + byCodeExample + " for that photo code."
+        : "Excel adds /by-code/ and the photo code to this address.";
+    }
+    const copied = await copyText(address);
+    if (note) {
+      note.textContent = copied
+        ? "Copied. Paste it into Data Horizontal DW!F1."
+        : "Select the address and copy it into Data Horizontal DW!F1.";
+    }
+    openModal("shareModal");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+
+  async function issueShare(replaceExisting) {
+    if (mutateBusy) return;
+    if (replaceExisting) {
+      const ok = window.confirm(
+        "This issues a new photo sharing code and stops the current one. Excel workbooks still using the old code will no longer load photos. Continue?"
+      );
+      if (!ok) return;
+    }
+    mutateBusy = true;
+    try {
+      const json = await postJson(data.photoShareApi + (replaceExisting ? "/renew" : ""), {});
+      photoShare = { active: true, activeCount: 1, expiresAt: json.expiresAt };
+      updateShareUi();
+      await showShareAddress(json.address, json.byCodeExample);
+    } catch (err) {
+      window.alert(err.message || "Could not create a photo sharing code.");
+    } finally {
+      mutateBusy = false;
+    }
+  }
+
+  async function revokeShare() {
+    if (mutateBusy) return;
+    const ok = window.confirm("Revoke the photo sharing code? Excel will no longer be able to load photos with it.");
+    if (!ok) return;
+    mutateBusy = true;
+    try {
+      await postJson(data.photoShareApi + "/revoke", {});
+      photoShare = { active: false, activeCount: 0 };
+      updateShareUi();
+    } catch (err) {
+      window.alert(err.message || "Could not revoke the photo sharing code.");
+    } finally {
+      mutateBusy = false;
+    }
+  }
+
+  function closeShareModal() {
+    closeModal("shareModal");
+  }
+  document.getElementById("btnPhotoShare").addEventListener("click", () => {
+    issueShare(!!(photoShare && photoShare.active));
+  });
+  document.getElementById("btnPhotoShareRevoke").addEventListener("click", revokeShare);
+  document.getElementById("btnShareClose").addEventListener("click", closeShareModal);
+  document.getElementById("btnCloseShareModal").addEventListener("click", closeShareModal);
+  document.getElementById("btnShareCopyAgain").addEventListener("click", async () => {
+    const input = document.getElementById("shareAddress");
+    const note = document.getElementById("shareCopyNote");
+    const address = input ? input.value : "";
+    const copied = await copyText(address);
+    if (note) note.textContent = copied ? "Copied." : "Select the address and copy it.";
+    if (input) input.select();
+  });
+  document.getElementById("shareModal").addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeShareModal();
+  });
+
+  document.getElementById("btnPoolReplace").addEventListener("click", () => {
+    const targets = poolReplaceTargets();
+    const scopeEl = document.getElementById("poolReplaceScope");
+    runReplace(
+      { kind: "pool" },
+      targets.codes,
+      scopeEl ? scopeEl.textContent : "",
+      document.getElementById("poolFind").value,
+      document.getElementById("poolReplaceWith").value
+    );
+  });
+
+  function closeReplaceResult() {
+    closeModal("replaceResultModal");
+  }
+  document.getElementById("btnReplaceResultOk").addEventListener("click", closeReplaceResult);
+  document.getElementById("btnCloseReplaceResult").addEventListener("click", closeReplaceResult);
+  document.getElementById("replaceResultModal").addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeReplaceResult();
+  });
+
+  updateShareUi();
   document.getElementById("photoLightbox").addEventListener("click", (e) => {
     if (e.target === e.currentTarget) closeLb();
   });
@@ -965,6 +1409,8 @@
         pendingExtract = null;
         closeModal("nameModal");
       }
+      closeShareModal();
+      closeReplaceResult();
       closeDone();
     }
   });
