@@ -163,6 +163,33 @@
     return name.toLowerCase().endsWith(ext.toLowerCase()) ? name.slice(0, -ext.length) : name;
   }
 
+  function codeFieldValue(value) {
+    return String(value || "").replace(/\r?\n/g, "");
+  }
+
+  function sizeCodeField(field) {
+    if (!field || field.tagName !== "TEXTAREA") return;
+    if (!field.getClientRects().length) return;
+    field.style.overflowY = "hidden";
+    field.style.height = "auto";
+    const style = window.getComputedStyle(field);
+    const line = parseFloat(style.lineHeight) || 16;
+    const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    const border = (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+    const max = Math.ceil(line * 3 + pad + border);
+    const min = Math.ceil(line + pad + border);
+    let next = Math.max(field.scrollHeight, min);
+    field.style.height = next + "px";
+    if (field.scrollHeight > field.clientHeight) {
+      next += field.offsetHeight - field.clientHeight;
+      field.style.height = next + "px";
+    }
+    if (next > max) {
+      field.style.height = max + "px";
+      field.style.overflowY = field.scrollHeight > field.clientHeight + 1 ? "auto" : "hidden";
+    }
+  }
+
   function deleteConfirmMessage(n) {
     const noun = n === 1 ? "photo" : "photos";
     return "Delete " + n + " " + noun + "? This cannot be undone.";
@@ -342,9 +369,9 @@
       "</button>" +
       '<label class="photo-name-edit">' +
       '<span class="visually-hidden">Photo code</span>' +
-      '<input type="text" class="photo-code-input" value="' +
+      '<textarea class="photo-code-input" rows="1" maxlength="140" autocomplete="off" spellcheck="false">' +
       stem +
-      '" maxlength="140" autocomplete="off" spellcheck="false" />' +
+      "</textarea>" +
       '<span class="photo-code-ext">' +
       ext +
       "</span></label>" +
@@ -397,6 +424,16 @@
       input.classList.remove("is-invalid");
       input.removeAttribute("title");
     });
+    input.addEventListener("input", () => {
+      const clean = codeFieldValue(input.value);
+      if (clean !== input.value) {
+        const at = input.selectionStart || clean.length;
+        input.value = clean;
+        const pos = Math.min(at, clean.length);
+        input.setSelectionRange(pos, pos);
+      }
+      sizeCodeField(input);
+    });
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -405,6 +442,7 @@
         e.preventDefault();
         const meta = scope.kind === "folder" ? folderPhotoMeta(code) : poolMetaFor(code);
         input.value = meta ? fileStem(meta.fileName || meta.code) : input.value;
+        sizeCodeField(input);
         input.dataset.skipCommit = "1";
         input.blur();
       }
@@ -416,6 +454,7 @@
       }
       commitCodeEdit(input, code, scope);
     });
+    sizeCodeField(input);
   }
 
   async function commitCodeEdit(input, code, scope) {
@@ -423,10 +462,11 @@
     const meta = scope.kind === "folder" ? folderPhotoMeta(code) : poolMetaFor(code);
     if (!meta) return;
     const stem = fileStem(meta.fileName || meta.code);
-    const next = input.value.trim();
+    const next = codeFieldValue(input.value).trim();
     if (!next || next === stem) {
       input.value = stem;
       input.classList.remove("is-invalid");
+      sizeCodeField(input);
       return;
     }
     input.dataset.committing = "1";
@@ -441,6 +481,7 @@
       input.value = stem;
       input.classList.add("is-invalid");
       input.title = err.message || "Could not rename that photo.";
+      sizeCodeField(input);
     } finally {
       input.dataset.committing = "0";
       mutateBusy = false;

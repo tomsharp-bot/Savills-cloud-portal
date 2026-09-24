@@ -319,6 +319,7 @@ describe("photo lightbox markup", () => {
   it("offers Delete and Rename beside Download zip, and keeps Rename to a single photo", () => {
     const view = readFileSync(join(process.cwd(), "views/photos-project.ejs"), "utf8");
     const js = readFileSync(join(process.cwd(), "public/js/photos.js"), "utf8");
+    const css = readFileSync(join(process.cwd(), "public/css/photos.css"), "utf8");
     assert.match(view, /id="btnDownloadZip"/);
     assert.match(view, /id="btnDeletePhotos"/);
     assert.match(view, /id="btnRenamePhoto"/);
@@ -347,7 +348,13 @@ describe("photo lightbox markup", () => {
     assert.match(view, />Find this</);
     assert.match(view, />Replace with</);
     assert.match(js, /photo-code-input/);
+    assert.match(js, /<textarea class="photo-code-input"/);
     assert.match(js, /commitCodeEdit/);
+    assert.match(css, /\.photo-grid\s*\{[^}]*minmax\(192px,\s*1fr\)/s);
+    assert.match(css, /\.folder-photos\s*\{[^}]*minmax\(192px,\s*1fr\)/s);
+    assert.match(css, /\.photo-code-input\s*\{[^}]*overflow-wrap:\s*break-word/s);
+    assert.match(css, /\.photo-code-input\s*\{[^}]*max-height:\s*calc\(1\.3em \* 3/s);
+    assert.doesNotMatch(css, /repeat\(15,\s*minmax\(0,\s*1fr\)\)/);
     assert.match(js, /data-folder-replace-confirm/);
     assert.match(js, /poolReplaceApi/);
   });

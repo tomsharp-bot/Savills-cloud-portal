@@ -289,13 +289,10 @@
 .photos-page .pool-select-hint strong { color: var(--navy); }
 .photos-page .photo-grid {
   display: grid;
-  grid-template-columns: repeat(15, minmax(0, 1fr));
-  gap: 8px;
+  /* ~192px keeps a typical code (2245623-Kitchen-1) on one line; longer room tags wrap. */
+  grid-template-columns: repeat(auto-fill, minmax(192px, 1fr));
+  gap: 10px;
 }
-@media (max-width: 1400px) { .photos-page .photo-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
-@media (max-width: 1100px) { .photos-page .photo-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
-@media (max-width: 780px) { .photos-page .photo-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-@media (max-width: 520px) { .photos-page .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .photos-page .photo-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -353,32 +350,44 @@
   margin: 0;
 }
 .photos-page .photo-thumb { height: 162px; background: #c5ced8; display: block; width: 100%; object-fit: cover; }
-.photos-page .photo-name { padding: 6px 5px 2px; font-size: 0.72rem; color: var(--navy); word-break: break-all; line-height: 1.25; font-weight: 600; }
+.photos-page .photo-name { padding: 6px 8px 2px; font-size: 0.8rem; color: var(--navy); overflow-wrap: break-word; line-height: 1.3; font-weight: 600; }
 .photos-page .photo-name-edit {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  justify-content: center;
   gap: 2px;
-  padding: 4px 4px 2px;
+  padding: 6px 8px 4px;
   cursor: text;
 }
 .photos-page .photo-code-input {
   width: 100%;
   min-width: 0;
+  flex: 1 1 auto;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--navy);
   text-align: center;
-  padding: 2px;
+  padding: 2px 1px;
   margin: 0;
+  line-height: 1.3;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: normal;
+  white-space: pre-wrap;
+  text-wrap: pretty;
+  min-height: calc(1.3em + 6px);
+  max-height: calc(1.3em * 3 + 6px);
 }
 .photos-page .photo-code-input:hover { border-color: var(--border); background: #fff; }
 .photos-page .photo-code-input:focus { border-color: var(--blue); background: #fff; outline: none; }
 .photos-page .photo-code-input.is-invalid { border-color: #a33; background: #fff5f5; }
-.photos-page .photo-code-ext { font-size: 0.65rem; color: var(--muted); flex: none; }
+.photos-page .photo-code-ext { font-size: 0.7rem; color: var(--muted); flex: none; line-height: 1.3; padding-bottom: 2px; }
 .photos-page .photo-meta { padding: 0 5px 8px; font-size: 0.65rem; color: var(--muted); word-break: break-all; line-height: 1.25; }
 .photos-page .folders-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .photos-page .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
@@ -416,11 +425,11 @@
 .photos-page .client-access input { width: 16px; height: 16px; accent-color: var(--navy); cursor: pointer; margin: 0; }
 .photos-page .folder-photos {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(192px, 1fr));
+  gap: 10px;
   padding: 10px 12px;
 }
-.photos-page .folder-photos .photo-thumb { height: 64px; }
+.photos-page .folder-photos .photo-thumb { height: 120px; }
 .photos-page .extract-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -739,5 +748,6 @@
 @media (max-width: 560px) {
   .photos-page .wrap { padding: 12px 12px 28px; }
   .photos-page .grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .photos-page .photo-grid { grid-template-columns: 1fr 1fr; }
+  .photos-page .photo-grid,
+  .photos-page .folder-photos { grid-template-columns: 1fr 1fr; }
 }
