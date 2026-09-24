@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { isHhsrsCategory, isHhsrsRating } from "./hhsrs-categories.js";
+import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import { matchDemoProject } from "./hhsrs-reporter-projects.js";
 
 export const HHSRS_SITE_FORM_PATH = "/HHSRS-site-form";
@@ -38,7 +38,86 @@ export function hhsrsPhotoSizeError(): string {
 }
 
 export function hhsrsPhotoHint(): string {
-  return `JPEG, PNG, WebP or HEIC. Add ${HHSRS_MIN_PHOTOS} to ${HHSRS_MAX_PHOTOS} photos. Each photo up to ${HHSRS_MAX_FILE_MB}MB.`;
+  return `At least ${HHSRS_MIN_PHOTOS} photo required, up to ${HHSRS_MAX_PHOTOS}. Phone photos are gently resized on your device (about 3000px on the long side) so uploads stay workable but detail stays clear for office checks. Each photo up to 25 MB after that.`;
+}
+
+/** Why a required client call reference was left blank. */
+export const CALL_REF_BLANK_REASONS = ["No answer", "Engaged/busy", "Other"] as const;
+export type CallRefBlankReason = (typeof CALL_REF_BLANK_REASONS)[number];
+
+export function isCallRefBlankReason(value: string): value is CallRefBlankReason {
+  return (CALL_REF_BLANK_REASONS as readonly string[]).includes(value);
+}
+
+export function normalizeUprn(value: string): string {
+  return String(value || "").replace(/\s+/g, "").trim();
+}
+
+export type StockLookupRow = {
+  uprn: string;
+  kind: string;
+  number: string;
+  block: string;
+  street: string;
+  area: string;
+  city: string;
+  postcode: string;
+};
+
+export type StockAddressMatch = {
+  uprn: string;
+  line: string;
+  postcode: string;
+  /** Kept off the form. Stock label for a later Main Log link; not stored on the submission. */
+  asset: string;
+  type: "Dwelling" | "Block" | "Garage";
+};
+
+export function stockKindLabel(kind: string): StockAddressMatch["type"] {
+  if (kind === "block") return "Block";
+  if (kind === "garage") return "Garage";
+  return "Dwelling";
+}
+
+/** One line from stock columns. Skips a repeated area/city (Bude, Bude). */
+export function formatStockAddressLine(asset: Pick<StockLookupRow, "number" | "block" | "street" | "area" | "city">): string {
+  const city = String(asset.city || "").trim();
+  const area = String(asset.area || "").trim();
+  const parts = [asset.number, asset.block, asset.street, area && area.toLowerCase() !== city.toLowerCase() ? area : "", city]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  const deduped: string[] = [];
+  for (const part of parts) {
+    if (deduped.length && deduped[deduped.length - 1].toLowerCase() === part.toLowerCase()) continue;
+    deduped.push(part);
+  }
+  return deduped.join(", ");
+}
+
+export function stockAssetLabel(asset: Pick<StockLookupRow, "number" | "block" | "kind">): string {
+  return String(asset.number || "").trim() || String(asset.block || "").trim() || stockKindLabel(asset.kind);
+}
+
+/** Prefer a dwelling when the same UPRN is stored as more than one kind. */
+export function stockMatchFromRows(rows: StockLookupRow[]): StockAddressMatch | null {
+  if (!rows.length) return null;
+  const rank = (kind: string): number => (kind === "dwelling" ? 0 : kind === "block" ? 1 : kind === "garage" ? 2 : 3);
+  const best = [...rows].sort((a, b) => rank(a.kind) - rank(b.kind))[0];
+  const uprn = normalizeUprn(best.uprn) || String(best.uprn || "").trim();
+  return {
+    uprn,
+    line: formatStockAddressLine(best) || (uprn ? `UPRN ${uprn}` : ""),
+    postcode: String(best.postcode || "").trim(),
+    asset: stockAssetLabel(best),
+    type: stockKindLabel(best.kind),
+  };
+}
+
+export function composeCallNotes(reason: string, notes: string): string {
+  const extra = String(notes || "").trim();
+  if (reason === "Other") return extra ? `Other — ${extra}` : "";
+  if (!reason) return extra;
+  return extra ? `${reason} — ${extra}` : reason;
 }
 
 export function hhsrsPhotoCountError(total: number): string | undefined {
@@ -62,17 +141,24 @@ export type HhsrsFormValues = {
   uprn: string;
   fullAddress: string;
   postcode: string;
+  /** Surveyor ticked the stock address after lookup (and again after any edit). */
+  addressConfirmed: boolean;
   surveyorName: string;
   category: string;
   rating: string;
   comment: string;
   clientCallReference: string;
   otherDetails: string;
-  /** Onward only. Unchecked or hidden extras are stored as false. */
+  /**
+   * No longer collected on the site form. Always false from this form.
+   * Reporter can still set it on the office case.
+   */
   cat1Confirmed: boolean;
   /** Draft-only. True when the surveyor could not obtain a required call reference. */
   callUnreached: boolean;
-  /** Draft-only. Why the call reference is blank. Stored as call notes on submit. */
+  /** Draft-only. No answer / Engaged/busy / Other. */
+  callRefBlankReason: string;
+  /** Draft-only. Extra detail. Required when the blank reason is Other. */
   callUnreachedNote: string;
 };
 
@@ -101,11 +187,14 @@ function readFlag(body: Record<string, unknown>, name: string): boolean {
 
 /** Map a completed "couldn't get through" answer onto the Reporter call fields. */
 export function siteSubmissionCallFields(
-  values: Pick<HhsrsFormValues, "clientCallReference" | "callUnreached" | "callUnreachedNote">
+  values: Pick<HhsrsFormValues, "clientCallReference" | "callUnreached" | "callRefBlankReason" | "callUnreachedNote">
 ): { clientCallReference: string; callOutcome: "" | "Attempted"; callNotes: string } {
-  const note = String(values.callUnreachedNote || "").trim();
-  if (values.callUnreached && note) {
-    return { clientCallReference: "", callOutcome: "Attempted", callNotes: note };
+  const reason = String(values.callRefBlankReason || "").trim();
+  if (values.callUnreached && isCallRefBlankReason(reason)) {
+    const callNotes = composeCallNotes(reason, values.callUnreachedNote);
+    if (reason !== "Other" || String(values.callUnreachedNote || "").trim()) {
+      return { clientCallReference: "", callOutcome: "Attempted", callNotes };
+    }
   }
   return {
     clientCallReference: String(values.clientCallReference || "").trim(),
@@ -146,6 +235,7 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     uprn: "",
     fullAddress: "",
     postcode: "",
+    addressConfirmed: false,
     surveyorName: "",
     category: "",
     rating: "",
@@ -154,27 +244,36 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     otherDetails: "",
     cat1Confirmed: false,
     callUnreached: false,
+    callRefBlankReason: "",
     callUnreachedNote: "",
   };
 }
 
 export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues {
   const field = (name: keyof HhsrsFormValues): string => String(body[name] ?? "").trim();
+  let callRefBlankReason = field("callRefBlankReason");
+  let callUnreachedNote = field("callUnreachedNote");
+  if (!callRefBlankReason && isCallRefBlankReason(callUnreachedNote)) {
+    callRefBlankReason = callUnreachedNote;
+    callUnreachedNote = "";
+  }
   return {
     projectId: field("projectId"),
     surveyDate: field("surveyDate") || todayLondonDate(),
-    uprn: field("uprn"),
+    uprn: normalizeUprn(field("uprn")),
     fullAddress: field("fullAddress"),
     postcode: field("postcode"),
+    addressConfirmed: readFlag(body, "addressConfirmed"),
     surveyorName: field("surveyorName"),
     category: field("category"),
     rating: field("rating"),
     comment: field("comment"),
     clientCallReference: field("clientCallReference"),
     otherDetails: field("otherDetails"),
-    cat1Confirmed: readFlag(body, "cat1Confirmed"),
+    cat1Confirmed: false,
     callUnreached: readFlag(body, "callUnreached"),
-    callUnreachedNote: field("callUnreachedNote"),
+    callRefBlankReason,
+    callUnreachedNote,
   };
 }
 
@@ -206,9 +305,46 @@ export function imageExt(name: string, mime = ""): string {
   return "jpg";
 }
 
+export type ValidateHhsrsOptions = {
+  /** When set, the surveyor must be one of these Personnel names. */
+  surveyorNames?: readonly string[];
+};
+
+export function siteFormSectionState(
+  values: HhsrsFormValues,
+  projectName: string
+): { visit: boolean; property: boolean; hazard: boolean; extras: boolean } {
+  const visit = Boolean(values.projectId && values.surveyDate && String(values.surveyorName || "").trim());
+  const property =
+    visit &&
+    Boolean(
+      String(values.uprn || "").trim() &&
+        String(values.fullAddress || "").trim() &&
+        String(values.postcode || "").trim() &&
+        values.addressConfirmed
+    );
+  const hazard =
+    property &&
+    Boolean(String(values.category || "").trim() && String(values.rating || "").trim() && String(values.comment || "").trim());
+  const flags = siteFormProjectFlags(projectName);
+  let callOk = true;
+  if (flags.calls) {
+    const reason = String(values.callRefBlankReason || "").trim();
+    const notes = String(values.callUnreachedNote || "").trim();
+    if (values.callUnreached) {
+      callOk = reason === "No answer" || reason === "Engaged/busy" || (reason === "Other" && Boolean(notes));
+    } else {
+      callOk = Boolean(String(values.clientCallReference || "").trim());
+    }
+  }
+  const extras = hazard && callOk && Boolean(String(values.otherDetails || "").trim());
+  return { visit, property, hazard, extras };
+}
+
 export function validateHhsrsForm(
   values: HhsrsFormValues,
-  activeProject: { id: string; name: string } | null
+  activeProject: { id: string; name: string } | null,
+  options: ValidateHhsrsOptions = {}
 ): { ok: true; data: HhsrsFormData } | { ok: false; errors: HhsrsFieldErrors } {
   const errors: HhsrsFieldErrors = {};
   if (!values.projectId) errors.projectId = "Select a project.";
@@ -226,35 +362,48 @@ export function validateHhsrsForm(
   if (!values.uprn) errors.uprn = "Enter the UPRN.";
   if (!values.fullAddress) errors.fullAddress = "Enter the full address.";
   if (!values.postcode) errors.postcode = "Enter the postcode.";
-  if (!values.surveyorName) errors.surveyorName = "Enter the surveyor name.";
+  if (!values.addressConfirmed) errors.addressConfirmed = "Confirm the address is correct.";
+  if (!values.surveyorName) errors.surveyorName = "Select a surveyor.";
+  else if (options.surveyorNames && !options.surveyorNames.includes(values.surveyorName)) {
+    errors.surveyorName = "Select a surveyor from Personnel.";
+  }
   if (!values.category) errors.category = "Select an HHSRS category.";
   else if (!isHhsrsCategory(values.category)) errors.category = "Select a valid HHSRS category.";
   if (!values.rating) errors.rating = "Select a rating.";
-  else if (!isHhsrsRating(values.rating)) errors.rating = "Select Low, Medium or High.";
+  else if (!isHhsrsSiteFormRating(values.rating)) errors.rating = "Select a rating from the list.";
   if (!values.comment) errors.comment = "Enter a comment.";
   if (!String(values.otherDetails || "").trim()) errors.otherDetails = "Enter any other details.";
   const flags = siteFormProjectFlags(activeProject?.name || "");
   const callUnreached = Boolean(values.callUnreached);
+  const callReason = String(values.callRefBlankReason || "").trim();
   const callNote = String(values.callUnreachedNote || "").trim();
-  if (flags.calls && !String(values.clientCallReference || "").trim()) {
-    if (!callUnreached) {
-      errors.clientCallReference =
-        "Enter the client call reference, or tick Couldn't get through and say why.";
-    } else if (!callNote) {
-      errors.callUnreachedNote = "Say why you couldn't get through.";
+  let skippedCall = false;
+  if (flags.calls) {
+    if (callUnreached) {
+      if (!isCallRefBlankReason(callReason)) {
+        errors.callRefBlankReason = "Select why the call reference is blank.";
+      } else if (callReason === "Other" && !callNote) {
+        errors.callUnreachedNote = "Say why the call reference is blank.";
+      } else {
+        skippedCall = true;
+      }
+    } else if (!String(values.clientCallReference || "").trim()) {
+      errors.clientCallReference = "Enter the client call reference, or say why it is blank.";
     }
   }
   if (Object.keys(errors).length) return { ok: false, errors };
-  const skippedCall = flags.calls && callUnreached && Boolean(callNote);
   return {
     ok: true,
     data: {
       ...values,
+      uprn: normalizeUprn(values.uprn),
       clientCallReference: skippedCall ? "" : String(values.clientCallReference || "").trim(),
       otherDetails: String(values.otherDetails || "").trim(),
       callUnreached: skippedCall,
+      callRefBlankReason: skippedCall ? callReason : "",
       callUnreachedNote: skippedCall ? callNote : "",
-      cat1Confirmed: flags.onward && Boolean(values.cat1Confirmed),
+      addressConfirmed: true,
+      cat1Confirmed: false,
       projectName: activeProject!.name,
     },
   };

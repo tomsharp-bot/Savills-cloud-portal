@@ -30,6 +30,11 @@ describe("HHSRS Reporter UI helpers", () => {
 
   it("maps rating display classes", () => {
     assert.equal(ratingDisplayClass("High"), "rating-cat1");
+    assert.equal(ratingDisplayClass("High - Emergency Risk"), "rating-cat1");
+    assert.equal(ratingDisplayClass("High - Severe Risk"), "rating-cat1");
+    assert.equal(ratingDisplayClass("Severe"), "rating-cat1");
+    assert.equal(ratingDisplayClass("Moderate"), "rating-cat2");
+    assert.equal(ratingDisplayClass("Slight"), "");
     assert.equal(ratingDisplayClass("Cat 2"), "rating-cat2");
     assert.equal(ratingDisplayClass("B"), "");
   });

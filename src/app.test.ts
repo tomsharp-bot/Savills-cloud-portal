@@ -79,7 +79,8 @@ function hhsrsReviewFields(): Record<string, string> {
     postcode: "EX1 1AA",
     surveyorName: "Alex Surveyor",
     category: "Damp & Mould Growth",
-    rating: "High",
+    rating: "Severe",
+    addressConfirmed: "true",
     comment: "Visible mould in bathroom.",
     clientCallReference: "",
     otherDetails: "No access issues.",
@@ -268,12 +269,16 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /HHSRS category/);
     assert.match(form.body, /Client call reference \*/);
     assert.match(form.body, /Couldn't get through/);
+    assert.match(form.body, /No answer/);
+    assert.match(form.body, /Engaged\/busy/);
     assert.match(form.body, /Any other details \*/);
-    assert.match(form.body, /required, 1 to 4/);
+    assert.match(form.body, /min 1, max 4/);
     assert.doesNotMatch(form.body, /Photos are optional/);
     assert.match(form.body, /action="\/HHSRS-site-form\/review"/);
-    assert.match(form.body, /each photo up to 40MB/i);
-    assert.match(form.body, /accept="[^"]*image\/heic[^"]*image\/heif/);
+    assert.match(form.body, /3000px/);
+    assert.match(form.body, /25 MB/);
+    assert.match(form.body, /accept="image\/\*"/);
+    assert.doesNotMatch(form.body, /capture=/);
     assert.match(form.body, /data-max-file-mb="40"/);
     assert.match(form.body, /Project &amp; visit/);
     assert.match(form.body, /class="hhsrs-body hhsrs-form-page"/);
@@ -281,32 +286,36 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /class="panel-top"/);
     assert.match(form.body, /Housing · Survey reporting/);
     assert.match(form.body, /<strong>HHSRS Site Reporting<\/strong>/);
-    assert.match(form.body, /class="info-box hazard"/);
+    assert.match(form.body, /class="info-box hazard flow-step"/);
     assert.match(form.body, /id="issue-details" hidden/);
     assert.match(form.body, /id="visit-gate-hint"/);
+    assert.match(form.body, /id="step-property"/);
+    assert.match(form.body, /id="step-hazard"/);
+    assert.match(form.body, /data-flow="photos"/);
     assert.doesNotMatch(form.body, /Fill Campion House sample/);
     assert.doesNotMatch(form.body, /btn-sample/);
-    assert.match(form.body, /data-extra="onward"/);
+    assert.doesNotMatch(form.body, /data-extra="onward"/);
     assert.match(form.body, /data-extra="saxon"/);
-    assert.match(form.body, /Category 1 confirmed/);
+    assert.doesNotMatch(form.body, /Category 1 confirmed/);
     assert.match(form.body, /Saxon Weald: all damp and mould/);
     assert.match(form.body, /id="clear-form"/);
-    assert.match(form.body, /id="houseNumber"/);
-    assert.match(form.body, /House number \/ name</);
-    assert.doesNotMatch(form.body, /House number \/ name \*/);
-    assert.doesNotMatch(form.body, /id="houseNumber"[^>]*\brequired\b/);
-    assert.doesNotMatch(form.body, /id="fullAddress"[^>]*\b(?:readonly|disabled)\b/);
-    assert.doesNotMatch(form.body, /id="uprn"[^>]*\b(?:readonly|disabled)\b/);
-    assert.match(form.body, /You can always type or edit the full address and UPRN/);
-    assert.match(form.body, /id="btn-find-address"/);
-    assert.match(form.body, /Find address/);
-    assert.match(form.body, /data-address-lookup="\/HHSRS-site-form\/address-lookup"/);
+    assert.doesNotMatch(form.body, /id="houseNumber"/);
+    assert.doesNotMatch(form.body, /Find address/);
+    assert.doesNotMatch(form.body, /address-lookup/);
+    assert.doesNotMatch(form.body, /Ideal Postcodes/);
+    assert.match(form.body, /id="btn-lookup-uprn"/);
+    assert.match(form.body, /data-stock-lookup="\/HHSRS-site-form\/stock-lookup"/);
+    assert.match(form.body, /<select id="surveyorName"/);
+    assert.match(form.body, /High - Emergency Risk/);
+    assert.match(form.body, /High - Severe Risk/);
+    assert.doesNotMatch(form.body, /<option value="High">/);
+    assert.doesNotMatch(form.body, /Extreme/);
+    assert.match(form.body, /id="addressConfirmed"/);
     assert.ok(
-      form.body.indexOf('id="postcode"') < form.body.indexOf('id="fullAddress"') &&
-        form.body.indexOf('id="fullAddress"') < form.body.indexOf('id="uprn"'),
-      "Property fields run postcode, full address, then UPRN"
+      form.body.indexOf('id="uprn"') < form.body.indexOf('id="fullAddress"') &&
+        form.body.indexOf('id="fullAddress"') < form.body.indexOf('id="postcode"'),
+      "Property fields run UPRN, then full address, then postcode"
     );
-    assert.doesNotMatch(form.body, /name="houseNumber"/);
     assert.match(form.body, /hhsrs-btn-secondary/);
     assert.match(form.body, /type="button"[^>]*>Clear Form</);
     const reviewIdx = form.body.indexOf(">Review<");
@@ -323,12 +332,19 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.equal(js.status, 200);
     assert.match(js.body, /Clear the form\? This cannot be undone\./);
     assert.match(js.body, /Europe\/London/);
-    assert.match(js.body, /btn-find-address/);
-    assert.match(js.body, /address-lookup/);
-    assert.match(js.body, /updateVisitGate/);
-    assert.match(js.body, /data-onward/);
+    assert.match(js.body, /btn-lookup-uprn/);
+    assert.match(js.body, /stock-lookup/);
+    assert.doesNotMatch(js.body, /address-lookup/);
+    assert.doesNotMatch(js.body, /btn-find-address/);
+    assert.match(js.body, /max-width: 1024px/);
+    assert.match(js.body, /MAX_EDGE = 3000/);
+    assert.match(js.body, /JPEG_QUALITY = 0\.88/);
+    assert.match(js.body, /SKIP_UNDER_BYTES = 3 \* 1024 \* 1024/);
+    assert.match(js.body, /CLIENT_MAX_BYTES = 25 \* 1024 \* 1024/);
     assert.match(js.body, /callUnreached/);
+    assert.match(js.body, /callRefBlankReason/);
     assert.match(js.body, /Add at least 1 photo/);
+    assert.doesNotMatch(js.body, /photo-modal|capture=/);
   });
 
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
@@ -420,28 +436,22 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(opened.body, /value="Alex Surveyor"/);
   });
 
-  it("returns a JSON error when address lookup is not configured", async () => {
-    const previous = process.env.IDEAL_POSTCODES_API_KEY;
-    delete process.env.IDEAL_POSTCODES_API_KEY;
-    try {
-      const app = createApp({ basePath: "/projectprogress" });
-      const missing = await request(app, "GET", "/HHSRS-site-form/address-lookup?postcode=SE1+2AA");
-      assert.equal(missing.status, 400);
-      assert.equal(JSON.parse(missing.body).error, "Enter a postcode and house number or name.");
+  it("looks up a UPRN on project stock and does not use Ideal Postcodes", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const missing = await request(app, "GET", "/HHSRS-site-form/stock-lookup?projectId=hhsrs-demo-current");
+    assert.equal(missing.status, 400);
+    assert.equal(JSON.parse(missing.body).error, "Enter a UPRN.");
 
-      const unconfigured = await request(
-        app,
-        "GET",
-        "/HHSRS-site-form/address-lookup?postcode=SE1+2AA&house=12"
-      );
-      assert.equal(unconfigured.status, 503);
-      const payload = JSON.parse(unconfigured.body);
-      assert.equal(payload.error, "Address lookup is not configured.");
-      assert.equal(JSON.stringify(payload).includes("api_key"), false);
-    } finally {
-      if (previous === undefined) delete process.env.IDEAL_POSTCODES_API_KEY;
-      else process.env.IDEAL_POSTCODES_API_KEY = previous;
-    }
+    const demo = await request(
+      app,
+      "GET",
+      "/HHSRS-site-form/stock-lookup?projectId=hhsrs-demo-current&uprn=100040123456"
+    );
+    assert.equal(demo.status, 404);
+    assert.match(JSON.parse(demo.body).error, /stock list/);
+
+    const gone = await request(app, "GET", "/HHSRS-site-form/address-lookup?postcode=SE1+2AA&house=12");
+    assert.equal(gone.status, 404);
   });
 
   it("returns validation errors on Review without saving", async () => {

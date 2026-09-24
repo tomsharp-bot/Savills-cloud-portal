@@ -1,8 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { HHSRS_CATEGORIES, isHhsrsCategory, isHhsrsRating } from "./hhsrs-categories.js";
+import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS, isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import {
+  composeCallNotes,
   emptyHhsrsValues,
+  formatStockAddressLine,
   HHSRS_MAX_FILE_BYTES,
   HHSRS_MAX_FILE_MB,
   HHSRS_MAX_PHOTOS,
@@ -15,9 +17,12 @@ import {
   isAllowedImageName,
   keepRequestedPhotos,
   listKeepPhotoNames,
+  normalizeUprn,
   readHhsrsValues,
   siteFormProjectFlags,
+  siteFormSectionState,
   siteSubmissionCallFields,
+  stockMatchFromRows,
   todayLondonDate,
   validateHhsrsForm,
   validatePhotos,
@@ -35,6 +40,18 @@ describe("HHSRS categories", () => {
     assert.equal(isHhsrsCategory("Not a hazard"), false);
     assert.equal(isHhsrsRating("Low"), true);
     assert.equal(isHhsrsRating("Critical"), false);
+    assert.deepEqual(HHSRS_SITE_FORM_RATINGS, [
+      "Low",
+      "Medium",
+      "Slight",
+      "Moderate",
+      "Severe",
+      "High - Emergency Risk",
+      "High - Severe Risk",
+    ]);
+    assert.equal(isHhsrsSiteFormRating("High - Emergency Risk"), true);
+    assert.equal(isHhsrsSiteFormRating("High"), false);
+    assert.equal(isHhsrsSiteFormRating("Extreme"), false);
   });
 });
 
@@ -58,9 +75,10 @@ describe("validateHhsrsForm", () => {
     postcode: "EX1 1AA",
     surveyorName: "Alex Surveyor",
     category: "Damp & Mould Growth",
-    rating: "High",
+    rating: "Severe",
     comment: "Visible mould in bathroom.",
     otherDetails: "No access issues.",
+    addressConfirmed: true,
   };
 
   it("accepts a complete issue and copies the active project name", () => {
@@ -80,7 +98,8 @@ describe("validateHhsrsForm", () => {
       assert.equal(result.errors.uprn, "Enter the UPRN.");
       assert.equal(result.errors.fullAddress, "Enter the full address.");
       assert.equal(result.errors.postcode, "Enter the postcode.");
-      assert.equal(result.errors.surveyorName, "Enter the surveyor name.");
+      assert.equal(result.errors.addressConfirmed, "Confirm the address is correct.");
+      assert.equal(result.errors.surveyorName, "Select a surveyor.");
       assert.equal(result.errors.category, "Select an HHSRS category.");
       assert.equal(result.errors.rating, "Select a rating.");
       assert.equal(result.errors.comment, "Enter a comment.");
@@ -96,8 +115,17 @@ describe("validateHhsrsForm", () => {
     assert.equal(badDate.ok, false);
     const badCat = validateHhsrsForm({ ...valid, category: "Damp & Mould Growth — High" }, project);
     assert.equal(badCat.ok, false);
-    const badRating = validateHhsrsForm({ ...valid, rating: "Cat 1" }, project);
+    const badRating = validateHhsrsForm({ ...valid, rating: "High" }, project);
     assert.equal(badRating.ok, false);
+    const extreme = validateHhsrsForm({ ...valid, rating: "Extreme" }, project);
+    assert.equal(extreme.ok, false);
+    const emergency = validateHhsrsForm({ ...valid, rating: "High - Emergency Risk" }, project);
+    assert.equal(emergency.ok, true);
+    const stranger = validateHhsrsForm(valid, project, { surveyorNames: ["Pat Jones"] });
+    assert.equal(stranger.ok, false);
+    if (!stranger.ok) assert.equal(stranger.errors.surveyorName, "Select a surveyor from Personnel.");
+    const known = validateHhsrsForm(valid, project, { surveyorNames: ["Alex Surveyor"] });
+    assert.equal(known.ok, true);
   });
 
   it("reads trimmed body fields and defaults the survey date", () => {
@@ -110,20 +138,25 @@ describe("validateHhsrsForm", () => {
     assert.equal(values.uprn, "1001");
     assert.equal(values.surveyDate, todayLondonDate());
     assert.equal(values.cat1Confirmed, false);
+    assert.equal(values.addressConfirmed, false);
     assert.equal(values.callUnreached, false);
     assert.match(todayLondonDate(), /^\d{4}-\d{2}-\d{2}$/);
-    assert.equal(readHhsrsValues({ cat1Confirmed: "true" }).cat1Confirmed, true);
-    assert.equal(readHhsrsValues({ callUnreached: "on", callUnreachedNote: " No answer " }).callUnreached, true);
-    assert.equal(readHhsrsValues({ callUnreached: "on", callUnreachedNote: " No answer " }).callUnreachedNote, "No answer");
+    assert.equal(readHhsrsValues({ cat1Confirmed: "true" }).cat1Confirmed, false);
+    assert.equal(readHhsrsValues({ addressConfirmed: "on" }).addressConfirmed, true);
+    assert.equal(readHhsrsValues({ uprn: " 1000 403 " }).uprn, "1000403");
+    const legacy = readHhsrsValues({ callUnreached: "on", callUnreachedNote: " No answer " });
+    assert.equal(legacy.callUnreached, true);
+    assert.equal(legacy.callRefBlankReason, "No answer");
+    assert.equal(legacy.callUnreachedNote, "");
   });
 
-  it("keeps Category 1 only for Onward and flags Saxon and call extras", () => {
+  it("does not store Category 1 from the site form, and flags Saxon and call extras", () => {
     const onward = validateHhsrsForm(
       { ...valid, cat1Confirmed: true, clientCallReference: "CR-9" },
       { id: "proj-1", name: "Onward 2026" }
     );
     assert.equal(onward.ok, true);
-    if (onward.ok) assert.equal(onward.data.cat1Confirmed, true);
+    if (onward.ok) assert.equal(onward.data.cat1Confirmed, false);
 
     const other = validateHhsrsForm({ ...valid, cat1Confirmed: true }, project);
     assert.equal(other.ok, true);
@@ -140,44 +173,76 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormProjectFlags("Demo current project (local)").onward, false);
   });
 
-  it("requires a call reference, or couldn't-get-through plus a why note", () => {
+  it("requires a call reference, or a blank reason (free text only when Other)", () => {
     const onward = { id: "proj-1", name: "Onward 2026" };
     const missing = validateHhsrsForm(valid, onward);
     assert.equal(missing.ok, false);
     if (!missing.ok) {
-      assert.match(String(missing.errors.clientCallReference), /Couldn't get through/);
+      assert.match(String(missing.errors.clientCallReference), /why it is blank/);
     }
 
     const withRef = validateHhsrsForm({ ...valid, clientCallReference: "CR-9" }, onward);
     assert.equal(withRef.ok, true);
     if (withRef.ok) assert.equal(withRef.data.cat1Confirmed, false);
 
-    const tickedBlank = validateHhsrsForm({ ...valid, callUnreached: true, callUnreachedNote: "  " }, onward);
+    const tickedBlank = validateHhsrsForm({ ...valid, callUnreached: true }, onward);
     assert.equal(tickedBlank.ok, false);
-    if (!tickedBlank.ok) assert.equal(tickedBlank.errors.callUnreachedNote, "Say why you couldn't get through.");
+    if (!tickedBlank.ok) assert.equal(tickedBlank.errors.callRefBlankReason, "Select why the call reference is blank.");
 
-    const noteOnly = validateHhsrsForm({ ...valid, callUnreachedNote: "Voicemail full." }, onward);
-    assert.equal(noteOnly.ok, false);
+    const otherBlank = validateHhsrsForm(
+      { ...valid, callUnreached: true, callRefBlankReason: "Other", callUnreachedNote: "  " },
+      onward
+    );
+    assert.equal(otherBlank.ok, false);
+    if (!otherBlank.ok) assert.equal(otherBlank.errors.callUnreachedNote, "Say why the call reference is blank.");
+
+    const noAnswer = validateHhsrsForm(
+      { ...valid, callUnreached: true, callRefBlankReason: "No answer" },
+      onward
+    );
+    assert.equal(noAnswer.ok, true);
+    if (noAnswer.ok) {
+      assert.deepEqual(siteSubmissionCallFields(noAnswer.data), {
+        clientCallReference: "",
+        callOutcome: "Attempted",
+        callNotes: "No answer",
+      });
+    }
+
+    const busyNote = validateHhsrsForm(
+      { ...valid, callUnreached: true, callRefBlankReason: "Engaged/busy", callUnreachedNote: "Line stayed busy" },
+      onward
+    );
+    assert.equal(busyNote.ok, true);
+    if (busyNote.ok) {
+      assert.equal(composeCallNotes("Engaged/busy", "Line stayed busy"), "Engaged/busy — Line stayed busy");
+      assert.deepEqual(siteSubmissionCallFields(busyNote.data), {
+        clientCallReference: "",
+        callOutcome: "Attempted",
+        callNotes: "Engaged/busy — Line stayed busy",
+      });
+    }
 
     const unreached = validateHhsrsForm(
-      { ...valid, callUnreached: true, callUnreachedNote: "Voicemail full." },
+      { ...valid, callUnreached: true, callRefBlankReason: "Other", callUnreachedNote: "Voicemail full." },
       onward
     );
     assert.equal(unreached.ok, true);
     if (unreached.ok) {
       assert.equal(unreached.data.clientCallReference, "");
       assert.equal(unreached.data.callUnreached, true);
+      assert.equal(unreached.data.callRefBlankReason, "Other");
       assert.equal(unreached.data.callUnreachedNote, "Voicemail full.");
       assert.equal(unreached.data.otherDetails, "No access issues.");
       assert.deepEqual(siteSubmissionCallFields(unreached.data), {
         clientCallReference: "",
         callOutcome: "Attempted",
-        callNotes: "Voicemail full.",
+        callNotes: "Other — Voicemail full.",
       });
     }
 
     const refAndSkip = validateHhsrsForm(
-      { ...valid, clientCallReference: "CR-9", callUnreached: true, callUnreachedNote: "Voicemail full." },
+      { ...valid, clientCallReference: "CR-9", callUnreached: true, callRefBlankReason: "No answer" },
       onward
     );
     assert.equal(refAndSkip.ok, true);
@@ -185,7 +250,7 @@ describe("validateHhsrsForm", () => {
       assert.deepEqual(siteSubmissionCallFields(refAndSkip.data), {
         clientCallReference: "",
         callOutcome: "Attempted",
-        callNotes: "Voicemail full.",
+        callNotes: "No answer",
       });
     }
 
@@ -229,7 +294,8 @@ describe("validatePhotos", () => {
     assert.equal(hhsrsMulterLimits.fileSize, HHSRS_MAX_FILE_BYTES);
     assert.equal(hhsrsMulterLimits.files, HHSRS_MAX_PHOTOS);
     assert.match(hhsrsPhotoSizeError(), /each photo up to 40MB/i);
-    assert.match(hhsrsPhotoHint(), /each photo up to 40MB/i);
+    assert.match(hhsrsPhotoHint(), /3000px/);
+    assert.match(hhsrsPhotoHint(), /25 MB/);
   });
 
   it("keeps only requested draft photos", () => {
@@ -243,5 +309,96 @@ describe("validatePhotos", () => {
       keepRequestedPhotos(draft, listKeepPhotoNames({ keepPhotos: ["keep.jpg"] })).map((p) => p.storedName),
       ["keep.jpg"]
     );
+  });
+});
+
+describe("stock UPRN address", () => {
+  it("builds a confirmable line and prefers a dwelling", () => {
+    assert.equal(normalizeUprn(" 1000 40123456 "), "100040123456");
+    assert.equal(
+      formatStockAddressLine({
+        number: "12",
+        block: "",
+        street: "Moor Cross",
+        area: "Bude",
+        city: "Bude",
+      }),
+      "12, Moor Cross, Bude"
+    );
+    const match = stockMatchFromRows([
+      {
+        uprn: "100040123890",
+        kind: "block",
+        number: "3",
+        block: "A",
+        street: "New Road",
+        area: "Bude",
+        city: "Bude",
+        postcode: "EX23 9AP",
+      },
+      {
+        uprn: "100040123890",
+        kind: "dwelling",
+        number: "3",
+        block: "A",
+        street: "New Road",
+        area: "Bude",
+        city: "Bude",
+        postcode: "EX23 9AP",
+      },
+    ]);
+    assert.equal(match?.type, "Dwelling");
+    assert.equal(match?.asset, "3");
+    assert.equal(match?.line, "3, A, New Road, Bude");
+    assert.equal(match?.postcode, "EX23 9AP");
+    assert.equal(stockMatchFromRows([]), null);
+  });
+
+  it("opens the next section only when the current one is complete", () => {
+    const empty = siteFormSectionState(emptyHhsrsValues(), "Gateway 2026");
+    assert.deepEqual(empty, { visit: false, property: false, hazard: false, extras: false });
+    const visit = siteFormSectionState(
+      { ...emptyHhsrsValues(), projectId: "p", surveyDate: "2026-09-20", surveyorName: "Alex Surveyor" },
+      "Gateway 2026"
+    );
+    assert.equal(visit.visit, true);
+    assert.equal(visit.property, false);
+    const ready = siteFormSectionState(
+      {
+        ...emptyHhsrsValues(),
+        projectId: "p",
+        surveyDate: "2026-09-20",
+        surveyorName: "Alex Surveyor",
+        uprn: "1001",
+        fullAddress: "1 High Street",
+        postcode: "EX1 1AA",
+        addressConfirmed: true,
+        category: "Damp & Mould Growth",
+        rating: "Low",
+        comment: "Damp patch.",
+        otherDetails: "None.",
+      },
+      "Gateway 2026"
+    );
+    assert.equal(ready.extras, true);
+    const onward = siteFormSectionState(
+      {
+        ...emptyHhsrsValues(),
+        projectId: "p",
+        surveyDate: "2026-09-20",
+        surveyorName: "Alex Surveyor",
+        uprn: "1001",
+        fullAddress: "1 High Street",
+        postcode: "EX1 1AA",
+        addressConfirmed: true,
+        category: "Damp & Mould Growth",
+        rating: "Low",
+        comment: "Damp patch.",
+        otherDetails: "None.",
+      },
+      "Onward 2026"
+    );
+    assert.equal(onward.hazard, true);
+    assert.equal(onward.extras, false);
   });
 });

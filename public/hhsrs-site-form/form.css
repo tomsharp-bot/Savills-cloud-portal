@@ -616,7 +616,11 @@ body.hhsrs-form-page {
 .hhsrs-form-page .match-list button { font-size: 0.9rem; }
 .hhsrs-form-page .form-rest[hidden],
 .hhsrs-form-page .gate-hint[hidden],
-.hhsrs-form-page .project-extra[hidden] {
+.hhsrs-form-page .project-extra[hidden],
+.hhsrs-form-page .flow-step[hidden],
+.hhsrs-form-page .addr-card[hidden],
+.hhsrs-form-page #form-actions[hidden],
+.hhsrs-form-page #call-ref-why[hidden] {
   display: none !important;
 }
 .hhsrs-form-page .form-rest.is-opening .info-box {
@@ -635,6 +639,77 @@ body.hhsrs-form-page {
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.4;
+}
+.hhsrs-form-page .photo-card figcaption {
+  white-space: normal;
+  text-overflow: unset;
+  word-break: break-word;
+}
+.hhsrs-form-page .addr-card {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.hhsrs-form-page .confirm-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 12px;
+  background: #fffceb;
+  border: 1px solid #f0e08a;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+.hhsrs-form-page .confirm-row input {
+  width: auto;
+  min-height: 0;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.hhsrs-form-page .hhsrs-btn-change {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--blue);
+  font-size: 12px;
+  min-height: 0;
+  padding: 8px 12px;
+  margin-top: 10px;
+  width: 100%;
+  box-shadow: none;
+}
+.hhsrs-form-page .flow-step.is-arrive {
+  animation: hhsrs-flow-arrive 0.35s ease;
+}
+@keyframes hhsrs-flow-arrive {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hhsrs-form-page .optional {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+/* Desktop stays open once the visit section is done. Phone and tablet step through. */
+@media (min-width: 1025px) {
+  .hhsrs-form-page #issue-details:not([hidden]) .flow-step,
+  .hhsrs-form-page #issue-details:not([hidden]) #form-actions {
+    display: block !important;
+  }
+}
+@media (max-width: 1024px) {
+  .hhsrs-form-page .flow-step.is-current {
+    outline: 2px solid rgba(26, 75, 124, 0.35);
+    outline-offset: 2px;
+  }
 }
 @media (max-width: 430px) {
   .hhsrs-form-page .panel-top { padding: 14px 14px; }
