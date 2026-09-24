@@ -182,6 +182,12 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /value=""/);
     assert.match(pending, /photo-att-col/);
     assert.match(pending, /Review Case/);
+    assert.match(review, /id="rv-email-bcc"/);
+    assert.match(review, /id="btn-abandon-claim"/);
+    assert.match(review, /id="rv-draft-status"/);
+    assert.match(js, /skipDraft \|\| opts\.keepEmail/);
+    assert.match(js, /Draft kept — come back anytime until sent or abandoned\./);
+    assert.match(js, /hhsrs-review-last-key-v1/);
     assert.doesNotMatch(sidebar, /side-brand/);
     assert.match(review, /id="rv-call-notes" name="callNotes"/);
     assert.match(review, /row\.callNotes/);

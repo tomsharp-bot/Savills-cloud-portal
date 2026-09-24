@@ -1,0 +1,6 @@
+<% const claim = typeof claimRow !== "undefined" ? claimRow : null; %>
+<% if (claim && claim.status === "stale") { %>
+  <div class="addr-claim"><span class="claim-chip is-stale">Still open — check with <%= claim.claimedBy || "someone" %></span></div>
+<% } else if (claim && claim.status === "claimed") { %>
+  <div class="addr-claim"><span class="claim-chip is-claimed">Claimed — <%= claim.claimedBy || "someone" %></span></div>
+<% } %>

@@ -328,6 +328,9 @@ model HhsrsSiteSubmission {
   emailBody            String    @default("")
   emailSentAt          DateTime?
   emailSentBy          String    @default("")
+  /// Office claim. Empty claimedBy means the case is open. Stale is derived from claimedAt — never auto-stolen.
+  claimedBy            String    @default("")
+  claimedAt            DateTime?
   lastEditedBy         String    @default("")
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt

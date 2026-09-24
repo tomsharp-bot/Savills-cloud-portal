@@ -17,6 +17,7 @@ import {
   formatTimeAgo,
   formatWorkspaceDate,
   isHhsrsCaseStatus,
+  isWaitingStatus,
   draftEmailFromReviewFields,
   mergeReviewDraftFields,
   photoAttachmentCount,
@@ -30,19 +31,22 @@ import {
   type ReporterSummary,
 } from "../lib/hhsrs-reporter.js";
 import {
+  PP_HHSRS_ALIAS,
   RATING_OPTIONS,
   REPORTER_DEMO_PROJECTS,
   SITE_FORM_PUBLIC_URL,
   matchDemoProject,
+  progressNameForCase,
 } from "../lib/hhsrs-reporter-projects.js";
 import {
-  ARCHIVE_INCOMPLETE_TOAST,
+  PROJECT_PROGRESS_CHANGE_TOAST,
   buildProjectOverview,
-  type ArchiveOverride,
   type LiveProjectCounts,
+  type ProgressProject,
   type ProjectOverview,
 } from "../lib/hhsrs-reporter-overview.js";
 import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
+import { claimRowClass, claimView, claimerLabel, type ClaimView } from "../lib/hhsrs-claims.js";
 
 export const hhsrsReporterRouter = Router();
 
@@ -57,6 +61,10 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
   res.locals.formatWorkspaceDate = formatWorkspaceDate;
   res.locals.ratingDisplayClass = ratingDisplayClass;
   res.locals.photoAttachmentCount = photoAttachmentCount;
+  res.locals.reporterCasePhotos = reporterCasePhotos;
+  res.locals.claimView = claimView;
+  res.locals.claimRowClass = (row: { claimedBy?: string | null; claimedAt?: Date | string | null }) =>
+    claimRowClass(claimView(row).status);
   res.locals.siteFormPublicUrl = SITE_FORM_PUBLIC_URL;
   res.locals.logoUrl = "/hhsrs-reporter/savills-logo.svg";
   // Logo is served from portal static; prefer baseUrl when available.
@@ -146,6 +154,46 @@ async function loadCase(id: string) {
   return prisma.hhsrsSiteSubmission.findUnique({ where: { id } });
 }
 
+async function loadProgressProjects(): Promise<ProgressProject[]> {
+  return prisma.project.findMany({
+    select: { name: true, stage: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+async function loadWaitingIds(): Promise<string[]> {
+  const rows = await prisma.hhsrsSiteSubmission.findMany({
+    where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((row) => row.id);
+}
+
+function reviewProjectNames(progress: ProgressProject[], selected: string): string[] {
+  const names = progress.filter((project) => project.stage === "current").map((project) => project.name);
+  if (selected && !names.some((name) => name === selected)) names.push(selected);
+  return names;
+}
+
+/** Claim an open waiting case. Claimed and stale rows are left with their current owner. */
+async function claimIfOpen(
+  row: NonNullable<Awaited<ReturnType<typeof loadCase>>>,
+  claimer: string
+): Promise<NonNullable<Awaited<ReturnType<typeof loadCase>>>> {
+  if (!isWaitingStatus(row.status)) return row;
+  if (claimView(row).status !== "open") return row;
+  const claimedAt = new Date();
+  const result = await prisma.hhsrsSiteSubmission.updateMany({
+    where: { id: row.id, claimedBy: "" },
+    data: { claimedBy: claimer, claimedAt },
+  });
+  if (result.count !== 1) {
+    return (await loadCase(row.id)) || row;
+  }
+  return { ...row, claimedBy: claimer, claimedAt };
+}
+
 function shellLocals(opts: {
   activeNav: "pending" | "review" | "main-log" | "admin" | "project-overview";
   summary: ReporterSummary;
@@ -183,19 +231,26 @@ hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Respo
       rating: true,
       comment: true,
       createdAt: true,
+      claimedBy: true,
+      claimedAt: true,
     },
   });
   res.setHeader("Cache-Control", "no-store");
   res.json({
-    pending: rows.map((row) => ({
-      id: row.id,
-      projectName: row.projectName,
-      fullAddress: row.fullAddress,
-      category: row.category,
-      rating: row.rating,
-      summary: pendingAlertSummary(row),
-      createdAt: row.createdAt.toISOString(),
-    })),
+    pending: rows.map((row) => {
+      const claim = claimView(row);
+      return {
+        id: row.id,
+        projectName: row.projectName,
+        fullAddress: row.fullAddress,
+        category: row.category,
+        rating: row.rating,
+        summary: pendingAlertSummary(row),
+        createdAt: row.createdAt.toISOString(),
+        claimStatus: claim.status,
+        claimedBy: claim.claimedBy,
+      };
+    }),
   });
 });
 
@@ -225,13 +280,15 @@ hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
 
 /* ---------- Review and create (blank) ---------- */
 hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
-  const [summary, alsoWaiting] = await Promise.all([
+  const [summary, alsoWaiting, progress, waitingIds] = await Promise.all([
     loadSummary(),
     prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
       orderBy: { createdAt: "desc" },
       take: 12,
     }),
+    loadProgressProjects(),
+    loadWaitingIds(),
   ]);
   const flash = takeFlash(req);
   res.render("hhsrs-reporter/review", {
@@ -249,9 +306,15 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     draftBody: "",
     draftTo: "",
     draftCc: "",
+    draftBcc: "",
     draftError: "",
     alsoWaiting,
     demoProjects: REPORTER_DEMO_PROJECTS,
+    reviewProjectNames: reviewProjectNames(progress, ""),
+    reviewProjectValue: "",
+    projectAliases: PP_HHSRS_ALIAS,
+    waitingIds,
+    claim: null as ClaimView | null,
     ratingOptions: RATING_OPTIONS,
     categories: HHSRS_CATEGORIES,
     ratings: HHSRS_RATINGS,
@@ -273,11 +336,15 @@ function renderReview(
     draftError?: string;
     summary: ReporterSummary;
     alsoWaiting: NonNullable<Awaited<ReturnType<typeof loadCase>>>[];
+    progress: ProgressProject[];
+    waitingIds: string[];
   }
 ): void {
   const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH);
   const draft = tryDraftFromRow(row);
-  const matched = matchDemoProject(row.projectName);
+  const currentNames = opts.progress.filter((project) => project.stage === "current").map((project) => project.name);
+  const reviewProjectValue = progressNameForCase(row.projectName, currentNames);
+  const matched = matchDemoProject(reviewProjectValue) || matchDemoProject(row.projectName);
   const flash = takeFlash(req);
   res.render("hhsrs-reporter/review", {
     ...shellLocals({
@@ -294,9 +361,15 @@ function renderReview(
     draftBody: draft.body || row.emailBody,
     draftTo: matched ? matched.to.join("; ") : "",
     draftCc: matched ? matched.cc.join("; ") : "",
+    draftBcc: "",
     draftError: opts.draftError || draft.error,
     alsoWaiting: opts.alsoWaiting.filter((r) => r.id !== row.id),
     demoProjects: REPORTER_DEMO_PROJECTS,
+    reviewProjectNames: reviewProjectNames(opts.progress, reviewProjectValue),
+    reviewProjectValue,
+    projectAliases: PP_HHSRS_ALIAS,
+    waitingIds: opts.waitingIds,
+    claim: claimView(row),
     ratingOptions: RATING_OPTIONS,
     categories: HHSRS_CATEGORIES,
     ratings: HHSRS_RATINGS,
@@ -309,7 +382,7 @@ function renderReview(
 }
 
 async function reviewContext(excludeId?: string) {
-  const [summary, alsoWaiting] = await Promise.all([
+  const [summary, alsoWaiting, progress, waitingIds] = await Promise.all([
     loadSummary(),
     prisma.hhsrsSiteSubmission.findMany({
       where: {
@@ -319,8 +392,10 @@ async function reviewContext(excludeId?: string) {
       orderBy: { createdAt: "desc" },
       take: 12,
     }),
+    loadProgressProjects(),
+    loadWaitingIds(),
   ]);
-  return { summary, alsoWaiting };
+  return { summary, alsoWaiting, progress, waitingIds };
 }
 
 hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
@@ -343,11 +418,12 @@ hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
 });
 
 hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
-  const row = await loadCase(req.params.id);
-  if (!row) {
+  const loaded = await loadCase(req.params.id);
+  if (!loaded) {
     res.status(404).send("Case not found.");
     return;
   }
+  const row = await claimIfOpen(loaded, claimerLabel(req.user));
   const ctx = await reviewContext(row.id);
   renderReview(req, res, row, ctx);
 });
@@ -465,23 +541,9 @@ async function loadLiveProjectCounts(): Promise<{
   return { hasLiveSubmissions: rows.length > 0, liveCounts };
 }
 
-async function loadArchiveOverrides(): Promise<ArchiveOverride[]> {
-  try {
-    const rows = await prisma.hhsrsReporterProjectArchive.findMany();
-    return rows.map((row) => ({
-      name: row.name,
-      archived: row.archived,
-      completed: row.completed,
-    }));
-  } catch (err) {
-    console.error("HHSRS project archive lookup failed", err);
-    return [];
-  }
-}
-
 async function loadProjectOverview(): Promise<ProjectOverview> {
-  const [live, overrides] = await Promise.all([loadLiveProjectCounts(), loadArchiveOverrides()]);
-  return buildProjectOverview({ ...live, overrides });
+  const [live, projects] = await Promise.all([loadLiveProjectCounts(), loadProgressProjects()]);
+  return buildProjectOverview({ projects, liveCounts: live.liveCounts });
 }
 
 /* ---------- Project overview ---------- */
@@ -503,66 +565,13 @@ hhsrsReporterRouter.get("/project-overview", async (req: Request, res: Response)
 });
 
 hhsrsReporterRouter.post("/project-overview/archive", async (req: Request, res: Response) => {
-  const name = String(req.body?.projectName || "").trim();
-  const back = `${HHSRS_REPORTER_PATH}/project-overview`;
-  if (!name) {
-    flashPo(req, "Choose a project to archive.");
-    res.redirect(back);
-    return;
-  }
-  const overview = await loadProjectOverview();
-  const row = overview.active.find((item) => item.name === name);
-  if (!row) {
-    flashPo(req, "That project is not on the active list.");
-    res.redirect(back);
-    return;
-  }
-  if (!row.canArchive) {
-    flashPo(req, ARCHIVE_INCOMPLETE_TOAST);
-    res.redirect(back);
-    return;
-  }
-  try {
-    await prisma.hhsrsReporterProjectArchive.upsert({
-      where: { name },
-      create: { name, archived: true, completed: row.completed },
-      update: { archived: true, completed: row.completed },
-    });
-    flashPo(req, `${name} archived. Use Restore under Archived to reverse it.`);
-  } catch (err) {
-    console.error("HHSRS project archive failed", err);
-    flashPo(req, "Could not archive that project. Try again once the database update is applied.");
-  }
-  res.redirect(back);
+  flashPo(req, PROJECT_PROGRESS_CHANGE_TOAST);
+  res.redirect(`${HHSRS_REPORTER_PATH}/project-overview`);
 });
 
 hhsrsReporterRouter.post("/project-overview/restore", async (req: Request, res: Response) => {
-  const name = String(req.body?.projectName || "").trim();
-  const back = `${HHSRS_REPORTER_PATH}/project-overview`;
-  if (!name) {
-    flashPo(req, "Choose a project to restore.");
-    res.redirect(back);
-    return;
-  }
-  const overview = await loadProjectOverview();
-  const row = overview.archived.find((item) => item.name === name);
-  if (!row) {
-    flashPo(req, "That project is not archived.");
-    res.redirect(back);
-    return;
-  }
-  try {
-    await prisma.hhsrsReporterProjectArchive.upsert({
-      where: { name },
-      create: { name, archived: false, completed: row.completed },
-      update: { archived: false, completed: row.completed },
-    });
-    flashPo(req, `${name} restored.`);
-  } catch (err) {
-    console.error("HHSRS project restore failed", err);
-    flashPo(req, "Could not restore that project. Try again once the database update is applied.");
-  }
-  res.redirect(back);
+  flashPo(req, PROJECT_PROGRESS_CHANGE_TOAST);
+  res.redirect(`${HHSRS_REPORTER_PATH}/project-overview`);
 });
 
 /* ---------- Admin ---------- */
@@ -588,6 +597,10 @@ hhsrsReporterRouter.post("/review/:id", async (req: Request, res: Response) => {
 
 hhsrsReporterRouter.post("/review/:id/mark-actioned", async (req: Request, res: Response) => {
   await handleMarkActioned(req, res, req.params.id);
+});
+
+hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Response) => {
+  await handleAbandon(req, res, req.params.id);
 });
 
 /* Back-compat paths from PR #20 */
@@ -740,6 +753,8 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
       lastEditedBy: editor,
       emailSubject: draft.subject || row.emailSubject,
       emailBody: draft.body || row.emailBody,
+      claimedBy: "",
+      claimedAt: null,
     },
   });
   if (result.count !== 1) {
@@ -757,6 +772,21 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
   }
   flashOk(req, "Marked as actioned. Case moved to Main Log. Attach photos in Outlook before you send.");
   res.redirect(`${HHSRS_REPORTER_PATH}/main-log`);
+}
+
+async function handleAbandon(req: Request, res: Response, id: string): Promise<void> {
+  const row = await loadCase(id);
+  if (!row) {
+    res.status(404).send("Case not found.");
+    return;
+  }
+  if (isWaitingStatus(row.status)) {
+    await prisma.hhsrsSiteSubmission.update({
+      where: { id: row.id },
+      data: { claimedBy: "", claimedAt: null },
+    });
+  }
+  res.redirect(HHSRS_REPORTER_PATH);
 }
 
 hhsrsReporterRouter.get("/:id/photos/:name", async (req: Request, res: Response) => {

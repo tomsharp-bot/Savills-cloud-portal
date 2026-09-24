@@ -292,14 +292,65 @@ export const RATING_OPTIONS: Record<RatingScheme, string[]> = {
 };
 
 function findRoster(name: string): ReporterProjectDemo | null {
-  return REPORTER_DEMO_PROJECTS.find((project) => project.name === name) || null;
+  const hit =
+    HHSRS_PROJECT_ROSTER.find((project) => project.name.toLowerCase() === name.toLowerCase()) || null;
+  if (!hit) return null;
+  const { demoCompleted: _completed, demoWaiting: _waiting, seedArchived: _archived, ...project } = hit;
+  return project;
 }
 
-/** Match a live submission projectName to the closest roster config. */
+/**
+ * Project Progress display name → Colin / HHSRS roster name.
+ * Waiting rows and email rules resolve through this map (approved offline mock).
+ */
+export const PP_HHSRS_ALIAS: Record<string, string> = {
+  Onward: "Onward 2026",
+  "Vico 2026": "Vico 2026 8k",
+  "Cornwall 2026 Ph2": "Cornwall 2026 Ph2",
+  "A2D Ph4": "A2D 2026 Phase 4",
+  "BPHA 2026 ACQ": "BPHA 2026 ACQ",
+  "LFHA 2026": "LFHA (Leeds)",
+  "Southern Blocks": "Southern Housing 2026 Blks",
+  Flagship: "Flagship 2026",
+  "Radius Ph1": "Radius 2025 Phase 1",
+  "Saxon Weald Ph 4": "Saxon Weald 2026 Phase 4",
+  "Bristol Ph2": "Bristol Council 2025",
+  MTVH: "MTVH Pilot 2026",
+};
+
+/** Roster key for a Project Progress name. Unknown names stay as typed. */
+export function hhsrsKey(ppName: string): string {
+  const raw = (ppName || "").trim();
+  if (!raw) return "";
+  if (PP_HHSRS_ALIAS[raw]) return PP_HHSRS_ALIAS[raw];
+  const found = Object.keys(PP_HHSRS_ALIAS).find((key) => key.toLowerCase() === raw.toLowerCase());
+  return found ? PP_HHSRS_ALIAS[found] : raw;
+}
+
+/**
+ * Project Progress name that should own a stored HHSRS / Colin project name.
+ * Returns the stored name when none of the live Progress names match.
+ */
+export function progressNameForCase(caseName: string, progressNames: readonly string[]): string {
+  const raw = (caseName || "").trim();
+  if (!raw) return "";
+  const exact = progressNames.find((name) => name.toLowerCase() === raw.toLowerCase());
+  if (exact) return exact;
+  const aliased = progressNames.find((name) => hhsrsKey(name).toLowerCase() === raw.toLowerCase());
+  if (aliased) return aliased;
+  return raw;
+}
+
+/** Match a live submission or Project Progress name to the closest roster config. */
 export function matchDemoProject(projectName: string): ReporterProjectDemo | null {
   const raw = (projectName || "").trim();
   if (!raw) return null;
-  const exact = REPORTER_DEMO_PROJECTS.find((project) => project.name.toLowerCase() === raw.toLowerCase());
+  const aliased = hhsrsKey(raw);
+  if (aliased && aliased.toLowerCase() !== raw.toLowerCase()) {
+    const viaAlias = findRoster(aliased);
+    if (viaAlias) return viaAlias;
+  }
+  const exact = findRoster(raw);
   if (exact) return exact;
   const lower = raw.toLowerCase();
   if (lower.startsWith("onward")) return findRoster("Onward 2026");
