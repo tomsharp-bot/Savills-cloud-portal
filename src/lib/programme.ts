@@ -416,19 +416,23 @@ export function teamPoolExcludingAdmins<T extends { name: string }>(
  * People with active === false are off the main grid and do not count.
  * Missing active means on the board, matching the programme tick default.
  * Two people assigned in the same week count as one tile.
+ * A tile matches the project by full name or by the short stamp
+ * ({@link programmeCellMatchesProject}). `catalogue` is the Current and
+ * Upcoming names, so two different projects that share a stamp are not merged.
  */
 export function projectWeeksOnGrid(
   projectName: string,
-  people: readonly { weeks?: readonly string[]; active?: boolean }[]
+  people: readonly { weeks?: readonly string[]; active?: boolean }[],
+  catalogue?: readonly string[]
 ): number {
-  const key = canonName(projectName);
-  if (!key) return 0;
+  if (!programmeCanon(projectName)) return 0;
+  const names = catalogue && catalogue.length ? catalogue : [projectName];
   const hit = new Set<number>();
   for (const person of people) {
     if (person.active === false) continue;
     const weeks = person.weeks || [];
     for (let i = 0; i < weeks.length; i++) {
-      if (canonName(weeks[i] || "") === key) hit.add(i);
+      if (programmeCellMatchesProject(weeks[i] || "", projectName, names)) hit.add(i);
     }
   }
   return hit.size;
@@ -474,12 +478,67 @@ export function programmeShortLabel(name: string): string {
   return label || `${value.slice(0, 11)}…`;
 }
 
+/**
+ * Grid text compared with a Project Progress name.
+ * Case, repeated spaces, en-dash/em-dash, and "Ph 4" vs "Ph4" do not matter.
+ */
+export function programmeCanon(name: string): string {
+  return canonName(
+    String(name || "")
+      .replace(/[\u2013\u2014\u2212]/g, "-")
+      .replace(/\bPh(?:ase)?\s+(\d+)\b/gi, "Ph$1")
+  );
+}
+
+function programmeStampKey(name: string): string {
+  return canonName(programmeShortLabel(String(name || "").replace(/[\u2013\u2014\u2212]/g, "-")));
+}
+
+/**
+ * True when a main-grid cell is this project.
+ *
+ * Exact names match first. Otherwise the cell counts when it is the project's
+ * short stamp, or when the cell's short stamp is the project's full name
+ * (`LFHA` ↔ `LFHA 2026`, `A2D Ph4` ↔ `A2Dominion 2026 - Ph4`, `Cornwall` ↔
+ * `Cornwall 2026 Ph2`). If another Current/Upcoming project already owns that
+ * text exactly, or more than one project shares the stamp, the alias is not used.
+ */
+export function programmeCellMatchesProject(
+  cell: string,
+  projectName: string,
+  catalogue?: readonly string[]
+): boolean {
+  const cellKey = programmeCanon(cell);
+  const projectKey = programmeCanon(projectName);
+  if (!cellKey || !projectKey) return false;
+  if (cellKey === projectKey) return true;
+
+  const names = (catalogue && catalogue.length ? catalogue : [projectName]).filter((name) => programmeCanon(name));
+  if (names.some((name) => programmeCanon(name) === cellKey)) return false;
+
+  const cellStamp = programmeStampKey(cell);
+  const projectStamp = programmeStampKey(projectName);
+
+  if (cellKey === projectStamp) {
+    const claimants = names.filter((name) => programmeCanon(name) === cellKey || programmeStampKey(name) === cellKey);
+    return claimants.length === 1 && programmeCanon(claimants[0]) === projectKey;
+  }
+
+  if (cellStamp && cellStamp !== cellKey && cellStamp === projectKey) {
+    const claimants = names.filter((name) => programmeCanon(name) === cellStamp);
+    return claimants.length === 1 && programmeCanon(claimants[0]) === projectKey;
+  }
+
+  return false;
+}
+
 /** Approx surveys = distinct on-grid week columns for the project × 40. */
 export function approxSurveysOnGrid(
   projectName: string,
-  people: readonly { weeks?: readonly string[]; active?: boolean }[]
+  people: readonly { weeks?: readonly string[]; active?: boolean }[],
+  catalogue?: readonly string[]
 ): number {
-  return projectWeeksOnGrid(projectName, people) * APPROX_SURVEYS_PER_WEEK;
+  return projectWeeksOnGrid(projectName, people, catalogue) * APPROX_SURVEYS_PER_WEEK;
 }
 
 export function surveyTypesForSave(seeded: string, text: unknown): { text: string; clear: boolean } | null {

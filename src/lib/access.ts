@@ -91,6 +91,35 @@ export function canSeeUpcoming(user: AuthedUser): boolean {
   return isAdmin(user);
 }
 
+/**
+ * Projects Programme is an admin page. Surveyors and clients do not see it.
+ * Write access is a separate allowlist: {@link canEditProgramme}.
+ */
+export function canSeeProgramme(user: AuthedUser | null | undefined): boolean {
+  return isAdmin(user);
+}
+
+/**
+ * Tom Sharp’s admin login, and only that account, may change the programme.
+ *
+ * Personnel logins are `username` (unique) and an optional email. Sign-in
+ * accepts either, so both fields are checked. The allowlist is the real admin
+ * identity used in this portal: username `tsharp` and email
+ * `tsharp@savillshousing.co.uk`. Display name "Tom Sharp" is not enough —
+ * another Tom, or a surveyor with a similar login, cannot edit.
+ */
+export const PROGRAMME_EDITOR_IDS = ["tsharp", "tsharp@savillshousing.co.uk"] as const;
+
+export function canEditProgramme(user: AuthedUser | null | undefined): boolean {
+  if (!user || !isAdmin(user)) return false;
+  const ids = new Set(
+    [user.username, user.email]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  return PROGRAMME_EDITOR_IDS.some((allowed) => ids.has(allowed));
+}
+
 export function clientForcedTab(user: AuthedUser, tab: string): string {
   if (isClient(user)) return "completions";
   return tab;

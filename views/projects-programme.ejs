@@ -11,7 +11,7 @@
 <div id="screen-app" class="programme-page">
   <%- include("partials/topbar") %>
   <%- include("partials/admin-hub", { active: "programme" }) %>
-  <main class="programme wrap">
+  <main class="programme wrap<%= canEdit ? '' : ' is-readonly' %>">
     <div class="head">
       <div>
         <h1>Projects Programme</h1>
@@ -19,12 +19,14 @@
       </div>
       <div class="head-actions">
         <button type="button" class="btn btn-primary" id="btnExcel">Export Excel</button>
+        <% if (canEdit) { %>
         <button type="button" class="btn" id="btnRefresh" title="Apply Active ticks: move people on or off the main grid">Refresh</button>
+        <% } %>
       </div>
     </div>
 
     <div class="toolbar">
-      <span class="hint" id="dndHint">Tick Active (left of the name), then Refresh to update the board. Drag a Current or Upcoming stamp onto a week (Shift+drop paints a run). Drag a grid tile across cells to copy it. Click a tile, then Delete or Backspace to clear it.</span>
+      <span class="hint" id="dndHint"><% if (canEdit) { %>Tick Active (left of the name), then Refresh to update the board. Drag a Current or Upcoming stamp onto a week (Shift+drop paints a run). Drag a grid tile across cells to copy it. Click a tile, then Delete or Backspace to clear it.<% } else { %>View only. Every admin can open this board and export Excel. Only Tom Sharp can move tiles, edit cells, or save changes.<% } %></span>
       <span class="meta"><span id="meta"></span> <span id="saveState"></span></span>
     </div>
 
@@ -82,7 +84,7 @@
         <div class="proj-col" id="colUpcoming">
           <h3>Upcoming<span class="proj-sub">Awaiting start / confirmation</span></h3>
           <table class="proj" id="projUpcoming">
-            <thead><tr><th style="width:34%">Project</th><th style="width:14%">Stock</th><th style="width:34%">Survey types</th><th style="width:18%">Project manager</th></tr></thead>
+            <thead><tr><th style="width:22%">Project</th><th style="width:10%">Stock</th><th style="width:24%">Survey types</th><th style="width:16%">Project manager</th><th style="width:14%" title="Distinct week columns on the main programme grid where this project is assigned. Several people in the same week count once.">Nr of Weeks</th><th style="width:14%" title="Nr of Weeks × 40. The same distinct week columns on the main grid, as an approximate survey count.">Approx surveys</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -96,7 +98,7 @@
       </div>
     </section>
 
-    <p class="footer">Board changes are saved for every admin. Current, Upcoming, and Completed read Project Progress. Stock is the number of assets on that project. Survey-type text starts from the project's survey-type ticks.</p>
+    <p class="footer"><% if (canEdit) { %>Board changes are saved from your account.<% } else { %>This board is view only for your account. Tom Sharp can change it.<% } %> Current, Upcoming, and Completed read Project Progress. Stock is the number of assets on that project. Survey-type text starts from the project's survey-type ticks. Nr of Weeks counts each occupied week once; Approx surveys is that count × 40.</p>
   </main>
 </div>
 <script id="programme-data" type="application/json"><%- programmeJson %></script>

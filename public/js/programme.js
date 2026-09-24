@@ -2,6 +2,7 @@
   var dataEl = document.getElementById("programme-data");
   if (!dataEl) return;
   var DATA = JSON.parse(dataEl.textContent);
+  var canEdit = DATA.canEdit === true;
 
   var PROJECT_STYLE = {
     "MTVH": "c-MTVH",
@@ -112,6 +113,49 @@
     return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
   }
 
+  // Keep in step with programmeCanon / programmeCellMatchesProject in src/lib/programme.ts.
+  function programmeCanon(name) {
+    return canon(String(name || "").replace(/[\u2013\u2014\u2212]/g, "-").replace(/\bPh(?:ase)?\s+(\d+)\b/gi, "Ph$1"));
+  }
+
+  function programmeStampKey(name) {
+    return canon(shortLabel(String(name || "").replace(/[\u2013\u2014\u2212]/g, "-")));
+  }
+
+  function programmeCellMatches(cell, projectName, catalogue) {
+    var cellKey = programmeCanon(cell);
+    var projectKey = programmeCanon(projectName);
+    if (!cellKey || !projectKey) return false;
+    if (cellKey === projectKey) return true;
+    var names = catalogue && catalogue.length ? catalogue : [projectName];
+    var i;
+    for (i = 0; i < names.length; i++) {
+      if (programmeCanon(names[i]) === cellKey) return false;
+    }
+    var cellStamp = programmeStampKey(cell);
+    var projectStamp = programmeStampKey(projectName);
+    function claimantsFor(pred) {
+      var found = [];
+      for (var n = 0; n < names.length; n++) {
+        if (pred(names[n])) found.push(names[n]);
+      }
+      return found;
+    }
+    if (cellKey === projectStamp) {
+      var stampClaimants = claimantsFor(function (name) {
+        return programmeCanon(name) === cellKey || programmeStampKey(name) === cellKey;
+      });
+      return stampClaimants.length === 1 && programmeCanon(stampClaimants[0]) === projectKey;
+    }
+    if (cellStamp && cellStamp !== cellKey && cellStamp === projectKey) {
+      var nameClaimants = claimantsFor(function (name) {
+        return programmeCanon(name) === cellStamp;
+      });
+      return nameClaimants.length === 1 && programmeCanon(nameClaimants[0]) === projectKey;
+    }
+    return false;
+  }
+
   function adminCanonSet() {
     var set = {};
     (DATA.adminNames || []).forEach(function (name) {
@@ -133,15 +177,24 @@
   // Two people in the same week count as one tile. One tile ≈ 40 surveys.
   var SURVEYS_PER_WEEK = 40;
 
+  function projectCatalogue() {
+    var names = [];
+    var P = DATA.projects || {};
+    (P.current || []).concat(P.upcoming || []).forEach(function (project) {
+      if (project && project.project) names.push(project.project);
+    });
+    return names;
+  }
+
   function weeksOccupied(projectName) {
-    var key = canon(projectName);
-    if (!key) return 0;
+    if (!programmeCanon(projectName)) return 0;
+    var catalogue = projectCatalogue();
     var seen = {};
     function scan(list) {
       (list || []).forEach(function (person) {
         if (!isApplied(person.name)) return;
         (person.weeks || []).forEach(function (val, wi) {
-          if (canon(val) === key) seen[wi] = true;
+          if (programmeCellMatches(val, projectName, catalogue)) seen[wi] = true;
         });
       });
     }
@@ -151,7 +204,7 @@
   }
 
   function refreshWeekCounts() {
-    document.querySelectorAll("#projCurrent td.nr-weeks").forEach(function (td) {
+    document.querySelectorAll("#projCurrent td.nr-weeks, #projUpcoming td.nr-weeks").forEach(function (td) {
       var n = weeksOccupied(td.getAttribute("data-project") || "");
       td.textContent = String(n);
       var approx = td.parentNode && td.parentNode.querySelector("td.approx-surveys");
@@ -207,7 +260,7 @@
   }
 
   function saveBoard() {
-    if (!DATA.saveUrl) return Promise.resolve(false);
+    if (!canEdit || !DATA.saveUrl) return Promise.resolve(false);
     dirty = false;
     markSave("Saving…");
     return fetch(DATA.saveUrl, {
@@ -229,23 +282,25 @@
   }
 
   function scheduleSave() {
+    if (!canEdit) return;
     dirty = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveBoard, 400);
   }
 
   window.addEventListener("pagehide", function () {
-    if (!dirty || !DATA.saveUrl || !navigator.sendBeacon) return;
+    if (!canEdit || !dirty || !DATA.saveUrl || !navigator.sendBeacon) return;
     var blob = new Blob([JSON.stringify(boardBody())], { type: "application/json" });
     navigator.sendBeacon(DATA.saveUrl, blob);
   });
 
   var orderNote = document.getElementById("orderNote");
   if (orderNote) {
-    orderNote.textContent =
-      ((DATA.notes && DATA.notes.surveyorOrder) ? DATA.notes.surveyorOrder + " " : "") +
-      "Active + Refresh controls who appears on the board. " +
-      ((DATA.notes && DATA.notes.dndNote) ? DATA.notes.dndNote : "");
+    orderNote.textContent = canEdit
+      ? ((DATA.notes && DATA.notes.surveyorOrder) ? DATA.notes.surveyorOrder + " " : "") +
+        "Active + Refresh controls who appears on the board. " +
+        ((DATA.notes && DATA.notes.dndNote) ? DATA.notes.dndNote : "")
+      : "View only. Stamps, tiles, Active ticks, and survey types cannot be changed from this account.";
   }
   var projCap = document.getElementById("projCap");
   if (projCap) projCap.textContent = (DATA.notes && DATA.notes.projectsCaption) || "";
@@ -281,7 +336,7 @@
       tile.textContent = st.short || name;
       tile.title = name + " — drag onto a surveyor week to stamp";
       tile.setAttribute("aria-label", name);
-      tile.draggable = true;
+      tile.draggable = !!canEdit;
       tile.dataset.project = name;
       palette.appendChild(tile);
     });
@@ -316,10 +371,11 @@
         cb.type = "checkbox";
         cb.className = "active-cb pool-active-cb";
         cb.checked = isTicked(p.name);
+        cb.disabled = !canEdit;
         cb.dataset.name = p.name;
         cb.title = "Active — tick then hit Refresh to return to the board";
         cb.setAttribute("aria-label", "Active: " + p.name);
-        cb.addEventListener("change", function () {
+        if (canEdit) cb.addEventListener("change", function () {
           setTick(p.name, cb.checked);
           scheduleSave();
         });
@@ -401,8 +457,8 @@
     span.dataset.wi = String(wi);
     var wk = fmtWeek(DATA.weeks[wi]).label;
     if (val) {
-      span.title = (personName || "Admin") + " · wc " + wk + " · " + val + " (drag to copy, Delete to clear)";
-      span.draggable = true;
+      span.title = (personName || "Admin") + " · wc " + wk + " · " + val + (canEdit ? " (drag to copy, Delete to clear)" : "");
+      span.draggable = !!canEdit;
     } else {
       span.title = (personName || "Admin") + " · wc " + wk + " (drop a project here)";
       span.draggable = false;
@@ -433,10 +489,11 @@
     cb.type = "checkbox";
     cb.className = "active-cb";
     cb.checked = isTicked(name);
+    cb.disabled = !canEdit;
     cb.dataset.name = name;
     cb.title = "Active — include on the programme board (hit Refresh to apply)";
     cb.setAttribute("aria-label", "Active: " + name);
-    cb.addEventListener("change", function () {
+    if (canEdit) cb.addEventListener("change", function () {
       setTick(name, cb.checked);
       scheduleSave();
     });
@@ -547,27 +604,32 @@
         ? '<td class="num nr-weeks" data-project="' + esc(p.project) + '">' + occupied + "</td>"
           + '<td class="num approx-surveys" data-project="' + esc(p.project) + '">' + (occupied * SURVEYS_PER_WEEK) + "</td>"
         : "";
+      var scopeTitle = canEdit
+        ? "Starts from Project Progress survey types — click to edit"
+        : "Survey types from Project Progress";
       tr.innerHTML =
         '<td><span class="pill ' + cls + '">' + esc(p.project) + "</span></td>" +
         '<td class="num">' + esc(String(p.numbers == null ? "" : p.numbers)) + "</td>" +
-        '<td><span class="scope-edit" contenteditable="true" spellcheck="false" data-project-id="' + esc(p.id) + '" title="Starts from Project Progress survey types — click to edit">' + esc(p.surveyTypes || "") + "</span></td>" +
+        '<td><span class="scope-edit" contenteditable="' + (canEdit ? "true" : "false") + '" spellcheck="false" data-project-id="' + esc(p.id) + '" title="' + esc(scopeTitle) + '">' + esc(p.surveyTypes || "") + "</span></td>" +
         '<td class="lead" title="Project manager from Project Progress">' + esc(p.lead || "") + "</td>" +
         weeksCell;
       tb.appendChild(tr);
     });
-    tb.querySelectorAll(".scope-edit").forEach(function (el) {
-      el.addEventListener("blur", function () {
-        saveScope(el.getAttribute("data-project-id"), el.textContent.trim());
+    if (canEdit) {
+      tb.querySelectorAll(".scope-edit").forEach(function (el) {
+        el.addEventListener("blur", function () {
+          saveScope(el.getAttribute("data-project-id"), el.textContent.trim());
+        });
+        el.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") { ev.preventDefault(); el.blur(); }
+        });
       });
-      el.addEventListener("keydown", function (ev) {
-        if (ev.key === "Enter") { ev.preventDefault(); el.blur(); }
-      });
-    });
+    }
   }
 
   var P = DATA.projects || {};
   fillProjTable("projCurrent", P.current, { weeks: true });
-  fillProjTable("projUpcoming", P.upcoming);
+  fillProjTable("projUpcoming", P.upcoming, { weeks: true });
   fillProjTable("projCompleted", P.completed);
 
   var drag = null;
@@ -609,6 +671,7 @@
 
   var paletteEl = document.getElementById("palette");
   paletteEl.addEventListener("dragstart", function (e) {
+    if (!canEdit) { e.preventDefault(); return; }
     var tile = e.target && e.target.closest ? e.target.closest(".palette-tile") : null;
     if (!tile || !tile.dataset.project) { e.preventDefault(); return; }
     drag = { fromPalette: true, value: tile.dataset.project, store: -1, wi: -1 };
@@ -633,6 +696,7 @@
   }
 
   tbody.addEventListener("dragstart", function (e) {
+    if (!canEdit) { e.preventDefault(); return; }
     var span = cellSpanFromEvent(e);
     if (!span || !span.draggable || !span.dataset.value) { e.preventDefault(); return; }
     drag = { fromPalette: false, store: +span.dataset.store, wi: +span.dataset.wi, value: span.dataset.value };
@@ -646,6 +710,7 @@
     drag = null;
   });
   tbody.addEventListener("dragover", function (e) {
+    if (!canEdit) return;
     var span = cellSpanFromEvent(e);
     if (!span || drag == null) return;
     e.preventDefault();
@@ -668,6 +733,7 @@
     }
   });
   tbody.addEventListener("drop", function (e) {
+    if (!canEdit) return;
     var span = cellSpanFromEvent(e);
     if (!span || drag == null) return;
     e.preventDefault();
@@ -707,6 +773,7 @@
     if (!t || !t.closest || !t.closest("#matrix")) clearSelection();
   });
   document.addEventListener("keydown", function (e) {
+    if (!canEdit) return;
     if (e.key !== "Delete" && e.key !== "Backspace") return;
     var t = e.target;
     if (t && t.closest && t.closest("input, textarea, select, [contenteditable='true']")) return;
@@ -720,6 +787,7 @@
 
   var brush = null;
   tbody.addEventListener("mousedown", function (e) {
+    if (!canEdit) return;
     if (e.button !== 0 || !e.altKey) return;
     var span = cellSpanFromEvent(e);
     if (!span || !span.dataset.value) return;
@@ -741,6 +809,7 @@
     clearDropMarks();
   });
   tbody.addEventListener("dblclick", function (e) {
+    if (!canEdit) return;
     var span = cellSpanFromEvent(e);
     if (!span) return;
     var store = +span.dataset.store;
@@ -770,10 +839,22 @@
 
   function scopeText(projectId) {
     var found = null;
-    document.querySelectorAll("#projCurrent .scope-edit").forEach(function (el) {
+    document.querySelectorAll("#projCurrent .scope-edit, #projUpcoming .scope-edit").forEach(function (el) {
       if (el.getAttribute("data-project-id") === projectId) found = (el.textContent || "").trim();
     });
     return found;
+  }
+
+  function exportProjectRows(list) {
+    return (list || []).map(function (row) {
+      var edited = scopeText(row.id);
+      return {
+        project: row.project,
+        numbers: row.numbers == null ? "" : String(row.numbers),
+        surveyTypes: edited == null ? (row.surveyTypes || "") : edited,
+        lead: row.lead || ""
+      };
+    });
   }
 
   function exportPayload() {
@@ -788,21 +869,15 @@
       };
     }
     var current = (DATA.projects && DATA.projects.current) || [];
+    var upcoming = (DATA.projects && DATA.projects.upcoming) || [];
     return {
       weeks: DATA.weeks || [],
       people: (DATA.rows || []).map(function (row) { return person(row, "surveyor"); })
         .concat((DATA.admins || []).map(function (row) { return person(row, "admin"); })),
       agency: (pools.agency || []).map(function (row) { return { name: row.name, flag: row.flag || "" }; }),
       team: (pools.team || []).map(function (row) { return { name: row.name, flag: row.flag || "" }; }),
-      projects: current.map(function (row) {
-        var edited = scopeText(row.id);
-        return {
-          project: row.project,
-          numbers: row.numbers == null ? "" : String(row.numbers),
-          surveyTypes: edited == null ? (row.surveyTypes || "") : edited,
-          lead: row.lead || ""
-        };
-      })
+      projects: exportProjectRows(current),
+      upcoming: exportProjectRows(upcoming)
     };
   }
 
@@ -839,7 +914,8 @@
       showToast("Could not export the programme.");
     });
   });
-  document.getElementById("btnRefresh").addEventListener("click", function () {
+  var btnRefresh = document.getElementById("btnRefresh");
+  if (btnRefresh) btnRefresh.addEventListener("click", function () {
     applyTicksToBoard();
     rebuildMatrix();
     saveBoard().then(function (ok) {
