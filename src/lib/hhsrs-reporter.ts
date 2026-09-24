@@ -198,6 +198,7 @@ export function mergeReviewDraftFields(
 export function draftEmailFromReviewFields(fields: ReviewDraftFields): {
   to: string;
   cc: string;
+  bcc: string;
   subject: string;
   body: string;
 } {
@@ -206,6 +207,7 @@ export function draftEmailFromReviewFields(fields: ReviewDraftFields): {
   return {
     to: matched ? matched.to.join("; ") : "",
     cc: matched ? matched.cc.join("; ") : "",
+    bcc: "",
     subject: draft.subject,
     body: draft.body,
   };

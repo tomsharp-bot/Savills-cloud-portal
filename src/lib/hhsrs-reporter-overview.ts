@@ -1,14 +1,12 @@
 /**
- * Project overview rows for /HHSRSreporter/project-overview.
- * Colin roster demo counts apply until live submissions exist.
- * Archive overrides persist separately and win over the seed.
+ * Project overview for /HHSRSreporter/project-overview.
+ * Project Progress is the master list: current projects are active, archived projects are completed.
+ * HHSRS does not keep a second archive.
  */
 
-import { HHSRS_PROJECT_ROSTER } from "./hhsrs-reporter-projects.js";
+import { HHSRS_PROJECT_ROSTER, hhsrsKey, progressNameForCase } from "./hhsrs-reporter-projects.js";
 
-export const ARCHIVE_DISABLED_TITLE = "Archive when project is complete.";
-export const ARCHIVE_INCOMPLETE_TOAST =
-  "Project isn’t complete yet — archive when it is complete.";
+export const PROJECT_PROGRESS_CHANGE_TOAST = "Change this on Project Progress.";
 
 export type OverviewStatus = "Complete" | "In progress";
 
@@ -17,10 +15,9 @@ export type LiveProjectCounts = {
   completed: number;
 };
 
-export type ArchiveOverride = {
+export type ProgressProject = {
   name: string;
-  archived: boolean;
-  completed: number;
+  stage: string;
 };
 
 export type OverviewActiveRow = {
@@ -30,7 +27,6 @@ export type OverviewActiveRow = {
   completed: number;
   waiting: number;
   status: OverviewStatus;
-  canArchive: boolean;
 };
 
 export type OverviewArchivedRow = {
@@ -53,76 +49,62 @@ export function overviewStatus(waiting: number): OverviewStatus {
   return waiting === 0 ? "Complete" : "In progress";
 }
 
+function rosterMeta(name: string): { template: string; ratingScheme: string } {
+  const key = hhsrsKey(name);
+  const row = HHSRS_PROJECT_ROSTER.find(
+    (project) => project.name.toLowerCase() === key.toLowerCase() || project.name.toLowerCase() === name.toLowerCase()
+  );
+  if (!row) return { template: "—", ratingScheme: "—" };
+  return { template: row.template, ratingScheme: row.ratingScheme };
+}
+
+function byName(a: { name: string }, b: { name: string }): number {
+  return a.name.localeCompare(b.name, "en-GB");
+}
+
+/** Attribute submission counts onto Project Progress names, including Colin aliases. */
+export function countsByProgressName(
+  progressNames: readonly string[],
+  liveCounts: Record<string, LiveProjectCounts>
+): Map<string, LiveProjectCounts> {
+  const buckets = new Map<string, LiveProjectCounts>();
+  for (const name of progressNames) buckets.set(name, { waiting: 0, completed: 0 });
+  for (const [submissionName, figures] of Object.entries(liveCounts)) {
+    const target = progressNameForCase(submissionName, progressNames);
+    const bucket = buckets.get(target);
+    if (!bucket) continue;
+    bucket.waiting += figures.waiting;
+    bucket.completed += figures.completed;
+  }
+  return buckets;
+}
+
 export function buildProjectOverview(input: {
-  hasLiveSubmissions: boolean;
+  projects: readonly ProgressProject[];
   liveCounts: Record<string, LiveProjectCounts>;
-  overrides: ArchiveOverride[];
 }): ProjectOverview {
-  const overrides = new Map(input.overrides.map((row) => [row.name, row]));
-  const known = new Set(HHSRS_PROJECT_ROSTER.map((project) => project.name));
+  const current = input.projects.filter((project) => project.stage === "current").slice().sort(byName);
+  const archivedProjects = input.projects.filter((project) => project.stage === "archive").slice().sort(byName);
+  const names = [...current, ...archivedProjects].map((project) => project.name);
+  const counts = countsByProgressName(names, input.liveCounts);
 
-  function archivedNow(name: string, seedArchived: boolean): boolean {
-    const override = overrides.get(name);
-    if (override) return override.archived;
-    return seedArchived;
-  }
-
-  function counts(name: string, demoWaiting: number, demoCompleted: number): LiveProjectCounts {
-    if (!input.hasLiveSubmissions) {
-      return { waiting: demoWaiting, completed: demoCompleted };
-    }
-    return input.liveCounts[name] || { waiting: 0, completed: 0 };
-  }
-
-  const active: OverviewActiveRow[] = [];
-  const archived: OverviewArchivedRow[] = [];
-
-  for (const project of HHSRS_PROJECT_ROSTER) {
-    const figures = counts(project.name, project.demoWaiting, project.demoCompleted);
-    if (archivedNow(project.name, project.seedArchived)) {
-      const override = overrides.get(project.name);
-      const completed = input.hasLiveSubmissions
-        ? figures.completed
-        : override?.archived
-          ? override.completed || project.demoCompleted
-          : project.demoCompleted;
-      archived.push({ name: project.name, completed });
-      continue;
-    }
-    const waiting = figures.waiting;
-    active.push({
+  const active: OverviewActiveRow[] = current.map((project) => {
+    const figures = counts.get(project.name) || { waiting: 0, completed: 0 };
+    const meta = rosterMeta(project.name);
+    return {
       name: project.name,
-      template: project.template,
-      ratingScheme: project.ratingScheme,
+      template: meta.template,
+      ratingScheme: meta.ratingScheme,
       completed: figures.completed,
-      waiting,
-      status: overviewStatus(waiting),
-      canArchive: waiting === 0,
-    });
-  }
+      waiting: figures.waiting,
+      status: overviewStatus(figures.waiting),
+    };
+  });
 
-  if (input.hasLiveSubmissions) {
-    const extras = Object.keys(input.liveCounts)
-      .filter((name) => name.trim() && !known.has(name))
-      .sort((a, b) => a.localeCompare(b, "en-GB"));
-    for (const name of extras) {
-      const figures = counts(name, 0, 0);
-      if (archivedNow(name, false)) {
-        const override = overrides.get(name);
-        archived.push({ name, completed: override?.completed || figures.completed });
-        continue;
-      }
-      active.push({
-        name,
-        template: "—",
-        ratingScheme: "—",
-        completed: figures.completed,
-        waiting: figures.waiting,
-        status: overviewStatus(figures.waiting),
-        canArchive: figures.waiting === 0,
-      });
-    }
-  }
+  const archived: OverviewArchivedRow[] = archivedProjects.map((project) => ({
+    name: project.name,
+    completed: (counts.get(project.name) || { waiting: 0, completed: 0 }).completed,
+  }));
 
   const waiting = active.reduce((sum, row) => sum + row.waiting, 0);
   const completed =

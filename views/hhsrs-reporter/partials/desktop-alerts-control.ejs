@@ -1,2 +1,13 @@
-<button type="button" class="btn btn-accent btn-sm" id="btn-enable-desktop-alerts">Enable desktop alerts</button>
-<span class="notif-status" id="notif-status" role="status" aria-live="polite"></span>
+<div class="desktop-alerts-banner" id="desktop-alerts-banner" role="region" aria-label="Desktop alerts">
+  <div class="dab-icon" aria-hidden="true">🔔</div>
+  <div class="dab-body">
+    <p class="dab-title dab-hide-on-ready">Turn on desktop alerts</p>
+    <p class="dab-title dab-ready-only">Desktop alerts ready</p>
+    <p class="dab-text dab-hide-on-ready">Get a Windows notification when a new site issue lands — even if this tab isn’t in front.</p>
+  </div>
+  <div class="dab-actions dab-hide-on-ready">
+    <button type="button" class="btn btn-sm btn-enable-alerts" id="btn-enable-desktop-alerts">Enable desktop alerts</button>
+    <button type="button" class="btn btn-sm btn-not-now" id="btn-desktop-alerts-not-now">Not now</button>
+  </div>
+  <div id="notif-status" class="notif-status" aria-live="polite"></div>
+</div>

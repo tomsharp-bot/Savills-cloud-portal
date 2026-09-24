@@ -72,6 +72,18 @@
   function matchProject(name) {
     if (!name) return null;
     if (DEMO[name]) return DEMO[name];
+    var aliases = cfg.projectAliases || {};
+    var alias = aliases[name];
+    if (!alias) {
+      var aliasKeys = Object.keys(aliases);
+      for (var a = 0; a < aliasKeys.length; a++) {
+        if (aliasKeys[a].toLowerCase() === String(name).toLowerCase()) {
+          alias = aliases[aliasKeys[a]];
+          break;
+        }
+      }
+    }
+    if (alias && DEMO[alias]) return DEMO[alias];
     var lower = name.toLowerCase();
     var keys = Object.keys(DEMO);
     for (var i = 0; i < keys.length; i++) {
@@ -147,7 +159,7 @@
   var DRAG_HINT = "Drag a photo into your email draft. If that doesn’t work, download the photo.";
 
   function clearEmailDraft() {
-    ["rv-email-to", "rv-email-cc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+    ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
       var el = $(id);
       if (!el) return;
       el.value = "";
@@ -183,7 +195,7 @@
     }
     fillRatingOptions(projectCfg ? projectCfg.ratingScheme : "NEW", opts.keepRating);
     setExtraVisibility(projectCfg);
-    if (!opts.skipDraft) clearEmailDraft();
+    if (!(opts.skipDraft || opts.keepEmail)) clearEmailDraft();
   }
 
   function nextPhotoId() {
@@ -387,6 +399,7 @@
     syncCaseLock();
     var note = $("rv-generate-note");
     if (note) note.textContent = "Case details unlocked. Edit them, then Generate email again to refresh the draft.";
+    scheduleReviewDraftSave();
   }
 
   function renderEmailThumbs() {
@@ -636,12 +649,13 @@
           if (note) note.textContent = (data && data.error) || "Could not prepare the client email.";
           return;
         }
-        ["rv-email-to", "rv-email-cc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+        ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
           var el = $(id);
           if (el) delete el.dataset.userEdited;
         });
         fillDraftFields(data);
         if (note) note.textContent = "Email generated. Case details are locked — Amend case details to edit, then Generate email again.";
+        saveReviewDraftNow();
       })
       .catch(function () {
         if (note) note.textContent = "Could not prepare the client email. Check the case details and try again.";
@@ -706,32 +720,30 @@
     }, 60);
   }
 
-  ["rv-email-to", "rv-email-cc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+  ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
     var el = $(id);
     if (!el) return;
     el.addEventListener("input", function () {
       el.dataset.userEdited = "1";
+      scheduleReviewDraftSave();
     });
+    el.addEventListener("change", scheduleReviewDraftSave);
   });
 
+  var reviewLeavingForResume = initReviewResume();
+
   var projectSel = $("rv-project");
-  if (projectSel) {
+  if (projectSel && !reviewLeavingForResume) {
     projectSel.addEventListener("change", function () {
-      ["rv-email-to", "rv-email-cc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+      ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
         var el = $(id);
         if (el) delete el.dataset.userEdited;
       });
       applyProjectChange();
+      scheduleReviewDraftSave();
     });
     var keep = ($("rv-rating") && $("rv-rating").value) || undefined;
-    if (cfg.initialProject && !projectSel.value) {
-      // Try exact then fuzzy match into select
-      if (DEMO[cfg.initialProject]) projectSel.value = cfg.initialProject;
-      else {
-        var m = matchProject(cfg.initialProject);
-        if (m) projectSel.value = m.name;
-      }
-    }
+    if (cfg.initialProject && !projectSel.value) ensureProjectSelectValue(cfg.initialProject);
     applyProjectChange({ keepRating: keep, skipDraft: true });
   }
 
@@ -751,6 +763,7 @@
     caseLocked = false;
     syncCaseLock();
   }
+  if (!reviewLeavingForResume && $("rv-email-body")) restoreReviewDraft(reviewDraftKey());
 
   var generateBtn = $("btn-generate-email");
   if (generateBtn) generateBtn.addEventListener("click", generateEmail);
@@ -942,6 +955,7 @@
       var note = new Notification("New HHSRS hazard", {
         body: body,
         tag: "hhsrs-" + item.id,
+        requireInteraction: true,
       });
       note.onclick = function () {
         window.focus();
@@ -969,13 +983,17 @@
       return;
     }
     if (!fresh.length) return;
+    var loud = [];
     fresh.forEach(function (item) {
       rememberId(item.id);
+      if (item.claimStatus === "claimed" || item.claimStatus === "stale") return;
+      loud.push(item);
     });
     saveSeen();
-    showToast(fresh);
-    var limit = Math.min(fresh.length, 3);
-    for (var n = 0; n < limit; n++) desktopNotify(fresh[n]);
+    if (!loud.length) return;
+    showToast(loud);
+    var limit = Math.min(loud.length, 3);
+    for (var n = 0; n < limit; n++) desktopNotify(loud[n]);
   }
 
   function pollPending() {
@@ -1009,10 +1027,29 @@
     return Notification.permission;
   }
 
+  var ALERTS_DISMISS_KEY = "hhsrs-desktop-alerts-dismissed";
+
+  function alertsDismissed() {
+    try {
+      return localStorage.getItem(ALERTS_DISMISS_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
   function paintNotifStatus() {
     var status = $("notif-status");
     var btn = $("btn-enable-desktop-alerts");
+    var banner = $("desktop-alerts-banner");
     var perm = notificationState();
+    if (banner) {
+      if (alertsDismissed()) {
+        banner.hidden = true;
+      } else {
+        banner.hidden = false;
+        banner.classList.toggle("is-ready", perm === "granted");
+      }
+    }
     if (status) {
       status.classList.remove("granted", "denied");
       if (perm === "granted") {
@@ -1072,6 +1109,16 @@
     enableBtn.addEventListener("click", function () {
       unlockAlertSound();
       askNotificationPermission();
+    });
+  }
+  var notNowBtn = $("btn-desktop-alerts-not-now");
+  if (notNowBtn) {
+    notNowBtn.addEventListener("click", function () {
+      try {
+        localStorage.setItem(ALERTS_DISMISS_KEY, "1");
+      } catch (e) {}
+      var banner = $("desktop-alerts-banner");
+      if (banner) banner.hidden = true;
     });
   }
   document.addEventListener("pointerdown", unlockAlertSound, true);
@@ -1212,4 +1259,413 @@
     }
     syncPoMode();
   }
+
+  /* Review email draft stays in this browser until sent or abandoned. */
+  var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
+  var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
+  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-status", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
+  var REVIEW_EMAIL_FIELD_IDS = ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"];
+  var reviewDraftSaveTimer = null;
+  var resumeCleared = false;
+  var skipDraftSave = false;
+
+  function reviewDraftKey() {
+    return cfg.caseId ? String(cfg.caseId) : "blank";
+  }
+
+  function getReviewLastKey() {
+    try {
+      var v = window.localStorage.getItem(REVIEW_LAST_KEY);
+      return v == null ? "" : String(v);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function setReviewLastKey(key) {
+    try {
+      window.localStorage.setItem(REVIEW_LAST_KEY, key == null || key === "" ? "blank" : String(key));
+    } catch (e) {}
+  }
+
+  function clearResumeKey() {
+    resumeCleared = true;
+    setReviewLastKey("blank");
+  }
+
+  function readReviewDrafts() {
+    try {
+      var raw = window.localStorage.getItem(REVIEW_DRAFTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeReviewDrafts(drafts) {
+    try {
+      window.localStorage.setItem(REVIEW_DRAFTS_KEY, JSON.stringify(drafts));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function setReviewDraftStatus(saved) {
+    var el = $("rv-draft-status");
+    if (!el) return;
+    el.hidden = !saved;
+    el.textContent = saved ? "Draft kept — come back anytime until sent or abandoned." : "";
+  }
+
+  function readReviewValue(id) {
+    var el = $(id);
+    if (!el) return "";
+    return el.type === "checkbox" ? !!el.checked : (el.value || "");
+  }
+
+  function reviewDraftHasContent(draft) {
+    if (!draft) return false;
+    if (draft.project || draft.caseDetailsLocked) return true;
+    var groups = [draft.fields || {}, draft.email || {}];
+    for (var g = 0; g < groups.length; g++) {
+      var vals = groups[g];
+      for (var key in vals) {
+        if (key === "rv-include-cause") continue;
+        if (Object.prototype.hasOwnProperty.call(vals, key) && vals[key] !== "" && vals[key] !== false && vals[key] !== null && vals[key] !== undefined) return true;
+      }
+    }
+    return false;
+  }
+
+  function collectReviewDraft() {
+    var fields = {};
+    var email = {};
+    REVIEW_CASE_FIELD_IDS.forEach(function (id) { fields[id] = readReviewValue(id); });
+    REVIEW_EMAIL_FIELD_IDS.forEach(function (id) { email[id] = readReviewValue(id); });
+    return {
+      project: ($("rv-project") && $("rv-project").value) || "",
+      fields: fields,
+      email: email,
+      caseDetailsLocked: !!caseLocked,
+      savedAt: new Date().toISOString()
+    };
+  }
+
+  function saveReviewDraftNow() {
+    reviewDraftSaveTimer = null;
+    if (skipDraftSave || !$("rv-email-body")) return;
+    var key = reviewDraftKey();
+    if (!resumeCleared) setReviewLastKey(key);
+    var draft = collectReviewDraft();
+    var drafts = readReviewDrafts();
+    if (!reviewDraftHasContent(draft)) {
+      delete drafts[key];
+      writeReviewDrafts(drafts);
+      setReviewDraftStatus(false);
+      return;
+    }
+    drafts[key] = draft;
+    if (writeReviewDrafts(drafts)) setReviewDraftStatus(true);
+  }
+
+  function scheduleReviewDraftSave() {
+    if (!$("rv-email-body") || resumeCleared) return;
+    if (reviewDraftSaveTimer) clearTimeout(reviewDraftSaveTimer);
+    reviewDraftSaveTimer = setTimeout(saveReviewDraftNow, 180);
+  }
+
+  function clearReviewDraft(key) {
+    if (reviewDraftSaveTimer) clearTimeout(reviewDraftSaveTimer);
+    reviewDraftSaveTimer = null;
+    var drafts = readReviewDrafts();
+    delete drafts[key || reviewDraftKey()];
+    writeReviewDrafts(drafts);
+    setReviewDraftStatus(false);
+  }
+
+  function ensureProjectSelectValue(name) {
+    var sel = $("rv-project");
+    if (!sel || !name) return;
+    var exists = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === name) { exists = true; break; }
+    }
+    if (!exists) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    }
+    sel.value = name;
+  }
+
+  function restoreReviewDraft(key) {
+    var draft = readReviewDrafts()[key];
+    if (!draft || !$("rv-email-body")) {
+      setReviewDraftStatus(false);
+      return false;
+    }
+    var project = draft.project || "";
+    if (project) ensureProjectSelectValue(project);
+    else if ($("rv-project")) $("rv-project").value = "";
+    applyProjectChange({ keepRating: draft.fields && draft.fields["rv-rating"], skipDraft: true, keepEmail: true });
+    var fields = draft.fields || {};
+    REVIEW_CASE_FIELD_IDS.forEach(function (id) {
+      var el = $(id);
+      if (!el || el.readOnly || !Object.prototype.hasOwnProperty.call(fields, id)) return;
+      if (el.type === "checkbox") el.checked = !!fields[id];
+      else el.value = fields[id] == null ? "" : fields[id];
+    });
+    setExtraVisibility(matchProject(($("rv-project") && $("rv-project").value) || ""));
+    var email = draft.email || {};
+    REVIEW_EMAIL_FIELD_IDS.forEach(function (id) {
+      var el = $(id);
+      if (!el || !Object.prototype.hasOwnProperty.call(email, id)) return;
+      el.value = email[id] == null ? "" : email[id];
+      if (el.value) el.dataset.userEdited = "1";
+    });
+    var hasEmail = REVIEW_EMAIL_FIELD_IDS.some(function (id) { return !!readReviewValue(id); });
+    var emptyHint = $("rv-email-empty-hint");
+    if (emptyHint) emptyHint.hidden = hasEmail;
+    var emailBadge = $("rv-email-badge");
+    if (emailBadge) emailBadge.textContent = hasEmail ? "Generated" : "Draft";
+    caseLocked = !!draft.caseDetailsLocked;
+    syncCaseLock();
+    setReviewDraftStatus(true);
+    return true;
+  }
+
+  function initReviewResume() {
+    if (!$("rv-email-body")) return false;
+    var compose = /(?:\?|&)compose=1(?:&|$)/.test(window.location.search);
+    if (compose) {
+      clearResumeKey();
+      clearReviewDraft("blank");
+      resumeCleared = false;
+      skipDraftSave = false;
+      return false;
+    }
+    if (!cfg.caseId) {
+      var last = getReviewLastKey();
+      var ids = Array.isArray(cfg.waitingIds) ? cfg.waitingIds : [];
+      if (last && last !== "blank" && ids.indexOf(last) >= 0) {
+        window.location.replace((cfg.base || "/HHSRSreporter") + "/review/" + encodeURIComponent(last));
+        return true;
+      }
+      if (last && last !== "blank") setReviewLastKey("blank");
+      return false;
+    }
+    setReviewLastKey(cfg.caseId);
+    return false;
+  }
+
+  function wireReviewDraftPersistence() {
+    if (!$("rv-email-body")) return;
+    REVIEW_CASE_FIELD_IDS.forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      var evt = (el.tagName === "SELECT" || el.type === "checkbox" || el.type === "date") ? "change" : "input";
+      el.addEventListener(evt, scheduleReviewDraftSave);
+    });
+    window.addEventListener("pagehide", saveReviewDraftNow);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") saveReviewDraftNow();
+    });
+    var markForm = $("mark-actioned-form");
+    if (markForm) {
+      markForm.addEventListener("submit", function (ev) {
+        if (!window.confirm("Confirm you have copied this draft and are ready to send (or have already sent) from Outlook?")) {
+          ev.preventDefault();
+          return;
+        }
+        skipDraftSave = true;
+        clearReviewDraft(cfg.caseId || "blank");
+        clearResumeKey();
+      });
+    }
+    var abandonForm = $("abandon-claim-form");
+    if (abandonForm) {
+      abandonForm.addEventListener("submit", function () {
+        skipDraftSave = true;
+        clearReviewDraft(cfg.caseId || "blank");
+        clearResumeKey();
+      });
+    }
+    var createBtn = $("btn-create-plain-email");
+    if (createBtn) {
+      createBtn.addEventListener("click", function () {
+        clearResumeKey();
+        if (!cfg.caseId) clearReviewDraft("blank");
+      });
+    }
+  }
+
+  /* Camera icon → Review-style rounded photo thumbs. */
+  var attPopEl = null;
+  var attPopThumbs = null;
+  var attPopAnchor = null;
+  var attPopPinned = false;
+  var attPopHideTimer = null;
+
+  function ensureAttPhotoPop() {
+    if (attPopEl) return attPopEl;
+    attPopEl = document.createElement("div");
+    attPopEl.className = "photo-att-pop";
+    attPopEl.id = "photo-att-pop";
+    attPopEl.setAttribute("role", "dialog");
+    attPopEl.setAttribute("aria-label", "Case photos");
+    attPopEl.setAttribute("aria-hidden", "true");
+    attPopEl.innerHTML = '<div class="photo-thumbs" aria-label="Case photo thumbnails"></div>';
+    document.body.appendChild(attPopEl);
+    attPopThumbs = attPopEl.querySelector(".photo-thumbs");
+    attPopEl.addEventListener("mouseenter", function () {
+      if (attPopHideTimer) {
+        clearTimeout(attPopHideTimer);
+        attPopHideTimer = null;
+      }
+    });
+    attPopEl.addEventListener("mouseleave", function (e) {
+      if (attPopPinned) return;
+      var related = e.relatedTarget;
+      if (related && attPopAnchor && (attPopAnchor === related || attPopAnchor.contains(related))) return;
+      scheduleHideAttPop();
+    });
+    return attPopEl;
+  }
+
+  function photosFromButton(btn) {
+    var raw = btn.getAttribute("data-photos") || "";
+    try {
+      var parsed = JSON.parse(decodeURIComponent(raw));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function renderAttPopThumbs(photos) {
+    ensureAttPhotoPop();
+    if (!attPopThumbs) return;
+    var html = "";
+    for (var i = 0; i < photos.length; i++) {
+      var p = photos[i] || {};
+      var src = p.url || "";
+      var cap = p.caption || "Photo";
+      var safe = function (value) {
+        return String(value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      };
+      html += '<div class="photo-thumb" title="' + safe(cap) + '">' +
+        '<img src="' + safe(src) + '" alt="' + safe(cap) + '" draggable="false" />' +
+        '<span class="photo-caption">' + safe(cap) + "</span></div>";
+    }
+    attPopThumbs.innerHTML = html;
+  }
+
+  function positionAttPop(anchor) {
+    var pop = ensureAttPhotoPop();
+    if (!anchor || !pop) return;
+    pop.style.left = "-9999px";
+    pop.style.top = "0px";
+    pop.classList.add("is-visible");
+    var popW = pop.offsetWidth || 220;
+    var popH = pop.offsetHeight || 110;
+    var rect = anchor.getBoundingClientRect();
+    var gap = 8;
+    var left = rect.left + (rect.width / 2) - (popW / 2);
+    var top = rect.bottom + gap;
+    if (left < 8) left = 8;
+    if (left + popW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - popW - 8);
+    if (top + popH > window.innerHeight - 8) top = rect.top - popH - gap;
+    if (top < 8) top = 8;
+    pop.style.left = Math.round(left) + "px";
+    pop.style.top = Math.round(top) + "px";
+  }
+
+  function scheduleHideAttPop() {
+    if (attPopHideTimer) clearTimeout(attPopHideTimer);
+    attPopHideTimer = setTimeout(function () {
+      attPopHideTimer = null;
+      if (!attPopPinned) hideAttPop(false);
+    }, 160);
+  }
+
+  function hideAttPop(immediate) {
+    if (attPopHideTimer) {
+      clearTimeout(attPopHideTimer);
+      attPopHideTimer = null;
+    }
+    if (attPopAnchor) attPopAnchor.classList.remove("is-pop-open");
+    attPopAnchor = null;
+    attPopPinned = false;
+    var pop = attPopEl || document.getElementById("photo-att-pop");
+    if (!pop) return;
+    pop.setAttribute("aria-hidden", "true");
+    pop.classList.remove("is-visible");
+    if (immediate) pop.style.transition = "";
+  }
+
+  function showAttPop(anchor, pinned) {
+    if (!anchor) return;
+    var photos = photosFromButton(anchor);
+    if (!photos.length) return;
+    if (attPopHideTimer) {
+      clearTimeout(attPopHideTimer);
+      attPopHideTimer = null;
+    }
+    if (attPopAnchor && attPopAnchor !== anchor) attPopAnchor.classList.remove("is-pop-open");
+    attPopAnchor = anchor;
+    attPopPinned = !!pinned;
+    anchor.classList.add("is-pop-open");
+    ensureAttPhotoPop();
+    attPopEl.setAttribute("aria-hidden", "false");
+    renderAttPopThumbs(photos);
+    positionAttPop(anchor);
+  }
+
+  function wireAttPhotoPopovers() {
+    document.addEventListener("mouseover", function (e) {
+      var btn = e.target.closest && e.target.closest(".photo-att-icon");
+      if (!btn) return;
+      if (attPopPinned && attPopAnchor === btn) return;
+      showAttPop(btn, false);
+    });
+    document.addEventListener("mouseout", function (e) {
+      var btn = e.target.closest && e.target.closest(".photo-att-icon");
+      if (!btn) return;
+      if (attPopPinned) return;
+      var related = e.relatedTarget;
+      if (related && (btn.contains(related) || (attPopEl && attPopEl.contains(related)))) return;
+      scheduleHideAttPop();
+    });
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest(".photo-att-icon");
+      if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (attPopPinned && attPopAnchor === btn && attPopEl && attPopEl.classList.contains("is-visible")) {
+          hideAttPop(true);
+          return;
+        }
+        showAttPop(btn, true);
+        return;
+      }
+      if (!attPopEl || !attPopEl.classList.contains("is-visible")) return;
+      if (e.target.closest && e.target.closest("#photo-att-pop")) return;
+      hideAttPop(true);
+    }, true);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") hideAttPop(true);
+    });
+    window.addEventListener("scroll", function () {
+      if (attPopEl && attPopEl.classList.contains("is-visible")) hideAttPop(true);
+    }, true);
+    window.addEventListener("resize", function () {
+      if (attPopEl && attPopEl.classList.contains("is-visible")) hideAttPop(true);
+    });
+  }
+
+  if (!reviewLeavingForResume) wireReviewDraftPersistence();
+  wireAttPhotoPopovers();
 })();

@@ -1,10 +1,13 @@
 <%- include("partials/layout-open") %>
 <%
   const isFilled = mode === "filled" && row;
-  const projectValue = isFilled
-    ? ((matchedProject && matchedProject.name) || row.projectName)
-    : "";
+  const projectValue = typeof reviewProjectValue === "string"
+    ? reviewProjectValue
+    : (isFilled ? ((matchedProject && matchedProject.name) || row.projectName) : "");
+  const projectNames = Array.isArray(reviewProjectNames) ? reviewProjectNames : [];
   const casePhotos = Array.isArray(photos) ? photos : [];
+  const claimState = typeof claim !== "undefined" && claim ? claim : null;
+  const showAbandon = !!(claimState && (claimState.status === "claimed" || claimState.status === "stale"));
 %>
 
 <div class="page-header">
@@ -22,7 +25,7 @@
 <section class="actions-row">
   <a class="btn btn-ghost" href="<%= reporterBase %>">← Back to Pending Issues</a>
   <% if (isFilled) { %>
-    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" style="display:inline" onsubmit="return confirm('Confirm you have copied this draft and are ready to send (or have already sent) from Outlook?');">
+    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" id="mark-actioned-form" style="display:inline">
       <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
       <button type="submit" class="btn btn-primary" id="btn-mark-actioned">Mark as actioned → Main Log</button>
     </form>
@@ -30,6 +33,11 @@
     <button type="button" class="btn btn-primary" id="btn-mark-actioned" disabled title="Open a waiting case from Pending Issues first">Mark as actioned → Main Log</button>
   <% } %>
   <a class="btn btn-create-email" id="btn-create-plain-email" href="<%= reporterBase %>/review?compose=1">Create new email</a>
+  <% if (isFilled) { %>
+    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form" style="display:inline">
+      <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
+    </form>
+  <% } %>
 </section>
 
 <div id="review-workspace">
@@ -61,11 +69,15 @@
             <tbody>
               <% alsoWaiting.forEach((r) => {
                 const ago = formatTimeAgo(r.createdAt);
+                const claim = claimView(r);
               %>
-                <tr>
+                <tr class="<%= claimRowClass(r) %>" data-claim-status="<%= claim.status %>">
                   <td><span class="project-pill"><%= r.projectName %></span></td>
-                  <td><strong><%= r.fullAddress %></strong></td>
-                  <%- include("partials/photo-att-cell", { count: photoAttachmentCount(r.photoPaths) }) %>
+                  <td class="addr-cell">
+                    <strong><%= r.fullAddress %></strong>
+                    <%- include("partials/claim-chip", { claimRow: claim }) %>
+                  </td>
+                  <%- include("partials/photo-att-cell", { count: photoAttachmentCount(r.photoPaths), photoThumbs: reporterCasePhotos(r, reporterBase) }) %>
                   <td><%= r.category %></td>
                   <td class="<%= ratingDisplayClass(r.rating) %>"><%= r.rating %></td>
                   <td>
@@ -90,12 +102,9 @@
       <label for="rv-project">Project</label>
       <select id="rv-project" name="projectNameDisplay" aria-describedby="rv-project-hint">
         <option value="">Select a project…</option>
-        <% demoProjects.forEach((p) => { %>
-          <option value="<%= p.name %>" <%= projectValue === p.name ? "selected" : "" %>><%= p.name %></option>
+        <% projectNames.forEach((name) => { %>
+          <option value="<%= name %>" <%= projectValue === name ? "selected" : "" %>><%= name %></option>
         <% }) %>
-        <% if (isFilled && !matchedProject) { %>
-          <option value="<%= row.projectName %>" selected><%= row.projectName %></option>
-        <% } %>
       </select>
       <p class="review-project-hint" id="rv-project-hint">Choose the project first. Extra fields and the email draft follow its rules.</p>
     </div>
@@ -289,6 +298,7 @@
         <h2>Client email draft</h2>
         <span class="count count-review" id="rv-email-badge">Draft</span>
       </div>
+      <p class="review-draft-status" id="rv-draft-status" hidden></p>
       <% if (draftError) { %><p class="flash flash-err"><%= draftError %></p><% } %>
       <form class="email-form" id="rv-email-form" onsubmit="return false;">
         <div class="field-with-copy">
@@ -300,6 +310,11 @@
           <label for="rv-email-cc">Cc</label>
           <input id="rv-email-cc" type="text" placeholder="optional" value="" />
           <button type="button" class="btn-copy" data-copy="rv-email-cc">Copy</button>
+        </div>
+        <div class="field-with-copy">
+          <label for="rv-email-bcc">Bcc</label>
+          <input id="rv-email-bcc" type="text" placeholder="optional" value="" />
+          <button type="button" class="btn-copy" data-copy="rv-email-bcc">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-subject">Subject</label>

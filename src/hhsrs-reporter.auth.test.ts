@@ -157,8 +157,8 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(overview.body, /Project overview/);
     assert.match(overview.body, /Total overview/);
     assert.match(overview.body, /By project/);
-    assert.match(overview.body, /Archive when project is complete\./);
-    assert.match(overview.body, /id="po-archive-confirm"/);
+    assert.match(overview.body, /List comes from Project Progress/);
+    assert.doesNotMatch(overview.body, /id="po-archive-confirm"/);
     assert.match(overview.body, /tab-label">Dashboard/);
     assert.match(overview.body, /tab-label">Project overview/);
     assert.doesNotMatch(overview.body, /po-by-hint/);
@@ -357,31 +357,22 @@ describe("HHSRS Reporter auth and queue", () => {
     }
   });
 
-  it("confirms archive only when a project is complete and restore reverses it", async (t) => {
+  it("mirrors Project Progress and does not archive from HHSRS", async (t) => {
     if (!dbReady) {
       t.skip("Postgres with seeded users is not available");
       return;
     }
     const { prisma } = await import("./lib/prisma.js");
-    const name = "Overview Complete " + Date.now();
-    const row = await prisma.hhsrsSiteSubmission.create({
-      data: {
-        projectName: name,
-        surveyDate: "2026-09-22",
-        uprn: "overview-done-" + Date.now(),
-        fullAddress: "1 Archive Lane",
-        postcode: "EX1 1AA",
-        surveyorName: "Sam Surveyor",
-        category: "Electrical Hazards",
-        rating: "Low",
-        comment: "already actioned for overview",
-        photoPaths: [],
-        status: "email_sent",
-      },
-    });
+    const onward = await prisma.project.findFirst({ where: { name: "Onward" } });
+    const createdOnward = onward
+      ? null
+      : await prisma.project.create({
+          data: { name: "Onward " + Date.now(), projectManager: "Tom Sharp", stage: "current" },
+        });
+    const progressName = (onward || createdOnward)!.name;
     const waiting = await prisma.hhsrsSiteSubmission.create({
       data: {
-        projectName: "Onward 2026",
+        projectName: progressName === "Onward" ? "Onward 2026" : progressName,
         surveyDate: "2026-09-22",
         uprn: "overview-wait-" + Date.now(),
         fullAddress: "2 Archive Lane",
@@ -390,47 +381,51 @@ describe("HHSRS Reporter auth and queue", () => {
         category: "Fire & Explosions",
         rating: "High",
         comment: "still waiting",
-        photoPaths: [],
+        photoPaths: ["hhsrs-site-form/placeholder/socket.jpg"],
         status: "new",
       },
     });
     try {
       const app = createApp({ basePath: "" });
       const cookie = await login(app, "phil.m", "PhilMoon2468");
+      const page = await request(app, "GET", "/HHSRSreporter/project-overview", { cookie });
+      assert.equal(page.status, 200);
+      assert.match(page.body, /Project Progress/);
+      assert.match(page.body, /Test 1/);
+      assert.match(page.body, /Old Demo Job/);
+      assert.match(page.body, /Completed on Project Progress/);
+      assert.doesNotMatch(page.body, /data-archive-project/);
+      assert.doesNotMatch(page.body, /<details[^>]*\sopen/);
+
       const blocked = await request(app, "POST", "/HHSRSreporter/project-overview/archive", {
         cookie,
-        body: `projectName=${encodeURIComponent("Onward 2026")}`,
+        body: `projectName=${encodeURIComponent(progressName)}`,
       });
       assert.equal(blocked.status, 302);
-      assert.match(blocked.location, /\/HHSRSreporter\/project-overview$/);
       const blockedCookie = blocked.setCookie.length ? cookieHeader(blocked.setCookie) : cookie;
       const blockedPage = await request(app, "GET", blocked.location, { cookie: blockedCookie });
-      assert.match(blockedPage.body, /complete yet/);
-      assert.match(blockedPage.body, /Onward 2026/);
+      assert.match(blockedPage.body, /Change this on Project Progress/);
 
-      const archived = await request(app, "POST", "/HHSRSreporter/project-overview/archive", {
+      const review = await request(app, "GET", `/HHSRSreporter/review/${waiting.id}`, { cookie: blockedCookie });
+      assert.equal(review.status, 200);
+      assert.match(review.body, /Abandon claim — return to pending/);
+      assert.match(review.body, /id="rv-email-bcc"/);
+      const pending = await request(app, "GET", "/HHSRSreporter", { cookie: blockedCookie });
+      assert.match(pending.body, /Claimed — Phil Moon/);
+      assert.match(pending.body, /data-photos=/);
+      assert.doesNotMatch(pending.body, /Abandon claim/);
+
+      const abandoned = await request(app, "POST", `/HHSRSreporter/review/${waiting.id}/abandon`, {
         cookie: blockedCookie,
-        body: `projectName=${encodeURIComponent(name)}`,
       });
-      assert.equal(archived.status, 302);
-      const archivedCookie = archived.setCookie.length ? cookieHeader(archived.setCookie) : blockedCookie;
-      const archivedPage = await request(app, "GET", archived.location, { cookie: archivedCookie });
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      assert.match(archivedPage.body, /Archived projects/);
-      assert.match(archivedPage.body, new RegExp(`data-restore-project="${escaped}"`));
-      assert.doesNotMatch(archivedPage.body, /<details[^>]*\sopen/);
-
-      const restored = await request(app, "POST", "/HHSRSreporter/project-overview/restore", {
-        cookie: archivedCookie,
-        body: `projectName=${encodeURIComponent(name)}`,
+      assert.equal(abandoned.status, 302);
+      const openAgain = await request(app, "GET", "/HHSRSreporter", {
+        cookie: abandoned.setCookie.length ? cookieHeader(abandoned.setCookie) : blockedCookie,
       });
-      assert.equal(restored.status, 302);
-      const restoredCookie = restored.setCookie.length ? cookieHeader(restored.setCookie) : archivedCookie;
-      const restoredPage = await request(app, "GET", restored.location, { cookie: restoredCookie });
-      assert.match(restoredPage.body, new RegExp(`data-archive-project="${escaped}"`));
+      assert.doesNotMatch(openAgain.body, /Claimed — Phil Moon/);
     } finally {
-      await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: { in: [row.id, waiting.id] } } });
-      await prisma.hhsrsReporterProjectArchive.deleteMany({ where: { name } }).catch(() => undefined);
+      await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: waiting.id } });
+      if (createdOnward) await prisma.project.delete({ where: { id: createdOnward.id } }).catch(() => undefined);
     }
   });
 });

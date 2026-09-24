@@ -3,7 +3,6 @@
 <h2 class="page-section-title">Pending Issues</h2>
 
 <div class="landing-toolbar" aria-label="Quick tools">
-  <%- include("partials/desktop-alerts-control") %>
   <a class="linkish dark" href="#last-actioned" style="margin-left:auto;font-size:0.75rem;">Jump to last 20 actioned</a>
 </div>
 
@@ -11,6 +10,9 @@
   <div class="panel-head received-head">
     <h2><span class="urgent-icon" aria-hidden="true">!</span> Pending issues</h2>
     <span class="count count-received"><%= waitingRows.length %> need action</span>
+  </div>
+  <div class="panel-body-alerts">
+    <%- include("partials/desktop-alerts-control") %>
   </div>
   <div class="waiting-banner">
     <span class="badge-need">Urgent</span>
@@ -37,11 +39,15 @@
         <tbody>
           <% waitingRows.forEach((row) => {
             const ago = formatTimeAgo(row.createdAt);
+            const claim = claimView(row);
           %>
-            <tr>
+            <tr class="<%= claimRowClass(row) %>" data-claim-status="<%= claim.status %>">
               <td><span class="project-pill"><%= row.projectName %></span></td>
-              <td><strong><%= row.fullAddress %></strong></td>
-              <%- include("partials/photo-att-cell", { count: photoAttachmentCount(row.photoPaths) }) %>
+              <td class="addr-cell">
+                <strong><%= row.fullAddress %></strong>
+                <%- include("partials/claim-chip", { claimRow: claim }) %>
+              </td>
+              <%- include("partials/photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase) }) %>
               <td><span style="color:var(--muted)"><%= row.uprn %></span></td>
               <td><%= row.surveyorName %></td>
               <td><%= row.category %></td>
@@ -77,6 +83,7 @@
             <th>#</th>
             <th>Project</th>
             <th>Address</th>
+            <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
             <th>UPRN</th>
             <th>Surveyor</th>
             <th>Category</th>
@@ -93,6 +100,7 @@
               <td><%= i + 1 %></td>
               <td><span class="project-pill"><%= row.projectName %></span></td>
               <td><strong><%= row.fullAddress %></strong></td>
+              <%- include("partials/photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase) }) %>
               <td><%= row.uprn %></td>
               <td><%= row.surveyorName %></td>
               <td><%= row.category %></td>

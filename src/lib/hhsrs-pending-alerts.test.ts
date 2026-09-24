@@ -62,6 +62,10 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(js, /pending-alerts\.json/);
     assert.match(js, /new Notification/);
     assert.match(js, /btn-enable-desktop-alerts/);
+    assert.match(js, /requireInteraction:\s*true/);
+    assert.match(control, /Turn on desktop alerts/);
+    assert.match(control, /Get a Windows notification when a new site issue lands/);
+    assert.match(js, /claimStatus === "claimed"/);
     assert.match(js, /is-visible/);
     assert.match(js, /playAlertChime\(\)/);
     assert.match(js, /AudioContext/);
