@@ -103,7 +103,7 @@ describe("validateHhsrsForm", () => {
       assert.equal(result.errors.category, "Select an HHSRS category.");
       assert.equal(result.errors.rating, "Select a rating.");
       assert.equal(result.errors.comment, "Enter a comment.");
-      assert.equal(result.errors.otherDetails, "Enter any other details.");
+      assert.equal(result.errors.otherDetails, undefined);
     }
     const archived = validateHhsrsForm(valid, null);
     assert.equal(archived.ok, false);
@@ -171,6 +171,47 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormProjectFlags("Cornwall 2026 Ph2").online, true);
     assert.equal(siteFormProjectFlags("Gateway 2026").calls, false);
     assert.equal(siteFormProjectFlags("Demo current project (local)").onward, false);
+    assert.equal(siteFormProjectFlags("MTVH 2026").calls, false);
+    assert.equal(siteFormProjectFlags("MTVH Pilot 2026").calls, false);
+    assert.equal(siteFormProjectFlags("MTVH Phase 1 2026").calls, false);
+    assert.equal(siteFormProjectFlags("A2D 2026 Phase 4").calls, true);
+    assert.equal(siteFormProjectFlags("Vico 2026 8k").calls, true);
+  });
+
+  it("accepts a blank other details field, and skips call reference unless the project needs it", () => {
+    const blankDetails = { ...valid, otherDetails: "   " };
+    const devon = validateHhsrsForm(blankDetails, project);
+    assert.equal(devon.ok, true);
+    if (devon.ok) assert.equal(devon.data.otherDetails, "");
+
+    const mtvh = validateHhsrsForm(blankDetails, { id: "mtvh", name: "MTVH 2026" });
+    assert.equal(mtvh.ok, true);
+    if (mtvh.ok) {
+      assert.equal(mtvh.data.projectName, "MTVH 2026");
+      assert.equal(mtvh.data.clientCallReference, "");
+      assert.equal(mtvh.data.otherDetails, "");
+      assert.equal(mtvh.data.callUnreached, false);
+    }
+
+    const phase = validateHhsrsForm(
+      { ...blankDetails, clientCallReference: "" },
+      { id: "mtvh-p1", name: "MTVH Phase 1 2026" }
+    );
+    assert.equal(phase.ok, true);
+
+    const onwardMissing = validateHhsrsForm(blankDetails, { id: "onward", name: "Onward 2026" });
+    assert.equal(onwardMissing.ok, false);
+    if (!onwardMissing.ok) {
+      assert.equal(onwardMissing.errors.otherDetails, undefined);
+      assert.match(String(onwardMissing.errors.clientCallReference), /why it is blank/);
+    }
+
+    const onwardWithRef = validateHhsrsForm(
+      { ...blankDetails, clientCallReference: "CR-9" },
+      { id: "onward", name: "Onward 2026" }
+    );
+    assert.equal(onwardWithRef.ok, true);
+    if (onwardWithRef.ok) assert.equal(onwardWithRef.data.otherDetails, "");
   });
 
   it("requires a call reference, or a blank reason (free text only when Other)", () => {
@@ -376,11 +417,27 @@ describe("stock UPRN address", () => {
         category: "Damp & Mould Growth",
         rating: "Low",
         comment: "Damp patch.",
-        otherDetails: "None.",
       },
       "Gateway 2026"
     );
     assert.equal(ready.extras, true);
+    const mtvh = siteFormSectionState(
+      {
+        ...emptyHhsrsValues(),
+        projectId: "p",
+        surveyDate: "2026-09-20",
+        surveyorName: "Alex Surveyor",
+        uprn: "1001",
+        fullAddress: "1 High Street",
+        postcode: "EX1 1AA",
+        addressConfirmed: true,
+        category: "Damp & Mould Growth",
+        rating: "Low",
+        comment: "Damp patch.",
+      },
+      "MTVH 2026"
+    );
+    assert.equal(mtvh.extras, true);
     const onward = siteFormSectionState(
       {
         ...emptyHhsrsValues(),
@@ -394,11 +451,28 @@ describe("stock UPRN address", () => {
         category: "Damp & Mould Growth",
         rating: "Low",
         comment: "Damp patch.",
-        otherDetails: "None.",
       },
       "Onward 2026"
     );
     assert.equal(onward.hazard, true);
     assert.equal(onward.extras, false);
+    const onwardCalled = siteFormSectionState(
+      {
+        ...emptyHhsrsValues(),
+        projectId: "p",
+        surveyDate: "2026-09-20",
+        surveyorName: "Alex Surveyor",
+        uprn: "1001",
+        fullAddress: "1 High Street",
+        postcode: "EX1 1AA",
+        addressConfirmed: true,
+        category: "Damp & Mould Growth",
+        rating: "Low",
+        comment: "Damp patch.",
+        clientCallReference: "CR-1",
+      },
+      "Onward 2026"
+    );
+    assert.equal(onwardCalled.extras, true);
   });
 });

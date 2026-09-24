@@ -51,6 +51,13 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(matchDemoProject("Saxon Weald 2026 Phase 4")?.hint || "", /damp and mould/);
     assert.doesNotMatch(matchDemoProject("Saxon Weald 2026 Phase 4")?.hint || "", /D&M/);
     assert.equal(matchDemoProject("Unknown Client"), null);
+    assert.equal(matchDemoProject("MTVH 2026")?.name, "MTVH Pilot 2026");
+    assert.equal(matchDemoProject("MTVH 2026")?.extras.calls, false);
+    assert.equal(matchDemoProject("MTVH Phase 1 2026")?.extras.calls, false);
+    assert.match(matchDemoProject("MTVH Pilot 2026")?.hint || "", /Cat 1 Emergency ring/);
+    assert.equal(matchDemoProject("Onward 2026")?.extras.calls, true);
+    assert.equal(matchDemoProject("A2D 2026 Phase 4")?.extras.calls, true);
+    assert.equal(matchDemoProject("Vico 2026 8k")?.extras.calls, true);
   });
 
   it("exposes the public site-form URL for Admin copy", () => {
