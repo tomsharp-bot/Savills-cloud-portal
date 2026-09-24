@@ -1,7 +1,15 @@
 import type { PhotoFolder, PhotoFolderActivity, PhotoPoolItem, Project } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { seededSurveyTypes } from "./programme.js";
-import { spacesObjectKey, spacesRequired, spacesStatus, spacesTargetOk } from "./spaces.js";
+import {
+  copySpacesObject,
+  deleteSpacesObject,
+  spacesObjectKey,
+  spacesRequired,
+  spacesStatus,
+  spacesTargetOk,
+  type SpacesCopyResult,
+} from "./spaces.js";
 
 const DEMO_ROOMS = ["Kitchen", "Bathroom", "Lounge", "Bedroom", "Hall", "Exterior", "Roof", "Boiler"] as const;
 
@@ -564,6 +572,386 @@ function crc32(buf: Buffer): number {
     for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
   }
   return ~c >>> 0;
+}
+
+export const PHOTO_NAME_MAX = 120;
+export const PHOTO_DELETE_MAX = 500;
+
+export type PhotoStorageOps = {
+  configured: () => boolean;
+  remove: (key: string) => Promise<boolean>;
+  copy: (fromKey: string, toKey: string) => Promise<SpacesCopyResult>;
+};
+
+export function defaultPhotoStorageOps(): PhotoStorageOps {
+  return {
+    configured: () => spacesStatus().configured,
+    remove: (key) => deleteSpacesObject(key),
+    copy: (fromKey, toKey) => copySpacesObject(fromKey, toKey),
+  };
+}
+
+export function fileExtension(fileName: string): string {
+  const match = String(fileName || "").match(/(\.[A-Za-z0-9]{1,8})$/);
+  return match ? match[1].toLowerCase() : ".jpg";
+}
+
+export function extensionOfKey(key: string): string {
+  const match = String(key || "").match(/(\.[A-Za-z0-9]{1,8})$/);
+  return match ? match[1].toLowerCase() : ".jpg";
+}
+
+function normCode(code: string): string {
+  return String(code || "").trim().toUpperCase();
+}
+
+/**
+ * New filename keeps the current extension. A typed matching extension is stripped
+ * so the stem is what changes. A different extension is rejected.
+ */
+export function parseRenamedPhotoName(
+  currentFileName: string,
+  requested: string
+): { ok: true; code: string; fileName: string } | { ok: false; error: string } {
+  const ext = fileExtension(currentFileName);
+  let raw = String(requested || "").trim();
+  if (!raw) return { ok: false, error: "Enter a file name." };
+  if (raw.length > 180) return { ok: false, error: "File name is too long." };
+  if (/[\u0000-\u001f]/.test(raw)) return { ok: false, error: "File name cannot include control characters." };
+  if (/[/\\]/.test(raw) || raw.includes("..")) return { ok: false, error: "File name cannot include a path." };
+  if (raw.toLowerCase().endsWith(ext)) {
+    raw = raw.slice(0, -ext.length).trim();
+  } else if (/\.[A-Za-z0-9]{1,8}$/.test(raw)) {
+    return { ok: false, error: `Keep the current extension (${ext}). Rename the name only.` };
+  }
+  if (!raw || raw === "." || raw === "..") return { ok: false, error: "Enter a file name." };
+  if (raw.length > PHOTO_NAME_MAX) return { ok: false, error: "File name is too long." };
+  if (/[/\\]/.test(raw) || raw.includes("..")) return { ok: false, error: "File name cannot include a path." };
+  return { ok: true, code: raw, fileName: `${raw}${ext}` };
+}
+
+/** Object key under this project's pool prefix. Null when the name is not safe to store. */
+export function photoObjectKey(projectId: string, code: string, ext: string): string | null {
+  if (!projectId || /[/\\]/.test(projectId) || projectId.includes("..")) return null;
+  if (!/^\.[a-z0-9]{1,8}$/.test(ext)) return null;
+  const safe = String(code || "").trim();
+  if (!safe || safe.length > PHOTO_NAME_MAX) return null;
+  if (/[/\\]/.test(safe) || safe.includes("..")) return null;
+  return `photos/${projectId}/pool/${safe}${ext}`;
+}
+
+/** True only for a single object inside photos/{projectId}/pool/. */
+export function isProjectPoolKey(projectId: string, key: string): boolean {
+  if (!projectId || /[/\\]/.test(projectId) || projectId.includes("..")) return false;
+  const prefix = `photos/${projectId}/pool/`;
+  if (!key.startsWith(prefix)) return false;
+  const rest = key.slice(prefix.length);
+  if (!rest || rest.includes("/") || rest.includes("\\") || rest.includes("..")) return false;
+  return /\.[A-Za-z0-9]{1,8}$/.test(rest);
+}
+
+export function canonicalCodes(
+  requested: string[],
+  allowed: string[],
+  missingError: string
+): { ok: true; codes: string[] } | { ok: false; error: string } {
+  const seen = new Set<string>();
+  const wanted: string[] = [];
+  for (const raw of requested) {
+    const trimmed = String(raw ?? "").trim();
+    if (!trimmed) continue;
+    const key = normCode(trimmed);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    wanted.push(trimmed);
+  }
+  if (!wanted.length) return { ok: false, error: "Select at least one photo." };
+  if (wanted.length > PHOTO_DELETE_MAX) return { ok: false, error: "Too many photos selected." };
+  const byNorm = new Map<string, string>();
+  for (const code of allowed) {
+    const key = normCode(code);
+    if (key && !byNorm.has(key)) byNorm.set(key, code);
+  }
+  const codes: string[] = [];
+  for (const code of wanted) {
+    const hit = byNorm.get(normCode(code));
+    if (!hit) return { ok: false, error: missingError };
+    codes.push(hit);
+  }
+  return { ok: true, codes };
+}
+
+export function replaceCodeInList(codes: string[], from: string, to: string): { codes: string[]; changed: boolean } {
+  const key = normCode(from);
+  let changed = false;
+  const next = codes.map((c) => {
+    if (normCode(c) !== key) return c;
+    changed = true;
+    return to;
+  });
+  return { codes: next, changed };
+}
+
+export function withoutCodes(codes: string[], drop: string[]): string[] {
+  const keys = new Set(drop.map((c) => normCode(c)));
+  return codes.filter((c) => !keys.has(normCode(c)));
+}
+
+export async function deleteStoredPhoto(
+  projectId: string,
+  spacesKey: string,
+  ops: PhotoStorageOps
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const key = String(spacesKey || "");
+  if (!key) return { ok: true };
+  if (!isProjectPoolKey(projectId, key)) {
+    return { ok: false, error: "Photo is not stored in this project." };
+  }
+  if (!ops.configured()) return { ok: false, error: "Photo storage is not available." };
+  const removed = await ops.remove(key);
+  if (!removed) return { ok: false, error: "Could not delete that photo from storage." };
+  return { ok: true };
+}
+
+/**
+ * Move a pool object to a new key in the same project.
+ * Copies first, deletes the old key, and deletes the new key if the old one cannot be removed.
+ * An empty source key stays empty (placeholder, no object to move).
+ * A missing source is treated as nothing to move — the caller may point metadata at the new key.
+ */
+export async function moveStoredPhoto(
+  projectId: string,
+  fromKey: string,
+  toKey: string,
+  ops: PhotoStorageOps
+): Promise<{ ok: true; spacesKey: string } | { ok: false; error: string }> {
+  const from = String(fromKey || "");
+  const to = String(toKey || "");
+  if (!from) return { ok: true, spacesKey: "" };
+  if (!isProjectPoolKey(projectId, from) || !isProjectPoolKey(projectId, to)) {
+    return { ok: false, error: "Photo is not stored in this project." };
+  }
+  if (from === to) return { ok: true, spacesKey: to };
+  if (!ops.configured()) return { ok: false, error: "Photo storage is not available." };
+  const copied = await ops.copy(from, to);
+  if (copied === "failed") return { ok: false, error: "Could not rename that photo in storage." };
+  if (copied === "missing") return { ok: true, spacesKey: to };
+  const removed = await ops.remove(from);
+  if (!removed) {
+    await ops.remove(to);
+    return { ok: false, error: "Could not rename that photo in storage." };
+  }
+  return { ok: true, spacesKey: to };
+}
+
+function storageFailureStatus(error: string): number {
+  if (error === "Photo storage is not available.") return 503;
+  if (error === "Photo is not stored in this project.") return 400;
+  return 502;
+}
+
+export type PhotoMutationScope = { kind: "pool" } | { kind: "folder"; folderId: string };
+
+/**
+ * Permanently delete photos that belong to this project.
+ * Folder scope only accepts codes listed on that folder. Pool and folder rows share one
+ * Spaces object, so a successful delete removes the pool row and every folder reference.
+ */
+export async function deleteProjectPhotos(
+  projectId: string,
+  requested: string[],
+  scope: PhotoMutationScope,
+  ops: PhotoStorageOps = defaultPhotoStorageOps()
+): Promise<
+  { ok: true; deletedCodes: string[] } | { ok: false; error: string; status: number; deletedCodes: string[] }
+> {
+  const pool = await prisma.photoPoolItem.findMany({ where: { projectId } });
+  let allowed: string[];
+  if (scope.kind === "folder") {
+    const folder = await prisma.photoFolder.findFirst({
+      where: { id: scope.folderId, projectId },
+    });
+    if (!folder) return { ok: false, error: "Folder not found.", status: 404, deletedCodes: [] };
+    if (folder.kind === "zip") {
+      return { ok: false, error: "Zip packs do not contain selectable photos.", status: 400, deletedCodes: [] };
+    }
+    allowed = photoCodesOf(folder);
+  } else {
+    allowed = pool.map((p) => p.code);
+  }
+
+  const resolved = canonicalCodes(
+    requested,
+    allowed,
+    scope.kind === "folder" ? "One or more photos are not in this folder." : "One or more photos are not in this pool."
+  );
+  if (!resolved.ok) return { ok: false, error: resolved.error, status: 400, deletedCodes: [] };
+
+  const byNorm = new Map(pool.map((p) => [normCode(p.code), p]));
+  const removableIds: string[] = [];
+  const deletedCodes: string[] = [];
+  let failureStatus = 502;
+  let failureError = "Could not delete that photo from storage.";
+
+  for (const code of resolved.codes) {
+    const item = byNorm.get(normCode(code));
+    if (!item) {
+      deletedCodes.push(code);
+      continue;
+    }
+    const stored = await deleteStoredPhoto(projectId, item.spacesKey, ops);
+    if (!stored.ok) {
+      failureStatus = storageFailureStatus(stored.error);
+      failureError = stored.error;
+      continue;
+    }
+    removableIds.push(item.id);
+    deletedCodes.push(item.code);
+  }
+
+  if (deletedCodes.length) {
+    await prisma.$transaction(async (tx) => {
+      if (removableIds.length) {
+        await tx.photoPoolItem.deleteMany({
+          where: { projectId, id: { in: removableIds } },
+        });
+      }
+      const folders = await tx.photoFolder.findMany({ where: { projectId } });
+      for (const folder of folders) {
+        const current = photoCodesOf(folder);
+        const next = withoutCodes(current, deletedCodes);
+        if (next.length !== current.length) {
+          await tx.photoFolder.update({
+            where: { id: folder.id },
+            data: { photoCodes: next },
+          });
+        }
+      }
+    });
+  }
+
+  if (deletedCodes.length !== resolved.codes.length) {
+    const removed = deletedCodes.length;
+    return {
+      ok: false,
+      error: removed
+        ? `Deleted ${removed} photo${removed === 1 ? "" : "s"}. ${failureError}`
+        : failureError,
+      status: removed ? 502 : failureStatus,
+      deletedCodes,
+    };
+  }
+  return { ok: true, deletedCodes };
+}
+
+/**
+ * Rename one photo. The extension is kept. The new name must be unique in the project
+ * (pool code and file name), which also covers the folder that listed it.
+ * Folder photoCodes that cite the old code are updated so captions stay in step.
+ */
+export async function renameProjectPhoto(
+  projectId: string,
+  requestedCode: string,
+  requestedName: string,
+  scope: PhotoMutationScope,
+  ops: PhotoStorageOps = defaultPhotoStorageOps()
+): Promise<
+  { ok: true; photo: PhotoPoolView; previousCode: string } | { ok: false; error: string; status: number }
+> {
+  const pool = await prisma.photoPoolItem.findMany({ where: { projectId } });
+  const folders = await prisma.photoFolder.findMany({ where: { projectId } });
+  let allowed: string[];
+  if (scope.kind === "folder") {
+    const folder = folders.find((f) => f.id === scope.folderId);
+    if (!folder) return { ok: false, error: "Folder not found.", status: 404 };
+    if (folder.kind === "zip") {
+      return { ok: false, error: "Zip packs do not contain selectable photos.", status: 400 };
+    }
+    allowed = photoCodesOf(folder);
+  } else {
+    allowed = pool.map((p) => p.code);
+  }
+
+  const resolved = canonicalCodes(
+    [requestedCode],
+    allowed,
+    scope.kind === "folder" ? "That photo is not in this folder." : "That photo is not in this pool."
+  );
+  if (!resolved.ok) return { ok: false, error: resolved.error, status: 400 };
+  const currentCode = resolved.codes[0];
+  const item = pool.find((p) => normCode(p.code) === normCode(currentCode));
+  if (!item) return { ok: false, error: "That photo is not in this pool.", status: 404 };
+
+  const parsed = parseRenamedPhotoName(item.fileName || fileNameForCode(item.code), requestedName);
+  if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
+
+  const sameName = parsed.code === item.code && parsed.fileName === String(item.fileName || "");
+  if (sameName) return { ok: true, photo: toPoolView(item), previousCode: item.code };
+
+  if (scope.kind === "folder") {
+    const folder = folders.find((f) => f.id === scope.folderId);
+    const folderClash = folder
+      ? photoCodesOf(folder).some((c) => normCode(c) === normCode(parsed.code) && normCode(c) !== normCode(item.code))
+      : false;
+    if (folderClash) {
+      return { ok: false, error: "A photo with that name already exists in this folder.", status: 409 };
+    }
+  }
+
+  const projectClash = pool.some(
+    (p) =>
+      p.id !== item.id &&
+      (normCode(p.code) === normCode(parsed.code) ||
+        String(p.fileName || "").toLowerCase() === parsed.fileName.toLowerCase())
+  );
+  const listedElsewhere = folders.some((f) =>
+    photoCodesOf(f).some((c) => normCode(c) === normCode(parsed.code) && normCode(c) !== normCode(item.code))
+  );
+  if (projectClash || listedElsewhere) {
+    return { ok: false, error: "A photo with that name already exists in this project.", status: 409 };
+  }
+
+  const ext = item.spacesKey ? extensionOfKey(item.spacesKey) : fileExtension(parsed.fileName);
+  const nextKey = item.spacesKey ? photoObjectKey(projectId, parsed.code, ext) : "";
+  if (item.spacesKey && !nextKey) return { ok: false, error: "File name cannot include a path.", status: 400 };
+
+  let storedKey = item.spacesKey;
+  if (item.spacesKey) {
+    const moved = await moveStoredPhoto(projectId, item.spacesKey, nextKey || "", ops);
+    if (!moved.ok) return { ok: false, error: moved.error, status: storageFailureStatus(moved.error) };
+    storedKey = moved.spacesKey;
+  }
+
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.photoPoolItem.update({
+        where: { id: item.id },
+        data: { code: parsed.code, fileName: parsed.fileName, spacesKey: storedKey },
+      });
+      const freshFolders = await tx.photoFolder.findMany({ where: { projectId } });
+      for (const folder of freshFolders) {
+        const current = photoCodesOf(folder);
+        const next = replaceCodeInList(current, item.code, parsed.code);
+        if (next.changed) {
+          await tx.photoFolder.update({
+            where: { id: folder.id },
+            data: { photoCodes: next.codes },
+          });
+        }
+      }
+      return row;
+    });
+    return { ok: true, photo: toPoolView(updated), previousCode: item.code };
+  } catch (err) {
+    if (item.spacesKey && storedKey && storedKey !== item.spacesKey) {
+      await moveStoredPhoto(projectId, storedKey, item.spacesKey, ops);
+    }
+    const message = err instanceof Error ? err.message : "";
+    if (/unique/i.test(message) || (typeof err === "object" && err && "code" in err && (err as { code?: string }).code === "P2002")) {
+      return { ok: false, error: "A photo with that name already exists in this project.", status: 409 };
+    }
+    return { ok: false, error: "Could not rename that photo.", status: 500 };
+  }
 }
 
 export function spacesHint(): string {

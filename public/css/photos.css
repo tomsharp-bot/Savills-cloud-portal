@@ -82,6 +82,8 @@
 .photos-page .btn-gold:hover { background: #f0e4c4; border-color: var(--gold); }
 .photos-page .btn-ghost { background: transparent; }
 .photos-page .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+.photos-page .btn-danger { background: #fff; border-color: #e2b0b0; color: #9b1c1c; }
+.photos-page .btn-danger:hover { background: #f8dede; border-color: #e2b0b0; color: #9b1c1c; }
 .photos-page .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .photos-page .btn.active-select { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
 .photos-page .section-bar {
@@ -264,7 +266,24 @@
   accent-color: var(--blue);
   display: none;
 }
-.photos-page.select-mode .photo-card .sel-check { display: block; }
+.photos-page.pool-select-mode #photoPool .photo-card .sel-check { display: block; }
+.photos-page .folder-photos.select-mode .photo-card .sel-check { display: block; }
+.photos-page .folder-photo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px 0;
+}
+.photos-page #renameInput {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+  margin: 0;
+}
 .photos-page .photo-thumb { height: 162px; background: #c5ced8; display: block; width: 100%; object-fit: cover; }
 .photos-page .photo-name { padding: 6px 5px 2px; font-size: 0.72rem; color: var(--navy); word-break: break-all; line-height: 1.25; font-weight: 600; }
 .photos-page .photo-meta { padding: 0 5px 8px; font-size: 0.65rem; color: var(--muted); word-break: break-all; line-height: 1.25; }

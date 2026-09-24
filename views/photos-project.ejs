@@ -52,7 +52,7 @@
     </div>
 
     <div id="panel-pool" class="panel active" role="tabpanel" aria-labelledby="tab-pool">
-      <p class="hint-muted">Coloured placeholders until Spaces serves real thumbs. Photo codes are usually <strong>UPRN-room-seq</strong> (e.g. 2245623-Kitchen-1). Extracts <strong>copy</strong> from here; originals stay in the pool.</p>
+      <p class="hint-muted">Coloured placeholders until Spaces serves real thumbs. Photo codes are usually <strong>UPRN-room-seq</strong> (e.g. 2245623-Kitchen-1). Extracts <strong>copy</strong> code lists from here; the file itself stays one Spaces object. Select images to download a zip, rename one photo, or delete.</p>
       <div class="pool-toolbar">
         <div class="pool-search">
           <label class="visually-hidden" for="poolSearch">Search Photos Pool</label>
@@ -61,6 +61,8 @@
         <div class="pool-actions">
           <button type="button" class="btn" id="btnSelectImages">Select Images</button>
           <button type="button" class="btn btn-primary" id="btnDownloadZip" disabled>Download zip</button>
+          <button type="button" class="btn btn-danger" id="btnDeletePhotos" disabled>Delete</button>
+          <button type="button" class="btn" id="btnRenamePhoto" disabled title="Select one photo to rename">Rename</button>
           <p class="pool-select-hint" id="poolSelectHint" hidden><strong id="poolSelectCount">0</strong> selected</p>
         </div>
       </div>
@@ -69,7 +71,7 @@
 
     <div id="panel-folders" class="panel" role="tabpanel" aria-labelledby="tab-folders">
       <div class="folders-toolbar">
-        <p class="hint-muted" style="margin:0">Batch folders (and zip packs). Tick <strong>Client Access</strong> to show on Client · Completions. Click a folder name to expand its photos.</p>
+        <p class="hint-muted" style="margin:0">Batch folders (and zip packs). Tick <strong>Client Access</strong> to show on Client · Completions. Click a folder name to expand its photos, then select them to download, rename, or delete.</p>
       </div>
       <div class="table-wrap">
         <table class="folders-table" aria-label="Photo Folders">
@@ -145,7 +147,44 @@
       <img id="lightboxImg" alt="" />
     </div>
     <div class="lightbox-foot">
+      <button type="button" class="btn" id="btnLightboxRename">Rename</button>
       <button type="button" class="btn btn-primary" id="btnLightboxOk">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="renameModal" role="dialog" aria-modal="true" aria-labelledby="renameModalTitle" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="renameModalTitle">Rename photo</h3>
+      <button type="button" class="modal-close" id="btnCloseRenameModal" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint-muted" style="margin-top:0">The file extension <strong id="renameExt">.jpg</strong> stays. Enter the new name only.</p>
+      <label for="renameInput" style="display:block;font-weight:600;font-size:.82rem;margin-bottom:6px;color:var(--navy)">New name</label>
+      <input type="text" id="renameInput" autocomplete="off" maxlength="140" />
+      <p class="err-msg" id="renameErr">Enter a file name.</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="btnCancelRename">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btnConfirmRename">Save name</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="deleteModalTitle">Delete photos</h3>
+      <button type="button" class="modal-close" id="btnCloseDeleteModal" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="deleteConfirmText" style="margin-top:0">Delete 0 photos? This cannot be undone.</p>
+      <p class="err-msg" id="deleteErr">Could not delete those photos.</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="btnCancelDelete">Cancel</button>
+      <button type="button" class="btn btn-danger" id="btnConfirmDelete">Delete</button>
     </div>
   </div>
 </div>
