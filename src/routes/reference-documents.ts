@@ -7,6 +7,7 @@ import { extOf } from "../lib/documents.js";
 import {
   REF_DOC_MAX_BYTES,
   REF_DOC_MAX_FILES,
+  referenceFileTooLargeMessage,
   categoryById,
   columnsWithCounts,
   contentDisposition,
@@ -103,7 +104,7 @@ function acceptUpload(req: Request, res: Response, next: NextFunction): void {
     const category = categoryById(String(req.params.category || ""));
     const back = category ? `/reference-documents/${category.id}` : "/reference-documents";
     if (code === "LIMIT_FILE_SIZE") {
-      res.redirect(`${back}?error=` + encodeURIComponent("Each file must be 20MB or smaller."));
+      res.redirect(`${back}?error=` + encodeURIComponent(referenceFileTooLargeMessage()));
       return;
     }
     if (code === "LIMIT_FILE_COUNT" || code === "LIMIT_UNEXPECTED_FILE") {

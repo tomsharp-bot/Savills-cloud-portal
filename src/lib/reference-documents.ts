@@ -24,8 +24,14 @@ export class ReferenceStorageError extends Error {
   }
 }
 
-export const REF_DOC_MAX_BYTES = 20 * 1024 * 1024;
+export const REF_DOC_MAX_BYTES = 50 * 1024 * 1024;
 export const REF_DOC_MAX_FILES = 20;
+
+/** Shown when multer rejects one reference-document file over REF_DOC_MAX_BYTES. */
+export function referenceFileTooLargeMessage(): string {
+  const mb = REF_DOC_MAX_BYTES / (1024 * 1024);
+  return `Each file must be ${mb}MB or smaller.`;
+}
 
 export const ALLOWED_REF_EXTS = ["pdf", "doc", "docx", "xls", "xlsx", "png", "jpg", "jpeg"] as const;
 
