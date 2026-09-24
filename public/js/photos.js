@@ -11,6 +11,13 @@
     return (basePath || "") + p;
   }
 
+  // Blob and data URIs are already displayable. App paths need the portal prefix.
+  function thumbSrc(thumbUrl) {
+    const raw = String(thumbUrl || "");
+    if (!raw || /^(https?:|data:|blob:)/i.test(raw)) return raw;
+    return url(raw);
+  }
+
   let folders = Array.isArray(data.folders) ? data.folders.slice() : [];
   const pool = Array.isArray(data.pool) ? data.pool.slice() : [];
 
@@ -254,7 +261,7 @@
       if (title) title.textContent = photo.fileName;
       if (sub) sub.textContent = "UPRN " + photo.uprn + " · " + photo.code;
       if (img) {
-        img.src = photo.thumbUrl;
+        img.src = thumbSrc(photo.thumbUrl);
         img.alt = photo.fileName;
       }
       const renameInput = document.getElementById("lightboxRenameInput");
@@ -294,7 +301,7 @@
     document.getElementById("lightboxTitle").textContent = meta.fileName;
     document.getElementById("lightboxSub").textContent = "UPRN " + meta.uprn + " · " + meta.code;
     const img = document.getElementById("lightboxImg");
-    img.src = meta.thumbUrl || "";
+    img.src = thumbSrc(meta.thumbUrl || "");
     img.alt = meta.fileName;
     const renameInput = document.getElementById("lightboxRenameInput");
     const renameExt = document.getElementById("lightboxRenameExt");
@@ -312,7 +319,7 @@
     const stem = escapeHtml(fileStem(fileName));
     const ext = escapeHtml(fileExtension(fileName));
     const thumb = meta.thumbUrl
-      ? '<img class="photo-thumb" src="' + meta.thumbUrl + '" alt="" loading="lazy" />'
+      ? '<img class="photo-thumb" src="' + escapeHtml(thumbSrc(meta.thumbUrl)) + '" alt="" loading="lazy" />'
       : '<div class="photo-thumb" aria-hidden="true"></div>';
     const uprn = options.showUprn
       ? '<div class="photo-meta">UPRN ' + escapeHtml(meta.uprn || "") + "</div>"

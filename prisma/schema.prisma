@@ -214,8 +214,8 @@ model Completion {
   status      String   @default("Ready")
 }
 
-/// Photos Pool row for a project. spacesKey empty = coloured placeholder until Spaces is wired.
-/// TODO: serve real thumbs/bytes from DigitalOcean Spaces bucket cloud-portal-vault (LON1).
+/// Photos Pool row for a project. spacesKey empty = coloured placeholder.
+/// A pool key is shown through the authenticated /photos image route, not a public Spaces URL.
 model PhotoPoolItem {
   id        String   @id @default(cuid())
   projectId String
