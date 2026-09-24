@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import vm from "node:vm";
 import {
   boardFromClient,
   buildProgrammeTables,
@@ -9,6 +10,7 @@ import {
   isHolidayLabel,
   parseSavedBoard,
   approxSurveysOnGrid,
+  programmeCellMatchesProject,
   programmeShortLabel,
   projectWeeksOnGrid,
   resolveProgramme,
@@ -46,6 +48,14 @@ describe("programme page controls", () => {
     assert.match(script, /isAdminName/);
     assert.match(script, /approx-surveys/);
     assert.match(script, /SURVEYS_PER_WEEK = 40/);
+    assert.match(script, /programmeCellMatches/);
+    assert.match(script, /fillProjTable\("projUpcoming", P\.upcoming, \{ weeks: true \}\)/);
+    assert.match(script, /if \(!canEdit \|\| !DATA\.saveUrl\) return Promise\.resolve\(false\)/);
+    const upcoming = page.slice(page.indexOf('id="projUpcoming"'), page.indexOf('id="projCompleted"'));
+    assert.match(upcoming, />Nr of Weeks</);
+    assert.match(upcoming, />Approx surveys</);
+    assert.match(page, /is-readonly/);
+    assert.match(page, /Only Tom Sharp can move tiles/);
     assert.match(script, /A2Dominion 2026 - Ph4/);
     const palette = script.slice(script.indexOf("function collectPaletteProjects"), script.indexOf("function buildPalette"));
     assert.match(palette, /P\.current/);
@@ -241,6 +251,58 @@ describe("projectWeeksOnGrid", () => {
     assert.equal(approxSurveysOnGrid("Onward", people), 80);
     assert.equal(approxSurveysOnGrid("Holiday", people), 40);
     assert.equal(approxSurveysOnGrid("Missing", people), 0);
+  });
+
+  it("counts short stamps and full names as the same project, once per week", () => {
+    const people = [
+      { weeks: ["LFHA", "A2D Ph4", "Cornwall", "LFHA 2026"], active: true },
+      { weeks: ["LFHA", "Vico", "A2Dominion 2026 – Ph 4", ""], active: true },
+      { weeks: ["LFHA 2026", "LFHA", "LFHA", "LFHA"], active: false },
+    ];
+    const catalogue = ["LFHA 2026", "A2Dominion 2026 - Ph4", "Cornwall 2026 Ph2", "Vico", "Onward"];
+    assert.equal(projectWeeksOnGrid("LFHA 2026", people, catalogue), 2);
+    assert.equal(projectWeeksOnGrid("A2Dominion 2026 - Ph4", people, catalogue), 2);
+    assert.equal(projectWeeksOnGrid("Cornwall 2026 Ph2", people, catalogue), 1);
+    assert.equal(projectWeeksOnGrid("Vico", people, catalogue), 1);
+    assert.equal(projectWeeksOnGrid("Onward", people, catalogue), 0);
+    assert.equal(approxSurveysOnGrid("LFHA 2026", people, catalogue), 80);
+    assert.equal(approxSurveysOnGrid("Vico", people, catalogue), 40);
+    assert.equal(programmeCellMatchesProject("LFHA 2025", "LFHA 2026", catalogue), false);
+    assert.equal(programmeCellMatchesProject("Saxon", "Saxon Weald Ph 4", ["Saxon Weald Ph 4"]), true);
+    assert.equal(programmeCellMatchesProject("Vico", "Vico 2026", ["Vico", "Vico 2026"]), false);
+    assert.equal(programmeCellMatchesProject("Vico 2026", "Vico", ["Vico", "Vico 2026"]), false);
+    const shared = programmeShortLabel("Hello Project Alpha");
+    assert.equal(shared, programmeShortLabel("Hello Project Beta"));
+    const longNames = ["Hello Project Alpha", "Hello Project Beta"];
+    assert.equal(programmeCellMatchesProject(shared, "Hello Project Alpha", longNames), false);
+    assert.equal(programmeCellMatchesProject("Hello Project Alpha", "Hello Project Alpha", longNames), true);
+  });
+
+  it("uses the same stamp match in the browser script", () => {
+    const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
+    const start = script.indexOf("var SHORT_LABELS");
+    const end = script.indexOf("function adminCanonSet");
+    const context: { programmeCellMatches?: (cell: string, project: string, catalogue: string[]) => boolean } = {};
+    vm.runInNewContext(script.slice(start, end), context);
+    assert.equal(typeof context.programmeCellMatches, "function");
+    const cases: { cell: string; project: string; catalogue: string[] }[] = [
+      { cell: "LFHA", project: "LFHA 2026", catalogue: ["LFHA 2026", "Onward"] },
+      { cell: "A2D Ph4", project: "A2Dominion 2026 - Ph4", catalogue: ["A2Dominion 2026 - Ph4", "A2Dominion 2027 - Ph2"] },
+      { cell: "A2Dominion 2026 – Ph 4", project: "A2Dominion 2026 - Ph4", catalogue: ["A2Dominion 2026 - Ph4"] },
+      { cell: "Cornwall", project: "Cornwall 2026 Ph2", catalogue: ["Cornwall 2026 Ph2"] },
+      { cell: "Vico 2026", project: "Vico", catalogue: ["Vico"] },
+      { cell: "LFHA", project: "LFHA 2026", catalogue: ["LFHA", "LFHA 2026"] },
+      { cell: "LFHA 2025", project: "LFHA 2026", catalogue: ["LFHA 2026"] },
+      { cell: "Holiday", project: "Onward", catalogue: ["Onward"] },
+      { cell: "Onward", project: "Onward", catalogue: ["Onward", "LFHA 2026"] },
+    ];
+    for (const row of cases) {
+      assert.equal(
+        context.programmeCellMatches!(row.cell, row.project, row.catalogue),
+        programmeCellMatchesProject(row.cell, row.project, row.catalogue),
+        `${row.cell} → ${row.project}`
+      );
+    }
   });
 });
 

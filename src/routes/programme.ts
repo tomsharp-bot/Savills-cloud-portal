@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
+import { canEditProgramme } from "../lib/access.js";
 import { requireAdmin } from "../middleware/auth.js";
 import {
   PROGRAMME_BOARD_ID,
@@ -20,6 +21,12 @@ import {
 
 export const programmeRouter = Router();
 programmeRouter.use(requireAdmin);
+
+function requireProgrammeEditor(req: Request, res: Response): boolean {
+  if (canEditProgramme(req.user)) return true;
+  res.status(403).json({ error: "Only Tom Sharp can change Projects Programme." });
+  return false;
+}
 
 programmeRouter.get("/", async (req: Request, res: Response) => {
   const [projects, surveyors, admins, boardRow, notes, stockGroups] = await Promise.all([
@@ -61,6 +68,7 @@ programmeRouter.get("/", async (req: Request, res: Response) => {
     },
     notes: programmeNotes(resolved.usingPersonnelAdmins),
     adminNames: admins.map((person) => person.name),
+    canEdit: canEditProgramme(req.user),
     saveUrl: res.locals.baseUrl("/projects-programme/board"),
     scopeUrl: res.locals.baseUrl("/projects-programme/survey-types"),
     exportUrl: res.locals.baseUrl("/projects-programme/export"),
@@ -71,10 +79,12 @@ programmeRouter.get("/", async (req: Request, res: Response) => {
     user: req.user,
     programmeJson: jsonForScript(payload),
     usingPersonnelAdmins: resolved.usingPersonnelAdmins,
+    canEdit: canEditProgramme(req.user),
   });
 });
 
 programmeRouter.post("/board", async (req: Request, res: Response) => {
+  if (!requireProgrammeEditor(req, res)) return;
   const saved = boardFromClient(req.body);
   if (!saved) {
     res.status(400).json({ error: "Board payload was not valid." });
@@ -101,6 +111,7 @@ programmeRouter.post("/export", async (req: Request, res: Response) => {
 });
 
 programmeRouter.post("/survey-types", async (req: Request, res: Response) => {
+  if (!requireProgrammeEditor(req, res)) return;
   const projectId = String(req.body?.projectId || "").trim();
   if (!projectId) {
     res.status(400).json({ error: "Missing project." });

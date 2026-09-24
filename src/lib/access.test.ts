@@ -2,20 +2,21 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AuthedUser } from "./access.js";
 import {
+  canEditProgramme,
   canEditSampleAnalysis,
   canManageReferenceDocuments,
   canSeeCompletions,
+  canSeeProgramme,
   canSeeProjectTab,
   canSeeReferenceDocuments,
   defaultProjectTab,
   visibleProjectTabs,
 } from "./access.js";
 
-function user(role: AuthedUser["role"]): AuthedUser {
+function user(role: AuthedUser["role"], patch: Partial<AuthedUser> = {}): AuthedUser {
   return {
     id: role,
     username: role,
-    role,
     name: role,
     email: null,
     initials: null,
@@ -23,6 +24,8 @@ function user(role: AuthedUser["role"]): AuthedUser {
     company: null,
     clientRole: null,
     frozen: false,
+    ...patch,
+    role,
   };
 }
 
@@ -35,6 +38,41 @@ describe("Reference documents access", () => {
     assert.equal(canManageReferenceDocuments(user("admin")), true);
     assert.equal(canManageReferenceDocuments(user("surveyor")), false);
     assert.equal(canManageReferenceDocuments(user("client")), false);
+  });
+});
+
+describe("Projects Programme access", () => {
+  it("lets every admin view and only Tom Sharp’s admin login edit", () => {
+    assert.equal(canSeeProgramme(user("admin")), true);
+    assert.equal(canSeeProgramme(user("surveyor")), false);
+    assert.equal(canSeeProgramme(user("client")), false);
+    assert.equal(canSeeProgramme(null), false);
+
+    assert.equal(canEditProgramme(user("admin", { username: "tsharp", name: "Tom Sharp" })), true);
+    assert.equal(
+      canEditProgramme(user("admin", { username: "TSharp", email: "other@example.com" })),
+      true
+    );
+    assert.equal(
+      canEditProgramme(
+        user("admin", { username: "phil.m", name: "Phil Moon", email: "tsharp@savillshousing.co.uk" })
+      ),
+      true
+    );
+    assert.equal(
+      canEditProgramme(
+        user("admin", { username: "phil.m", email: "TSharp@SavillsHousing.co.uk" })
+      ),
+      true
+    );
+    assert.equal(
+      canEditProgramme(user("admin", { username: "tom.s", name: "Tom Sharp", email: "tom.s@savills.com" })),
+      false
+    );
+    assert.equal(canEditProgramme(user("admin", { username: "phil.m", name: "Phil Moon" })), false);
+    assert.equal(canEditProgramme(user("surveyor", { username: "tsharp", email: "tsharp@savillshousing.co.uk" })), false);
+    assert.equal(canEditProgramme(user("client", { username: "tsharp" })), false);
+    assert.equal(canEditProgramme(null), false);
   });
 });
 

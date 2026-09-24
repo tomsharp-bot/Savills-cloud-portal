@@ -57,7 +57,7 @@ describe("programme Excel export", () => {
 
     const xlsxWb = XLSX.read(built.buffer, { type: "buffer" });
     assert.equal(xlsxWb.Props?.Title, "BHC Programme 22-09-2026");
-    assert.deepEqual(xlsxWb.SheetNames, ["Programme", "Current projects"]);
+    assert.deepEqual(xlsxWb.SheetNames, ["Programme", "Current projects", "Upcoming projects"]);
     assert.equal(
       xlsxWb.SheetNames.some((name) => /pool/i.test(name)),
       false
@@ -68,7 +68,7 @@ describe("programme Excel export", () => {
     assert.equal(wb.title, "BHC Programme 22-09-2026");
     assert.deepEqual(
       wb.worksheets.map((sheet) => sheet.name),
-      ["Programme", "Current projects"]
+      ["Programme", "Current projects", "Upcoming projects"]
     );
 
     const programme = wb.getWorksheet("Programme");
@@ -177,6 +177,49 @@ describe("programme Excel export", () => {
     assert.match(sheetXml || "", /zoomScale="80"/);
     const projectsXml = await zip.file("xl/worksheets/sheet2.xml")?.async("string");
     assert.match(projectsXml || "", /zoomScale="80"/);
+    const upcomingSheet = wb.getWorksheet("Upcoming projects");
+    assert.ok(upcomingSheet);
+    assert.equal(upcomingSheet.views[0]?.zoomScale, 80);
+    assert.equal(upcomingSheet.getCell("E1").value, "Nr of Weeks");
+    assert.equal(upcomingSheet.getCell("F1").value, "Approx surveys");
+    const upcomingXml = await zip.file("xl/worksheets/sheet3.xml")?.async("string");
+    assert.match(upcomingXml || "", /zoomScale="80"/);
+  });
+
+  it("counts short stamps on current and upcoming sheets", async () => {
+    const parsed = parseProgrammeExport({
+      weeks: ["2026-09-21", "2026-09-28", "2026-10-05"],
+      people: [
+        { name: "Richard Moreing", flag: "", role: "surveyor", active: true, weeks: ["LFHA", "A2D Ph4", "Vico"] },
+        { name: "Peter May", flag: "", role: "surveyor", active: true, weeks: ["LFHA 2026", "A2D Ph4", "Vico"] },
+        { name: "Off Board", flag: "", role: "surveyor", active: false, weeks: ["Vico", "Vico", "Vico"] },
+      ],
+      projects: [{ project: "LFHA 2026", numbers: "4", surveyTypes: "Blocks", lead: "Tom Sharp" }],
+      upcoming: [
+        { project: "A2Dominion 2026 - Ph4", numbers: "2", surveyTypes: "Condition Only", lead: "Carly Morgan" },
+        { project: "Vico", numbers: "1", surveyTypes: "", lead: "Greg Kowalski" },
+      ],
+    });
+    assert.ok(parsed);
+    assert.equal(parsed.upcoming.length, 2);
+    const built = await buildProgrammeWorkbook(parsed, NOW);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(built.buffer as unknown as ExcelJS.Buffer);
+    const current = wb.getWorksheet("Current projects");
+    const upcoming = wb.getWorksheet("Upcoming projects");
+    assert.ok(current);
+    assert.ok(upcoming);
+    assert.equal(current.getCell("A2").value, "LFHA 2026");
+    assert.equal(current.getCell("E2").value, 1);
+    assert.equal(current.getCell("F2").value, 40);
+    assert.equal(upcoming.getCell("A2").value, "A2Dominion 2026 - Ph4");
+    assert.equal(upcoming.getCell("E2").value, 1);
+    assert.equal(upcoming.getCell("F2").value, 40);
+    assert.equal(upcoming.getCell("A3").value, "Vico");
+    assert.equal(upcoming.getCell("E3").value, 1);
+    assert.equal(upcoming.getCell("F3").value, 40);
+    assert.equal(upcoming.getCell("A1").font?.name, "Aptos");
+    assert.equal(upcoming.views[0]?.zoomScale, 80);
   });
 
   it("rejects a payload that is not an export object", () => {

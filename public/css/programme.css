@@ -518,6 +518,16 @@
   background: #fff;
   box-shadow: 0 0 0 2px rgba(26, 75, 124, 0.15);
 }
+.programme.is-readonly .palette-tile,
+.programme.is-readonly .cell,
+.programme.is-readonly .scope-edit { cursor: default; }
+.programme.is-readonly .scope-edit:hover,
+.programme.is-readonly .scope-edit:focus {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.programme.is-readonly .active-cb { pointer-events: none; }
 .programme table.proj td.lead { white-space: normal; font-size: 9px; line-height: 1.2; font-weight: 700; color: var(--blue); }
 .programme table.proj tr.empty-sec td { color: var(--muted); font-style: italic; font-size: 10px; white-space: normal; }
 .programme table.proj .pill,

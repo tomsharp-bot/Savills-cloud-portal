@@ -139,6 +139,7 @@ export type ProgrammeExportInput = {
   agency: ProgrammeExportPoolPerson[];
   team: ProgrammeExportPoolPerson[];
   projects: ProgrammeExportProject[];
+  upcoming: ProgrammeExportProject[];
 };
 
 export type ProgrammeWorkbook = {
@@ -246,7 +247,10 @@ export function parseProgrammeExport(body: unknown): ProgrammeExportInput | null
   if (asList(row.weeks).length > MAX_WEEKS) return null;
   const rawPeople = asList(row.people);
   const rawProjects = asList(row.projects);
-  if (rawPeople.length > MAX_PEOPLE || rawProjects.length > MAX_PROJECTS) return null;
+  const rawUpcoming = asList(row.upcoming);
+  if (rawPeople.length > MAX_PEOPLE || rawProjects.length > MAX_PROJECTS || rawUpcoming.length > MAX_PROJECTS) {
+    return null;
+  }
   if (asList(row.agency).length > MAX_PEOPLE || asList(row.team).length > MAX_PEOPLE) return null;
   const people = rawPeople
     .map((person) => personFrom(person, weeks.length))
@@ -269,6 +273,9 @@ export function parseProgrammeExport(body: unknown): ProgrammeExportInput | null
       .map(poolFrom)
       .filter((person): person is ProgrammeExportPoolPerson => Boolean(person)),
     projects: rawProjects
+      .map(projectFrom)
+      .filter((project): project is ProgrammeExportProject => Boolean(project)),
+    upcoming: rawUpcoming
       .map(projectFrom)
       .filter((project): project is ProgrammeExportProject => Boolean(project)),
   };
@@ -357,6 +364,37 @@ async function aptosNormalFont(buffer: Buffer): Promise<Buffer> {
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
+function writeProjectSheet(
+  wb: ExcelJS.Workbook,
+  name: string,
+  projects: readonly ProgrammeExportProject[],
+  onBoard: readonly ProgrammeExportPerson[],
+  catalogue: readonly string[]
+): void {
+  const sheet = addSheet(wb, name);
+  const header = ["Project", "Stock", "Survey types", "Project manager", "Nr of Weeks", "Approx surveys"];
+  writeRow(
+    sheet,
+    header,
+    header.map(() => PROJ_HEADER)
+  );
+  for (const project of projects) {
+    writeRow(
+      sheet,
+      [
+        project.project,
+        project.numbers,
+        project.surveyTypes,
+        project.lead,
+        projectWeeksOnGrid(project.project, onBoard, catalogue),
+        approxSurveysOnGrid(project.project, onBoard, catalogue),
+      ],
+      [projectLook(project.project), PLAIN_BOLD, PLAIN, LEAD, PLAIN_BOLD, PLAIN_BOLD]
+    );
+  }
+  setWidths(sheet, [28, 12, 36, 22, 14, 16]);
+}
+
 export async function buildProgrammeWorkbook(input: ProgrammeExportInput, now = new Date()): Promise<ProgrammeWorkbook> {
   const title = programmeExportStamp(now);
   const filename = `${title}.xlsx`;
@@ -396,28 +434,10 @@ export async function buildProgrammeWorkbook(input: ProgrammeExportInput, now = 
   }
   setWidths(programme, [10, 24, 8, ...input.weeks.map(() => 14)]);
 
-  const projects = addSheet(wb, "Current projects");
-  const projectHeader = ["Project", "Stock", "Survey types", "Project manager", "Nr of Weeks", "Approx surveys"];
-  writeRow(
-    projects,
-    projectHeader,
-    projectHeader.map(() => PROJ_HEADER)
-  );
-  for (const project of input.projects) {
-    writeRow(
-      projects,
-      [
-        project.project,
-        project.numbers,
-        project.surveyTypes,
-        project.lead,
-        projectWeeksOnGrid(project.project, onBoard),
-        approxSurveysOnGrid(project.project, onBoard),
-      ],
-      [projectLook(project.project), PLAIN_BOLD, PLAIN, LEAD, PLAIN_BOLD, PLAIN_BOLD]
-    );
-  }
-  setWidths(projects, [28, 12, 36, 22, 14, 16]);
+  const upcoming = input.upcoming ?? [];
+  const catalogue = [...input.projects, ...upcoming].map((project) => project.project);
+  writeProjectSheet(wb, "Current projects", input.projects, onBoard, catalogue);
+  writeProjectSheet(wb, "Upcoming projects", upcoming, onBoard, catalogue);
 
   const raw = await wb.xlsx.writeBuffer();
   const buffer = await aptosNormalFont(Buffer.from(raw));
