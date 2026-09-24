@@ -5,6 +5,7 @@ import type { AddressInfo } from "node:net";
 import { createApp } from "../app.js";
 import { prisma } from "./prisma.js";
 import { photoObjectKey, uploadProjectPhoto, type PhotoStorageOps } from "./photos.js";
+import { hashPhotoShareSecret } from "./photo-share.js";
 import { spacesStatus } from "./spaces.js";
 
 async function listen(app: ReturnType<typeof createApp>): Promise<{ server: http.Server; port: number }> {
@@ -520,5 +521,209 @@ describe("Photo Storage routes", () => {
     const afterCodes = Array.isArray(afterFail?.photoCodes) ? afterFail.photoCodes.map(String) : [];
     assert.deepEqual(afterCodes, before);
     assert.equal(afterCodes.includes(failedCode), false);
+  });
+
+  it("issues a project photo-share code Excel can call, and blocks everyone else", async (t) => {
+    let projectCount = 0;
+    try {
+      projectCount = await prisma.project.count();
+    } catch {
+      t.skip("Postgres not available");
+      return;
+    }
+    if (!projectCount) {
+      t.skip("No seeded projects");
+      return;
+    }
+
+    const app = createApp({ basePath: "/projectprogress" });
+    const { server, port } = await listen(app);
+    t.after(() => server.close());
+
+    const home = await request(port, "GET", "/projectprogress/");
+    assert.equal(home.status, 302);
+    assert.match(home.location || "", /\/login/);
+
+    const bogus = await request(port, "GET", "/photos/share/not-a-real-token");
+    assert.equal(bogus.status, 401);
+    assert.match(bogus.body, /not valid/);
+    assert.doesNotMatch(bogus.body, /screen-app|Photo Storage/);
+
+    const login = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "phil.m", password: "PhilMoon2468" },
+    });
+    const cookie = cookieHeader(login.setCookie);
+    const landing = await request(port, "GET", "/projectprogress/photos", { cookie });
+    const m = landing.body.match(/href="\/projectprogress\/photos\/projects\/([^"]+)"/);
+    assert.ok(m, "expected a project tile link");
+    const projectId = m![1];
+    const stamp = Date.now().toString(36);
+    const doorCode = `224466-Front Door ${stamp}`;
+    const kitchenCode = `224466-Kitchen-${stamp}`;
+    const clashCode = `113355-Kitchen-${stamp}`;
+    const otherCode = `secret-other-${stamp}`;
+
+    const door = await prisma.photoPoolItem.create({
+      data: { projectId, code: doorCode, fileName: `${doorCode}.jpg`, spacesKey: "" },
+    });
+    const kitchen = await prisma.photoPoolItem.create({
+      data: { projectId, code: kitchenCode, fileName: `${kitchenCode}.jpg`, spacesKey: "" },
+    });
+    const clash = await prisma.photoPoolItem.create({
+      data: { projectId, code: clashCode, fileName: `${clashCode}.jpg`, spacesKey: "" },
+    });
+    const otherProject = await prisma.project.create({
+      data: { name: `zz share ${stamp}`, projectManager: "Tom Sharp" },
+    });
+    const otherPhoto = await prisma.photoPoolItem.create({
+      data: { projectId: otherProject.id, code: otherCode, fileName: `${otherCode}.jpg`, spacesKey: "" },
+    });
+    t.after(async () => {
+      await prisma.photoShareToken.deleteMany({ where: { projectId: { in: [projectId, otherProject.id] } } });
+      await prisma.photoPoolItem.deleteMany({ where: { id: { in: [door.id, kitchen.id, clash.id, otherPhoto.id] } } });
+      await prisma.project.deleteMany({ where: { id: otherProject.id } });
+    });
+
+    const surveyorLogin = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "peter.m", password: "PeterMay2468" },
+    });
+    const surveyorCookie = cookieHeader(surveyorLogin.setCookie);
+    const surveyorShare = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share`, {
+      cookie: surveyorCookie,
+      body: {},
+    });
+    assert.equal(surveyorShare.status, 403);
+    const surveyorReplace = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/replace`, {
+      cookie: surveyorCookie,
+      body: { find: "224466", replace: "113355", codes: [doorCode] },
+    });
+    assert.equal(surveyorReplace.status, 403);
+
+    const anonShare = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share`, {
+      body: {},
+    });
+    assert.equal(anonShare.status, 302);
+
+    const page = await request(port, "GET", `/projectprogress/photos/projects/${projectId}`, { cookie });
+    assert.match(page.body, /Get photo sharing code/);
+    assert.match(page.body, /id="lightboxRenameInput"/);
+    assert.match(page.body, /id="poolFind"/);
+
+    const created = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share`, {
+      cookie,
+      body: { label: "Excel" },
+    });
+    assert.equal(created.status, 200);
+    const createdJson = JSON.parse(created.body);
+    assert.equal(createdJson.ok, true);
+    assert.match(createdJson.address, /^http:\/\/127\.0\.0\.1:\d+\/photos\/share\/[A-Za-z0-9_-]{43}$/);
+    assert.equal(createdJson.address.includes("/projectprogress"), false);
+    assert.match(createdJson.byCodeExample, /\/by-code\/635569-Front%20Door1$/);
+    const secret = createdJson.address.split("/photos/share/")[1];
+    const row = await prisma.photoShareToken.findFirst({ where: { projectId, revokedAt: null } });
+    assert.ok(row);
+    assert.equal(row?.tokenHash, hashPhotoShareSecret(secret));
+    assert.equal(JSON.stringify(row).includes(secret), false);
+    const expires = row ? row.expiresAt.getTime() - Date.now() : 0;
+    assert.ok(expires > 360 * 24 * 60 * 60 * 1000);
+    assert.ok(expires < 370 * 24 * 60 * 60 * 1000);
+
+    const help = await request(port, "GET", `/photos/share/${secret}`);
+    assert.equal(help.status, 200);
+    assert.match(help.body, /Data Horizontal DW!F1/);
+    assert.match(help.body, /\/by-code\//);
+    assert.doesNotMatch(help.body, /screen-app/);
+
+    const missing = await request(
+      port,
+      "GET",
+      `/photos/share/${secret}/by-code/${encodeURIComponent("no-such-" + stamp)}`
+    );
+    assert.equal(missing.status, 404);
+    assert.match(missing.body, /Photo not found/);
+
+    const otherHit = await request(
+      port,
+      "GET",
+      `/photos/share/${secret}/by-code/${encodeURIComponent(otherCode)}`
+    );
+    assert.equal(otherHit.status, 404);
+    assert.match(otherHit.body, /Photo not found/);
+
+    const storedCase = `Zz-Case-${stamp}`;
+    const stored = await prisma.photoPoolItem.create({
+      data: { projectId, code: storedCase, fileName: `${storedCase}.png`, spacesKey: "" },
+    });
+    t.after(async () => {
+      await prisma.photoPoolItem.deleteMany({ where: { id: stored.id } });
+    });
+    const caseHit = await request(
+      port,
+      "GET",
+      `/photos/share/${secret}/by-code/${encodeURIComponent(storedCase.toLowerCase())}`
+    );
+    assert.equal(caseHit.status, 404);
+    assert.match(caseHit.body, /not available/);
+    assert.doesNotMatch(caseHit.body, /spacesKey|photos\//);
+
+    const renewed = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share/renew`, {
+      cookie,
+      body: {},
+    });
+    assert.equal(renewed.status, 200);
+    const renewedJson = JSON.parse(renewed.body);
+    const nextSecret = renewedJson.address.split("/photos/share/")[1];
+    assert.notEqual(nextSecret, secret);
+    const oldHelp = await request(port, "GET", `/photos/share/${secret}`);
+    assert.equal(oldHelp.status, 403);
+    const newHelp = await request(port, "GET", `/photos/share/${nextSecret}`);
+    assert.equal(newHelp.status, 200);
+
+    const revoked = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share/revoke`, {
+      cookie,
+      body: {},
+    });
+    assert.equal(revoked.status, 200);
+    assert.equal(JSON.parse(revoked.body).active, false);
+    const afterRevoke = await request(port, "GET", `/photos/share/${nextSecret}/by-code/${encodeURIComponent(doorCode)}`);
+    assert.equal(afterRevoke.status, 403);
+
+    const again = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share`, {
+      cookie,
+      body: {},
+    });
+    const liveSecret = JSON.parse(again.body).address.split("/photos/share/")[1];
+    await prisma.photoShareToken.updateMany({
+      where: { tokenHash: hashPhotoShareSecret(liveSecret) },
+      data: { expiresAt: new Date("2020-01-01T00:00:00Z") },
+    });
+    const expired = await request(port, "GET", `/photos/share/${liveSecret}`);
+    assert.equal(expired.status, 401);
+    assert.match(expired.body, /expired/);
+
+    const replaced = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/replace`, {
+      cookie,
+      body: { find: "224466", replace: "113355", codes: [doorCode, kitchenCode, clashCode] },
+    });
+    assert.equal(replaced.status, 200);
+    const replacedJson = JSON.parse(replaced.body);
+    assert.equal(replacedJson.renamedCount, 1);
+    assert.equal(replacedJson.renamed[0].from, doorCode);
+    assert.equal(replacedJson.renamed[0].to, doorCode.replace("224466", "113355"));
+    const reasons = replacedJson.skipped.map((row: { reason: string }) => row.reason).join(" ");
+    assert.match(reasons, /already exists/);
+    assert.match(reasons, /not in that photo code/);
+    const doorRow = await prisma.photoPoolItem.findUnique({ where: { id: door.id } });
+    assert.equal(doorRow?.code, doorCode.replace("224466", "113355"));
+    const kitchenRow = await prisma.photoPoolItem.findUnique({ where: { id: kitchen.id } });
+    const clashRow = await prisma.photoPoolItem.findUnique({ where: { id: clash.id } });
+    assert.equal(kitchenRow?.code, kitchenCode);
+    assert.equal(clashRow?.code, clashCode);
+
+    const emptyFind = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/replace`, {
+      cookie,
+      body: { find: "   ", replace: "1", codes: [clashCode] },
+    });
+    assert.equal(emptyFind.status, 400);
   });
 });

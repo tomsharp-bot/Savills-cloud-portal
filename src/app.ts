@@ -21,6 +21,7 @@ import { programmeRouter } from "./routes/programme.js";
 import { isAdmin, roleLabel } from "./lib/access.js";
 import { postLoginPath } from "./lib/landing.js";
 import { photosRouter } from "./routes/photos.js";
+import { photoShareRouter } from "./routes/photo-share.js";
 import { referenceDocumentsRouter } from "./routes/reference-documents.js";
 import { surveyorRouter } from "./routes/surveyor.js";
 import { prisma } from "./lib/prisma.js";
@@ -142,6 +143,10 @@ export function createApp(options: CreateAppOptions = {}) {
     res.redirect(`${HHSRS_REPORTER_PATH}${suffix}`);
   });
   app.use(HHSRS_REPORTER_PATH, hhsrsReporterRouter);
+
+  // Excel photo sharing lives at the domain root, even when Mark Up is under BASE_PATH.
+  // It is not behind portal login. The token cannot open the app UI.
+  app.use("/photos/share", photoShareRouter);
 
   if (basePath) {
     app.get("/", (_req: express.Request, res: express.Response) => {
