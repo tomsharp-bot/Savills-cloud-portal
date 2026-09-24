@@ -5,8 +5,10 @@ import { access, mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  REF_DOC_MAX_BYTES,
   REFERENCE_COLUMNS,
   ReferenceStorageError,
+  referenceFileTooLargeMessage,
   columnsWithCounts,
   contentDisposition,
   displayType,
@@ -33,6 +35,17 @@ import {
   spacesStatus,
   spacesTargetOk,
 } from "./spaces.js";
+
+describe("reference document upload limit", () => {
+  it("allows each file up to 50 MB", () => {
+    assert.equal(REF_DOC_MAX_BYTES, 50 * 1024 * 1024);
+    assert.equal(referenceFileTooLargeMessage(), "Each file must be 50MB or smaller.");
+    const route = readFileSync(join(process.cwd(), "src/routes/reference-documents.ts"), "utf8");
+    assert.match(route, /fileSize: REF_DOC_MAX_BYTES/);
+    assert.match(route, /referenceFileTooLargeMessage\(\)/);
+    assert.doesNotMatch(route, /20MB/);
+  });
+});
 
 describe("reference document categories", () => {
   it("lays the six categories out in three columns", () => {
