@@ -63,14 +63,37 @@ export function photoShareByCodeUrl(address: string, code: string): string {
   return `${base}/by-code/${encodeURIComponent(code)}`;
 }
 
+/** One request for every Photos Pool code. Excel looks codes up in memory. */
+export function photoShareCodesUrl(address: string): string {
+  const base = String(address || "").replace(/\/+$/, "");
+  return `${base}/codes`;
+}
+
+/** Codes as stored. Exact duplicates collapse; differing case stays. */
+export function uniqueStoredPhotoCodes(codes: Iterable<string>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of codes) {
+    const code = String(raw ?? "");
+    if (seen.has(code)) continue;
+    seen.add(code);
+    out.push(code);
+  }
+  return out;
+}
+
 export function photoShareHelpText(address: string): string {
   const example = photoShareByCodeUrl(address, "635569-Front Door1");
+  const codesUrl = photoShareCodesUrl(address);
   return (
     "Savills Cloud Portal — Excel photo address\n" +
     "\n" +
     "This address does not sign you in and does not open the portal.\n" +
     "\n" +
     "Paste it into Excel cell Data Horizontal DW!F1.\n" +
+    "The yellow photo checker downloads every photo code for this project once from:\n" +
+    `GET ${codesUrl}\n` +
+    'That returns JSON { "codes": ["635569-Front Door1", ...], "count": N }.\n' +
     "\n" +
     "Excel loads one photo from this project's Photos Pool with:\n" +
     `GET ${address}/by-code/<photo code>\n` +
@@ -153,6 +176,19 @@ export async function findPhotoShareGrant(secret: string, now: Date = new Date()
     return { ok: false, status: 401, error: "This photo sharing code is not valid." };
   }
   return assessPhotoShareToken(row, now);
+}
+
+/**
+ * Photo codes for one project's Photos Pool. Database only — no Spaces fetch.
+ * Ordered by code. Exact duplicates are dropped; the stored spelling is kept.
+ */
+export async function listSharedPoolCodes(projectId: string): Promise<string[]> {
+  const rows = await prisma.photoPoolItem.findMany({
+    where: { projectId },
+    select: { code: true },
+    orderBy: { code: "asc" },
+  });
+  return uniqueStoredPhotoCodes(rows.map((row) => row.code));
 }
 
 export async function findPoolPhotoForShare(projectId: string, rawCode: string) {

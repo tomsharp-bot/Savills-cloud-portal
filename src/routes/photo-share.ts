@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import {
   findPhotoShareGrant,
+  listSharedPoolCodes,
   photoShareAddress,
   photoShareHelpText,
   photoShareOrigin,
@@ -9,8 +10,8 @@ import {
 
 /**
  * Excel photo lookup. Mounted at the domain root (/photos/share), outside the portal
- * login wall. A token reads one Photos Pool image for its project. It does not start
- * a session and it does not unlock Photo Storage.
+ * login wall. A token reads one Photos Pool image, or the project's photo codes,
+ * for its project. It does not start a session and it does not unlock Photo Storage.
  */
 export const photoShareRouter = Router();
 
@@ -25,6 +26,16 @@ photoShareRouter.use((_req, res, next) => {
 function plain(res: Response, status: number, message: string): void {
   res.status(status).type("text/plain; charset=utf-8").send(message);
 }
+
+photoShareRouter.get("/:token/codes", async (req: Request, res: Response) => {
+  const grant = await findPhotoShareGrant(String(req.params.token || ""));
+  if (!grant.ok) {
+    plain(res, grant.status, grant.error);
+    return;
+  }
+  const codes = await listSharedPoolCodes(grant.projectId);
+  res.status(200).json({ codes, count: codes.length });
+});
 
 photoShareRouter.get("/:token/by-code/:code", async (req: Request, res: Response) => {
   const grant = await findPhotoShareGrant(String(req.params.token || ""));
