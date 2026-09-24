@@ -4,6 +4,8 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../app.js";
 import { prisma } from "./prisma.js";
+import { photoObjectKey, uploadProjectPhoto, type PhotoStorageOps } from "./photos.js";
+import { spacesStatus } from "./spaces.js";
 
 async function listen(app: ReturnType<typeof createApp>): Promise<{ server: http.Server; port: number }> {
   const server = http.createServer(app);
@@ -12,16 +14,44 @@ async function listen(app: ReturnType<typeof createApp>): Promise<{ server: http
   return { server, port };
 }
 
+function multipartBody(
+  parts: Array<{ name: string; value?: string; filename?: string; type?: string; data?: Buffer }>
+): { body: Buffer; contentType: string } {
+  const boundary = "----scp-photo-upload";
+  const chunks: Buffer[] = [];
+  for (const part of parts) {
+    if (part.filename != null) {
+      chunks.push(
+        Buffer.from(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="${part.name}"; filename="${part.filename}"\r\n` +
+            `Content-Type: ${part.type || "application/octet-stream"}\r\n\r\n`
+        )
+      );
+      chunks.push(part.data || Buffer.alloc(0));
+      chunks.push(Buffer.from("\r\n"));
+    } else {
+      chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${part.name}"\r\n\r\n${part.value || ""}\r\n`));
+    }
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  return { body: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
 async function request(
   port: number,
   method: string,
   path: string,
-  opts: { cookie?: string; body?: unknown; form?: Record<string, string> } = {}
+  opts: { cookie?: string; body?: unknown; form?: Record<string, string>; raw?: Buffer; contentType?: string } = {}
 ) {
   const headers: Record<string, string> = {};
-  let body: string | undefined;
+  let body: BodyInit | undefined;
   if (opts.cookie) headers.cookie = opts.cookie;
-  if (opts.form) {
+  if (opts.raw) {
+    headers["content-type"] = opts.contentType || "application/octet-stream";
+    headers.accept = "application/json";
+    body = new Blob([Uint8Array.from(opts.raw)]);
+  } else if (opts.form) {
     headers["content-type"] = "application/x-www-form-urlencoded";
     body = new URLSearchParams(opts.form).toString();
   } else if (opts.body !== undefined) {
@@ -86,6 +116,8 @@ describe("Photo Storage routes", () => {
     assert.match(project.body, /Create Photos Extract/);
     assert.match(project.body, /Photo Folders/);
     assert.match(project.body, /Select Images/);
+    assert.match(project.body, /Upload photos/);
+    assert.match(project.body, /\/pool\/upload/);
     assert.match(project.body, /id="btnDownloadZip"/);
     assert.match(project.body, /id="btnDeletePhotos"/);
     assert.match(project.body, /id="btnRenamePhoto"/);
@@ -141,6 +173,14 @@ describe("Photo Storage routes", () => {
       body: { code: "does-not-matter", name: "renamed" },
     });
     assert.equal(surveyorRename.status, 403);
+    const surveyorUpload = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/upload`, {
+      cookie: surveyorCookie,
+      body: {},
+    });
+    assert.equal(surveyorUpload.status, 403);
+    assert.equal(boot.uploadConcurrency, 4);
+    assert.equal(typeof boot.poolUploadApi, "string");
+    assert.match(boot.poolUploadApi, /\/pool\/upload$/);
   });
 
   it("admins can rename and delete pool and folder photos, scoped to that project", async (t) => {
@@ -291,5 +331,194 @@ describe("Photo Storage routes", () => {
     });
     assert.equal(refused.status, 400);
     assert.ok(await prisma.photoPoolItem.findUnique({ where: { id: foreign.id } }));
+  });
+
+  it("uploads pool and folder photos without overwriting an existing code", async (t) => {
+    let projectCount = 0;
+    try {
+      projectCount = await prisma.project.count();
+    } catch {
+      t.skip("Postgres not available");
+      return;
+    }
+    if (!projectCount) {
+      t.skip("No seeded projects");
+      return;
+    }
+
+    const app = createApp({ basePath: "/projectprogress" });
+    const { server, port } = await listen(app);
+    t.after(() => server.close());
+
+    const login = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "phil.m", password: "PhilMoon2468" },
+    });
+    const cookie = cookieHeader(login.setCookie);
+    const landing = await request(port, "GET", "/projectprogress/photos", { cookie });
+    const m = landing.body.match(/href="\/projectprogress\/photos\/projects\/([^"]+)"/);
+    assert.ok(m, "expected a project tile link");
+    const projectId = m![1];
+    const stamp = Date.now().toString(36);
+    const existingCode = `zz-have-${stamp}`;
+    const freshCode = `zz-new-${stamp}`;
+    const folderCode = `zz-folder-new-${stamp}`;
+    const failedCode = `zz-fail-${stamp}`;
+
+    const existing = await prisma.photoPoolItem.create({
+      data: { projectId, code: existingCode, fileName: `${existingCode}.jpg`, spacesKey: "" },
+    });
+    const folder = await prisma.photoFolder.create({
+      data: {
+        projectId,
+        name: `9. Upload test ${stamp}`,
+        kind: "folder",
+        photoCodes: [existingCode],
+      },
+    });
+    const zip = await prisma.photoFolder.create({
+      data: { projectId, name: `upload-${stamp}.zip`, kind: "zip", photoCodes: [] },
+    });
+    const createdIds: string[] = [existing.id];
+    t.after(async () => {
+      await prisma.photoPoolItem.deleteMany({ where: { id: { in: createdIds } } });
+      await prisma.photoPoolItem.deleteMany({ where: { projectId, code: { in: [freshCode, folderCode, failedCode] } } });
+      await prisma.photoFolder.deleteMany({ where: { id: { in: [folder.id, zip.id] } } });
+    });
+
+    const unsafe = multipartBody([
+      { name: "file", filename: "room..1.jpg", type: "image/jpeg", data: Buffer.from("nope") },
+    ]);
+    const unsafeRes = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/upload`, {
+      cookie,
+      raw: unsafe.body,
+      contentType: unsafe.contentType,
+    });
+    assert.equal(unsafeRes.status, 400);
+    assert.match(unsafeRes.body, /path/);
+
+    const clash = multipartBody([
+      { name: "spacesKey", value: "photos/other-project/pool/secret.jpg" },
+      { name: "file", filename: `${existingCode}.jpg`, type: "image/jpeg", data: Buffer.from("jpeg-bytes") },
+    ]);
+    const clashRes = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/upload`, {
+      cookie,
+      raw: clash.body,
+      contentType: clash.contentType,
+    });
+    assert.equal(clashRes.status, 409);
+    assert.match(clashRes.body, /already exists/);
+    const unchanged = await prisma.photoPoolItem.findUnique({ where: { id: existing.id } });
+    assert.equal(unchanged?.spacesKey, "");
+    assert.equal(unchanged?.code, existingCode);
+
+    const missingFolder = multipartBody([
+      { name: "file", filename: `${freshCode}.jpg`, type: "image/jpeg", data: Buffer.from("jpeg-bytes") },
+    ]);
+    const missingRes = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/${projectId}/folders/not-a-folder/photos/upload`,
+      { cookie, raw: missingFolder.body, contentType: missingFolder.contentType }
+    );
+    assert.equal(missingRes.status, 404);
+
+    const zipRes = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/${projectId}/folders/${zip.id}/photos/upload`,
+      { cookie, raw: missingFolder.body, contentType: missingFolder.contentType }
+    );
+    assert.equal(zipRes.status, 400);
+    assert.match(zipRes.body, /zip pack/);
+
+    if (!spacesStatus().configured) {
+      const blocked = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/upload`, {
+        cookie,
+        raw: missingFolder.body,
+        contentType: missingFolder.contentType,
+      });
+      assert.equal(blocked.status, 503);
+      assert.equal(
+        await prisma.photoPoolItem.findFirst({ where: { projectId, code: freshCode } }),
+        null
+      );
+    }
+
+    const puts: string[] = [];
+    const storage: PhotoStorageOps = {
+      configured: () => true,
+      remove: async () => true,
+      copy: async () => "copied",
+      put: async (key, body) => {
+        puts.push(`${key}:${body.toString()}`);
+        return true;
+      },
+    };
+    const pooled = await uploadProjectPhoto(
+      projectId,
+      { originalName: `${freshCode}.JPEG`, buffer: Buffer.from("pool-bytes"), mime: "image/jpeg" },
+      { kind: "pool" },
+      storage
+    );
+    assert.equal(pooled.ok, true);
+    if (!pooled.ok) return;
+    assert.equal(pooled.photo.code, freshCode);
+    assert.equal(pooled.photo.fileName, `${freshCode}.jpg`);
+    assert.equal(pooled.photo.spacesKey, photoObjectKey(projectId, freshCode, ".jpg"));
+    assert.equal(pooled.folder, undefined);
+    createdIds.push(
+      (await prisma.photoPoolItem.findFirst({ where: { projectId, code: freshCode } }))!.id
+    );
+    assert.deepEqual(puts, [`photos/${projectId}/pool/${freshCode}.jpg:pool-bytes`]);
+
+    const again = await uploadProjectPhoto(
+      projectId,
+      { originalName: `${freshCode}.jpg`, buffer: Buffer.from("other-bytes"), mime: "image/jpeg" },
+      { kind: "pool" },
+      storage
+    );
+    assert.equal(again.ok, false);
+    if (!again.ok) assert.equal(again.status, 409);
+    assert.equal(puts.length, 1);
+    const still = await prisma.photoPoolItem.findFirst({ where: { projectId, code: freshCode } });
+    assert.equal(still?.spacesKey, photoObjectKey(projectId, freshCode, ".jpg"));
+
+    const folded = await uploadProjectPhoto(
+      projectId,
+      { originalName: `${folderCode}.png`, buffer: Buffer.from("png-bytes"), mime: "image/png" },
+      { kind: "folder", folderId: folder.id },
+      storage
+    );
+    assert.equal(folded.ok, true);
+    if (!folded.ok) return;
+    assert.equal(folded.photo.spacesKey, photoObjectKey(projectId, folderCode, ".png"));
+    assert.ok(folded.folder);
+    assert.ok(folded.folder?.photoCodes.includes(folderCode));
+    assert.ok(folded.folder?.photoCodes.includes(existingCode));
+    const folderRow = await prisma.photoFolder.findUnique({ where: { id: folder.id } });
+    const listed = Array.isArray(folderRow?.photoCodes) ? folderRow?.photoCodes.map(String) : [];
+    assert.ok(listed.includes(folderCode));
+    assert.equal(await prisma.photoPoolItem.findFirst({ where: { projectId, code: folderCode } }) !== null, true);
+
+    const failing: PhotoStorageOps = {
+      configured: () => true,
+      remove: async () => true,
+      copy: async () => "copied",
+      put: async () => false,
+    };
+    const before = listed.slice();
+    const failed = await uploadProjectPhoto(
+      projectId,
+      { originalName: `${failedCode}.webp`, buffer: Buffer.from("webp-bytes"), mime: "image/webp" },
+      { kind: "folder", folderId: folder.id },
+      failing
+    );
+    assert.equal(failed.ok, false);
+    if (!failed.ok) assert.equal(failed.status, 502);
+    assert.equal(await prisma.photoPoolItem.findFirst({ where: { projectId, code: failedCode } }), null);
+    const afterFail = await prisma.photoFolder.findUnique({ where: { id: folder.id } });
+    const afterCodes = Array.isArray(afterFail?.photoCodes) ? afterFail.photoCodes.map(String) : [];
+    assert.deepEqual(afterCodes, before);
+    assert.equal(afterCodes.includes(failedCode), false);
   });
 });

@@ -201,6 +201,64 @@
 .photos-page .panel { display: none; }
 .photos-page .panel.active { display: block; }
 .photos-page .hint-muted { font-size: 0.78rem; color: var(--muted); margin: 0 0 12px; }
+.photos-page .upload-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 2px dashed #c5d0dc;
+  border-radius: 12px;
+  background: #f7f9fb;
+  padding: 18px 16px;
+  margin: 0 0 12px;
+  cursor: pointer;
+  color: var(--navy);
+}
+.photos-page .upload-zone:hover,
+.photos-page .upload-zone.dragover {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+.photos-page .upload-zone:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+.photos-page .upload-zone-copy strong { display: block; font-size: 0.98rem; margin-bottom: 4px; }
+.photos-page .upload-zone-copy span { display: block; font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+.photos-page .upload-zone.folder-upload { margin: 10px 12px 0; padding: 12px; }
+.photos-page .upload-status {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--blue);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+.photos-page .upload-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.photos-page .upload-status-summary { margin: 0; font-size: 0.85rem; color: var(--navy); font-weight: 600; }
+.photos-page .upload-status-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.photos-page .upload-status-actions .btn[hidden],
+.photos-page .upload-note[hidden],
+.photos-page .upload-status[hidden] { display: none; }
+.photos-page .upload-note { margin: 6px 0 0; font-size: 0.78rem; color: var(--muted); }
+.photos-page .upload-failures {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 0.78rem;
+}
+.photos-page .upload-failures:empty { display: none; }
+.photos-page .upload-failures li {
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+  color: #9b1c1c;
+  word-break: break-all;
+}
 .photos-page .pool-toolbar {
   display: flex;
   flex-wrap: wrap;
