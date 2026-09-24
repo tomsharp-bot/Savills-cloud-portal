@@ -6,19 +6,33 @@
   var statusEl = document.getElementById("photo-status");
   var minPhotos = form ? parseInt(form.getAttribute("data-min-photos") || "1", 10) : 1;
   var max = form ? parseInt(form.getAttribute("data-max-photos") || "4", 10) : 4;
-  var maxBytes = form
-    ? parseInt(form.getAttribute("data-max-file-bytes") || String(40 * 1024 * 1024), 10)
-    : 40 * 1024 * 1024;
-  var maxMb = form ? parseInt(form.getAttribute("data-max-file-mb") || "40", 10) : 40;
-  var MAX_EDGE = 2048;
-  var JPEG_QUALITY = 0.82;
-  var SKIP_UNDER_BYTES = 2 * 1024 * 1024;
+  var lookupUrl = form ? form.getAttribute("data-stock-lookup") || "" : "";
 
-  var findBtn = document.getElementById("btn-find-address");
+  var MAX_EDGE = 3000;
+  var JPEG_QUALITY = 0.88;
+  var SKIP_UNDER_BYTES = 3 * 1024 * 1024;
+  var CLIENT_MAX_BYTES = 25 * 1024 * 1024;
+
+  var findBtn = document.getElementById("btn-lookup-uprn");
   var findStatus = document.getElementById("find-status");
-  var matchList = document.getElementById("match-list");
-  var lookupUrl = form ? form.getAttribute("data-address-lookup") || "" : "";
   var lookupBusy = false;
+  var photoBusy = false;
+  var chosen = [];
+  var lastProject = "";
+  var lastFocusedStep = "";
+
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  function val(id) {
+    var el = $(id);
+    return el ? String(el.value || "").trim() : "";
+  }
+
+  function normUprn(value) {
+    return String(value || "").replace(/\s+/g, "").trim();
+  }
 
   function setFindStatus(text, kind) {
     if (!findStatus) return;
@@ -26,85 +40,132 @@
     findStatus.className = "find-status" + (kind ? " is-" + kind : "");
   }
 
-  function clearMatches() {
-    if (!matchList) return;
-    matchList.hidden = true;
-    matchList.replaceChildren();
+  function setPhotoStatus(text, kind) {
+    if (!statusEl) return;
+    statusEl.textContent = text || "";
+    statusEl.className = "find-status" + (kind ? " is-" + kind : "");
   }
 
-  function keepAddressEditable() {
-    ["fullAddress", "uprn"].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.readOnly = false;
-      el.disabled = false;
-    });
+  function progressive() {
+    return window.matchMedia("(max-width: 1024px)").matches;
   }
 
-  function applyMatch(match) {
-    var address = document.getElementById("fullAddress");
-    var uprn = document.getElementById("uprn");
-    var postcode = document.getElementById("postcode");
-    keepAddressEditable();
+  function showStep(el, arrive) {
+    if (!el) return;
+    var wasHidden = el.hidden;
+    el.hidden = false;
+    if (arrive && wasHidden) {
+      el.classList.add("is-arrive");
+      window.setTimeout(function () {
+        el.classList.remove("is-arrive");
+      }, 400);
+    }
+  }
+
+  function hideStep(el) {
+    if (!el) return;
+    el.hidden = true;
+    el.classList.remove("is-current", "is-arrive");
+  }
+
+  function setCurrent(el) {
+    var steps = document.querySelectorAll(".flow-step");
+    for (var i = 0; i < steps.length; i++) steps[i].classList.remove("is-current");
+    if (el) el.classList.add("is-current");
+  }
+
+  function focusAndScroll(el, fieldId) {
+    if (!el || !progressive()) return;
+    try {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      el.scrollIntoView(true);
+    }
+    var field = fieldId ? $(fieldId) : null;
+    if (field && !field.disabled && !field.readOnly) {
+      window.setTimeout(function () {
+        try {
+          field.focus({ preventScroll: true });
+        } catch (err) {
+          field.focus();
+        }
+      }, 280);
+    }
+  }
+
+  function addressLocked() {
+    var card = $("addr-card");
+    return !!(card && !card.hidden);
+  }
+
+  function clearAddressMatch(keepUprn) {
+    var uprn = $("uprn");
+    var address = $("fullAddress");
+    var postcode = $("postcode");
+    var confirm = $("addressConfirmed");
+    var card = $("addr-card");
+    var kept = keepUprn && uprn ? uprn.value : "";
+    if (address) address.value = "";
+    if (postcode) postcode.value = "";
+    if (confirm) confirm.checked = false;
+    if (card) card.hidden = true;
+    if (uprn) {
+      uprn.value = kept;
+      uprn.readOnly = false;
+    }
+    if (findBtn) findBtn.disabled = false;
+    setFindStatus("");
+  }
+
+  function applyStockMatch(match) {
+    var address = $("fullAddress");
+    var postcode = $("postcode");
+    var uprn = $("uprn");
+    var confirm = $("addressConfirmed");
+    var card = $("addr-card");
     if (address) {
       address.value = match.line || "";
+      address.readOnly = false;
       address.classList.remove("is-invalid");
     }
-    if (uprn) {
-      uprn.value = match.uprn || "";
-      uprn.classList.remove("is-invalid");
-    }
-    if (postcode && match.postcode) {
-      postcode.value = match.postcode;
+    if (postcode) {
+      postcode.value = match.postcode || "";
+      postcode.readOnly = false;
       postcode.classList.remove("is-invalid");
     }
-    clearMatches();
-    setFindStatus("Address found.", "ok");
+    if (uprn) {
+      uprn.value = match.uprn || uprn.value;
+      uprn.readOnly = true;
+      uprn.classList.remove("is-invalid");
+    }
+    if (confirm) confirm.checked = false;
+    if (card) card.hidden = false;
+    if (findBtn) findBtn.disabled = true;
+    setFindStatus("Match found on this project’s stock list. Edit the address if it’s wrong, then confirm.", "ok");
+    updateFlow({ announce: true });
   }
 
-  function showMatches(matches) {
-    if (!matchList) return;
-    matchList.replaceChildren();
-    matches.forEach(function (match) {
-      var li = document.createElement("li");
-      var btn = document.createElement("button");
-      btn.type = "button";
-      var label = match.line || "Address";
-      if (match.uprn) label += " · UPRN " + match.uprn;
-      btn.textContent = label;
-      btn.addEventListener("click", function () {
-        applyMatch(match);
-      });
-      li.appendChild(btn);
-      matchList.appendChild(li);
-    });
-    matchList.hidden = false;
-  }
-
-  function findAddress() {
-    if (!findBtn || lookupBusy) return;
-    var postcodeEl = document.getElementById("postcode");
-    var houseEl = document.getElementById("houseNumber");
-    var postcode = postcodeEl ? String(postcodeEl.value || "").trim() : "";
-    var house = houseEl ? String(houseEl.value || "").trim() : "";
-    clearMatches();
-    if (!postcode || !house) {
-      setFindStatus("Enter postcode and house number / name first.", "err");
+  function lookupUprn() {
+    if (!findBtn || lookupBusy || addressLocked()) return;
+    var project = val("projectId");
+    var uprnEl = $("uprn");
+    var uprn = normUprn(uprnEl ? uprnEl.value : "");
+    if (!project) {
+      setFindStatus("Choose a project first.", "err");
+      return;
+    }
+    if (!uprn) {
+      setFindStatus("Enter a UPRN.", "err");
       return;
     }
     if (!lookupUrl) {
-      setFindStatus("Address lookup is not available.", "err");
+      setFindStatus("UPRN lookup is not available.", "err");
       return;
     }
     lookupBusy = true;
     findBtn.disabled = true;
-    setFindStatus("Looking up address…", "");
-    var url =
-      lookupUrl +
-      "?postcode=" +
-      encodeURIComponent(postcode) +
-      "&house=" +
-      encodeURIComponent(house);
+    setFindStatus("Looking up UPRN…", "");
+    var url = lookupUrl + "?projectId=" + encodeURIComponent(project) + "&uprn=" + encodeURIComponent(uprn);
     fetch(url, { headers: { Accept: "application/json" } })
       .then(function (res) {
         return res.json().then(
@@ -118,74 +179,104 @@
       })
       .then(function (result) {
         var data = result.data || {};
-        if (result.status === 503 || result.status === 501) {
-          setFindStatus(data.error || "Address lookup is not configured.", "err");
-          return;
-        }
         if (result.status === 429) {
           setFindStatus(data.error || "Too many lookups. Wait a moment and try again.", "err");
           return;
         }
-        if (!result.status || result.status >= 400) {
-          setFindStatus(data.error || "Could not look up that address.", "err");
+        if (!result.status || result.status >= 400 || !data.match) {
+          setFindStatus(data.error || "No match on this project’s stock list — check the UPRN.", "err");
           return;
         }
-        var matches = Array.isArray(data.matches) ? data.matches : [];
-        if (matches.length === 1) {
-          applyMatch(matches[0]);
-          return;
-        }
-        if (matches.length > 1) {
-          setFindStatus("Pick the matching address:", "");
-          showMatches(matches);
-          return;
-        }
-        setFindStatus("No matching address. Type the full address and UPRN yourself.", "err");
+        applyStockMatch(data.match);
       })
       .catch(function () {
-        setFindStatus("Could not look up that address. Check your connection or type the address.", "err");
+        setFindStatus("Could not look up that UPRN. Check your connection and try again.", "err");
       })
       .then(function () {
         lookupBusy = false;
-        if (findBtn) findBtn.disabled = false;
+        if (findBtn && !addressLocked()) findBtn.disabled = false;
       });
   }
 
-  if (findBtn) findBtn.addEventListener("click", findAddress);
+  if (findBtn) findBtn.addEventListener("click", lookupUprn);
 
-  function onLookupEnter(e) {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    findAddress();
+  var uprnInput = $("uprn");
+  if (uprnInput) {
+    uprnInput.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || addressLocked()) return;
+      e.preventDefault();
+      lookupUprn();
+    });
   }
 
-  ["postcode", "houseNumber"].forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener("keydown", onLookupEnter);
+  var changeUprn = $("btn-change-uprn");
+  if (changeUprn) {
+    changeUprn.addEventListener("click", function () {
+      var kept = val("uprn");
+      clearAddressMatch(false);
+      var uprn = $("uprn");
+      if (uprn) {
+        uprn.value = kept;
+        uprn.focus();
+        if (uprn.select) uprn.select();
+      }
+      updateFlow({ announce: false });
+    });
+  }
+
+  ["fullAddress", "postcode"].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener("input", function () {
+      var confirm = $("addressConfirmed");
+      if (confirm) confirm.checked = false;
+      updateFlow({ announce: false });
+    });
   });
 
-  function visitReady() {
-    var project = document.getElementById("projectId");
-    var date = document.getElementById("surveyDate");
-    var name = document.getElementById("surveyorName");
-    return !!(
-      project && String(project.value || "").trim() &&
-      date && String(date.value || "").trim() &&
-      name && String(name.value || "").trim()
-    );
+  function visitDone() {
+    return Boolean(val("projectId") && val("surveyDate") && val("surveyorName"));
+  }
+
+  function propertyDone() {
+    var confirm = $("addressConfirmed");
+    return Boolean(addressLocked() && val("uprn") && val("fullAddress") && val("postcode") && confirm && confirm.checked);
+  }
+
+  function hazardDone() {
+    return Boolean(val("category") && val("rating") && val("comment"));
+  }
+
+  function callsRequired() {
+    var project = $("projectId");
+    var opt = project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
+    return !!(opt && opt.getAttribute("data-calls") === "1");
+  }
+
+  function extrasDone() {
+    if (!hazardDone()) return false;
+    if (callsRequired()) {
+      var skipped = $("callUnreached") && $("callUnreached").checked;
+      if (skipped) {
+        if (!val("callRefBlankReason")) return false;
+        if (val("callRefBlankReason") === "Other" && !val("callUnreachedNote")) return false;
+      } else if (!val("clientCallReference")) {
+        return false;
+      }
+    }
+    return Boolean(val("otherDetails"));
   }
 
   function syncProjectExtras() {
-    var project = document.getElementById("projectId");
+    var project = $("projectId");
     var opt = project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
-    var label = document.getElementById("extra-project-label");
+    var label = $("extra-project-label");
     if (label) {
-      var name = opt && project && String(project.value || "").trim() ? String(opt.textContent || "").trim() : "";
+      var name = opt && project && val("projectId") ? String(opt.textContent || "").trim() : "";
       label.textContent = name ? "· " + name : "";
     }
     var flags = {
       calls: !!(opt && opt.getAttribute("data-calls") === "1"),
-      onward: !!(opt && opt.getAttribute("data-onward") === "1"),
       saxon: !!(opt && opt.getAttribute("data-saxon") === "1"),
       online: !!(opt && opt.getAttribute("data-online") === "1"),
     };
@@ -194,50 +285,173 @@
       var key = nodes[i].getAttribute("data-extra") || "";
       var show = !!flags[key];
       nodes[i].hidden = !show;
+      if (key === "calls") continue;
       var inputs = nodes[i].querySelectorAll("input, textarea, select");
       for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !show;
     }
-  }
-
-  function updateVisitGate() {
-    var details = document.getElementById("issue-details");
-    var hint = document.getElementById("visit-gate-hint");
-    var open = visitReady();
-    var wasHidden = !!(details && details.hidden);
-    if (details) details.hidden = !open;
-    if (hint) hint.hidden = open;
-    if (open && wasHidden && details) {
-      details.classList.add("is-opening");
-      window.setTimeout(function () {
-        details.classList.remove("is-opening");
-      }, 320);
-    }
-    if (open) keepAddressEditable();
-    syncProjectExtras();
     syncCallUnreached();
   }
 
   function syncCallUnreached() {
-    var box = document.getElementById("callUnreached");
-    var wrap = document.getElementById("call-unreached-note");
-    var note = document.getElementById("callUnreachedNote");
+    var box = $("callUnreached");
+    var wrap = $("call-ref-why");
+    var note = $("callUnreachedNote");
+    var reason = $("callRefBlankReason");
+    var ref = $("clientCallReference");
     var calls = document.querySelector('.project-extra[data-extra="calls"]');
     var callsShown = !!(calls && !calls.hidden);
     var on = !!(box && box.checked && callsShown);
     if (wrap) wrap.hidden = !on;
     if (note) note.disabled = !on;
+    if (reason) reason.disabled = !on;
+    if (ref) {
+      ref.disabled = !callsShown || on;
+      if (on) ref.value = "";
+    }
+    if (!on) {
+      if (reason) reason.value = "";
+      if (note) note.value = "";
+    }
+    if (note && reason) {
+      var need = val("callRefBlankReason") === "Other";
+      note.required = need;
+      note.placeholder = need ? "Please say why…" : "Add a short note if needed…";
+    }
   }
 
-  var callBox = document.getElementById("callUnreached");
-  if (callBox) callBox.addEventListener("change", syncCallUnreached);
+  function updateFlow(opts) {
+    opts = opts || {};
+    var announce = !!opts.announce;
+    var project = val("projectId");
+    if (project !== lastProject) {
+      if (lastProject) clearAddressMatch(false);
+      lastProject = project;
+    }
+    syncProjectExtras();
 
-  ["projectId", "surveyDate", "surveyorName"].forEach(function (id) {
-    var el = document.getElementById(id);
+    var details = $("issue-details");
+    var hint = $("visit-gate-hint");
+    var actions = $("form-actions");
+    var stepVisit = $("step-visit");
+    var stepProp = $("step-property");
+    var stepHaz = $("step-hazard");
+    var stepEx = $("extra-box");
+    var stepPh = $("step-photos");
+    var vDone = visitDone();
+    var narrow = progressive();
+
+    if (hint) hint.hidden = vDone;
+    if (details) details.hidden = !vDone;
+    if (!vDone) {
+      hideStep(stepHaz);
+      hideStep(stepEx);
+      hideStep(stepPh);
+      if (actions) actions.hidden = true;
+      setCurrent(stepVisit);
+      return;
+    }
+
+    showStep(stepProp, false);
+    if (!narrow) {
+      showStep(stepHaz, false);
+      showStep(stepEx, false);
+      showStep(stepPh, false);
+      if (actions) actions.hidden = false;
+      setCurrent(stepVisit);
+      return;
+    }
+
+    if (!propertyDone()) {
+      hideStep(stepHaz);
+      hideStep(stepEx);
+      hideStep(stepPh);
+      if (actions) actions.hidden = true;
+      setCurrent(stepProp);
+      if (announce && lastFocusedStep !== "property") {
+        lastFocusedStep = "property";
+        focusAndScroll(stepProp, addressLocked() ? "addressConfirmed" : "uprn");
+      }
+      return;
+    }
+
+    showStep(stepHaz, announce);
+    if (!hazardDone()) {
+      hideStep(stepEx);
+      hideStep(stepPh);
+      if (actions) actions.hidden = true;
+      setCurrent(stepHaz);
+      if (announce && lastFocusedStep !== "hazard") {
+        lastFocusedStep = "hazard";
+        focusAndScroll(stepHaz, "category");
+      }
+      return;
+    }
+
+    showStep(stepEx, announce);
+    if (!extrasDone()) {
+      hideStep(stepPh);
+      if (actions) actions.hidden = true;
+      setCurrent(stepEx);
+      if (announce && lastFocusedStep !== "extras") {
+        lastFocusedStep = "extras";
+        var focusId = $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
+        focusAndScroll(stepEx, callsRequired() ? focusId : "otherDetails");
+      }
+      return;
+    }
+
+    showStep(stepPh, announce);
+    if (actions) actions.hidden = false;
+    var photoCount = existingCount() + chosen.length;
+    if (photoCount < minPhotos || photoCount > max) {
+      setCurrent(stepPh);
+      if (announce && lastFocusedStep !== "photos") {
+        lastFocusedStep = "photos";
+        focusAndScroll(stepPh, null);
+      }
+      return;
+    }
+
+    if (actions) setCurrent(actions);
+    if (announce && lastFocusedStep !== "actions") {
+      lastFocusedStep = "actions";
+      focusAndScroll(actions, null);
+    }
+  }
+
+  ["projectId", "surveyDate", "surveyorName", "category", "rating", "comment", "clientCallReference", "callRefBlankReason", "callUnreachedNote", "otherDetails"].forEach(function (id) {
+    var el = $(id);
     if (!el) return;
-    el.addEventListener("input", updateVisitGate);
-    el.addEventListener("change", updateVisitGate);
+    el.addEventListener("change", function () {
+      updateFlow({ announce: true });
+    });
+    el.addEventListener("input", function () {
+      updateFlow({ announce: false });
+    });
   });
-  updateVisitGate();
+
+  var confirmBox = $("addressConfirmed");
+  if (confirmBox) {
+    confirmBox.addEventListener("change", function () {
+      updateFlow({ announce: true });
+    });
+  }
+  var callBox = $("callUnreached");
+  if (callBox) {
+    callBox.addEventListener("change", function () {
+      syncCallUnreached();
+      updateFlow({ announce: true });
+    });
+  }
+
+  var narrowMedia = window.matchMedia("(max-width: 1024px)");
+  if (narrowMedia.addEventListener) {
+    narrowMedia.addEventListener("change", function () {
+      updateFlow({ announce: false });
+    });
+  }
+
+  updateFlow({ announce: false });
 
   if (!input || !newGrid) return;
 
@@ -250,6 +464,10 @@
     var nodes = form.querySelectorAll("input[required], textarea[required], select[required]");
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
+      if (el.type === "checkbox") {
+        if (!el.checked && !el.disabled && !(el.closest && el.closest("[hidden]"))) return true;
+        continue;
+      }
       if (el.disabled || (el.closest && el.closest("[hidden]"))) continue;
       if (!String(el.value || "").trim()) return true;
     }
@@ -258,28 +476,19 @@
 
   function syncFiles(files) {
     var dt = new DataTransfer();
-    files.forEach(function (f) { dt.items.add(f); });
+    files.forEach(function (f) {
+      dt.items.add(f);
+    });
     input.files = dt.files;
   }
 
-  function currentFiles() {
-    return Array.prototype.slice.call(input.files || []);
-  }
-
-  function setStatus(text) {
-    if (!statusEl) return;
-    if (!text) {
-      statusEl.hidden = true;
-      statusEl.textContent = "";
-      return;
-    }
-    statusEl.hidden = false;
-    statusEl.textContent = text;
+  function fmtMb(n) {
+    return (n / (1024 * 1024)).toFixed(n >= 5 * 1024 * 1024 ? 1 : 2) + " MB";
   }
 
   function renderNew() {
     newGrid.innerHTML = "";
-    currentFiles().forEach(function (file, index) {
+    chosen.forEach(function (file, index) {
       var fig = document.createElement("figure");
       fig.className = "photo-card";
       var img = document.createElement("img");
@@ -288,15 +497,19 @@
         img.src = URL.createObjectURL(file);
       }
       var cap = document.createElement("figcaption");
-      cap.textContent = file.name;
+      cap.textContent = file.name + " · " + fmtMb(file.size);
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "hhsrs-btn hhsrs-btn-ghost photo-remove";
       btn.textContent = "Remove";
       btn.addEventListener("click", function () {
-        var next = currentFiles().filter(function (_f, i) { return i !== index; });
-        syncFiles(next);
+        chosen = chosen.filter(function (_f, i) {
+          return i !== index;
+        });
+        syncFiles(chosen);
         renderNew();
+        setPhotoStatus(chosen.length ? chosen.length + " photo(s) ready." : "", chosen.length ? "ok" : "");
+        updateFlow({ announce: true });
       });
       fig.appendChild(img);
       fig.appendChild(cap);
@@ -323,40 +536,36 @@
 
   function compressFile(file) {
     var type = String(file.type || "").toLowerCase();
-    var canTry =
-      type === "image/jpeg" ||
-      type === "image/jpg" ||
-      type === "image/png" ||
-      type === "image/webp" ||
-      type === "image/heic" ||
-      type === "image/heif" ||
-      /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || "");
-    if (!canTry) return Promise.resolve(file);
-
+    var canTry = type.indexOf("image/") === 0 || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || "");
+    if (!canTry) return Promise.resolve({ file: file, shrunk: false, from: file.size, to: file.size });
+    if (type.indexOf("heic") >= 0 || type.indexOf("heif") >= 0 || /\.heic$/i.test(file.name || "") || /\.heif$/i.test(file.name || "")) {
+      return Promise.resolve({ file: file, shrunk: false, from: file.size, to: file.size, heic: true });
+    }
     return loadImage(file)
       .then(function (img) {
         var w = img.naturalWidth || img.width;
         var h = img.naturalHeight || img.height;
-        if (!w || !h) return file;
+        if (!w || !h) return { file: file, shrunk: false, from: file.size, to: file.size };
         var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
         if (file.size <= SKIP_UNDER_BYTES && scale === 1 && (type === "image/jpeg" || type === "image/jpg")) {
-          return file;
+          return { file: file, shrunk: false, from: file.size, to: file.size };
         }
         var canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(w * scale));
         canvas.height = Math.max(1, Math.round(h * scale));
         var ctx = canvas.getContext("2d");
-        if (!ctx) return file;
+        if (!ctx) return { file: file, shrunk: false, from: file.size, to: file.size };
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         return new Promise(function (resolve) {
           canvas.toBlob(
             function (blob) {
               if (!blob || blob.size >= file.size) {
-                resolve(file);
+                resolve({ file: file, shrunk: false, from: file.size, to: file.size });
                 return;
               }
               var base = String(file.name || "photo").replace(/\.[a-z0-9]+$/i, "");
-              resolve(new File([blob], base + ".jpg", { type: "image/jpeg", lastModified: Date.now() }));
+              var next = new File([blob], base + ".jpg", { type: "image/jpeg", lastModified: Date.now() });
+              resolve({ file: next, shrunk: true, from: file.size, to: next.size });
             },
             "image/jpeg",
             JPEG_QUALITY
@@ -364,28 +573,57 @@
         });
       })
       .catch(function () {
-        return file;
+        return { file: file, shrunk: false, from: file.size, to: file.size };
       });
   }
 
-  function oversizedName(files) {
-    for (var i = 0; i < files.length; i++) {
-      if (files[i].size > maxBytes) return files[i].name || "photo";
-    }
-    return "";
-  }
-
   input.addEventListener("change", function () {
-    var room = Math.max(0, max - existingCount());
-    var picked = currentFiles().slice(0, room);
-    syncFiles(picked);
-    renderNew();
-    var big = oversizedName(picked);
-    if (big) {
-      setStatus(big + " is over " + maxMb + "MB. Each photo up to " + maxMb + "MB. It will be compressed on Review if possible.");
-    } else {
-      setStatus("");
+    if (photoBusy) return;
+    var room = Math.max(0, max - existingCount() - chosen.length);
+    var picked = Array.prototype.slice.call(input.files || []);
+    if (!picked.length) {
+      syncFiles(chosen);
+      renderNew();
+      updateFlow({ announce: true });
+      return;
     }
+    if (room <= 0) {
+      syncFiles(chosen);
+      renderNew();
+      setPhotoStatus("Add " + minPhotos + " to " + max + " photos.", "err");
+      updateFlow({ announce: true });
+      return;
+    }
+    var batch = picked.slice(0, room);
+    var trimmed = picked.length > room;
+    photoBusy = true;
+    setPhotoStatus("Shrinking photos for a quicker upload…", "");
+    Promise.all(batch.map(compressFile))
+      .then(function (results) {
+        var notes = [];
+        results.forEach(function (result) {
+          if (result.file.size > CLIENT_MAX_BYTES) {
+            notes.push((result.file.name || "photo") + " is still over 25 MB after shrink — choose another shot.");
+            return;
+          }
+          chosen.push(result.file);
+          if (result.heic) notes.push((result.file.name || "photo") + ": HEIC kept as-is (some phones).");
+          else if (result.shrunk) notes.push((result.file.name || "photo") + ": " + fmtMb(result.from) + " → " + fmtMb(result.to));
+          else notes.push((result.file.name || "photo") + ": " + fmtMb(result.to) + " (already small enough)");
+        });
+        if (trimmed) notes.push("Only " + max + " photos can be added.");
+        syncFiles(chosen);
+        renderNew();
+        setPhotoStatus(notes.join(" · "), chosen.length ? "ok" : "err");
+      })
+      .catch(function () {
+        syncFiles(chosen);
+        setPhotoStatus("Couldn’t shrink one of the photos — try again or pick another.", "err");
+      })
+      .then(function () {
+        photoBusy = false;
+        updateFlow({ announce: true });
+      });
   });
 
   if (existing) {
@@ -394,65 +632,49 @@
       if (!btn) return;
       var card = btn.closest("[data-existing]");
       if (card) card.remove();
+      updateFlow({ announce: true });
     });
   }
 
   if (form) {
     form.addEventListener("submit", function (e) {
-      if (form.getAttribute("data-photos-ready") === "1") return;
-      var files = currentFiles();
-      var total = existingCount() + files.length;
-      if (total < minPhotos && !visibleRequiredMissing()) {
+      if (photoBusy) {
         e.preventDefault();
-        setStatus(minPhotos === 1 ? "Add at least 1 photo." : "Add at least " + minPhotos + " photos.");
+        setPhotoStatus("Still preparing photos…", "err");
+        return;
+      }
+      syncFiles(chosen);
+      var total = existingCount() + chosen.length;
+      var oversized = "";
+      for (var i = 0; i < chosen.length; i++) {
+        if (chosen[i].size > CLIENT_MAX_BYTES) {
+          oversized = chosen[i].name || "photo";
+          break;
+        }
+      }
+      if (oversized) {
+        e.preventDefault();
+        setPhotoStatus(oversized + " is still over 25 MB after shrink — choose another shot.", "err");
         return;
       }
       if (total > max) {
         e.preventDefault();
-        setStatus("Add " + minPhotos + " to " + max + " photos.");
+        setPhotoStatus("Add " + minPhotos + " to " + max + " photos.", "err");
         return;
       }
-      if (!files.length) return;
-      e.preventDefault();
-      var btn = form.querySelector('button[type="submit"]');
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "Preparing photos…";
+      if (total < minPhotos && !visibleRequiredMissing()) {
+        e.preventDefault();
+        setPhotoStatus(minPhotos === 1 ? "Add at least 1 photo." : "Add at least " + minPhotos + " photos.", "err");
       }
-      setStatus("Compressing photos for upload…");
-      Promise.all(files.map(compressFile))
-        .then(function (next) {
-          syncFiles(next);
-          renderNew();
-          var big = oversizedName(next);
-          if (big) {
-            setStatus(big + " is still over " + maxMb + "MB (each photo up to " + maxMb + "MB). Choose a smaller photo.");
-            if (btn) {
-              btn.disabled = false;
-              btn.textContent = "Review";
-            }
-            return;
-          }
-          setStatus("");
-          form.setAttribute("data-photos-ready", "1");
-          if (typeof form.requestSubmit === "function") form.requestSubmit();
-          else form.submit();
-        })
-        .catch(function () {
-          form.setAttribute("data-photos-ready", "1");
-          if (typeof form.requestSubmit === "function") form.requestSubmit();
-          else form.submit();
-        });
     });
   }
 
-  var clearBtn = document.getElementById("clear-form");
+  var clearBtn = $("clear-form");
   var FIELD_IDS = [
     "projectId",
-    "houseNumber",
-    "postcode",
     "fullAddress",
     "uprn",
+    "postcode",
     "surveyorName",
     "category",
     "rating",
@@ -460,6 +682,7 @@
     "clientCallReference",
     "otherDetails",
     "callUnreachedNote",
+    "callRefBlankReason",
   ];
 
   function todayLondonDate() {
@@ -468,28 +691,27 @@
 
   function resetFormToDefaults() {
     FIELD_IDS.forEach(function (id) {
-      var el = document.getElementById(id);
+      var el = $(id);
       if (!el) return;
       el.value = "";
       el.classList.remove("is-invalid");
     });
-    var dateEl = document.getElementById("surveyDate");
+    var dateEl = $("surveyDate");
     if (dateEl) {
       dateEl.value = todayLondonDate();
       dateEl.classList.remove("is-invalid");
     }
+    chosen = [];
     syncFiles([]);
     renderNew();
     if (existing) existing.innerHTML = "";
-    setStatus("");
-    clearMatches();
-    setFindStatus("", "");
-    var cat1 = document.getElementById("cat1Confirmed");
-    if (cat1) cat1.checked = false;
-    var callUnreached = document.getElementById("callUnreached");
+    setPhotoStatus("");
+    clearAddressMatch(false);
+    lastProject = "";
+    lastFocusedStep = "";
+    var callUnreached = $("callUnreached");
     if (callUnreached) callUnreached.checked = false;
-    updateVisitGate();
-    if (form) form.removeAttribute("data-photos-ready");
+    updateFlow({ announce: false });
     var submit = form && form.querySelector('button[type="submit"]');
     if (submit) {
       submit.disabled = false;

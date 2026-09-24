@@ -1,11 +1,12 @@
 import path from "node:path";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
-import { allowAddressLookup, lookupIdealPostcodes } from "../lib/ideal-postcodes.js";
+import { allowAddressLookup } from "../lib/ideal-postcodes.js";
 import { prisma } from "../lib/prisma.js";
 import { isProduction } from "../config.js";
-import { HHSRS_CATEGORIES, HHSRS_RATINGS } from "../lib/hhsrs-categories.js";
+import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS } from "../lib/hhsrs-categories.js";
 import {
+  CALL_REF_BLANK_REASONS,
   deleteDraft,
   draftPhotoPath,
   emptyHhsrsValues,
@@ -21,15 +22,20 @@ import {
   keepRequestedPhotos,
   listKeepPhotoNames,
   newDraftId,
+  normalizeUprn,
   persistSubmissionPhotos,
   pruneRemovedPhotos,
   readDraft,
   readHhsrsValues,
   saveIncomingPhotos,
+  siteFormSectionState,
+  stockMatchFromRows,
   sweepOldDrafts,
   type HhsrsDraft,
   type HhsrsFieldErrors,
   type HhsrsFormValues,
+  type StockAddressMatch,
+  type StockLookupRow,
   validateHhsrsForm,
   siteFormProjectFlags,
   siteSubmissionCallFields,
@@ -64,6 +70,9 @@ function uploadPhotos(req: Request, res: Response, next: NextFunction): void {
 }
 
 const DEV_DEMO_PROJECT = { id: "hhsrs-demo-current", name: "Demo current project (local)" };
+const DEV_DEMO_SURVEYOR = { id: "hhsrs-demo-surveyor", name: "Alex Surveyor" };
+
+type SurveyorOption = { id: string; name: string };
 
 function withDevDemo(projects: { id: string; name: string }[]): { id: string; name: string }[] {
   if (isProduction || projects.length) return projects;
@@ -96,6 +105,67 @@ async function findActiveProject(projectId: string): Promise<{ id: string; name:
   }
 }
 
+function withDevSurveyors(rows: SurveyorOption[]): SurveyorOption[] {
+  if (isProduction || rows.length) return rows;
+  return [DEV_DEMO_SURVEYOR];
+}
+
+async function loadSurveyors(): Promise<SurveyorOption[]> {
+  try {
+    const rows = await prisma.user.findMany({
+      where: { role: "surveyor", frozen: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
+    const named = rows
+      .map((row) => ({ id: row.id, name: String(row.name || "").trim() }))
+      .filter((row) => row.name);
+    return withDevSurveyors(named);
+  } catch {
+    return withDevSurveyors([]);
+  }
+}
+
+function isDemoProject(projectId: string): boolean {
+  return !isProduction && projectId === DEV_DEMO_PROJECT.id;
+}
+
+async function findStockMatch(projectId: string, uprnRaw: string): Promise<StockAddressMatch | null> {
+  const uprn = normalizeUprn(uprnRaw);
+  if (!uprn || uprn.length > 64 || isDemoProject(projectId)) return null;
+  const rows = await prisma.asset.findMany({
+    where: {
+      projectId,
+      omitAsset: false,
+      stockMissing: false,
+      uprn: { equals: uprn, mode: "insensitive" },
+    },
+    select: {
+      uprn: true,
+      kind: true,
+      number: true,
+      block: true,
+      street: true,
+      area: true,
+      city: true,
+      postcode: true,
+    },
+    take: 8,
+  });
+  return stockMatchFromRows(rows as StockLookupRow[]);
+}
+
+async function stockUprnError(projectId: string, uprn: string): Promise<string | undefined> {
+  if (!uprn || isDemoProject(projectId)) return undefined;
+  try {
+    const match = await findStockMatch(projectId, uprn);
+    if (!match) return "No match on this project's stock list — check the UPRN.";
+    return undefined;
+  } catch {
+    return "Could not check this UPRN on the project stock list. Try again.";
+  }
+}
+
 function filesOf(req: Request): Uploaded[] {
   return Array.isArray(req.files) ? (req.files as Uploaded[]) : [];
 }
@@ -111,20 +181,26 @@ function renderForm(
     errors?: HhsrsFieldErrors;
     draft?: HhsrsDraft | null;
     projects: { id: string; name: string }[];
+    surveyors: SurveyorOption[];
     formError?: string;
   }
 ): void {
+  const projects = opts.projects.map((project) => ({
+    ...project,
+    flags: siteFormProjectFlags(project.name),
+  }));
+  const selected = projects.find((project) => project.id === opts.values.projectId);
   res.render("hhsrs-site-form/form", {
     title: "New issue — Savills HHSRS Site Reporting",
     categories: HHSRS_CATEGORIES,
-    ratings: HHSRS_RATINGS,
+    ratings: HHSRS_SITE_FORM_RATINGS,
+    callBlankReasons: CALL_REF_BLANK_REASONS,
     values: opts.values,
     errors: opts.errors || {},
     draft: opts.draft || null,
-    projects: opts.projects.map((project) => ({
-      ...project,
-      flags: siteFormProjectFlags(project.name),
-    })),
+    projects,
+    surveyors: opts.surveyors,
+    steps: siteFormSectionState(opts.values, selected?.name || ""),
     formError: opts.formError || "",
     maxPhotos: HHSRS_MAX_PHOTOS,
     minPhotos: HHSRS_MIN_PHOTOS,
@@ -142,39 +218,72 @@ hhsrsSiteFormRouter.use((req: Request, res: Response, next: NextFunction) => {
 
 hhsrsSiteFormRouter.use("/assets", express.static(assetsDir));
 
-function lookupInput(req: Request): { postcode: string; house: string } {
-  const body = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {};
-  const query = req.query as Record<string, unknown>;
-  const source: Record<string, unknown> = req.method === "GET" ? query : { ...query, ...body };
-  const read = (value: unknown): string => (Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""));
-  const house = read(source.house);
+function queryValue(value: unknown): string {
+  return (Array.isArray(value) ? String(value[0] ?? "") : String(value ?? "")).trim();
+}
+
+function surveyorNamesFor(projectId: string, surveyors: SurveyorOption[]): string[] | undefined {
+  if (isDemoProject(projectId)) return undefined;
+  return surveyors.map((row) => row.name);
+}
+
+async function checkSubmission(
+  values: HhsrsFormValues,
+  surveyors: SurveyorOption[]
+): Promise<{
+  active: { id: string; name: string } | null;
+  checked: ReturnType<typeof validateHhsrsForm>;
+}> {
+  const active = await findActiveProject(values.projectId);
+  const checked = validateHhsrsForm(values, active, {
+    surveyorNames: surveyorNamesFor(values.projectId, surveyors),
+  });
+  if (!values.uprn || !active) return { active, checked };
+  const stockErr = await stockUprnError(active.id, values.uprn);
+  if (!stockErr) return { active, checked };
   return {
-    postcode: read(source.postcode),
-    house: house || read(source.query),
+    active,
+    checked: {
+      ok: false,
+      errors: checked.ok ? { uprn: stockErr } : { ...checked.errors, uprn: stockErr },
+    },
   };
 }
 
-async function addressLookup(req: Request, res: Response): Promise<void> {
+async function stockLookup(req: Request, res: Response): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   if (!allowAddressLookup(ip)) {
-    res.status(429).json({ error: "Too many address lookups. Wait a moment and try again." });
+    res.status(429).json({ error: "Too many lookups. Wait a moment and try again." });
     return;
   }
-  const { postcode, house } = lookupInput(req);
-  const result = await lookupIdealPostcodes({
-    postcode,
-    house,
-    apiKey: process.env.IDEAL_POSTCODES_API_KEY,
-  });
-  if (!result.ok) {
-    res.status(result.status).json({ error: result.error });
+  const projectId = queryValue(req.query.projectId);
+  const uprn = normalizeUprn(queryValue(req.query.uprn));
+  if (!projectId) {
+    res.status(400).json({ error: "Choose a project first." });
     return;
   }
-  res.json({ matches: result.matches });
+  if (!uprn) {
+    res.status(400).json({ error: "Enter a UPRN." });
+    return;
+  }
+  const active = await findActiveProject(projectId);
+  if (!active) {
+    res.status(400).json({ error: "Choose a project first." });
+    return;
+  }
+  try {
+    const match = await findStockMatch(active.id, uprn);
+    if (!match) {
+      res.status(404).json({ error: "No match on this project's stock list — check the UPRN." });
+      return;
+    }
+    res.json({ match });
+  } catch {
+    res.status(503).json({ error: "Could not look up that UPRN. Try again." });
+  }
 }
 
-hhsrsSiteFormRouter.get("/address-lookup", addressLookup);
-hhsrsSiteFormRouter.post("/address-lookup", addressLookup);
+hhsrsSiteFormRouter.get("/stock-lookup", stockLookup);
 
 hhsrsSiteFormRouter.get("/", async (_req: Request, res: Response) => {
   await sweepOldDrafts();
@@ -184,14 +293,14 @@ hhsrsSiteFormRouter.get("/", async (_req: Request, res: Response) => {
 });
 
 hhsrsSiteFormRouter.get("/new", async (req: Request, res: Response) => {
-  const projects = await loadActiveProjects();
+  const [projects, surveyors] = await Promise.all([loadActiveProjects(), loadSurveyors()]);
   const draftId = String(req.query.draft || "").trim();
   const draft = draftId ? await readDraft(draftId) : null;
   if (draft) {
-    renderForm(res, { values: draft, draft, projects });
+    renderForm(res, { values: draft, draft, projects, surveyors });
     return;
   }
-  renderForm(res, { values: emptyHhsrsValues(), projects });
+  renderForm(res, { values: emptyHhsrsValues(), projects, surveyors });
 });
 
 hhsrsSiteFormRouter.get("/draft/:draftId/photo/:name", async (req: Request, res: Response) => {
@@ -211,14 +320,13 @@ hhsrsSiteFormRouter.get("/draft/:draftId/photo/:name", async (req: Request, res:
 
 hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Response) => {
   const values = readHhsrsValues(req.body || {});
-  const projects = await loadActiveProjects();
+  const [projects, surveyors] = await Promise.all([loadActiveProjects(), loadSurveyors()]);
   const draftId = String(req.body?.draftId || "").trim() || newDraftId();
   const existing = await readDraft(draftId);
   const keep = existing ? keepRequestedPhotos(existing, listKeepPhotoNames(req.body || {})) : [];
   const incoming = filesOf(req);
   const photoError = uploadErrorOf(req) || validatePhotos(incoming, keep.length);
-  const active = await findActiveProject(values.projectId);
-  const checked = validateHhsrsForm(values, active);
+  const { active, checked } = await checkSubmission(values, surveyors);
   if (!checked.ok || photoError) {
     if (existing) await pruneRemovedPhotos(existing, keep);
     const draft: HhsrsDraft = {
@@ -233,6 +341,7 @@ hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Resp
       errors: checked.ok ? (photoError ? { photos: photoError } : {}) : { ...checked.errors, ...(photoError ? { photos: photoError } : {}) },
       draft,
       projects,
+      surveyors,
       formError: photoError && checked.ok ? photoError : "",
     });
     return;
@@ -269,8 +378,8 @@ hhsrsSiteFormRouter.post("/edit", async (req: Request, res: Response) => {
     res.redirect(hhsrsUrl("/new"));
     return;
   }
-  const projects = await loadActiveProjects();
-  renderForm(res, { values: draft, draft, projects });
+  const [projects, surveyors] = await Promise.all([loadActiveProjects(), loadSurveyors()]);
+  renderForm(res, { values: draft, draft, projects, surveyors });
 });
 
 hhsrsSiteFormRouter.post("/cancel", async (req: Request, res: Response) => {
@@ -286,8 +395,8 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
     res.redirect(hhsrsUrl("/new"));
     return;
   }
-  const active = await findActiveProject(draft.projectId);
-  const checked = validateHhsrsForm(draft, active);
+  const surveyors = await loadSurveyors();
+  const { checked } = await checkSubmission(draft, surveyors);
   const photoError = validatePhotos([], draft.photos.length);
   if (!checked.ok || photoError) {
     const projects = await loadActiveProjects();
@@ -299,6 +408,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
       },
       draft,
       projects,
+      surveyors,
       formError: photoError && checked.ok ? photoError : "",
     });
     return;

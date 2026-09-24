@@ -336,7 +336,13 @@ export function formatWorkspaceDate(now: Date = new Date()): string {
 
 export function ratingDisplayClass(rating: string): string {
   const r = (rating || "").trim().toLowerCase();
-  if (r === "cat 1" || r === "high" || r.startsWith("severe") || r.includes("emergency")) {
+  if (
+    r === "cat 1" ||
+    r === "high" ||
+    r.startsWith("high ") ||
+    r.startsWith("severe") ||
+    r.includes("emergency")
+  ) {
     return "rating-cat1";
   }
   if (r === "cat 2" || r === "medium" || r === "moderate") {

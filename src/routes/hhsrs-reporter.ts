@@ -4,7 +4,12 @@ import { prisma } from "../lib/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { formatDocDate } from "../lib/dates.js";
 import { config } from "../config.js";
-import { HHSRS_CATEGORIES, HHSRS_RATINGS, isHhsrsRating } from "../lib/hhsrs-categories.js";
+import {
+  HHSRS_CATEGORIES,
+  HHSRS_RATINGS,
+  HHSRS_SITE_FORM_RATINGS,
+  isHhsrsRating,
+} from "../lib/hhsrs-categories.js";
 import { safeId, safeStoredName } from "../lib/hhsrs-site-form.js";
 import { ONWARD_TOPICS } from "../lib/hhsrs-reporter-draft.js";
 import {
@@ -481,7 +486,7 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
     rows,
     projectNames: projects.map((p) => p.projectName),
     filters: { q, project, rating },
-    ratings: HHSRS_RATINGS,
+    ratings: Array.from(new Set([...HHSRS_RATINGS, ...HHSRS_SITE_FORM_RATINGS])),
   });
 });
 
