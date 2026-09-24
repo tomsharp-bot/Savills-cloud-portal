@@ -7,10 +7,19 @@ import {
   buildFolderName,
   buildPlaceholderZip,
   buildPoolCodes,
+  canonicalCodes,
+  deleteStoredPhoto,
+  isProjectPoolKey,
   leadFirstName,
+  moveStoredPhoto,
   nextFolderSequence,
   parsePhotoCodes,
+  parseRenamedPhotoName,
+  photoObjectKey,
+  replaceCodeInList,
   uprnFromCode,
+  withoutCodes,
+  type PhotoStorageOps,
 } from "./photos.js";
 import { spacesStatus } from "./spaces.js";
 
@@ -74,6 +83,132 @@ describe("accentClassForName", () => {
   });
 });
 
+describe("photo rename names", () => {
+  it("keeps the current extension and rejects a different one or a path", () => {
+    const ok = parseRenamedPhotoName("2245623-Kitchen-1.jpg", "2245623-Lounge-1");
+    assert.equal(ok.ok, true);
+    if (ok.ok) {
+      assert.equal(ok.code, "2245623-Lounge-1");
+      assert.equal(ok.fileName, "2245623-Lounge-1.jpg");
+    }
+    const withExt = parseRenamedPhotoName("2245623-Kitchen-1.JPG", "2245623-Lounge-1.jpg");
+    assert.equal(withExt.ok, true);
+    if (withExt.ok) assert.equal(withExt.fileName, "2245623-Lounge-1.jpg");
+    const otherExt = parseRenamedPhotoName("2245623-Kitchen-1.jpg", "2245623-Lounge-1.png");
+    assert.equal(otherExt.ok, false);
+    const path = parseRenamedPhotoName("2245623-Kitchen-1.jpg", "../other");
+    assert.equal(path.ok, false);
+    const slash = parseRenamedPhotoName("2245623-Kitchen-1.jpg", "pool/secret");
+    assert.equal(slash.ok, false);
+    assert.equal(parseRenamedPhotoName("2245623-Kitchen-1.jpg", "   ").ok, false);
+  });
+
+  it("builds a pool key only inside the project prefix", () => {
+    const projectId = "proj1";
+    assert.equal(photoObjectKey(projectId, "2245623-Lounge-1", ".jpg"), "photos/proj1/pool/2245623-Lounge-1.jpg");
+    assert.equal(photoObjectKey(projectId, "../secret", ".jpg"), null);
+    assert.equal(isProjectPoolKey(projectId, "photos/proj1/pool/2245623-Lounge-1.jpg"), true);
+    assert.equal(isProjectPoolKey(projectId, "photos/other/pool/2245623-Lounge-1.jpg"), false);
+    assert.equal(isProjectPoolKey(projectId, "photos/proj1/pool/../../secret.jpg"), false);
+  });
+});
+
+describe("photo code lists", () => {
+  it("resolves requested codes against the folder or pool and drops duplicates", () => {
+    const resolved = canonicalCodes(
+      [" kitchen ", "KITCHEN", "bath"],
+      ["Kitchen", "Bath"],
+      "missing"
+    );
+    assert.deepEqual(resolved, { ok: true, codes: ["Kitchen", "Bath"] });
+    const missing = canonicalCodes(["Hall"], ["Kitchen"], "One or more photos are not in this folder.");
+    assert.equal(missing.ok, false);
+  });
+
+  it("replaces and removes codes without touching other names", () => {
+    assert.deepEqual(replaceCodeInList(["Kitchen", "Bath"], "kitchen", "Lounge"), {
+      codes: ["Lounge", "Bath"],
+      changed: true,
+    });
+    assert.deepEqual(withoutCodes(["Kitchen", "Bath", "kitchen"], ["KITCHEN"]), ["Bath"]);
+  });
+});
+
+describe("Spaces photo delete and rename", () => {
+  const projectId = "proj1";
+
+  function ops(overrides: Partial<PhotoStorageOps> = {}): PhotoStorageOps & { calls: string[] } {
+    const calls: string[] = [];
+    return {
+      calls,
+      configured: overrides.configured || (() => true),
+      remove: overrides.remove || (async (key) => {
+        calls.push(`remove ${key}`);
+        return true;
+      }),
+      copy: overrides.copy || (async (from, to) => {
+        calls.push(`copy ${from} -> ${to}`);
+        return "copied";
+      }),
+    };
+  }
+
+  it("deletes a project pool object and ignores placeholders", async () => {
+    const storage = ops();
+    const key = "photos/proj1/pool/Kitchen.jpg";
+    assert.deepEqual(await deleteStoredPhoto(projectId, "", storage), { ok: true });
+    assert.equal(storage.calls.length, 0);
+    assert.deepEqual(await deleteStoredPhoto(projectId, key, storage), { ok: true });
+    assert.deepEqual(storage.calls, [`remove ${key}`]);
+  });
+
+  it("does not delete a key outside the project, or when storage is down", async () => {
+    const foreign = ops();
+    const blocked = await deleteStoredPhoto(projectId, "photos/other/pool/Kitchen.jpg", foreign);
+    assert.equal(blocked.ok, false);
+    assert.equal(foreign.calls.length, 0);
+    const down = ops({ configured: () => false });
+    const unavailable = await deleteStoredPhoto(projectId, "photos/proj1/pool/Kitchen.jpg", down);
+    assert.equal(unavailable.ok, false);
+    if (!unavailable.ok) assert.match(unavailable.error, /not available/);
+    assert.equal(down.calls.length, 0);
+  });
+
+  it("moves an object and removes the new key if the old key cannot be deleted", async () => {
+    const from = "photos/proj1/pool/Kitchen.jpg";
+    const to = "photos/proj1/pool/Lounge.jpg";
+    const removed: string[] = [];
+    const storage = ops({
+      remove: async (key) => {
+        removed.push(key);
+        return key !== from;
+      },
+    });
+    const moved = await moveStoredPhoto(projectId, from, to, storage);
+    assert.equal(moved.ok, false);
+    assert.deepEqual(storage.calls, [`copy ${from} -> ${to}`]);
+    assert.deepEqual(removed, [from, to]);
+  });
+
+  it("points metadata at the new key when the source object is already gone", async () => {
+    const from = "photos/proj1/pool/Kitchen.jpg";
+    const to = "photos/proj1/pool/Lounge.jpg";
+    const storage = ops({
+      copy: async () => "missing",
+    });
+    const moved = await moveStoredPhoto(projectId, from, to, storage);
+    assert.deepEqual(moved, { ok: true, spacesKey: to });
+    assert.equal(storage.calls.length, 0);
+  });
+
+  it("leaves a placeholder with no object key", async () => {
+    const storage = ops();
+    const moved = await moveStoredPhoto(projectId, "", "photos/proj1/pool/Lounge.jpg", storage);
+    assert.deepEqual(moved, { ok: true, spacesKey: "" });
+    assert.equal(storage.calls.length, 0);
+  });
+});
+
 describe("photo lightbox markup", () => {
   it("keeps the lightbox inside Photo Storage so overlay styles apply, and sizes it to the viewport", () => {
     const view = readFileSync(join(process.cwd(), "views/photos-project.ejs"), "utf8");
@@ -89,6 +224,20 @@ describe("photo lightbox markup", () => {
     assert.match(css, /\.lightbox-backdrop\s*\{[^}]*justify-content:\s*center/s);
     assert.match(css, /width:\s*min\(1100px,\s*92vw\)/);
     assert.match(css, /max-height:\s*min\(78vh,\s*820px\)/);
+  });
+
+  it("offers Delete and Rename beside Download zip, and keeps Rename to a single photo", () => {
+    const view = readFileSync(join(process.cwd(), "views/photos-project.ejs"), "utf8");
+    const js = readFileSync(join(process.cwd(), "public/js/photos.js"), "utf8");
+    assert.match(view, /id="btnDownloadZip"/);
+    assert.match(view, /id="btnDeletePhotos"/);
+    assert.match(view, /id="btnRenamePhoto"/);
+    assert.match(view, /id="btnLightboxRename"/);
+    assert.match(js, /Delete " \+ n \+ " " \+ noun \+ "\? This cannot be undone\./);
+    assert.match(js, /rename\.disabled = !poolSelectMode \|\| n !== 1/);
+    assert.match(js, /data-folder-delete/);
+    assert.match(js, /data-folder-rename/);
+    assert.match(js, /data-folder-zip/);
   });
 });
 

@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
@@ -249,6 +250,46 @@ export async function putSpacesObject(key: string, body: Buffer, contentType?: s
   } catch (err) {
     spacesError("put", err);
     return false;
+  }
+}
+
+export type SpacesCopyResult = "copied" | "missing" | "failed";
+
+function spacesObjectMissing(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const rec = err as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+  const name = String(rec.name || "");
+  const code = String(rec.Code || "");
+  if (name === "NoSuchKey" || name === "NotFound" || code === "NoSuchKey" || code === "NotFound") return true;
+  return rec.$metadata?.httpStatusCode === 404;
+}
+
+/**
+ * Server-side copy inside the bucket. "missing" means the source key is not there
+ * (nothing was written to the destination). "failed" means the copy did not happen.
+ */
+export async function copySpacesObject(fromKey: string, toKey: string): Promise<SpacesCopyResult> {
+  const s3 = spacesClient();
+  if (!s3) return "failed";
+  const bucket = spacesStatus().bucket;
+  const copySource = `${bucket}/${fromKey
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/")}`;
+  try {
+    await s3.send(
+      new CopyObjectCommand({
+        Bucket: bucket,
+        Key: toKey,
+        CopySource: copySource,
+        ACL: "private",
+      })
+    );
+    return "copied";
+  } catch (err) {
+    if (spacesObjectMissing(err)) return "missing";
+    spacesError("copy", err);
+    return "failed";
   }
 }
 

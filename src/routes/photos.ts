@@ -3,7 +3,9 @@ import { requireAdmin } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import {
   buildPlaceholderZip,
+  canonicalCodes,
   createPhotosExtract,
+  deleteProjectPhotos,
   ensureProjectPhotoDemo,
   fileNameForCode,
   leadFirstName,
@@ -11,6 +13,7 @@ import {
   loadProjectPhotos,
   markFolderDownloaded,
   photoCodesOf,
+  renameProjectPhoto,
   setFolderClientAccess,
   spacesHint,
   uprnFromCode,
@@ -90,6 +93,8 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
       extractApi: `/photos/projects/${project.id}/extract`,
       clientAccessApiBase: `/photos/projects/${project.id}/folders`,
       zipApi: `/photos/projects/${project.id}/pool/download-zip`,
+      poolDeleteApi: `/photos/projects/${project.id}/pool/delete`,
+      poolRenameApi: `/photos/projects/${project.id}/pool/rename`,
     },
   });
 });
@@ -123,17 +128,55 @@ photosRouter.post("/projects/:id/folders/:folderId/client-access", async (req: R
   res.json({ ok: true, clientAccess });
 });
 
+function codesFromQuery(query: Request["query"]): string[] {
+  const raw = query.codes ?? query.code;
+  if (Array.isArray(raw)) return raw.map((c) => String(c).trim()).filter(Boolean);
+  return String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function readCodes(body: unknown): string[] {
+  if (!body || typeof body !== "object" || !("codes" in body)) return [];
+  const raw = (body as { codes?: unknown }).codes;
+  if (Array.isArray(raw)) return raw.map((c) => String(c));
+  if (typeof raw === "string") return raw.split(",");
+  return [];
+}
+
+function placeholderZipFiles(
+  label: string,
+  ordered: Array<{ code: string; fileName: string; spacesKey: string }>
+): Array<{ name: string; body: string }> {
+  return ordered.map((item) => {
+    const code = item.code;
+    const fileName = (item.fileName || fileNameForCode(code)).replace(/\.jpg$/i, ".txt");
+    const body =
+      `Savills Cloud Portal · ${label}\n` +
+      `File: ${item.fileName || fileNameForCode(code)}\n` +
+      `UPRN: ${uprnFromCode(code)}\n` +
+      `Code: ${code}\n` +
+      `Spaces key: ${item.spacesKey || "(placeholder — Spaces not wired)"}\n` +
+      `Live build will pack the real JPEG/PNG bytes from Spaces.\n`;
+    return { name: fileName, body };
+  });
+}
+
+function sendZip(res: Response, filename: string, files: Array<{ name: string; body: string }>): void {
+  const zip = buildPlaceholderZip(files);
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(zip);
+}
+
 photosRouter.get("/projects/:id/pool/download-zip", async (req: Request, res: Response) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
   if (!project) {
     res.status(404).send("Project not found.");
     return;
   }
-  const raw = String(req.query.codes || "");
-  const codes = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const codes = codesFromQuery(req.query);
   if (!codes.length) {
     res.status(400).send("Select at least one photo.");
     return;
@@ -142,31 +185,129 @@ photosRouter.get("/projects/:id/pool/download-zip", async (req: Request, res: Re
     where: { projectId: project.id, code: { in: codes } },
   });
   const byCode = new Map(pool.map((p) => [p.code.toUpperCase(), p]));
-  const files = codes
+  const ordered = codes
     .map((c) => byCode.get(c.toUpperCase()))
-    .filter(Boolean)
-    .map((item) => {
-      const code = item!.code;
-      const fileName = (item!.fileName || fileNameForCode(code)).replace(/\.jpg$/i, ".txt");
-      const body =
-        `Savills Cloud Portal · Photos Pool\n` +
-        `File: ${item!.fileName || fileNameForCode(code)}\n` +
-        `UPRN: ${uprnFromCode(code)}\n` +
-        `Code: ${code}\n` +
-        `Spaces key: ${item!.spacesKey || "(placeholder — Spaces not wired)"}\n` +
-        `Live build will pack the real JPEG/PNG bytes from Spaces.\n`;
-      return { name: fileName, body };
-    });
-  if (!files.length) {
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => ({
+      code: item.code,
+      fileName: item.fileName || fileNameForCode(item.code),
+      spacesKey: item.spacesKey || "",
+    }));
+  if (!ordered.length) {
     res.status(404).send("No matching photos in the pool.");
     return;
   }
-  const zip = buildPlaceholderZip(files);
   const stamp = new Date().toISOString().slice(0, 10);
   const filename = `${project.name.replace(/\s+/g, "-")}-selected-${stamp}.zip`;
-  res.setHeader("Content-Type", "application/zip");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(zip);
+  sendZip(res, filename, placeholderZipFiles("Photos Pool", ordered));
+});
+
+photosRouter.post("/projects/:id/pool/delete", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ error: "Project not found." });
+    return;
+  }
+  const result = await deleteProjectPhotos(project.id, readCodes(req.body), { kind: "pool" });
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error, deletedCodes: result.deletedCodes });
+    return;
+  }
+  res.json({ ok: true, deletedCodes: result.deletedCodes });
+});
+
+photosRouter.post("/projects/:id/pool/rename", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ error: "Project not found." });
+    return;
+  }
+  const result = await renameProjectPhoto(
+    project.id,
+    String(req.body?.code ?? ""),
+    String(req.body?.name ?? ""),
+    { kind: "pool" }
+  );
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error });
+    return;
+  }
+  res.json({ ok: true, photo: result.photo, previousCode: result.previousCode });
+});
+
+photosRouter.post("/projects/:id/folders/:folderId/photos/delete", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ error: "Project not found." });
+    return;
+  }
+  const result = await deleteProjectPhotos(project.id, readCodes(req.body), {
+    kind: "folder",
+    folderId: req.params.folderId,
+  });
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error, deletedCodes: result.deletedCodes });
+    return;
+  }
+  res.json({ ok: true, deletedCodes: result.deletedCodes });
+});
+
+photosRouter.post("/projects/:id/folders/:folderId/photos/rename", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ error: "Project not found." });
+    return;
+  }
+  const result = await renameProjectPhoto(
+    project.id,
+    String(req.body?.code ?? ""),
+    String(req.body?.name ?? ""),
+    { kind: "folder", folderId: req.params.folderId }
+  );
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error });
+    return;
+  }
+  res.json({ ok: true, photo: result.photo, previousCode: result.previousCode });
+});
+
+photosRouter.get("/projects/:id/folders/:folderId/photos/download-zip", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).send("Project not found.");
+    return;
+  }
+  const folder = await prisma.photoFolder.findFirst({
+    where: { id: req.params.folderId, projectId: project.id },
+  });
+  if (!folder || folder.kind === "zip") {
+    res.status(404).send("Folder not found.");
+    return;
+  }
+  const resolved = canonicalCodes(
+    codesFromQuery(req.query),
+    photoCodesOf(folder),
+    "One or more photos are not in this folder."
+  );
+  if (!resolved.ok) {
+    res.status(400).send(resolved.error);
+    return;
+  }
+  const pool = await prisma.photoPoolItem.findMany({
+    where: { projectId: project.id, code: { in: resolved.codes } },
+  });
+  const byCode = new Map(pool.map((p) => [p.code.toUpperCase(), p]));
+  const ordered = resolved.codes.map((code) => {
+    const item = byCode.get(code.toUpperCase());
+    return {
+      code: item?.code || code,
+      fileName: item?.fileName || fileNameForCode(code),
+      spacesKey: item?.spacesKey || "",
+    };
+  });
+  const stamp = new Date().toISOString().slice(0, 10);
+  const filename = `${project.name.replace(/\s+/g, "-")}-folder-selected-${stamp}.zip`;
+  sendZip(res, filename, placeholderZipFiles("Photo Folder", ordered));
 });
 
 photosRouter.get("/projects/:id/folders/:folderId/download", async (req: Request, res: Response) => {
