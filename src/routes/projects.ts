@@ -21,6 +21,13 @@ import { parseProjectTarget } from "../lib/project-target.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
 import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { buildSampleAnalysis } from "../lib/sample-analysis.js";
+import {
+  conditionSurveyCompletion,
+  foldDwellingStatusCounts,
+  loadDwellingSurveyGroups,
+  type ConditionSurveyCompletion,
+  type StatusCountRow,
+} from "../lib/sample-status-counts.js";
 import { buildCurrentProjectTileStats, type ProjectTileStats } from "../lib/project-tile-stats.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 import { loadStockWindow } from "../lib/stock-query.js";
@@ -307,14 +314,21 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
       : [];
 
   const summary = needsAssets ? buildSummary(project, assets) : [];
-  let sample: ReturnType<typeof buildSampleAnalysis> & { canEdit: boolean } | null = null;
+  let sample:
+    | (ReturnType<typeof buildSampleAnalysis> & {
+        canEdit: boolean;
+        statusCounts: StatusCountRow[];
+        conditionCompletion: ConditionSurveyCompletion;
+      })
+    | null = null;
   if (tab === "sample-analysis") {
-    const [patchMeta, accessRows] = await Promise.all([
+    const [patchMeta, accessRows, statusGroups] = await Promise.all([
       prisma.patchSample.findMany({ where: { projectId: project.id } }),
       prisma.projectAccess.findMany({
         where: { projectId: project.id },
         select: { userId: true },
       }),
+      loadDwellingSurveyGroups(project.id),
     ]);
     const allocatedIds = new Set(accessRows.map((row) => row.userId));
     sample = {
@@ -327,6 +341,8 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
         knownSurveyors: surveyors,
       }),
       canEdit: canEditSampleAnalysis(user),
+      statusCounts: foldDwellingStatusCounts(statusGroups),
+      conditionCompletion: conditionSurveyCompletion(project, statusGroups),
     };
   }
   const completions = await prisma.completion.findMany({

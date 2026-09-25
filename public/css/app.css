@@ -318,11 +318,18 @@ tr.row-stock-missing.row-omitted{background:#ebebeb}
 .sa-surv th.sb-block-todo{background:#f5eef9!important;color:#3b1a52!important}
 .sa-surv tr.surv-total td{background:#f0f3f7;font-weight:700;border-top:2px solid #9aa8b8;color:#c0392b}
 .sa-job h3{font-size:.95rem;color:#c0392b;margin:0 0 8px}
-.job-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.job-item{background:#f7f9fc;border:1px solid var(--border);border-radius:7px;padding:6px 8px}
-.job-item .label{font-size:.68rem;color:#c0392b;letter-spacing:.02em;font-weight:600;text-transform:none}
-.job-item .value{font-size:.95rem;font-weight:700;color:#c0392b;margin-top:2px}
-.sa .job-item input[type=date]{width:100%;margin:2px 0 0;padding:3px 5px;border:1px solid var(--border);border-radius:5px;font-size:.85rem;font-weight:600;color:#c0392b;background:#fff}
+.job-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(17.5rem,1fr));gap:6px}
+.job-item{display:flex;flex-wrap:nowrap;align-items:baseline;gap:.35em;background:#f7f9fc;border:1px solid var(--border);border-radius:7px;padding:6px 8px}
+.job-item .label,
+.job-item .value{font-size:.8rem;font-weight:600;color:#c0392b;letter-spacing:.02em;margin:0;line-height:1.35;white-space:nowrap}
+.sa .job-item input[type=date]{width:auto;margin:0;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:.8rem;font-weight:600;color:#c0392b;background:#fff}
+.sa-status-wrap{overflow:auto;border:1px solid var(--border);border-radius:8px;margin:0 0 8px;background:#fff}
+.sa table.sa-status{width:100%;border-collapse:collapse;font-size:.75rem;margin:0}
+.sa-status th,.sa-status td{border-bottom:1px solid var(--border);padding:5px 8px;text-align:left;background:#fff}
+.sa-status thead th{background:#1a4b7c;color:#fff;font-size:.62rem;text-transform:uppercase;font-weight:600}
+.sa-status .num{text-align:right;font-variant-numeric:tabular-nums;color:#c0392b;font-weight:600}
+.sa-status td.hi{background:#e8f5e9;font-weight:700}
+.sa-status tr.status-total td{background:#f0f3f7;font-weight:700;border-top:2px solid #9aa8b8}
 .job-section{margin:0 0 7px;font-size:.75rem;font-weight:700;color:#c0392b;letter-spacing:.02em}
 .job-section:not(:first-child){margin-top:12px}
 .sa-footer,.sa-access{margin:8px 0 0;padding:7px 10px;background:#f7f9fc;border:1px solid var(--border);border-radius:7px;font-size:.78rem;color:var(--muted);line-height:1.35}
