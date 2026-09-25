@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
@@ -10,6 +11,7 @@ import {
   deleteDraft,
   draftPhotoPath,
   emptyHhsrsValues,
+  submissionDir,
   HHSRS_MAX_FILE_BYTES,
   HHSRS_MAX_FILE_MB,
   HHSRS_MAX_PHOTOS,
@@ -42,6 +44,11 @@ import {
   validatePhotos,
   writeDraft,
 } from "../lib/hhsrs-site-form.js";
+import {
+  PHOTOS_NOT_STORED,
+  SitePhotoError,
+  sitePhotoStorageFromApp,
+} from "../lib/hhsrs-site-photos.js";
 
 export const hhsrsSiteFormRouter = Router();
 
@@ -359,7 +366,28 @@ hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Resp
   }
 
   if (existing) await pruneRemovedPhotos(existing, keep);
-  const added = incoming.length ? await saveIncomingPhotos(draftId, incoming) : [];
+  let added: Awaited<ReturnType<typeof saveIncomingPhotos>> = [];
+  try {
+    added = incoming.length ? await saveIncomingPhotos(draftId, incoming) : [];
+  } catch (err) {
+    const message = err instanceof SitePhotoError ? err.message : "Could not save that photo. Try again.";
+    const draft: HhsrsDraft = {
+      id: draftId,
+      ...checked.data,
+      photos: keep,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+    };
+    await writeDraft(draft);
+    renderForm(res, {
+      values,
+      errors: { photos: message },
+      draft,
+      projects,
+      surveyors,
+      formError: message,
+    });
+    return;
+  }
   const draft: HhsrsDraft = {
     id: draftId,
     ...checked.data,
@@ -379,6 +407,7 @@ hhsrsSiteFormRouter.get("/review", async (req: Request, res: Response) => {
   res.render("hhsrs-site-form/review", {
     title: "Review issue — Savills HHSRS Site Reporting",
     draft,
+    storeError: "",
   });
 });
 
@@ -425,35 +454,62 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
     return;
   }
   const call = siteSubmissionCallFields(checked.data);
-  const created = await prisma.hhsrsSiteSubmission.create({
-    data: {
-      projectId: checked.data.projectId,
-      projectName: checked.data.projectName,
-      surveyDate: checked.data.surveyDate,
-      uprn: checked.data.uprn,
-      fullAddress: checked.data.fullAddress,
-      postcode: checked.data.postcode,
-      surveyorName: checked.data.surveyorName,
-      category: checked.data.category,
-      rating: checked.data.rating,
-      comment: checked.data.comment,
-      clientCallReference: call.clientCallReference,
-      callOutcome: call.callOutcome,
-      callNotes: call.callNotes,
-      otherDetails: checked.data.otherDetails,
-      cat1Confirmed: checked.data.cat1Confirmed,
-      photoPaths: [],
-    },
-  });
-  const photoPaths = await persistSubmissionPhotos(created.id, draft);
-  if (photoPaths.length) {
-    await prisma.hhsrsSiteSubmission.update({
-      where: { id: created.id },
-      data: { photoPaths },
+  const storage = sitePhotoStorageFromApp(req.app);
+  let createdId = "";
+  let storedKeys: string[] = [];
+  try {
+    const created = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        projectId: isDemoProject(checked.data.projectId) ? null : checked.data.projectId,
+        projectName: checked.data.projectName,
+        surveyDate: checked.data.surveyDate,
+        uprn: checked.data.uprn,
+        fullAddress: checked.data.fullAddress,
+        postcode: checked.data.postcode,
+        surveyorName: checked.data.surveyorName,
+        category: checked.data.category,
+        rating: checked.data.rating,
+        comment: checked.data.comment,
+        clientCallReference: call.clientCallReference,
+        callOutcome: call.callOutcome,
+        callNotes: call.callNotes,
+        otherDetails: checked.data.otherDetails,
+        cat1Confirmed: checked.data.cat1Confirmed,
+        photoPaths: [],
+      },
+    });
+    createdId = created.id;
+    storedKeys = await persistSubmissionPhotos(created.id, draft, storage);
+    if (storedKeys.length !== draft.photos.length) {
+      throw new SitePhotoError(PHOTOS_NOT_STORED);
+    }
+    if (storedKeys.length) {
+      await prisma.hhsrsSiteSubmission.update({
+        where: { id: created.id },
+        data: { photoPaths: storedKeys },
+      });
+    }
+    await deleteDraft(draft.id);
+    res.redirect(hhsrsUrl(`/thanks?id=${encodeURIComponent(created.id)}`));
+  } catch (err) {
+    if (storedKeys.length) {
+      await Promise.all(storedKeys.map((key) => storage.remove(key).catch(() => false)));
+    }
+    if (createdId) {
+      await prisma.hhsrsSiteSubmission.delete({ where: { id: createdId } }).catch(() => undefined);
+      await fs.rm(submissionDir(createdId), { recursive: true, force: true }).catch(() => undefined);
+    }
+    const message = err instanceof SitePhotoError ? err.message : PHOTOS_NOT_STORED;
+    if (!(err instanceof SitePhotoError)) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`HHSRS site-form submit failed: ${detail}`);
+    }
+    res.status(200).render("hhsrs-site-form/review", {
+      title: "Review issue — Savills HHSRS Site Reporting",
+      draft,
+      storeError: message,
     });
   }
-  await deleteDraft(draft.id);
-  res.redirect(hhsrsUrl(`/thanks?id=${encodeURIComponent(created.id)}`));
 });
 
 hhsrsSiteFormRouter.get("/thanks", (req: Request, res: Response) => {

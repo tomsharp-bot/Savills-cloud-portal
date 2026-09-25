@@ -3,6 +3,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import {
+  defaultSitePhotoStorage,
+  prepareSitePhoto,
+  putSitePhotoWithRetry,
+  siteFormPhotoKey,
+  storedNameForPrepared,
+  type SitePhotoPutOptions,
+  type SitePhotoStorage,
+} from "./hhsrs-site-photos.js";
 
 export const HHSRS_SITE_FORM_PATH = "/HHSRS-site-form";
 export const HHSRS_MIN_PHOTOS = 1;
@@ -500,17 +509,29 @@ export async function saveIncomingPhotos(
   draftId: string,
   files: { originalname: string; mimetype: string; size: number; buffer: Buffer }[]
 ): Promise<HhsrsPhoto[]> {
+  const prepared = [];
+  for (const file of files) {
+    const ready = await prepareSitePhoto({
+      originalName: file.originalname,
+      mime: file.mimetype,
+      buffer: file.buffer,
+    });
+    prepared.push({
+      ready,
+      originalName: String(file.originalname || "photo").slice(0, 180),
+    });
+  }
   const dir = draftDir(draftId);
   await fs.mkdir(dir, { recursive: true });
   const saved: HhsrsPhoto[] = [];
-  for (const file of files) {
-    const storedName = `${randomUUID()}.${imageExt(file.originalname, file.mimetype)}`;
-    await fs.writeFile(path.join(dir, storedName), file.buffer);
+  for (const item of prepared) {
+    const storedName = `${randomUUID()}.${item.ready.ext}`;
+    await fs.writeFile(path.join(dir, storedName), item.ready.buffer);
     saved.push({
       storedName,
-      originalName: String(file.originalname || "photo").slice(0, 180),
-      mime: file.mimetype || "application/octet-stream",
-      size: file.size,
+      originalName: item.originalName,
+      mime: item.ready.mime,
+      size: item.ready.buffer.length,
     });
   }
   return saved;
@@ -533,20 +554,43 @@ export async function pruneRemovedPhotos(draft: HhsrsDraft, keep: HhsrsPhoto[]):
   }
 }
 
+/**
+ * Copy each draft photo into the submission cache and the private Spaces
+ * bucket. photoPaths stay `hhsrs-site-form/<submissionId>/<file>`.
+ * A failed upload deletes anything already stored for this attempt and throws.
+ * The caller must not save photoPaths, and must keep the draft so the
+ * surveyor can try again.
+ */
 export async function persistSubmissionPhotos(
   submissionId: string,
-  draft: HhsrsDraft
+  draft: HhsrsDraft,
+  storage?: SitePhotoStorage,
+  options?: SitePhotoPutOptions
 ): Promise<string[]> {
   const destDir = submissionDir(submissionId);
   await fs.mkdir(destDir, { recursive: true });
   const paths: string[] = [];
-  for (const photo of draft.photos) {
-    const src = draftPhotoPath(draft.id, photo.storedName);
-    const dest = path.join(destDir, photo.storedName);
-    await fs.copyFile(src, dest);
-    paths.push(`hhsrs-site-form/${submissionId}/${photo.storedName}`);
+  const store = storage ?? defaultSitePhotoStorage();
+  try {
+    for (const photo of draft.photos) {
+      const raw = await fs.readFile(draftPhotoPath(draft.id, photo.storedName));
+      const ready = await prepareSitePhoto({
+        originalName: photo.storedName,
+        mime: photo.mime,
+        buffer: raw,
+      });
+      const storedName = storedNameForPrepared(photo.storedName, ready.ext);
+      await fs.writeFile(path.join(destDir, storedName), ready.buffer);
+      const key = siteFormPhotoKey(submissionId, storedName);
+      await putSitePhotoWithRetry(store, key, ready.buffer, ready.mime, options);
+      paths.push(key);
+    }
+    return paths;
+  } catch (err) {
+    await Promise.all(paths.map((key) => store.remove(key).catch(() => false)));
+    await fs.rm(destDir, { recursive: true, force: true }).catch(() => undefined);
+    throw err;
   }
-  return paths;
 }
 
 export async function sweepOldDrafts(now = Date.now()): Promise<void> {

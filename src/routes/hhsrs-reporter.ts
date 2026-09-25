@@ -1,9 +1,7 @@
-import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { formatDocDate } from "../lib/dates.js";
-import { config } from "../config.js";
 import {
   HHSRS_CATEGORIES,
   HHSRS_RATINGS,
@@ -61,6 +59,12 @@ import {
   sentBannerText,
 } from "../lib/hhsrs-send.js";
 import { latestSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import {
+  loadSiteFormPhoto,
+  privateInlineHeaders,
+  sitePhotoStorageFromApp,
+  type SitePhotoStorage,
+} from "../lib/hhsrs-site-photos.js";
 
 export const hhsrsReporterRouter = Router();
 
@@ -343,11 +347,14 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
   });
 });
 
-async function reviewPhotos(row: { id: string; photoPaths: unknown }): Promise<Array<ReporterCasePhoto & { bytes: number }>> {
+async function reviewPhotos(
+  row: { id: string; photoPaths: unknown },
+  storage: SitePhotoStorage
+): Promise<Array<ReporterCasePhoto & { bytes: number }>> {
   const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH);
   return Promise.all(
     photos.map(async (photo) => {
-      const bytes = await photoByteSize(row.id, photo.name);
+      const bytes = await photoByteSize(row.id, photo.name, storage);
       return { ...photo, bytes: bytes ?? 0 };
     })
   );
@@ -367,7 +374,8 @@ async function renderReview(
     waitingIds: string[];
   }
 ): Promise<void> {
-  const [photos, sentEmail] = await Promise.all([reviewPhotos(row), latestSentEmail(row.id)]);
+  const storage = sitePhotoStorageFromApp(req.app);
+  const [photos, sentEmail] = await Promise.all([reviewPhotos(row, storage), latestSentEmail(row.id)]);
   const draft = tryDraftFromRow(row);
   const currentNames = opts.progress.filter((project) => project.stage === "current").map((project) => project.name);
   const reviewProjectValue = progressNameForCase(row.projectName, currentNames);
@@ -897,6 +905,7 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
     sentBy: user?.name || user?.username || "",
     hasReporterAccess: Boolean(user && isAdmin(user)),
     body: (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>,
+    storage: sitePhotoStorageFromApp(req.app),
   });
   if (!result.ok) flashErr(req, result.error);
   res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
@@ -959,12 +968,14 @@ hhsrsReporterRouter.get("/:id/photos/:name", async (req: Request, res: Response)
     res.status(404).send("Photo not found.");
     return;
   }
-  const dest = path.resolve(process.cwd(), config.uploadDir, expected);
-  res.sendFile(dest, (err?: Error) => {
-    if (err && !res.headersSent) {
-      res.status(404).send("File missing on disk. TODO: fetch from Spaces cloud-portal-vault.");
-    }
-  });
+  const loaded = await loadSiteFormPhoto(expected, sitePhotoStorageFromApp(req.app));
+  if (!loaded) {
+    res.status(404).send("Photo not found.");
+    return;
+  }
+  const headers = privateInlineHeaders(loaded.fileName, loaded.body.length, loaded.contentType);
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+  res.status(200).send(loaded.body);
 });
 
 /* Photos under /review/:id/photos/:name */

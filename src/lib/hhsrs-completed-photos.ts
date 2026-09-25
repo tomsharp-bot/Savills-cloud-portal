@@ -6,12 +6,11 @@
  *   HHSRS - Completed/<Project Progress name>/<UPRN> - <short address>/<file>
  *
  * The full address is stored on the index row (and as Spaces object metadata)
- * so Photo Storage can search by UPRN or address. Disk originals are left in place.
- * A Spaces failure is recorded and can be retried. The same case logged twice
- * does not create a second copy.
+ * so Photo Storage can search by UPRN or address. The site-form object in Spaces
+ * is the source of truth. A local file is only a cache. A Spaces failure is
+ * recorded and can be retried. The same case logged twice does not create a second copy.
  */
 
-import fs from "node:fs/promises";
 import path from "node:path";
 import { config } from "../config.js";
 import { formatStockAddressLine } from "./hhsrs-site-form.js";
@@ -27,6 +26,7 @@ import {
   uprnFromCode,
 } from "./photos.js";
 import { prisma } from "./prisma.js";
+import { readSiteFormPhotoBytes, type SitePhotoStorage } from "./hhsrs-site-photos.js";
 import { putSpacesObject } from "./spaces.js";
 
 export const HHSRS_COMPLETED_PREFIX = "HHSRS - Completed";
@@ -384,7 +384,7 @@ export async function copyLoggedCasePhotos(submissionId: string, deps: HhsrsCopy
     const bytes = await deps.readFile(sourcePath);
     if (!bytes) {
       failedCount += 1;
-      errors.push(`Missing on disk: ${fileName}`);
+      errors.push(`Missing photo: ${fileName}`);
       continue;
     }
     const contentType = contentTypeForPhotoName(fileName);
@@ -428,7 +428,7 @@ export async function copyLoggedCasePhotos(submissionId: string, deps: HhsrsCopy
   return { status, error, copiedCount, failedCount };
 }
 
-export function defaultHhsrsCopyDeps(): HhsrsCopyDeps {
+export function defaultHhsrsCopyDeps(storage?: SitePhotoStorage): HhsrsCopyDeps {
   return {
     loadCase: loadCaseSnapshot,
     listCopiedSources: async (submissionId) => {
@@ -459,15 +459,7 @@ export function defaultHhsrsCopyDeps(): HhsrsCopyDeps {
         },
       });
     },
-    readFile: async (sourcePath) => {
-      const dest = hhsrsDiskPath(sourcePath);
-      if (!dest) return null;
-      try {
-        return await fs.readFile(dest);
-      } catch {
-        return null;
-      }
-    },
+    readFile: (sourcePath) => readSiteFormPhotoBytes(sourcePath, storage),
     putObject: (key, body, contentType, metadata) => putSpacesObject(key, body, contentType, metadata),
   };
 }
