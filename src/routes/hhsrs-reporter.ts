@@ -54,6 +54,13 @@ import {
 } from "../lib/hhsrs-reporter-overview.js";
 import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
 import { claimRowClass, claimView, claimerLabel, type ClaimView } from "../lib/hhsrs-claims.js";
+import { isAdmin } from "../lib/access.js";
+import {
+  buildMainLogEntry,
+  publicSendSettings,
+  sentBannerText,
+} from "../lib/hhsrs-send.js";
+import { latestSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
 
 export const hhsrsReporterRouter = Router();
 
@@ -330,10 +337,23 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     onwardTopics: ONWARD_TOPICS,
     matchedProject: null,
     mode: "blank",
+    sendConfig: publicSendSettings(false),
+    sentEmail: null,
+    sentBanner: "",
   });
 });
 
-function renderReview(
+async function reviewPhotos(row: { id: string; photoPaths: unknown }): Promise<Array<ReporterCasePhoto & { bytes: number }>> {
+  const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH);
+  return Promise.all(
+    photos.map(async (photo) => {
+      const bytes = await photoByteSize(row.id, photo.name);
+      return { ...photo, bytes: bytes ?? 0 };
+    })
+  );
+}
+
+async function renderReview(
   req: Request,
   res: Response,
   row: NonNullable<Awaited<ReturnType<typeof loadCase>>>,
@@ -346,8 +366,8 @@ function renderReview(
     progress: ProgressProject[];
     waitingIds: string[];
   }
-): void {
-  const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH);
+): Promise<void> {
+  const [photos, sentEmail] = await Promise.all([reviewPhotos(row), latestSentEmail(row.id)]);
   const draft = tryDraftFromRow(row);
   const currentNames = opts.progress.filter((project) => project.stage === "current").map((project) => project.name);
   const reviewProjectValue = progressNameForCase(row.projectName, currentNames);
@@ -386,6 +406,9 @@ function renderReview(
     onwardTopics: ONWARD_TOPICS,
     matchedProject: matched,
     mode: "filled",
+    sendConfig: publicSendSettings(Boolean(sentEmail)),
+    sentEmail,
+    sentBanner: sentEmail ? sentBannerText(sentEmail.sentBy, sentEmail.sentAt) : "",
   });
 }
 
@@ -433,7 +456,7 @@ hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
   }
   const row = await claimIfOpen(loaded, claimerLabel(req.user));
   const ctx = await reviewContext(row.id);
-  renderReview(req, res, row, ctx);
+  await renderReview(req, res, row, ctx);
 });
 
 /* ---------- Main Log ---------- */
@@ -530,6 +553,60 @@ hhsrsReporterRouter.get("/main-log/export.csv", async (req: Request, res: Respon
   res.send(lines.join("\n"));
 });
 
+hhsrsReporterRouter.get("/main-log/:id", async (req: Request, res: Response) => {
+  const row = await loadCase(req.params.id);
+  if (!row) {
+    res.status(404).send("Case not found.");
+    return;
+  }
+  const [sent, summary, rows, projects] = await Promise.all([
+    latestSentEmail(row.id),
+    loadSummary(),
+    prisma.hhsrsSiteSubmission.findMany({
+      where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
+      orderBy: [{ emailSentAt: "desc" }, { updatedAt: "desc" }],
+      take: 300,
+    }),
+    prisma.hhsrsSiteSubmission.findMany({
+      where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
+      distinct: ["projectName"],
+      select: { projectName: true },
+      orderBy: { projectName: "asc" },
+    }),
+  ]);
+  const address = row.postcode ? `${row.fullAddress}, ${row.postcode}` : row.fullAddress;
+  const markedAt = sent?.sentAt || row.emailSentAt || row.updatedAt;
+  const markedBy = sent?.sentBy || row.emailSentBy || row.lastEditedBy || "";
+  const entry = buildMainLogEntry({
+    uprn: row.uprn,
+    address,
+    projectName: row.projectName,
+    sent,
+    markedBy,
+    markedAt,
+  });
+  const known = new Set(entry.photoNames);
+  const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH).filter((photo) => known.has(photo.name));
+  const flash = takeFlash(req);
+  res.render("hhsrs-reporter/main-log", {
+    ...shellLocals({
+      activeNav: "main-log",
+      summary,
+      title: "Main Log entry — HHSRS Reporter",
+      flashOk: flash.ok,
+      flashErr: flash.err,
+    }),
+    user: req.user,
+    rows,
+    projectNames: projects.map((project) => project.projectName),
+    filters: { q: "", project: "", rating: "" },
+    ratings: Array.from(new Set([...HHSRS_RATINGS, ...HHSRS_SITE_FORM_RATINGS])),
+    entry,
+    entryPhotos: photos,
+    entryId: row.id,
+  });
+});
+
 async function loadLiveProjectCounts(): Promise<{
   hasLiveSubmissions: boolean;
   liveCounts: Record<string, LiveProjectCounts>;
@@ -607,6 +684,10 @@ hhsrsReporterRouter.post("/review/:id/mark-actioned", async (req: Request, res: 
   await handleMarkActioned(req, res, req.params.id);
 });
 
+hhsrsReporterRouter.post("/review/:id/send", async (req: Request, res: Response) => {
+  await handleSend(req, res, req.params.id);
+});
+
 hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Response) => {
   await handleAbandon(req, res, req.params.id);
 });
@@ -643,34 +724,34 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   const update = readReporterUpdate(req.body || {});
   // Site-form ratings stay Low/Medium/High; allow keeping an existing non-standard value.
   if (!isHhsrsRating(update.rating) && update.rating !== row.rating) {
-    renderReview(req, res, row, {
+    await renderReview(req, res, row, {
       ...ctx,
       flashErr: "Select a valid rating for this case.",
     });
     return;
   }
   if (!isHhsrsCaseStatus(update.status)) {
-    renderReview(req, res, row, { ...ctx, flashErr: "Select a valid case status." });
+    await renderReview(req, res, row, { ...ctx, flashErr: "Select a valid case status." });
     return;
   }
   if (
     update.callOutcome &&
     !(HHSRS_CALL_OUTCOMES as readonly string[]).includes(update.callOutcome)
   ) {
-    renderReview(req, res, row, { ...ctx, flashErr: "Select a valid call outcome." });
+    await renderReview(req, res, row, { ...ctx, flashErr: "Select a valid call outcome." });
     return;
   }
 
   const expected = update.expectedUpdatedAt ? new Date(update.expectedUpdatedAt) : null;
   if (!expected || Number.isNaN(expected.getTime())) {
-    renderReview(req, res, row, {
+    await renderReview(req, res, row, {
       ...ctx,
       flashErr: "Missing concurrency token. Reload the case and try again.",
     });
     return;
   }
   if (row.updatedAt.getTime() !== expected.getTime()) {
-    renderReview(req, res, row, {
+    await renderReview(req, res, row, {
       ...ctx,
       flashErr:
         "This case was updated by someone else since you opened it. Reload to see their changes, then save again.",
@@ -714,7 +795,7 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
       res.status(404).send("Case not found.");
       return;
     }
-    renderReview(req, res, fresh, {
+    await renderReview(req, res, fresh, {
       ...(await reviewContext(fresh.id)),
       flashErr:
         "This case was updated by someone else since you opened it. Reload to see their changes, then save again.",
@@ -735,14 +816,14 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
   const expectedRaw = String(req.body?.expectedUpdatedAt || "").trim();
   const expected = expectedRaw ? new Date(expectedRaw) : null;
   if (!expected || Number.isNaN(expected.getTime())) {
-    renderReview(req, res, row, {
+    await renderReview(req, res, row, {
       ...(await reviewContext(row.id)),
       flashErr: "Missing concurrency token. Reload the case and try again.",
     });
     return;
   }
   if (row.updatedAt.getTime() !== expected.getTime()) {
-    renderReview(req, res, row, {
+    await renderReview(req, res, row, {
       ...(await reviewContext(row.id)),
       flashErr:
         "This case was updated by someone else since you opened it. Reload to see their changes, then mark actioned again.",
@@ -752,18 +833,26 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
 
   const draft = tryDraftFromRow(row);
   const editor = req.user?.name || req.user?.username || "";
+  const alreadySent = Boolean(row.emailSentAt);
   const result = await prisma.hhsrsSiteSubmission.updateMany({
     where: { id: row.id, updatedAt: expected },
-    data: {
-      status: "email_sent",
-      emailSentAt: new Date(),
-      emailSentBy: editor,
-      lastEditedBy: editor,
-      emailSubject: draft.subject || row.emailSubject,
-      emailBody: draft.body || row.emailBody,
-      claimedBy: "",
-      claimedAt: null,
-    },
+    data: alreadySent
+      ? {
+          status: row.status === "closed" ? "closed" : "email_sent",
+          lastEditedBy: editor,
+          claimedBy: "",
+          claimedAt: null,
+        }
+      : {
+          status: "email_sent",
+          emailSentAt: new Date(),
+          emailSentBy: editor,
+          lastEditedBy: editor,
+          emailSubject: draft.subject || row.emailSubject,
+          emailBody: draft.body || row.emailBody,
+          claimedBy: "",
+          claimedAt: null,
+        },
   });
   if (result.count !== 1) {
     const fresh = await loadCase(row.id);
@@ -771,7 +860,7 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
       res.status(404).send("Case not found.");
       return;
     }
-    renderReview(req, res, fresh, {
+    await renderReview(req, res, fresh, {
       ...(await reviewContext(fresh.id)),
       flashErr:
         "This case was updated by someone else since you opened it. Reload to see their changes, then mark actioned again.",
@@ -781,8 +870,36 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
   // The case is already on the Main Log. Copy must not undo that, and a slow or
   // failed Spaces upload must not hold the redirect open.
   await archiveLoggedPhotos(req, row.id);
-  flashOk(req, "Marked as actioned. Case moved to Main Log. Attach photos in Outlook before you send.");
-  res.redirect(`${HHSRS_REPORTER_PATH}/main-log`);
+  const sent = await latestSentEmail(row.id);
+  flashOk(
+    req,
+    sent
+      ? "Marked as actioned. Case moved to Main Log."
+      : "Marked as actioned. Case moved to Main Log. Attach photos in Outlook before you send."
+  );
+  res.redirect(sent ? `${HHSRS_REPORTER_PATH}/main-log/${row.id}` : `${HHSRS_REPORTER_PATH}/main-log`);
+}
+
+function flashErr(req: Request, message: string): void {
+  req.session = req.session || {};
+  req.session.flashErr = message;
+}
+
+async function handleSend(req: Request, res: Response, id: string): Promise<void> {
+  const row = await loadCase(id);
+  if (!row) {
+    res.status(404).send("Case not found.");
+    return;
+  }
+  const user = req.user;
+  const result = await sendCaseEmail({
+    row,
+    sentBy: user?.name || user?.username || "",
+    hasReporterAccess: Boolean(user && isAdmin(user)),
+    body: (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>,
+  });
+  if (!result.ok) flashErr(req, result.error);
+  res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
 }
 
 /** Tests replace this with a stub. Production copies into Spaces. */

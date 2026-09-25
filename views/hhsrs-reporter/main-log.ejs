@@ -69,7 +69,10 @@
               <td><%= formatDocDate(when) %></td>
               <td><%= row.emailSentBy || row.lastEditedBy || "—" %></td>
               <td><span class="status-pill <%= pillClass %>"><%= actionedStatusLabel(row.status) %></span></td>
-              <td><a class="linkish dark" href="<%= reporterBase %>/review/<%= row.id %>">View pack →</a></td>
+              <td>
+                <a class="linkish dark" href="<%= reporterBase %>/main-log/<%= row.id %>">View entry</a>
+                <a class="linkish dark" href="<%= reporterBase %>/review/<%= row.id %>">View pack →</a>
+              </td>
             </tr>
           <% }) %>
         </tbody>
@@ -83,5 +86,52 @@
 </section>
 
 <p class="footer-note">Main Log archive · Live actioned submissions</p>
+
+<% if (typeof entry !== "undefined" && entry) { %>
+<div class="ml-overlay" id="ml-overlay">
+  <div class="ml-dialog" role="dialog" aria-modal="true" aria-labelledby="ml-title">
+    <div class="ml-head">
+      <h2 id="ml-title">Main Log entry</h2>
+      <span class="count count-dealt">Actioned</span>
+    </div>
+    <% if (entry.copyWarning) { %><p class="ml-sub"><%= entry.copyWarning %></p><% } %>
+    <div class="ml-body" id="ml-body">
+      <dl class="ml-list">
+        <dt>Case</dt><dd><%= entry.caseLine %></dd>
+        <dt>Email</dt><dd class="<%= entry.emailSent ? '' : 'ml-empty' %>"><% if (entry.emailSent) { %><strong><%= entry.emailLine %></strong><% } else { %><%= entry.emailLine %><% } %></dd>
+        <dt>From</dt><dd><%= entry.fromLine %></dd>
+        <dt>Marked actioned by</dt><dd><%= entry.markedByLine %></dd>
+        <div class="ml-sep"></div>
+        <dt>To</dt><dd class="<%= entry.to ? '' : 'ml-empty' %>"><%= entry.to || "—" %></dd>
+        <dt>Cc</dt><dd class="<%= entry.cc ? '' : 'ml-empty' %>"><%= entry.cc || "—" %></dd>
+        <dt>Bcc</dt><dd class="<%= entry.bcc ? '' : 'ml-empty' %>"><%= entry.bcc || "—" %></dd>
+        <dt>Subject</dt><dd class="<%= entry.subject ? '' : 'ml-empty' %>"><%= entry.subject || "—" %></dd>
+      </dl>
+      <details class="ml-text" open>
+        <summary>Email text</summary>
+        <pre><%= entry.body || "(empty)" %></pre>
+      </details>
+      <p class="ml-photos-label"><%= entry.photoLabel %></p>
+      <% if (entryPhotos && entryPhotos.length) { %>
+        <div class="ml-photos">
+          <% entryPhotos.forEach((p) => { %>
+            <figure>
+              <img src="<%= p.url %>" alt="<%= p.caption %>" />
+              <figcaption><%= p.name %></figcaption>
+            </figure>
+          <% }) %>
+        </div>
+      <% } else if (entry.photoNames.length) { %>
+        <ul class="ml-photos-names">
+          <% entry.photoNames.forEach((name) => { %><li><%= name %></li><% }) %>
+        </ul>
+      <% } else { %>
+        <p class="ml-note" style="font-style:normal;margin-top:0.3rem">No photos.</p>
+      <% } %>
+    </div>
+    <div class="ml-foot"><a class="btn btn-primary" id="ml-close" href="<%= reporterBase %>/main-log">Close</a></div>
+  </div>
+</div>
+<% } %>
 
 <%- include("partials/layout-close") %>

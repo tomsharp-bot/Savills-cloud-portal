@@ -356,6 +356,7 @@ model HhsrsSiteSubmission {
   updatedAt            DateTime  @updatedAt
   completedPhotos      HhsrsCompletedPhoto[]
   photoCopy            HhsrsPhotoCopy?
+  sentEmails           HhsrsSentEmail[]
 
   @@index([createdAt])
   @@index([projectId])
@@ -401,6 +402,29 @@ model HhsrsPhotoCopy {
   copiedCount  Int                 @default(0)
   failedCount  Int                 @default(0)
   updatedAt    DateTime            @updatedAt
+}
+
+/// One row per portal send. A future Sent emails tab and resend can list every version.
+/// Person-initiated only — nothing in the app sends on a timer.
+model HhsrsSentEmail {
+  id            String              @id @default(cuid())
+  submissionId  String
+  submission    HhsrsSiteSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  sentAt        DateTime            @default(now())
+  sentBy        String
+  from          String
+  to            String
+  cc            String              @default("")
+  bcc           String              @default("")
+  subject       String              @default("")
+  body          String              @default("")
+  photoNames    Json
+  messageId     String              @default("")
+  sentCopySaved Boolean             @default(false)
+  sentCopyError String              @default("")
+
+  @@index([submissionId])
+  @@index([sentAt])
 }
 
 /// Office archive flag for HHSRS Reporter → Project overview.

@@ -14,7 +14,7 @@
   <div>
     <h2 class="page-section-title">Review and create</h2>
     <% if (isFilled) { %>
-      <p class="subtitle" id="review-subtitle">Review the site submission for <%= row.projectName %>, then copy the client email into Outlook.</p>
+      <p class="subtitle" id="review-subtitle">Review the site submission for <%= row.projectName %>, then send the client email.</p>
     <% } else { %>
       <p class="subtitle" id="review-subtitle" hidden></p>
     <% } %>
@@ -269,7 +269,7 @@
           </div>
         </fieldset>
         <div class="generate-email-row">
-          <button type="button" class="btn btn-primary" id="btn-generate-email" <%= isFilled ? "" : "disabled" %>>Generate email</button>
+          <button type="button" class="btn btn-primary" id="btn-generate-email" <%= isFilled && !sentEmail ? "" : "disabled" %>>Generate email</button>
           <button type="button" class="btn btn-ghost" id="btn-amend-case" hidden>Amend case details</button>
           <% if (isFilled) { %>
             <button type="submit" class="btn btn-ghost">Save review</button>
@@ -283,37 +283,76 @@
     <section class="panel email-draft-panel" aria-label="Client email draft">
       <div class="panel-head neutral">
         <h2>Client email draft</h2>
-        <span class="count count-review" id="rv-email-badge">Draft</span>
+        <span class="count <%= sentEmail ? 'count-dealt' : 'count-review' %>" id="rv-email-badge"><%= sentEmail ? "Sent" : "Draft" %></span>
       </div>
       <p class="review-draft-status" id="rv-draft-status" hidden></p>
       <% if (draftError) { %><p class="flash flash-err"><%= draftError %></p><% } %>
-      <form class="email-form" id="rv-email-form" onsubmit="return false;">
+      <form class="email-form <%= sentEmail ? 'is-sent' : '' %>" id="rv-email-form" onsubmit="return false;">
+        <% if (sentEmail) { %>
+          <p class="sent-banner" id="rv-sent-banner" role="status" aria-live="polite"><%= sentBanner %></p>
+          <% if (!sentEmail.sentCopySaved) { %><p class="send-warn" id="rv-sent-copy-warn">Sent. Mailbox Sent folder copy failed.</p><% } %>
+        <% } else { %>
+          <p class="sent-banner" id="rv-sent-banner" role="status" aria-live="polite" hidden></p>
+        <% } %>
+        <div class="field-locked">
+          <label id="rv-email-from-label">From</label>
+          <div class="locked-field" id="rv-email-from" aria-labelledby="rv-email-from-label" aria-readonly="true"><span class="lock" aria-hidden="true">🔒</span><%= sendConfig.fromLine %><span class="locked-tag">Locked</span></div>
+        </div>
         <div class="field-with-copy">
           <label for="rv-email-to">To</label>
-          <input id="rv-email-to" type="text" placeholder="Select a project for recipients…" value="" />
+          <input id="rv-email-to" type="text" placeholder="Select a project for recipients…" value="<%= sentEmail ? sentEmail.to : '' %>" <%= sentEmail ? "readonly" : "" %> />
           <button type="button" class="btn-copy" data-copy="rv-email-to">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-cc">Cc</label>
-          <input id="rv-email-cc" type="text" placeholder="optional" value="" />
+          <input id="rv-email-cc" type="text" placeholder="optional" value="<%= sentEmail ? sentEmail.cc : '' %>" <%= sentEmail ? "readonly" : "" %> />
           <button type="button" class="btn-copy" data-copy="rv-email-cc">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-bcc">Bcc</label>
-          <input id="rv-email-bcc" type="text" placeholder="optional" value="" />
+          <input id="rv-email-bcc" type="text" placeholder="optional" value="<%= sentEmail ? sentEmail.bcc : '' %>" <%= sentEmail ? "readonly" : "" %> />
           <button type="button" class="btn-copy" data-copy="rv-email-bcc">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-subject">Subject</label>
-          <input id="rv-email-subject" type="text" placeholder="Subject" value="" />
+          <input id="rv-email-subject" type="text" placeholder="Subject" value="<%= sentEmail ? sentEmail.subject : '' %>" <%= sentEmail ? "readonly" : "" %> />
           <button type="button" class="btn-copy" data-copy="rv-email-subject">Copy</button>
         </div>
         <div class="field-with-copy">
           <label for="rv-email-body">Body</label>
-          <textarea id="rv-email-body" placeholder="Draft email…"></textarea>
+          <textarea id="rv-email-body" placeholder="Draft email…" <%= sentEmail ? "readonly" : "" %>><%= sentEmail ? sentEmail.body : "" %></textarea>
           <button type="button" class="btn-copy" data-copy="rv-email-body">Copy</button>
         </div>
-        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint">Fill case details, then click Generate email below Case details.</p>
+        <% if (isFilled) { %>
+          <div class="attach-block" id="rv-attach-block">
+            <div class="attach-head">
+              <label id="rv-attach-label">Attachments</label>
+              <span class="attach-count" id="rv-attach-count" aria-live="polite"><% if (casePhotos.length) { %><%= casePhotos.length %> of <%= casePhotos.length %> attached<% } %></span>
+            </div>
+            <div class="attach-list" id="rv-attach-list" role="group" aria-labelledby="rv-attach-label">
+              <% if (!casePhotos.length) { %>
+                <p class="attach-none">No photos.</p>
+              <% } %>
+              <% casePhotos.forEach((p) => {
+                const attached = !sentEmail || sentEmail.photoNames.map(String).includes(p.name);
+              %>
+                <figure class="attach-item <%= attached ? 'is-on' : '' %>">
+                  <img src="<%= p.url %>" alt="<%= p.caption %>" draggable="false" />
+                  <figcaption class="attach-name"><%= p.name %></figcaption>
+                  <label class="attach-tick">
+                    <input type="checkbox" <%= attached ? "checked" : "" %> <%= sentEmail ? "disabled" : "" %> data-attach-name="<%= p.name %>" data-bytes="<%= p.bytes || 0 %>" />
+                    Attach
+                  </label>
+                </figure>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+        <div class="send-block" id="rv-send-block">
+          <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
+          <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
+        </div>
+        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
         <div id="rv-email-photos" class="email-photo-tools" hidden>
           <div class="photo-thumbs email-photo-thumbs" id="rv-email-photo-thumbs" aria-label="Drag case photos into your email draft"></div>
           <p class="photos-drag-hint" id="rv-photos-hint">Drag a photo into your email draft. If that doesn’t work, download the photo.</p>
@@ -321,7 +360,6 @@
             <button type="button" class="btn btn-sm btn-photo-fallback" id="btn-download-photos" disabled>Download photos</button>
           </div>
         </div>
-        <p class="review-project-hint" style="margin-top:0.75rem">Copy into Outlook, attach photos, then send. <strong>Mark as actioned</strong> at the bottom when done.</p>
       </form>
     </section>
   </div>
@@ -335,7 +373,7 @@
       <% } %>
     </div>
     <div class="finish-bar-right">
-      <p class="finish-hint" id="rv-finish-hint">Finished? Mark it as actioned.</p>
+      <p class="finish-hint <%= sentEmail ? 'is-sent' : '' %>" id="rv-finish-hint"><%= sentEmail ? "Sent. Mark as actioned when done." : "Finished? Mark it as actioned." %></p>
       <% if (isFilled) { %>
         <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" id="mark-actioned-form">
           <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
@@ -349,5 +387,37 @@
 </div>
 
 <p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
+
+<% if (isFilled && !sentEmail) { %>
+<div class="ck-overlay" id="ck-overlay" hidden>
+  <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
+    <form id="rv-send-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/send">
+      <div class="ck-head"><h2 id="ck-title">Check before sending</h2></div>
+      <div class="ck-body" id="ck-body">
+        <% if (sendConfig.testMode) { %>
+          <p class="ck-test" id="ck-test"><%= sendConfig.testBanner %></p>
+        <% } %>
+      </div>
+      <div class="ck-body" style="padding-top:0">
+        <label class="ck-tick" id="ck-tick-label" for="ck-tick">
+          <input type="checkbox" id="ck-tick" name="checked" value="1" />
+          I've checked the details
+        </label>
+        <p class="ck-safe">Nothing is sent until you press Send now.</p>
+      </div>
+      <input type="hidden" name="to" id="rv-send-to" value="" />
+      <input type="hidden" name="cc" id="rv-send-cc" value="" />
+      <input type="hidden" name="bcc" id="rv-send-bcc" value="" />
+      <input type="hidden" name="subject" id="rv-send-subject" value="" />
+      <input type="hidden" name="body" id="rv-send-body" value="" />
+      <div id="rv-send-photo-fields"></div>
+      <div class="ck-foot">
+        <button type="button" class="btn btn-back" id="ck-back">Go back</button>
+        <button type="submit" class="btn btn-primary" id="ck-send" disabled>Send now</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
 
 <%- include("partials/layout-close") %>

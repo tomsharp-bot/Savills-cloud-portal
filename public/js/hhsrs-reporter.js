@@ -395,6 +395,7 @@
   }
 
   function amendCaseDetails() {
+    if (cfg.send && cfg.send.sent) return;
     caseLocked = false;
     syncCaseLock();
     var note = $("rv-generate-note");
@@ -415,6 +416,10 @@
   function setEmailPhotoTools(show) {
     var box = $("rv-email-photos");
     if (!box) return;
+    if ($("rv-attach-block")) {
+      box.hidden = true;
+      return;
+    }
     var visible = Boolean(show) && casePhotos.length > 0;
     box.hidden = !visible;
     var dl = $("btn-download-photos");
@@ -621,6 +626,7 @@
     emailGenerated = true;
     caseLocked = true;
     syncCaseLock();
+    syncSendButton();
   }
 
   function generateEmail() {
@@ -663,7 +669,7 @@
         if (note) note.textContent = "Could not prepare the client email. Check the case details and try again.";
       })
       .then(function () {
-        if (btn) btn.disabled = !(($("rv-project") && $("rv-project").value) || "");
+        if (btn) btn.disabled = !!(cfg.send && cfg.send.sent) || !(($("rv-project") && $("rv-project").value) || "");
       });
   }
 
@@ -1424,7 +1430,7 @@
 
   function saveReviewDraftNow() {
     reviewDraftSaveTimer = null;
-    if (skipDraftSave || !$("rv-email-body")) return;
+    if (skipDraftSave || !$("rv-email-body") || (cfg.send && cfg.send.sent)) return;
     var key = reviewDraftKey();
     if (!resumeCleared) setReviewLastKey(key);
     var draft = collectReviewDraft();
@@ -1471,6 +1477,10 @@
   }
 
   function restoreReviewDraft(key) {
+    if (cfg.send && cfg.send.sent) {
+      setReviewDraftStatus(false);
+      return false;
+    }
     var draft = readReviewDrafts()[key];
     if (!draft || !$("rv-email-body")) {
       setReviewDraftStatus(false);
@@ -1503,6 +1513,8 @@
     caseLocked = !!draft.caseDetailsLocked;
     syncCaseLock();
     setReviewDraftStatus(true);
+    if (hasEmail) emailGenerated = true;
+    syncSendButton();
     return true;
   }
 
@@ -1545,7 +1557,7 @@
     var markForm = $("mark-actioned-form");
     if (markForm) {
       markForm.addEventListener("submit", function (ev) {
-        if (!window.confirm("Confirm you have copied this draft and are ready to send (or have already sent) from Outlook?")) {
+        if (!window.confirm("Mark this case as actioned?")) {
           ev.preventDefault();
           return;
         }
@@ -1737,4 +1749,200 @@
 
   if (!reviewLeavingForResume) wireReviewDraftPersistence();
   wireAttPhotoPopovers();
+  wirePortalSend();
+
+  function syncSendButton() {
+    var btn = $("btn-send-email");
+    var line = $("rv-send-line");
+    if (!btn || !line) return;
+    if (cfg.send && cfg.send.sent) return;
+    if (!cfg.send || !cfg.send.configured) {
+      btn.disabled = true;
+      line.hidden = false;
+      line.textContent = "Sending not set up yet.";
+      return;
+    }
+    var badge = $("rv-email-badge");
+    var generated = emailGenerated || (badge && /generated/i.test(badge.textContent || ""));
+    var to = ($("rv-email-to") && String($("rv-email-to").value || "").trim()) || "";
+    var subject = ($("rv-email-subject") && String($("rv-email-subject").value || "").trim()) || "";
+    var body = ($("rv-email-body") && String($("rv-email-body").value || "")) || "";
+    var over = attachmentBytes() > (cfg.send.maxBytes || 20 * 1024 * 1024);
+    line.hidden = false;
+    if (over) {
+      btn.disabled = true;
+      line.textContent = "Photos are over 20 MB.";
+      return;
+    }
+    if (!generated) {
+      btn.disabled = true;
+      line.textContent = "Generate the email first.";
+      return;
+    }
+    if (!to) {
+      btn.disabled = true;
+      line.textContent = "Add a To address first.";
+      return;
+    }
+    if (!subject && !String(body).trim()) {
+      btn.disabled = true;
+      line.textContent = "Add a subject or body first.";
+      return;
+    }
+    if (!cfg.caseId) {
+      btn.disabled = true;
+      line.textContent = "Open a case before sending.";
+      return;
+    }
+    btn.disabled = false;
+    line.textContent = "You check it before it goes.";
+  }
+
+  function attachmentBytes() {
+    var total = 0;
+    document.querySelectorAll("#rv-attach-list input[data-attach-name]").forEach(function (box) {
+      if (!box.checked) return;
+      total += Number(box.getAttribute("data-bytes") || 0);
+    });
+    return total;
+  }
+
+  function updateAttachCount() {
+    var boxes = document.querySelectorAll("#rv-attach-list input[data-attach-name]");
+    var on = 0;
+    Array.prototype.forEach.call(boxes, function (box) {
+      var item = box.closest(".attach-item");
+      if (item) item.classList.toggle("is-on", box.checked);
+      if (box.checked) on += 1;
+    });
+    var countEl = $("rv-attach-count");
+    if (countEl && boxes.length) countEl.textContent = on + " of " + boxes.length + " attached";
+  }
+
+  function wirePortalSend() {
+    var btn = $("btn-send-email");
+    var list = $("rv-attach-list");
+    if (list) list.addEventListener("change", function () { updateAttachCount(); syncSendButton(); });
+    ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener("input", syncSendButton);
+    });
+    syncSendButton();
+    var ck = $("ck-overlay");
+    if (!btn || !ck || (cfg.send && cfg.send.sent)) return;
+    var ckBody = $("ck-body");
+    var ckTick = $("ck-tick");
+    var ckTickLabel = $("ck-tick-label");
+    var ckSend = $("ck-send");
+    var ckBack = $("ck-back");
+    var form = $("rv-send-form");
+    var lastFocus = null;
+    var sending = false;
+
+    function esc(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function val(id) {
+      var el = $(id);
+      return el ? String(el.value || "").trim() : "";
+    }
+    function tickedPhotos() {
+      var photos = Array.isArray(cfg.casePhotos) ? cfg.casePhotos : [];
+      var picked = [];
+      document.querySelectorAll("#rv-attach-list input[data-attach-name]").forEach(function (box) {
+        if (!box.checked) return;
+        var name = box.getAttribute("data-attach-name") || "";
+        var match = null;
+        for (var i = 0; i < photos.length; i++) {
+          if (photos[i] && photos[i].name === name) { match = photos[i]; break; }
+        }
+        picked.push(match || { name: name, caption: name, url: "" });
+      });
+      return picked;
+    }
+    function openCheck() {
+      if (btn.disabled || sending) return;
+      var photos = tickedPhotos();
+      var h = "";
+      var test = $("ck-test");
+      if (test) h += test.outerHTML;
+      h += "<dl class=\"ck-list\">";
+      h += "<dt>From</dt><dd class=\"ck-from\">" + esc(cfg.send && cfg.send.fromLine) + "</dd>";
+      h += "<dt>To</dt><dd>" + esc(val("rv-email-to")) + "</dd>";
+      if (val("rv-email-cc")) h += "<dt>Cc</dt><dd>" + esc(val("rv-email-cc")) + "</dd>";
+      if (val("rv-email-bcc")) h += "<dt>Bcc</dt><dd>" + esc(val("rv-email-bcc")) + "</dd>";
+      h += "<dt>Subject</dt><dd>" + (val("rv-email-subject") ? esc(val("rv-email-subject")) : "(no subject)") + "</dd>";
+      h += "</dl>";
+      var bodyEl = $("rv-email-body");
+      var body = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
+      h += "<div class=\"ck-text\" tabindex=\"0\" aria-label=\"Email text\">" + esc(body || "(empty)") + "</div>";
+      h += "<p class=\"ck-photos-label\">Attached: " + photos.length + (photos.length === 1 ? " photo" : " photos") + "</p>";
+      if (photos.length) {
+        h += "<div class=\"ck-photos\">" + photos.map(function (p) {
+          return "<figure><img src=\"" + esc(p.url || "") + "\" alt=\"" + esc(p.caption || p.name) + "\"><figcaption>" + esc(p.name) + "</figcaption></figure>";
+        }).join("") + "</div>";
+      } else {
+        h += "<p class=\"ck-none\">No photos.</p>";
+      }
+      ckBody.innerHTML = h;
+      ckTick.checked = false;
+      ckSend.disabled = true;
+      ckTickLabel.classList.remove("is-on");
+      lastFocus = document.activeElement;
+      ck.hidden = false;
+      document.body.style.overflow = "hidden";
+      ckTick.focus();
+    }
+    function closeCheck() {
+      if (sending) return;
+      ck.hidden = true;
+      document.body.style.overflow = "";
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+    ckTick.addEventListener("change", function () {
+      ckSend.disabled = !ckTick.checked;
+      ckTickLabel.classList.toggle("is-on", ckTick.checked);
+    });
+    ckBack.addEventListener("click", closeCheck);
+    ck.addEventListener("click", function (e) { if (e.target === ck) closeCheck(); });
+    document.addEventListener("keydown", function (e) {
+      if (ck.hidden) return;
+      if (e.key === "Escape") { closeCheck(); return; }
+      if (e.key !== "Tab") return;
+      var f = Array.prototype.slice.call(ck.querySelectorAll("button:not([disabled]), input, [tabindex=\"0\"]"));
+      if (!f.length) return;
+      if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+    });
+    btn.addEventListener("click", openCheck);
+    form.addEventListener("submit", function (e) {
+      if (sending || !ckTick.checked) {
+        e.preventDefault();
+        return;
+      }
+      sending = true;
+      ckSend.disabled = true;
+      ckSend.textContent = "Sending…";
+      $("rv-send-to").value = val("rv-email-to");
+      $("rv-send-cc").value = val("rv-email-cc");
+      $("rv-send-bcc").value = val("rv-email-bcc");
+      $("rv-send-subject").value = val("rv-email-subject");
+      var bodyEl = $("rv-email-body");
+      $("rv-send-body").value = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
+      var holder = $("rv-send-photo-fields");
+      holder.innerHTML = "";
+      tickedPhotos().forEach(function (p) {
+        var input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "photo";
+        input.value = p.name;
+        holder.appendChild(input);
+      });
+    });
+  }
 })();

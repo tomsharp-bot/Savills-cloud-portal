@@ -333,7 +333,11 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(workspace, /Mark as actioned → Main Log/);
     assert.match(workspace, /Open a waiting case from Pending Issues first/);
     assert.match(workspace, /disabled title="Open a waiting case from Pending Issues first"/);
-    assert.match(review, /<strong>Mark as actioned<\/strong> at the bottom when done\./);
+    assert.match(review, /id="btn-send-email"/);
+    assert.match(review, /Check before sending/);
+    assert.match(review, /I've checked the details/);
+    assert.match(review, /id="rv-email-from"/);
+    assert.doesNotMatch(review, /Copy into Outlook/);
     assert.doesNotMatch(review, /Use <strong>Mark as actioned → Main Log<\/strong> when done/);
     assert.match(css, /#review-workspace\s*\{[^}]*padding-bottom:\s*85vh/);
     assert.match(css, /\.finish-bar\s*\{[^}]*background:\s*var\(--surface\)/);
