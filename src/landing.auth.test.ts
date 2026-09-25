@@ -128,7 +128,8 @@ describe("post-login landing by role", () => {
     assert.match(hub.body, /Reference Documents/);
     assert.match(hub.body, /class="brand" href="\/projectprogress\/admin"/);
     assert.match(hub.body, /hhsrs-pending-alerts\.js/);
-    assert.match(hub.body, /New HHSRS case waiting in Pending/);
+    assert.match(hub.body, /New HHSRS Hazard/);
+    assert.match(hub.body, /hhsrs-home-alert-hazard/);
     assert.doesNotMatch(hub.body, /Enable desktop alerts/);
 
     const home = await request(app, "GET", "/projectprogress", { cookie: adminCookie });
@@ -144,13 +145,15 @@ describe("post-login landing by role", () => {
     assert.match(photos.body, /Photo Storage/);
     assert.match(photos.body, /Current projects/);
     assert.match(photos.body, /hhsrs-pending-alerts\.js/);
-    assert.match(photos.body, /New HHSRS case waiting in Pending/);
+    assert.match(photos.body, /New HHSRS Hazard/);
+    assert.match(photos.body, /hhsrs-home-alert-hazard/);
     assert.doesNotMatch(photos.body, /Enable desktop alerts/);
 
     const progress = await request(app, "GET", "/projectprogress/projects", { cookie: adminCookie });
     assert.equal(progress.status, 200);
     assert.match(progress.body, /hhsrs-pending-alerts\.js/);
-    assert.match(progress.body, /New HHSRS case waiting in Pending/);
+    assert.match(progress.body, /New HHSRS Hazard/);
+    assert.match(progress.body, /hhsrs-home-alert-hazard/);
     assert.doesNotMatch(progress.body, /Enable desktop alerts/);
 
     const programme = await request(app, "GET", "/projectprogress/projects-programme", { cookie: adminCookie });

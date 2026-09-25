@@ -1,7 +1,7 @@
 <% if (typeof isAdmin !== "undefined" && isAdmin) { %>
 <link rel="stylesheet" href="<%= baseUrl('/css/hhsrs-pending-alerts.css') %>" />
 <div class="hhsrs-home-alert is-fixed" id="hhsrs-home-alert" role="status" hidden>
-  <span class="hhsrs-home-alert-text" id="hhsrs-home-alert-text">New HHSRS case waiting in Pending</span>
+  <span class="hhsrs-home-alert-text" id="hhsrs-home-alert-text"><span class="hhsrs-home-alert-mark" aria-hidden="true">🔴</span> <span class="hhsrs-home-alert-hazard">New HHSRS Hazard</span> <span class="hhsrs-home-alert-rest" id="hhsrs-home-alert-rest">waiting in Pending</span></span>
   <a class="hhsrs-home-alert-link" id="hhsrs-home-alert-link" href="<%= baseUrl('/HHSRSreporter') %>">Open Pending</a>
   <button type="button" class="hhsrs-home-alert-dismiss" id="hhsrs-home-alert-dismiss">Dismiss</button>
 </div>

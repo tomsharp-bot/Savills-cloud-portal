@@ -198,7 +198,7 @@ describe("HHSRS pending alert marker", () => {
         rating: "Category 1",
         fullAddress: "14 Harbour Lane",
       }),
-      { title: "New HHSRS Hazard", body: "MTVH 2026 · Category 1" }
+      { title: "🔴 New HHSRS Hazard", body: "MTVH 2026 · Category 1" }
     );
     assert.equal(
       pendingAlertScript.desktopAlertCopy({ projectName: "  MTVH 2026  ", rating: "  " }).body,
@@ -209,8 +209,8 @@ describe("HHSRS pending alert marker", () => {
   });
 
   it("uses one short home notice for a single new case", () => {
-    assert.equal(pendingAlertScript.homeNoticeText(1), "New HHSRS case waiting in Pending");
-    assert.equal(pendingAlertScript.homeNoticeText(2), "2 new HHSRS cases waiting in Pending");
+    assert.equal(pendingAlertScript.homeNoticeText(1), "New HHSRS Hazard waiting in Pending");
+    assert.equal(pendingAlertScript.homeNoticeText(2), "New HHSRS Hazard · 2 new cases waiting in Pending");
   });
 
   it("lets one fresh leader record block every other tab", () => {
@@ -247,6 +247,7 @@ describe("HHSRS Reporter alert wiring", () => {
     const appScripts = fs.readFileSync(path.join(root, "views/partials/app-scripts.ejs"), "utf8");
     const projects = fs.readFileSync(path.join(root, "views/projects.ejs"), "utf8");
     const project = fs.readFileSync(path.join(root, "views/project.ejs"), "utf8");
+    const noticeCss = fs.readFileSync(path.join(root, "public/css/hhsrs-pending-alerts.css"), "utf8");
     const js = `${reporterJs}\n${sharedJs}`;
 
     assert.match(layout, /hhsrs-pending-alerts\.js/);
@@ -262,7 +263,10 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(sharedJs, /clearInterval/);
     assert.match(partial, /if \(typeof isAdmin !== "undefined" && isAdmin\)/);
     assert.match(partial, /hhsrs-pending-alerts\.js/);
-    assert.match(partial, /New HHSRS case waiting in Pending/);
+    assert.match(partial, /New HHSRS Hazard/);
+    assert.match(partial, /🔴/);
+    assert.match(partial, /hhsrs-home-alert-hazard/);
+    assert.match(partial, /waiting in Pending/);
     assert.match(partial, /surface: "portal"/);
     assert.doesNotMatch(partial, /Enable desktop alerts/);
     assert.doesNotMatch(partial, /desktop-alerts-banner/);
@@ -309,7 +313,9 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(js, /btn-admin-simulate-alerts-off/);
     assert.match(js, /btn-admin-send-test-alert/);
     assert.match(js, /Test · Project · Rating/);
-    assert.match(js, /New HHSRS Hazard/);
+    assert.match(js, /🔴 New HHSRS Hazard/);
+    assert.match(noticeCss, /#c62828/);
+    assert.match(noticeCss, /\.hhsrs-home-alert-hazard/);
     assert.doesNotMatch(js, /New HHSRS hazard/);
     assert.doesNotMatch(js, /HHSRS test alert - if you can see this/);
     assert.doesNotMatch(sharedJs, /Math\.min\(unseen\.length, 3\)/);

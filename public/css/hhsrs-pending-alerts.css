@@ -21,6 +21,10 @@
 .hhsrs-alerts-paused {
   font-weight: 600;
 }
+.hhsrs-home-alert-hazard {
+  color: #c62828;
+  font-weight: 700;
+}
 .hhsrs-home-alert-link {
   display: inline-flex;
   align-items: center;

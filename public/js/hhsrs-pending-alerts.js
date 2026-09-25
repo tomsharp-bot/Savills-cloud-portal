@@ -208,9 +208,13 @@
     return false;
   }
 
+  function homeNoticeRest(count) {
+    if (!count || count <= 1) return "waiting in Pending";
+    return "· " + count + " new cases waiting in Pending";
+  }
+
   function homeNoticeText(count) {
-    if (count === 1) return "New HHSRS case waiting in Pending";
-    return count + " new HHSRS cases waiting in Pending";
+    return "New HHSRS Hazard " + homeNoticeRest(count);
   }
 
   function readStorageMarker() {
@@ -297,7 +301,7 @@
     var parts = [];
     if (project) parts.push(project);
     if (rating) parts.push(rating);
-    return { title: "New HHSRS Hazard", body: parts.join(" · ") };
+    return { title: "🔴 New HHSRS Hazard", body: parts.join(" · ") };
   }
 
   function desktopNotify(item, cfg) {
@@ -402,9 +406,9 @@
   function showPortalNotice(fresh, cfg) {
     var box = document.getElementById("hhsrs-home-alert");
     if (!box || !fresh.length) return;
-    var text = document.getElementById("hhsrs-home-alert-text");
+    var rest = document.getElementById("hhsrs-home-alert-rest");
     var link = document.getElementById("hhsrs-home-alert-link");
-    if (text) text.textContent = homeNoticeText(fresh.length);
+    if (rest) rest.textContent = homeNoticeRest(fresh.length);
     if (link) link.href = pendingUrl(cfg);
     box.hidden = false;
   }
