@@ -4,7 +4,7 @@ import { canClearStock, canEditSiteComments, canExportStock, canOmitAsset, canPu
 import { applyMissingStockPurge, formatPurgeNotice } from "../lib/stock-purge.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, stockColumns } from "../lib/stock-columns.js";
 import { formatStockDate } from "../lib/dates.js";
-import { applyEpcSurveyType } from "../lib/epc-survey.js";
+import { applyEpcSurveyType, deriveDwellingSurveyType } from "../lib/epc-survey.js";
 import { loadStockWindow } from "../lib/stock-query.js";
 import { STOCK_ROW_HEIGHT } from "../lib/stock-window.js";
 import { userAccessIds } from "../middleware/auth.js";
@@ -259,6 +259,25 @@ stockRouter.patch("/projects/:id/assets/:assetId", async (req: Request, res: Res
       return;
     }
     data.epcRequired = req.body.epcRequired === true || req.body.epcRequired === "true";
+  }
+  if (typeof req.body.assetStatus === "string" || typeof req.body.external === "string") {
+    if (!isAdmin(user)) {
+      res.status(403).json({ error: "Admin only." });
+      return;
+    }
+    if (typeof req.body.external === "string") data.external = req.body.external;
+    if (typeof req.body.assetStatus === "string") data.assetStatus = req.body.assetStatus.trim();
+    if (typeof data.external === "string" && data.external.trim().toLowerCase() === "yes" && data.assetStatus == null) {
+      data.assetStatus = "Ext-Only";
+    }
+  }
+  if (
+    asset.kind === "dwelling" &&
+    (typeof data.epcRequired === "boolean" || typeof data.assetStatus === "string" || typeof data.external === "string")
+  ) {
+    const status = typeof data.assetStatus === "string" ? data.assetStatus : asset.assetStatus;
+    const epc = typeof data.epcRequired === "boolean" ? data.epcRequired : asset.epcRequired;
+    data.surveyType = deriveDwellingSurveyType(status, epc);
   }
   for (const col of ADMIN_EDIT_STOCK_COLS) {
     if (typeof req.body[col] !== "string") continue;

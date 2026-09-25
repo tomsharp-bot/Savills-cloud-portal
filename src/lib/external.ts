@@ -1,4 +1,5 @@
 import { cellVal } from "./asset-status.js";
+import { deriveDwellingSurveyType } from "./epc-survey.js";
 import type { RawRow } from "./excel.js";
 import { prisma } from "./prisma.js";
 import { extractUprn } from "./stock-refresh.js";
@@ -32,11 +33,19 @@ export async function applyExternalUprnSet(projectId: string, uprns: string[]): 
   const size = 2000;
   for (let i = 0; i < unique.length; i += size) {
     const chunk = unique.slice(i, i + size);
-    const result = await prisma.asset.updateMany({
-      where: { projectId, uprn: { in: chunk } },
+    const dwellings = await prisma.asset.updateMany({
+      where: { projectId, uprn: { in: chunk }, kind: "dwelling" },
+      data: {
+        external: "Yes",
+        assetStatus: "Ext-Only",
+        surveyType: deriveDwellingSurveyType("Ext-Only", false),
+      },
+    });
+    const others = await prisma.asset.updateMany({
+      where: { projectId, uprn: { in: chunk }, kind: { not: "dwelling" } },
       data: { external: "Yes", assetStatus: "Ext-Only" },
     });
-    matched += result.count;
+    matched += dwellings.count + others.count;
   }
   return { matched, flagged: unique.length };
 }

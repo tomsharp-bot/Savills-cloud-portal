@@ -13,10 +13,16 @@ import {
   buildStockRefreshFlash,
   formatStockRefreshResult,
   kindForStockRow,
+  mapStockAddress,
+  mergedStockFields,
   planStocklistRefresh,
+  siteCommentsToStore,
   stockCreateInput,
+  stockFieldToStore,
+  surveyTypeForStockWrite,
   type RefreshAsset,
 } from "./stock-refresh.js";
+import { formatStockDate } from "./dates.js";
 import { flaggedUprnsFromRows, isTruthyFlag } from "./external.js";
 
 function row(partial: Partial<RefreshAsset> & { uprn: string }): RefreshAsset {
@@ -71,7 +77,8 @@ describe("Stocklist refresh plan", () => {
     assert.equal(added.address.city, "Bude");
     assert.equal(added.address.postcode, "EX23 8JZ");
     assert.equal(added.address.yearBuilt, "1962");
-    assert.equal(added.address.surveyType, "Condition Only");
+    assert.equal(added.address.surveyType, undefined);
+    assert.equal(added.address.epcRequired, false);
     assert.equal(added.address.block, "Harbour Court");
     assert.equal(added.address.number, undefined);
   });
@@ -134,6 +141,58 @@ describe("Stocklist refresh plan", () => {
   it("errors when no UPRN values are present", () => {
     const plan = planStocklistRefresh([row({ uprn: "A" })], [{ Street: "Nope" }], true);
     assert.equal(plan.error, "No UPRN column / values found in file");
+  });
+
+  it("reads Site Comments onto new and matched dwellings", () => {
+    const plan = planStocklistRefresh(
+      [row({ uprn: "A", siteComments: "Old note" })],
+      [
+        { UPRN: "A", "Site Comments": "  Gate code 1234  " },
+        { UPRN: "B", Comments: "Ring the bell" },
+        { UPRN: "C", Notes: "Side entrance" },
+        { UPRN: "D", Site_Comments: "Underscored export header" },
+        { UPRN: "E", Comment: "Short" },
+        { UPRN: "F", "Site Comments": "   " },
+        { UPRN: "G", Street: "High St" },
+      ],
+      false
+    );
+    assert.equal(plan.matched[0].address.siteComments, "Gate code 1234");
+    const byUprn = Object.fromEntries(plan.added.map((item) => [item.uprn, item]));
+    assert.equal(stockCreateInput("p", byUprn.B).siteComments, "Ring the bell");
+    assert.equal(byUprn.C.address.siteComments, "Side entrance");
+    assert.equal(byUprn.D.address.siteComments, "Underscored export header");
+    assert.equal(mapStockAddress({ "Site Comment": "Singular" }).siteComments, "Singular");
+    assert.equal(byUprn.E.address.siteComments, "Short");
+    assert.equal(byUprn.F.address.siteComments, undefined);
+    assert.equal(stockCreateInput("p", byUprn.F).siteComments, undefined);
+    assert.equal(byUprn.G.address.siteComments, undefined);
+    const moved = planStocklistRefresh(
+      [row({ uprn: "R", kind: "dwelling" })],
+      [{ UPRN: "R", Archetype: "Block", "Site Comments": "Block note" }],
+      false,
+      "auto"
+    );
+    assert.equal(moved.reclassified[0].address.siteComments, "Block note");
+  });
+
+  it("replaces a stored comment from the file and keeps the omitted-survey note", () => {
+    assert.equal(siteCommentsToStore("Gate code 1234", "Old note"), "Gate code 1234");
+    assert.equal(siteCommentsToStore("  ", "Old note"), "Old note");
+    assert.equal(siteCommentsToStore(undefined, "Old note"), "Old note");
+    assert.equal(
+      siteCommentsToStore("Gate code 1234", `Old note · ${OMITTED_SURVEYED_NOTE}`),
+      `Gate code 1234 · ${OMITTED_SURVEYED_NOTE}`
+    );
+    assert.equal(
+      siteCommentsToStore(`Already noted · ${OMITTED_SURVEYED_NOTE}`, OMITTED_SURVEYED_NOTE),
+      `Already noted · ${OMITTED_SURVEYED_NOTE}`
+    );
+    assert.equal(siteCommentsToStore("", "Kept", `Moved · ${OMITTED_SURVEYED_NOTE}`), "Kept");
+    assert.equal(
+      siteCommentsToStore("From the file", "", `Moved · ${OMITTED_SURVEYED_NOTE}`),
+      `From the file · ${OMITTED_SURVEYED_NOTE}`
+    );
   });
 
   it("appends the surveyed-omit note once", () => {
@@ -419,12 +478,313 @@ describe("Large stocklists and partial imports", () => {
         x1: "a",
         x2: "b",
         x3: "c",
+        siteComments: "Gate code",
+        surveyDate: "01/02/26",
+        surveyedBy: "AB",
+        visit1: "01/02/26",
+        visit2: "03/04/26",
+        visit3: "05/06/26",
       },
     });
     assert.ok(Object.keys(input).length <= STOCK_IMPORT_COLUMNS);
-    assert.equal(input.surveyType, "Condition Only");
+    assert.equal(input.surveyType, "");
     assert.equal(input.assetStatus, "No Visit");
     assert.equal(input.epcRequired, true);
+  });
+});
+
+describe("EPC Req. column on stocklist refresh", () => {
+  it("reads Yes, yes, Y, TRUE, and 1 as ticked", () => {
+    for (const value of ["Yes", "yes", "Y", "TRUE", "1", true, 1]) {
+      assert.equal(mapStockAddress({ "EPC Req": value }).epcRequired, true, String(value));
+    }
+  });
+
+  it("reads No and 0 as not ticked", () => {
+    for (const value of ["No", "0", false, 0]) {
+      assert.equal(mapStockAddress({ "EPC Req": value }).epcRequired, false, String(value));
+    }
+  });
+
+  it("leaves epcRequired unset when the cell is blank or unrecognised", () => {
+    assert.equal(mapStockAddress({ "EPC Req": "" }).epcRequired, undefined);
+    assert.equal(mapStockAddress({ "EPC Req": "   " }).epcRequired, undefined);
+    assert.equal(mapStockAddress({ "EPC Req": "maybe" }).epcRequired, undefined);
+    assert.equal(mapStockAddress({ UPRN: "1", Street: "High St" }).epcRequired, undefined);
+    const created = stockCreateInput("p", {
+      uprn: "1",
+      kind: "dwelling",
+      address: mapStockAddress({ UPRN: "1", "EPC Req": "" }),
+    });
+    assert.equal(Object.hasOwn(created, "epcRequired"), false);
+  });
+
+  it("accepts the dwellings export header EPC Req. and the other EPC Req aliases", () => {
+    assert.equal(mapStockAddress({ "EPC Req.": "Yes" }).epcRequired, true);
+    assert.equal(mapStockAddress({ "EPC_Req.": "yes" }).epcRequired, true);
+    assert.equal(mapStockAddress({ "EPC Required": "Y" }).epcRequired, true);
+    assert.equal(mapStockAddress({ "EPC Reqd": "1" }).epcRequired, true);
+    assert.equal(mapStockAddress({ EPC: "TRUE" }).epcRequired, true);
+  });
+
+  it("lets an explicit EPC Req value win over Survey Type", () => {
+    const yes = mapStockAddress({ "Survey Type": "Condition Only", "EPC Req": "Yes" });
+    assert.equal(yes.surveyType, undefined);
+    assert.equal(yes.epcRequired, true);
+    const no = mapStockAddress({ "Survey Type": "Condition + EPC", "EPC Req.": "No" });
+    assert.equal(no.surveyType, undefined);
+    assert.equal(no.epcRequired, false);
+    const blank = mapStockAddress({ "Survey Type": "Condition + EPC", "EPC Req": "" });
+    assert.equal(blank.surveyType, undefined);
+    assert.equal(blank.epcRequired, true);
+    const fallback = mapStockAddress({ "Survey Type": "SCS Only" });
+    assert.equal(fallback.epcRequired, false);
+    assert.equal(fallback.surveyType, undefined);
+  });
+
+  it("puts the tick on added, matched, and reclassified assets", () => {
+    const existing = [row({ uprn: "M", kind: "dwelling" }), row({ uprn: "R", kind: "dwelling" })];
+    const plan = planStocklistRefresh(
+      existing,
+      [
+        { UPRN: "N", "EPC Req": "Yes" },
+        { UPRN: "M", "EPC Req.": "Yes" },
+        { UPRN: "R", Archetype: "Block", "EPC Req": "Yes" },
+      ],
+      false,
+      "auto"
+    );
+    const added = plan.added.find((item) => item.uprn === "N");
+    const matched = plan.matched.find((item) => item.uprn === "M");
+    const moved = plan.reclassified.find((item) => item.uprn === "R");
+    assert.equal(added?.address.epcRequired, true);
+    assert.equal(matched?.address.epcRequired, true);
+    assert.equal(moved?.address.epcRequired, true);
+    assert.equal(moved?.to, "block");
+    assert.equal(stockCreateInput("p", added!).epcRequired, true);
+    assert.equal(stockCreateInput("p", added!).surveyType, "");
+  });
+
+  it("does not copy an uploaded Survey Type onto a dwelling", () => {
+    const plan = planStocklistRefresh(
+      [],
+      [
+        { UPRN: "1", "Survey Type": "Condition + EPC" },
+        { UPRN: "2", "Survey Type": "Blocks" },
+        { UPRN: "3", "EPC Req": "No", "Survey Type": "Condition + EPC" },
+      ],
+      false
+    );
+    const byUprn = Object.fromEntries(plan.added.map((item) => [item.uprn, item]));
+    assert.equal(byUprn["1"].kind, "dwelling");
+    assert.equal(byUprn["1"].address.surveyType, undefined);
+    assert.equal(byUprn["1"].address.epcRequired, true);
+    const created = stockCreateInput("p", byUprn["1"]);
+    assert.equal(created.surveyType, "");
+    assert.equal(created.epcRequired, true);
+    assert.equal(byUprn["2"].kind, "block");
+    assert.equal(byUprn["2"].address.surveyType, "Blocks");
+    assert.equal(stockCreateInput("p", byUprn["2"]).surveyType, "Blocks");
+    assert.equal(byUprn["3"].address.epcRequired, false);
+    assert.equal(stockCreateInput("p", byUprn["3"]).surveyType, "");
+  });
+
+  it("stores a derived Survey Type for added, matched, and reclassified dwellings", () => {
+    assert.equal(
+      surveyTypeForStockWrite({ kind: "dwelling", assetStatus: "No Visit", epcRequired: true, useKindDefault: true }),
+      ""
+    );
+    assert.equal(
+      surveyTypeForStockWrite({
+        kind: "dwelling",
+        assetStatus: "Full Survey",
+        epcRequired: false,
+        fileSurveyType: "Condition + EPC",
+        useKindDefault: false,
+      }),
+      "SCS Only"
+    );
+    assert.equal(
+      surveyTypeForStockWrite({
+        kind: "dwelling",
+        assetStatus: "Full Survey",
+        epcRequired: true,
+        fileSurveyType: "Condition Only",
+        useKindDefault: false,
+      }),
+      "SCS + EPC"
+    );
+    assert.equal(
+      surveyTypeForStockWrite({ kind: "dwelling", assetStatus: "Ext-Only", epcRequired: true, useKindDefault: true }),
+      "External"
+    );
+    assert.equal(
+      surveyTypeForStockWrite({ kind: "dwelling", assetStatus: "No Access", epcRequired: false, useKindDefault: true }),
+      ""
+    );
+    assert.equal(
+      surveyTypeForStockWrite({
+        kind: "block",
+        assetStatus: "Full Survey",
+        epcRequired: true,
+        fileSurveyType: "Blocks",
+        useKindDefault: true,
+      }),
+      "Blocks"
+    );
+    assert.equal(
+      surveyTypeForStockWrite({ kind: "garage", assetStatus: "No Visit", epcRequired: false, useKindDefault: false }),
+      undefined
+    );
+  });
+});
+
+describe("Asset Status, survey date, surveyed by, and visit dates", () => {
+  it("folds status from the file and keeps an unrecognised label", () => {
+    assert.equal(mapStockAddress({ "Asset Status": "Full Surveys" }).assetStatus, "Full Survey");
+    assert.equal(mapStockAddress({ "Access Status": "external only" }).assetStatus, "Ext-Only");
+    assert.equal(mapStockAddress({ Status: "NO ACCESS" }).assetStatus, "No Access");
+    assert.equal(mapStockAddress({ "Asset Status": "  On hold  " }).assetStatus, "On hold");
+    assert.equal(mapStockAddress({ "Asset Status": "   " }).assetStatus, undefined);
+    assert.equal(mapStockAddress({ Street: "High St" }).assetStatus, undefined);
+
+    const created = stockCreateInput("p", {
+      uprn: "N",
+      kind: "dwelling",
+      address: mapStockAddress({
+        "Asset Status": "Full Surveys",
+        "EPC Req": "Yes",
+        "Surveyed By": "AB",
+      }),
+    });
+    assert.equal(created.assetStatus, "Full Survey");
+    assert.equal(created.surveyType, "SCS + EPC");
+    assert.equal(created.surveyedBy, "AB");
+
+    const blank = stockCreateInput("p", {
+      uprn: "B",
+      kind: "dwelling",
+      address: mapStockAddress({ Street: "High St", "Asset Status": "" }),
+    });
+    assert.equal(blank.assetStatus, "No Visit");
+    assert.equal(blank.surveyType, "");
+    assert.equal(blank.surveyDate, undefined);
+    assert.equal(blank.visit1, undefined);
+
+    const external = stockCreateInput("p", {
+      uprn: "E",
+      kind: "dwelling",
+      address: mapStockAddress({ "Asset Status": "External Only" }),
+    });
+    assert.equal(external.assetStatus, "Ext-Only");
+    assert.equal(external.surveyType, "External");
+  });
+
+  it("formats survey and visit dates and accepts the export headers", () => {
+    const serial = 46094;
+    const fromExport = mapStockAddress({
+      "Survey Date": "12/03/2026",
+      "Surveyed by": "TS",
+      "Visit 1 Date": "01/04/26",
+      "Visit 2 Date": "2026-05-02",
+      "Visit 3 Date": "3-6-26",
+    });
+    assert.equal(fromExport.surveyDate, "12/03/26");
+    assert.equal(fromExport.surveyedBy, "TS");
+    assert.equal(fromExport.visit1, "01/04/26");
+    assert.equal(fromExport.visit2, "02/05/26");
+    assert.equal(fromExport.visit3, "03/06/26");
+
+    const aliases = mapStockAddress({
+      "Survey Date": serial,
+      "Visit 1": "1-4-26",
+      "Visit Date 2": new Date(Date.UTC(2026, 4, 2)),
+      Visit3: "03/06/2026",
+    });
+    assert.equal(aliases.surveyDate, formatStockDate(serial));
+    assert.equal(aliases.visit1, "01/04/26");
+    assert.equal(aliases.visit2, "02/05/26");
+    assert.equal(aliases.visit3, "03/06/26");
+    assert.equal(mapStockAddress({ "Visit1": "01/04/2026" }).visit1, "01/04/26");
+    assert.equal(mapStockAddress({ "Survey Date": "   " }).surveyDate, undefined);
+  });
+
+  it("replaces stored status and dates when the file has a value, and keeps them when the cell is blank", () => {
+    const replaced = mergedStockFields({
+      kind: "dwelling",
+      external: "",
+      storedStatus: "No Visit",
+      storedEpcRequired: false,
+      address: mapStockAddress({
+        "Asset Status": "full surveys",
+        "EPC Req": "No",
+        "Survey Date": "12/03/2026",
+        "Surveyed By": "AB",
+        "Visit 1 Date": "01/04/26",
+        "Visit 2": "02/05/2026",
+        "Visit Date 3": "2026-06-03",
+      }),
+      useKindDefault: false,
+      surveyDate: "01/01/20",
+      surveyedBy: "OLD",
+      visit1: "02/02/20",
+      visit2: "03/03/20",
+      visit3: "04/04/20",
+    });
+    assert.equal(replaced.assetStatus, "Full Survey");
+    assert.equal(replaced.surveyType, "SCS Only");
+    assert.equal(replaced.surveyDate, "12/03/26");
+    assert.equal(replaced.surveyedBy, "AB");
+    assert.equal(replaced.visit1, "01/04/26");
+    assert.equal(replaced.visit2, "02/05/26");
+    assert.equal(replaced.visit3, "03/06/26");
+
+    const kept = mergedStockFields({
+      kind: "dwelling",
+      external: "",
+      storedStatus: "No Access",
+      storedEpcRequired: true,
+      address: mapStockAddress({ UPRN: "1", "Survey Date": "  ", "Surveyed By": "" }),
+      useKindDefault: false,
+      surveyDate: "01/02/26",
+      surveyedBy: "TS",
+      visit1: "03/04/26",
+      visit2: "",
+      visit3: "05/06/26",
+    });
+    assert.equal(kept.assetStatus, "No Access");
+    assert.equal(kept.surveyType, "");
+    assert.equal(kept.surveyDate, "01/02/26");
+    assert.equal(kept.surveyedBy, "TS");
+    assert.equal(kept.visit1, "03/04/26");
+    assert.equal(kept.visit3, "05/06/26");
+    assert.equal(stockFieldToStore(undefined, "No Access"), "No Access");
+    assert.equal(stockFieldToStore("  ", "01/02/26"), "01/02/26");
+
+    const forced = mergedStockFields({
+      kind: "dwelling",
+      external: "yes",
+      storedStatus: "No Visit",
+      storedEpcRequired: true,
+      address: mapStockAddress({ "Asset Status": "Full Survey", "EPC Req": "Yes" }),
+      useKindDefault: false,
+      surveyDate: "",
+      surveyedBy: "",
+      visit1: "",
+      visit2: "",
+      visit3: "",
+    });
+    assert.equal(forced.assetStatus, "Ext-Only");
+    assert.equal(forced.surveyType, "External");
+
+    const moved = planStocklistRefresh(
+      [row({ uprn: "R", kind: "dwelling" })],
+      [{ UPRN: "R", Archetype: "Block", "Asset Status": "Void", "Visit 1 Date": "01/02/2026" }],
+      false,
+      "auto"
+    );
+    assert.equal(moved.reclassified[0].address.assetStatus, "Void");
+    assert.equal(moved.reclassified[0].address.visit1, "01/02/26");
   });
 });
 

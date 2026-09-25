@@ -1,7 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { statusFromVisit } from "./asset-status.js";
-import { normalizeVisit } from "./loader.js";
+import { normalizeVisit, surveyTypeForLoadedAsset } from "./loader.js";
+
+describe("Visit import survey type", () => {
+  it("derives a dwelling Survey Type from the visit status and the stored EPC tick", () => {
+    assert.equal(surveyTypeForLoadedAsset("dwelling", "Full Survey", false), "SCS Only");
+    assert.equal(surveyTypeForLoadedAsset("dwelling", "Full Survey", true), "SCS + EPC");
+    assert.equal(surveyTypeForLoadedAsset("dwelling", "Ext-Only", true), "External");
+    assert.equal(surveyTypeForLoadedAsset("dwelling", "No Access", true), "");
+    assert.equal(surveyTypeForLoadedAsset("block", "Full Survey", true), undefined);
+    assert.equal(surveyTypeForLoadedAsset("garage", "No Visit", false), undefined);
+  });
+});
 
 describe("Visit import column mapping", () => {
   it("reads Access_Type / Visit_Type so Successful is not stored as No Access", () => {

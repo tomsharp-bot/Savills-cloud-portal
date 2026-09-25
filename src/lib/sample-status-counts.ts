@@ -119,8 +119,7 @@ export function projectHasBothConditionTypes(project: {
  * Ext-Only does not count.
  *
  * Which of the two rows a full survey belongs to follows the Dwellings grid:
- * on a Condition + EPC project, `applyEpcSurveyType` rewrites a completed
- * dwelling from EPC Req. (SCS + EPC vs SCS only).
+ * a completed dwelling is SCS + EPC or SCS Only from EPC Req, on every project.
  */
 export function conditionSurveyCompletion(
   project: { typeConditionOnly?: boolean | null; typeConditionEpc?: boolean | null },

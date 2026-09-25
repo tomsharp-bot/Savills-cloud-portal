@@ -1,10 +1,11 @@
 import type { AssetKind, Prisma } from "@prisma/client";
-import { cellVal, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
+import { cellVal, foldAssetStatus, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
 import { dwellingMisrouteWarning, routeStockRow, type StockRouteTarget } from "./stock-route.js";
-import { epcRequiredFromSurveyType } from "./epc-survey.js";
+import { deriveDwellingSurveyType, epcRequiredFromSurveyType, parseEpcRequired } from "./epc-survey.js";
 import { formatStockDate } from "./dates.js";
 import { uprnText, type RawRow } from "./excel.js";
 import { prisma } from "./prisma.js";
+import { STOCK_LABELS } from "./stock-columns.js";
 
 export const OMITTED_SURVEYED_NOTE = "Omitted but already surveyed";
 
@@ -31,6 +32,13 @@ export type AddressPatch = {
   x1?: string;
   x2?: string;
   x3?: string;
+  siteComments?: string;
+  assetStatus?: string;
+  surveyDate?: string;
+  surveyedBy?: string;
+  visit1?: string;
+  visit2?: string;
+  visit3?: string;
 };
 
 export type RefreshAsset = {
@@ -144,16 +152,109 @@ export function buildStockRefreshFlash(opts: {
   };
 }
 
+/** External = Yes forces Ext-Only, the same rule as a stocklist match and the visit loader. */
+export function assetStatusForStockWrite(external: string, assetStatus: string): string {
+  return String(external).toLowerCase() === "yes" ? "Ext-Only" : assetStatus;
+}
+
+/**
+ * Survey Type written with a stock row.
+ * Dwellings ignore the uploaded Survey Type and use status + EPC Req.
+ * Blocks and garages keep the file value. A blank file cell uses the tab default
+ * only when useKindDefault is set (new rows and moves). A matched block or garage
+ * leaves its stored type alone when the file cell is blank.
+ */
+export function surveyTypeForStockWrite(opts: {
+  kind: AssetKind;
+  assetStatus: string;
+  epcRequired: boolean;
+  fileSurveyType?: string;
+  useKindDefault: boolean;
+}): string | undefined {
+  if (opts.kind === "dwelling") return deriveDwellingSurveyType(opts.assetStatus, opts.epcRequired);
+  const fromFile = String(opts.fileSurveyType ?? "").trim();
+  if (fromFile) return fromFile;
+  return opts.useKindDefault ? surveyTypeForKind(opts.kind) : undefined;
+}
+
+/** A filled-in file cell replaces the stored text. A blank cell leaves it alone. */
+export function stockFieldToStore(fileValue: string | undefined, stored: string): string {
+  const file = String(fileValue ?? "").trim();
+  return file || String(stored ?? "");
+}
+
+/**
+ * Status, survey date, surveyed by, and visit dates written for a matched or
+ * reclassified row. File values are already normalised. External = Yes still
+ * forces Ext-Only, and a dwelling's Survey Type follows that status.
+ */
+export function mergedStockFields(opts: {
+  kind: AssetKind;
+  external: string;
+  storedStatus: string;
+  storedEpcRequired: boolean;
+  address: AddressPatch;
+  useKindDefault: boolean;
+  surveyDate: string;
+  surveyedBy: string;
+  visit1: string;
+  visit2: string;
+  visit3: string;
+}): {
+  assetStatus: string;
+  surveyType?: string;
+  surveyDate: string;
+  surveyedBy: string;
+  visit1: string;
+  visit2: string;
+  visit3: string;
+} {
+  const assetStatus = assetStatusForStockWrite(
+    opts.external,
+    stockFieldToStore(opts.address.assetStatus, opts.storedStatus)
+  );
+  const epcRequired = opts.address.epcRequired !== undefined ? opts.address.epcRequired : opts.storedEpcRequired;
+  const surveyType = surveyTypeForStockWrite({
+    kind: opts.kind,
+    assetStatus,
+    epcRequired,
+    fileSurveyType: opts.address.surveyType,
+    useKindDefault: opts.useKindDefault,
+  });
+  const fields = {
+    assetStatus,
+    surveyDate: stockFieldToStore(opts.address.surveyDate, opts.surveyDate),
+    surveyedBy: stockFieldToStore(opts.address.surveyedBy, opts.surveyedBy),
+    visit1: stockFieldToStore(opts.address.visit1, opts.visit1),
+    visit2: stockFieldToStore(opts.address.visit2, opts.visit2),
+    visit3: stockFieldToStore(opts.address.visit3, opts.visit3),
+  };
+  return surveyType !== undefined ? { ...fields, surveyType } : fields;
+}
+
 export function stockCreateInput(projectId: string, item: RefreshPlanItem): Prisma.AssetCreateManyInput {
+  const address = { ...item.address };
+  const fileSurveyType = address.surveyType;
+  const fileStatus = address.assetStatus;
+  if (item.kind === "dwelling") delete address.surveyType;
+  delete address.assetStatus;
+  const assetStatus = assetStatusForStockWrite("", fileStatus || "No Visit");
+  const surveyType = surveyTypeForStockWrite({
+    kind: item.kind,
+    assetStatus,
+    epcRequired: address.epcRequired ?? false,
+    fileSurveyType,
+    useKindDefault: true,
+  });
   return {
     projectId,
     kind: item.kind,
     uprn: item.uprn,
-    assetStatus: "No Visit",
+    assetStatus,
     omitAsset: false,
     stockMissing: false,
-    surveyType: surveyTypeForKind(item.kind),
-    ...item.address,
+    ...address,
+    ...(surveyType !== undefined ? { surveyType } : {}),
   };
 }
 
@@ -267,6 +368,38 @@ function trimmedCell(raw: RawRow, aliases: string[]): string {
   return String(v).trim();
 }
 
+/**
+ * EPC Req. column names. The dwellings grid export header is "EPC Req."
+ * normHeader strips ".", so "EPC Req." and "EPC Req" both match "epcreq".
+ * "EPC" is last so a more specific header wins when several are filled in.
+ */
+const EPC_REQ_ALIASES = [STOCK_LABELS.epcRequired, "EPC Req", "EPC Required", "EPC Reqd", "EPC"];
+
+/** Dwellings export header is "Site Comments". More specific names are listed first. */
+const SITE_COMMENT_ALIASES = [STOCK_LABELS.siteComments, "Site Comment", "Comments", "Comment", "Notes"];
+
+/** Dwellings export header is "Asset Status". */
+const ASSET_STATUS_ALIASES = [STOCK_LABELS.assetStatus, "Access Status", "Status"];
+
+/** Dwellings export header is "Survey Date". */
+const SURVEY_DATE_ALIASES = [STOCK_LABELS.surveyDate];
+
+/** Dwellings export header is "Surveyed By". The lowercase "by" is the same column. */
+const SURVEYED_BY_ALIASES = [STOCK_LABELS.surveyedBy, "Surveyed by"];
+
+/** Export headers are "Visit 1 Date", "Visit 2 Date", and "Visit 3 Date". */
+const VISIT_DATE_ALIASES: [string, string, string, string][] = [
+  [STOCK_LABELS.visit1, "Visit 1", "Visit Date 1", "Visit1"],
+  [STOCK_LABELS.visit2, "Visit 2", "Visit Date 2", "Visit2"],
+  [STOCK_LABELS.visit3, "Visit 3", "Visit Date 3", "Visit3"],
+];
+
+function stockDateCell(raw: RawRow, aliases: string[]): string {
+  const value = cellValAliases(raw, aliases);
+  if (value == null || value === "") return "";
+  return formatStockDate(value).trim();
+}
+
 export function mapStockAddress(raw: RawRow): AddressPatch {
   let number = trimmedCell(raw, ["Number"]);
   let block = trimmedCell(raw, ["Block"]);
@@ -306,11 +439,26 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   if (yearBuilt) patch.yearBuilt = yearBuilt;
   if (patchName) patch.patch = patchName;
   if (surveyor) patch.surveyor = surveyor;
+  // Survey Type is not copied onto the address. It only fills EPC Req when
+  // the EPC Req column itself has no Yes or No. An explicit EPC Req cell wins.
   if (surveyType) {
-    patch.surveyType = surveyType;
-    const epcRequired = epcRequiredFromSurveyType(surveyType);
-    if (epcRequired !== undefined) patch.epcRequired = epcRequired;
+    const fromSurveyType = epcRequiredFromSurveyType(surveyType);
+    if (fromSurveyType !== undefined) patch.epcRequired = fromSurveyType;
   }
+  const epcRequired = parseEpcRequired(cellValAliases(raw, EPC_REQ_ALIASES));
+  if (epcRequired !== undefined) patch.epcRequired = epcRequired;
+  const siteComments = trimmedCell(raw, SITE_COMMENT_ALIASES);
+  if (siteComments) patch.siteComments = siteComments;
+  const assetStatus = foldAssetStatus(cellValAliases(raw, ASSET_STATUS_ALIASES));
+  if (assetStatus) patch.assetStatus = assetStatus;
+  const surveyDate = stockDateCell(raw, SURVEY_DATE_ALIASES);
+  if (surveyDate) patch.surveyDate = surveyDate;
+  const surveyedBy = trimmedCell(raw, SURVEYED_BY_ALIASES);
+  if (surveyedBy) patch.surveyedBy = surveyedBy;
+  const [visit1, visit2, visit3] = VISIT_DATE_ALIASES.map((aliases) => stockDateCell(raw, aliases));
+  if (visit1) patch.visit1 = visit1;
+  if (visit2) patch.visit2 = visit2;
+  if (visit3) patch.visit3 = visit3;
 
   const residentName = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentName);
   const residentNumber = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentNumber);
@@ -339,6 +487,15 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   return patch;
 }
 
+/** Blocks and garages still take Survey Type from the file. Dwellings do not. */
+function addressForFileKind(kind: AssetKind, raw: RawRow): AddressPatch {
+  const address = mapStockAddress(raw);
+  if (kind === "dwelling") return address;
+  const surveyType = trimmedCell(raw, ["Survey Type"]);
+  if (surveyType) address.surveyType = surveyType;
+  return address;
+}
+
 export function isSurveyedStatus(status: string): boolean {
   return isCompletedAssetStatus(status);
 }
@@ -347,6 +504,19 @@ export function appendSurveyedNote(comments: string): string {
   const c = String(comments || "").trim();
   if (c.includes(OMITTED_SURVEYED_NOTE)) return c;
   return c ? `${c} · ${OMITTED_SURVEYED_NOTE}` : OMITTED_SURVEYED_NOTE;
+}
+
+/**
+ * Comment written on a matched or reclassified row.
+ * A blank file cell keeps the stored comment. A file comment replaces it, and
+ * the omitted-but-surveyed note is put back if either stored comment had it.
+ */
+export function siteCommentsToStore(fileComment: string | undefined, stored: string, alsoStored = ""): string {
+  const file = String(fileComment ?? "").trim();
+  const kept = String(stored || alsoStored || "");
+  if (!file) return kept;
+  const hadNote = [stored, alsoStored].some((comment) => String(comment || "").includes(OMITTED_SURVEYED_NOTE));
+  return hadNote ? appendSurveyedNote(file) : file;
 }
 
 /**
@@ -417,7 +587,7 @@ export function planStocklistRefresh(
       }
       continue;
     }
-    const address = mapStockAddress(file.raw);
+    const address = addressForFileKind(file.kind, file.raw);
     const sameKind = rows.filter((r) => r.kind === file.kind);
     const otherKind = rows.filter((r) => r.kind !== file.kind);
     if (sameKind.length) {
@@ -434,7 +604,7 @@ export function planStocklistRefresh(
 
   for (const [uprn, file] of fileByUprn) {
     if (existingByUprn.has(uprn)) continue;
-    added.push({ uprn, kind: file.kind, address: mapStockAddress(file.raw) });
+    added.push({ uprn, kind: file.kind, address: addressForFileKind(file.kind, file.raw) });
   }
 
   void alsoOmit;
@@ -457,6 +627,7 @@ const IMPORT_EXISTING_SELECT = {
   assetStatus: true,
   siteComments: true,
   external: true,
+  epcRequired: true,
   omitAsset: true,
   stockMissing: true,
   visit1: true,
@@ -539,19 +710,27 @@ export async function applyStocklistRefresh(opts: {
     for (const m of plan.matched) {
       const row = byKindUprn.get(`${m.kind}\0${m.uprn}`);
       if (!row) continue;
+      const fields = mergedStockFields({
+        kind: m.kind,
+        external: row.external,
+        storedStatus: row.assetStatus,
+        storedEpcRequired: row.epcRequired,
+        address: m.address,
+        useKindDefault: false,
+        surveyDate: row.surveyDate,
+        surveyedBy: row.surveyedBy,
+        visit1: row.visit1,
+        visit2: row.visit2,
+        visit3: row.visit3,
+      });
       matchedWrites.push({
         id: row.id,
         data: {
           stockMissing: false,
           ...m.address,
-          siteComments: row.siteComments,
           external: row.external,
-          visit1: row.visit1,
-          visit2: row.visit2,
-          visit3: row.visit3,
-          surveyDate: row.surveyDate,
-          surveyedBy: row.surveyedBy,
-          assetStatus: String(row.external).toLowerCase() === "yes" ? "Ext-Only" : row.assetStatus,
+          siteComments: siteCommentsToStore(m.address.siteComments, row.siteComments),
+          ...fields,
         },
       });
     }
@@ -562,45 +741,57 @@ export async function applyStocklistRefresh(opts: {
       if (!row) continue;
       const conflict = byKindUprn.get(`${r.to}\0${r.uprn}`);
       if (conflict && conflict.id !== row.id) {
-        const takeVisits = !conflict.visit1 && row.visit1;
+        const takeVisits = !conflict.visit1 && !!row.visit1;
+        const kept = takeVisits ? row : conflict;
+        const external = conflict.external || row.external;
+        const fields = mergedStockFields({
+          kind: r.to,
+          external,
+          storedStatus: kept.assetStatus,
+          storedEpcRequired: conflict.epcRequired,
+          address: r.address,
+          useKindDefault: true,
+          surveyDate: kept.surveyDate,
+          surveyedBy: kept.surveyedBy,
+          visit1: kept.visit1,
+          visit2: kept.visit2,
+          visit3: kept.visit3,
+        });
         await prisma.asset.update({
           where: { id: conflict.id },
           data: {
             stockMissing: false,
             ...r.address,
-            siteComments: conflict.siteComments || row.siteComments,
-            external: conflict.external || row.external,
-            visit1: takeVisits ? row.visit1 : conflict.visit1,
-            visit2: takeVisits ? row.visit2 : conflict.visit2,
-            visit3: takeVisits ? row.visit3 : conflict.visit3,
-            surveyDate: takeVisits ? row.surveyDate : conflict.surveyDate,
-            surveyedBy: takeVisits ? row.surveyedBy : conflict.surveyedBy,
-            assetStatus:
-              String(conflict.external || row.external).toLowerCase() === "yes"
-                ? "Ext-Only"
-                : takeVisits
-                  ? row.assetStatus
-                  : conflict.assetStatus,
+            external,
+            siteComments: siteCommentsToStore(r.address.siteComments, conflict.siteComments, row.siteComments),
+            ...fields,
           },
         });
         await prisma.asset.delete({ where: { id: row.id } });
         byKindUprn.delete(`${r.from}\0${r.uprn}`);
       } else {
+        const fields = mergedStockFields({
+          kind: r.to,
+          external: row.external,
+          storedStatus: row.assetStatus,
+          storedEpcRequired: row.epcRequired,
+          address: r.address,
+          useKindDefault: true,
+          surveyDate: row.surveyDate,
+          surveyedBy: row.surveyedBy,
+          visit1: row.visit1,
+          visit2: row.visit2,
+          visit3: row.visit3,
+        });
         await prisma.asset.update({
           where: { id: row.id },
           data: {
             kind: r.to,
             stockMissing: false,
             ...r.address,
-            surveyType: r.address.surveyType || surveyTypeForKind(r.to),
-            siteComments: row.siteComments,
             external: row.external,
-            visit1: row.visit1,
-            visit2: row.visit2,
-            visit3: row.visit3,
-            surveyDate: row.surveyDate,
-            surveyedBy: row.surveyedBy,
-            assetStatus: String(row.external).toLowerCase() === "yes" ? "Ext-Only" : row.assetStatus,
+            siteComments: siteCommentsToStore(r.address.siteComments, row.siteComments),
+            ...fields,
           },
         });
         byKindUprn.delete(`${r.from}\0${r.uprn}`);
