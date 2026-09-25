@@ -19,6 +19,7 @@ import {
   type SendCommit,
   type SentEmailRecord,
 } from "./hhsrs-send.js";
+import { imapSentFolder } from "./hhsrs-send-transport.js";
 
 const base = {
   hasReporterAccess: true,
@@ -31,6 +32,23 @@ const base = {
   allowDomainsRaw: undefined as string | undefined,
   totalBytes: 0,
 };
+
+describe("HHSRS IMAP sent folder", () => {
+  it("defaults to the top-level Sent mailbox and can be overridden", () => {
+    const previous = process.env.HHSRS_IMAP_SENT_FOLDER;
+    try {
+      delete process.env.HHSRS_IMAP_SENT_FOLDER;
+      assert.equal(imapSentFolder(), "Sent");
+      process.env.HHSRS_IMAP_SENT_FOLDER = "  ";
+      assert.equal(imapSentFolder(), "Sent");
+      process.env.HHSRS_IMAP_SENT_FOLDER = "Archive/Sent";
+      assert.equal(imapSentFolder(), "Archive/Sent");
+    } finally {
+      if (previous === undefined) delete process.env.HHSRS_IMAP_SENT_FOLDER;
+      else process.env.HHSRS_IMAP_SENT_FOLDER = previous;
+    }
+  });
+});
 
 describe("HHSRS send allow-list", () => {
   it("defaults to Savills and names a blocked address", () => {

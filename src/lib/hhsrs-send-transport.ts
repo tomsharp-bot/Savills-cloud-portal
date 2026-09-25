@@ -24,6 +24,12 @@ function imapHost(): string {
   return (process.env.HHSRS_IMAP_HOST || "").trim() || "imap.secureserver.net";
 }
 
+/** Top-level mailbox on the GoDaddy account. Not INBOX.Sent. */
+export function imapSentFolder(): string {
+  const value = (process.env.HHSRS_IMAP_SENT_FOLDER || "").trim();
+  return value || "Sent";
+}
+
 export function mockTransportEnabled(): boolean {
   return process.env.HHSRS_SEND_MOCK === "1" && process.env.NODE_ENV !== "production";
 }
@@ -100,11 +106,7 @@ export async function appendToSentFolder(raw: Buffer): Promise<void> {
   });
   await client.connect();
   try {
-    let mailbox = "Sent";
-    const boxes = await client.list();
-    const sent = boxes.find((box) => box.specialUse === "\\Sent") || boxes.find((box) => /sent/i.test(box.path));
-    if (sent?.path) mailbox = sent.path;
-    const appended = await client.append(mailbox, raw, ["\\Seen"]);
+    const appended = await client.append(imapSentFolder(), raw, ["\\Seen"]);
     if (!appended) throw new Error("IMAP append was refused");
   } finally {
     await client.logout().catch(() => undefined);
