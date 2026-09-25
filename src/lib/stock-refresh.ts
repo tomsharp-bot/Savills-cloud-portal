@@ -1,5 +1,5 @@
 import type { AssetKind, Prisma } from "@prisma/client";
-import { cellVal, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
+import { cellVal, foldAssetStatus, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
 import { dwellingMisrouteWarning, routeStockRow, type StockRouteTarget } from "./stock-route.js";
 import { deriveDwellingSurveyType, epcRequiredFromSurveyType, parseEpcRequired } from "./epc-survey.js";
 import { formatStockDate } from "./dates.js";
@@ -33,6 +33,12 @@ export type AddressPatch = {
   x2?: string;
   x3?: string;
   siteComments?: string;
+  assetStatus?: string;
+  surveyDate?: string;
+  surveyedBy?: string;
+  visit1?: string;
+  visit2?: string;
+  visit3?: string;
 };
 
 export type RefreshAsset = {
@@ -171,15 +177,42 @@ export function surveyTypeForStockWrite(opts: {
   return opts.useKindDefault ? surveyTypeForKind(opts.kind) : undefined;
 }
 
-function stockWriteStatusAndType(opts: {
+/** A filled-in file cell replaces the stored text. A blank cell leaves it alone. */
+export function stockFieldToStore(fileValue: string | undefined, stored: string): string {
+  const file = String(fileValue ?? "").trim();
+  return file || String(stored ?? "");
+}
+
+/**
+ * Status, survey date, surveyed by, and visit dates written for a matched or
+ * reclassified row. File values are already normalised. External = Yes still
+ * forces Ext-Only, and a dwelling's Survey Type follows that status.
+ */
+export function mergedStockFields(opts: {
   kind: AssetKind;
   external: string;
-  assetStatus: string;
+  storedStatus: string;
   storedEpcRequired: boolean;
   address: AddressPatch;
   useKindDefault: boolean;
-}): { assetStatus: string; surveyType?: string } {
-  const assetStatus = assetStatusForStockWrite(opts.external, opts.assetStatus);
+  surveyDate: string;
+  surveyedBy: string;
+  visit1: string;
+  visit2: string;
+  visit3: string;
+}): {
+  assetStatus: string;
+  surveyType?: string;
+  surveyDate: string;
+  surveyedBy: string;
+  visit1: string;
+  visit2: string;
+  visit3: string;
+} {
+  const assetStatus = assetStatusForStockWrite(
+    opts.external,
+    stockFieldToStore(opts.address.assetStatus, opts.storedStatus)
+  );
   const epcRequired = opts.address.epcRequired !== undefined ? opts.address.epcRequired : opts.storedEpcRequired;
   const surveyType = surveyTypeForStockWrite({
     kind: opts.kind,
@@ -188,14 +221,24 @@ function stockWriteStatusAndType(opts: {
     fileSurveyType: opts.address.surveyType,
     useKindDefault: opts.useKindDefault,
   });
-  return surveyType !== undefined ? { assetStatus, surveyType } : { assetStatus };
+  const fields = {
+    assetStatus,
+    surveyDate: stockFieldToStore(opts.address.surveyDate, opts.surveyDate),
+    surveyedBy: stockFieldToStore(opts.address.surveyedBy, opts.surveyedBy),
+    visit1: stockFieldToStore(opts.address.visit1, opts.visit1),
+    visit2: stockFieldToStore(opts.address.visit2, opts.visit2),
+    visit3: stockFieldToStore(opts.address.visit3, opts.visit3),
+  };
+  return surveyType !== undefined ? { ...fields, surveyType } : fields;
 }
 
 export function stockCreateInput(projectId: string, item: RefreshPlanItem): Prisma.AssetCreateManyInput {
   const address = { ...item.address };
   const fileSurveyType = address.surveyType;
+  const fileStatus = address.assetStatus;
   if (item.kind === "dwelling") delete address.surveyType;
-  const assetStatus = "No Visit";
+  delete address.assetStatus;
+  const assetStatus = assetStatusForStockWrite("", fileStatus || "No Visit");
   const surveyType = surveyTypeForStockWrite({
     kind: item.kind,
     assetStatus,
@@ -335,6 +378,28 @@ const EPC_REQ_ALIASES = [STOCK_LABELS.epcRequired, "EPC Req", "EPC Required", "E
 /** Dwellings export header is "Site Comments". More specific names are listed first. */
 const SITE_COMMENT_ALIASES = [STOCK_LABELS.siteComments, "Site Comment", "Comments", "Comment", "Notes"];
 
+/** Dwellings export header is "Asset Status". */
+const ASSET_STATUS_ALIASES = [STOCK_LABELS.assetStatus, "Access Status", "Status"];
+
+/** Dwellings export header is "Survey Date". */
+const SURVEY_DATE_ALIASES = [STOCK_LABELS.surveyDate];
+
+/** Dwellings export header is "Surveyed By". The lowercase "by" is the same column. */
+const SURVEYED_BY_ALIASES = [STOCK_LABELS.surveyedBy, "Surveyed by"];
+
+/** Export headers are "Visit 1 Date", "Visit 2 Date", and "Visit 3 Date". */
+const VISIT_DATE_ALIASES: [string, string, string, string][] = [
+  [STOCK_LABELS.visit1, "Visit 1", "Visit Date 1", "Visit1"],
+  [STOCK_LABELS.visit2, "Visit 2", "Visit Date 2", "Visit2"],
+  [STOCK_LABELS.visit3, "Visit 3", "Visit Date 3", "Visit3"],
+];
+
+function stockDateCell(raw: RawRow, aliases: string[]): string {
+  const value = cellValAliases(raw, aliases);
+  if (value == null || value === "") return "";
+  return formatStockDate(value).trim();
+}
+
 export function mapStockAddress(raw: RawRow): AddressPatch {
   let number = trimmedCell(raw, ["Number"]);
   let block = trimmedCell(raw, ["Block"]);
@@ -384,6 +449,16 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   if (epcRequired !== undefined) patch.epcRequired = epcRequired;
   const siteComments = trimmedCell(raw, SITE_COMMENT_ALIASES);
   if (siteComments) patch.siteComments = siteComments;
+  const assetStatus = foldAssetStatus(cellValAliases(raw, ASSET_STATUS_ALIASES));
+  if (assetStatus) patch.assetStatus = assetStatus;
+  const surveyDate = stockDateCell(raw, SURVEY_DATE_ALIASES);
+  if (surveyDate) patch.surveyDate = surveyDate;
+  const surveyedBy = trimmedCell(raw, SURVEYED_BY_ALIASES);
+  if (surveyedBy) patch.surveyedBy = surveyedBy;
+  const [visit1, visit2, visit3] = VISIT_DATE_ALIASES.map((aliases) => stockDateCell(raw, aliases));
+  if (visit1) patch.visit1 = visit1;
+  if (visit2) patch.visit2 = visit2;
+  if (visit3) patch.visit3 = visit3;
 
   const residentName = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentName);
   const residentNumber = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentNumber);
@@ -635,13 +710,18 @@ export async function applyStocklistRefresh(opts: {
     for (const m of plan.matched) {
       const row = byKindUprn.get(`${m.kind}\0${m.uprn}`);
       if (!row) continue;
-      const typed = stockWriteStatusAndType({
+      const fields = mergedStockFields({
         kind: m.kind,
         external: row.external,
-        assetStatus: row.assetStatus,
+        storedStatus: row.assetStatus,
         storedEpcRequired: row.epcRequired,
         address: m.address,
         useKindDefault: false,
+        surveyDate: row.surveyDate,
+        surveyedBy: row.surveyedBy,
+        visit1: row.visit1,
+        visit2: row.visit2,
+        visit3: row.visit3,
       });
       matchedWrites.push({
         id: row.id,
@@ -649,13 +729,8 @@ export async function applyStocklistRefresh(opts: {
           stockMissing: false,
           ...m.address,
           external: row.external,
-          visit1: row.visit1,
-          visit2: row.visit2,
-          visit3: row.visit3,
-          surveyDate: row.surveyDate,
-          surveyedBy: row.surveyedBy,
           siteComments: siteCommentsToStore(m.address.siteComments, row.siteComments),
-          ...typed,
+          ...fields,
         },
       });
     }
@@ -666,15 +741,21 @@ export async function applyStocklistRefresh(opts: {
       if (!row) continue;
       const conflict = byKindUprn.get(`${r.to}\0${r.uprn}`);
       if (conflict && conflict.id !== row.id) {
-        const takeVisits = !conflict.visit1 && row.visit1;
+        const takeVisits = !conflict.visit1 && !!row.visit1;
+        const kept = takeVisits ? row : conflict;
         const external = conflict.external || row.external;
-        const typed = stockWriteStatusAndType({
+        const fields = mergedStockFields({
           kind: r.to,
           external,
-          assetStatus: takeVisits ? row.assetStatus : conflict.assetStatus,
+          storedStatus: kept.assetStatus,
           storedEpcRequired: conflict.epcRequired,
           address: r.address,
           useKindDefault: true,
+          surveyDate: kept.surveyDate,
+          surveyedBy: kept.surveyedBy,
+          visit1: kept.visit1,
+          visit2: kept.visit2,
+          visit3: kept.visit3,
         });
         await prisma.asset.update({
           where: { id: conflict.id },
@@ -682,25 +763,25 @@ export async function applyStocklistRefresh(opts: {
             stockMissing: false,
             ...r.address,
             external,
-            visit1: takeVisits ? row.visit1 : conflict.visit1,
-            visit2: takeVisits ? row.visit2 : conflict.visit2,
-            visit3: takeVisits ? row.visit3 : conflict.visit3,
-            surveyDate: takeVisits ? row.surveyDate : conflict.surveyDate,
-            surveyedBy: takeVisits ? row.surveyedBy : conflict.surveyedBy,
             siteComments: siteCommentsToStore(r.address.siteComments, conflict.siteComments, row.siteComments),
-            ...typed,
+            ...fields,
           },
         });
         await prisma.asset.delete({ where: { id: row.id } });
         byKindUprn.delete(`${r.from}\0${r.uprn}`);
       } else {
-        const typed = stockWriteStatusAndType({
+        const fields = mergedStockFields({
           kind: r.to,
           external: row.external,
-          assetStatus: row.assetStatus,
+          storedStatus: row.assetStatus,
           storedEpcRequired: row.epcRequired,
           address: r.address,
           useKindDefault: true,
+          surveyDate: row.surveyDate,
+          surveyedBy: row.surveyedBy,
+          visit1: row.visit1,
+          visit2: row.visit2,
+          visit3: row.visit3,
         });
         await prisma.asset.update({
           where: { id: row.id },
@@ -709,13 +790,8 @@ export async function applyStocklistRefresh(opts: {
             stockMissing: false,
             ...r.address,
             external: row.external,
-            visit1: row.visit1,
-            visit2: row.visit2,
-            visit3: row.visit3,
-            surveyDate: row.surveyDate,
-            surveyedBy: row.surveyedBy,
             siteComments: siteCommentsToStore(r.address.siteComments, row.siteComments),
-            ...typed,
+            ...fields,
           },
         });
         byKindUprn.delete(`${r.from}\0${r.uprn}`);

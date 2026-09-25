@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   assetStatusFilterOptions,
+  foldAssetStatus,
   inferStockKind,
   statusFromVisit,
   statusFromVisitLogs,
@@ -93,6 +94,20 @@ describe("Auto-route to Dwellings / Blocks / Garages", () => {
     assert.equal(inferStockKind({ "Asset Type": "Commercial unit", Archetype: "Shop" }), "dwelling");
     assert.equal(inferStockKind({ Archetype: "Block" }), "block");
     assert.equal(inferStockKind({ Archetype: "Low-rise block" }), "block");
+  });
+});
+
+describe("Stocklist Asset Status folding", () => {
+  it("folds known labels onto the seven grid statuses and keeps anything else", () => {
+    assert.equal(foldAssetStatus("Full Surveys"), "Full Survey");
+    assert.equal(foldAssetStatus("full survey"), "Full Survey");
+    assert.equal(foldAssetStatus("External Only"), "Ext-Only");
+    assert.equal(foldAssetStatus("EXT-ONLY"), "Ext-Only");
+    assert.equal(foldAssetStatus("no access"), "No Access");
+    assert.equal(foldAssetStatus("  Appt Made Not Kept  "), "Appt Made Not Kept");
+    assert.equal(foldAssetStatus("On hold"), "On hold");
+    assert.equal(foldAssetStatus("  "), undefined);
+    assert.equal(foldAssetStatus(null), undefined);
   });
 });
 

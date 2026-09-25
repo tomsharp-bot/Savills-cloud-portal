@@ -274,6 +274,24 @@ export function isExtOnlyStatus(status: unknown): boolean {
   return s === "Ext-Only" || s === "External Only";
 }
 
+const ASSET_STATUS_BY_KEY = new Map<string, AssetStatus>(
+  ASSET_STATUSES.map((status) => [status.toLowerCase(), status])
+);
+ASSET_STATUS_BY_KEY.set("full surveys", "Full Survey");
+ASSET_STATUS_BY_KEY.set("external only", "Ext-Only");
+
+/**
+ * Fold a stocklist Asset Status onto one of the seven grid labels.
+ * Matching is case-insensitive. "Full Surveys" becomes Full Survey and
+ * "External Only" becomes Ext-Only. Blank is left unset. Any other
+ * non-blank text is kept as typed, trimmed, the same way the grid keeps it.
+ */
+export function foldAssetStatus(raw: unknown): string | undefined {
+  const text = String(raw ?? "").trim();
+  if (!text) return undefined;
+  return ASSET_STATUS_BY_KEY.get(text.toLowerCase()) ?? text;
+}
+
 export function isCompletedAssetStatus(status: unknown): boolean {
   return isFullSurveyStatus(status) || isExtOnlyStatus(status);
 }
