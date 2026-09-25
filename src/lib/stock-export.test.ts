@@ -82,7 +82,19 @@ describe("Stocklist export", () => {
       { includeEpcRequired: true }
     );
     assert.equal(blank["EPC Req."], "");
-    assert.equal(blank["Survey Type"], "SCS only");
+    assert.equal(blank["Survey Type"], "SCS Only");
+    const external = assetToExportRow(
+      applyEpcSurveyType(asset({ assetStatus: "Ext-Only", epcRequired: true, surveyType: "Condition + EPC" }), false),
+      "dwelling",
+      { includeEpcRequired: true }
+    );
+    assert.equal(external["Survey Type"], "External");
+    const open = assetToExportRow(
+      applyEpcSurveyType(asset({ assetStatus: "No Visit", epcRequired: true, surveyType: "Condition + EPC" }), false),
+      "dwelling",
+      { includeEpcRequired: true }
+    );
+    assert.equal(open["Survey Type"], "");
   });
 
   it("omits Admin-only columns from a surveyor export", () => {

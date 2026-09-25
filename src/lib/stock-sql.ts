@@ -41,17 +41,17 @@ function agencyDisplaySql(): Prisma.Sql {
   return Prisma.sql`COALESCE(${lookup(assetCol("surveyedBy"))}, ${lookup(assetCol("surveyor"))}, '')`;
 }
 
-function surveyTypeDisplaySql(conditionEpc: boolean): Prisma.Sql {
+function surveyTypeDisplaySql(_conditionEpc: boolean): Prisma.Sql {
   const stored = Prisma.sql`btrim(COALESCE(a."surveyType", ''))`;
-  if (!conditionEpc) return stored;
-  // Same rule as applyEpcSurveyType: completed dwellings display SCS + EPC / SCS only.
+  const status = Prisma.sql`btrim(COALESCE(a."assetStatus", ''))`;
+  // Same rule as deriveDwellingSurveyType, on every project. Blocks and garages stay stored.
   return Prisma.sql`CASE
-    WHEN a.kind::text = 'dwelling' AND (
-      btrim(COALESCE(a."assetStatus", '')) IN ('Full Survey', 'Full Surveys')
-      OR lower(btrim(COALESCE(a."assetStatus", ''))) IN ('completed', 'complete')
-    )
-    THEN CASE WHEN a."epcRequired" THEN 'SCS + EPC' ELSE 'SCS only' END
-    ELSE ${stored}
+    WHEN a.kind::text <> 'dwelling' THEN ${stored}
+    WHEN ${status} IN ('Ext-Only', 'External Only') THEN 'External'
+    WHEN ${status} IN ('Full Survey', 'Full Surveys')
+      OR lower(${status}) IN ('completed', 'complete')
+    THEN CASE WHEN a."epcRequired" THEN 'SCS + EPC' ELSE 'SCS Only' END
+    ELSE ''
   END`;
 }
 

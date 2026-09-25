@@ -148,4 +148,15 @@ describe("Condition Only and Condition + EPC completed counts", () => {
     assert.equal(result.conditionOnly, 3);
     assert.equal(result.conditionEpc, 0);
   });
+
+  it("splits completed dwellings by the derived SCS Only and SCS + EPC labels", () => {
+    const result = conditionSurveyCompletion(bothTypes, [
+      group({ assetStatus: "Full Survey", surveyType: "SCS Only", epcRequired: false, count: 2 }),
+      group({ assetStatus: "Full Survey", surveyType: "SCS + EPC", epcRequired: true, count: 3 }),
+      group({ assetStatus: "Ext-Only", surveyType: "External", epcRequired: true, count: 4 }),
+      group({ assetStatus: "No Visit", surveyType: "", epcRequired: true, count: 5 }),
+    ]);
+    assert.equal(result.conditionOnly, 2);
+    assert.equal(result.conditionEpc, 3);
+  });
 });

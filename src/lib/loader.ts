@@ -1,6 +1,7 @@
 import type { AssetKind, Prisma, User } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { statusFromVisitLogs, surveyTypeForKind } from "./asset-status.js";
+import { deriveDwellingSurveyType } from "./epc-survey.js";
 import { routeStockRow } from "./stock-route.js";
 import { cellValAliases } from "./stock-refresh.js";
 import { formatVisitDateDisplay, visitDateSortKey } from "./dates.js";
@@ -91,6 +92,16 @@ function parseCombinedAddress(combined: string): { number: string; street: strin
     street = parts.slice(1, postcode ? -1 : undefined).join(", ") || (parts.length === 2 ? parts[1] : "");
   }
   return { number, street, postcode };
+}
+
+/** Dwellings take a derived Survey Type. Blocks and garages keep the type they already have. */
+export function surveyTypeForLoadedAsset(
+  kind: AssetKind,
+  assetStatus: string,
+  epcRequired: boolean
+): string | undefined {
+  if (kind !== "dwelling") return undefined;
+  return deriveDwellingSurveyType(assetStatus, epcRequired);
 }
 
 export async function applyVisitRows(opts: {
@@ -201,6 +212,7 @@ export async function applyVisitRows(opts: {
     const external = existing?.external ?? "";
     let assetStatus = st.assetStatus;
     if (String(external).toLowerCase() === "yes") assetStatus = "Ext-Only";
+    const derivedSurveyType = surveyTypeForLoadedAsset(kind, assetStatus, existing?.epcRequired ?? false);
 
     const data: Prisma.AssetUncheckedCreateInput = {
       projectId: opts.projectId,
@@ -222,7 +234,7 @@ export async function applyVisitRows(opts: {
       yearBuilt: existing?.yearBuilt || "",
       patch: existing?.patch || "",
       surveyor: initials || existing?.surveyor || "",
-      surveyType: existing?.surveyType || surveyTypeForKind(kind),
+      surveyType: derivedSurveyType !== undefined ? derivedSurveyType : existing?.surveyType || surveyTypeForKind(kind),
       siteComments,
       external,
       omitAsset: existing?.omitAsset ?? false,
@@ -249,6 +261,7 @@ export async function applyVisitRows(opts: {
           postcode: data.postcode,
           archetype: data.archetype,
           surveyor: data.surveyor,
+          ...(derivedSurveyType !== undefined ? { surveyType: derivedSurveyType } : {}),
           siteComments,
           external,
         },

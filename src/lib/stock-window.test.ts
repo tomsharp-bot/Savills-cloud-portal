@@ -193,6 +193,21 @@ describe("Virtual stock window for a 44k dwellings tab", () => {
     assert.ok(!flat.values.includes(44231));
     assert.match(compact, /LIKE/);
     assert.match(compact, /SCS \+ EPC/);
+    assert.match(compact, /SCS Only/);
+    assert.match(compact, /External/);
+    const anyProject = stockIdQuery({
+      projectId: "proj",
+      kind: "dwelling",
+      conditionEpc: false,
+      where,
+      sort: "surveyType",
+      dir: "asc",
+      limit: 10,
+      offset: 0,
+    });
+    const anyCompact = flattenSql(anyProject).text.replace(/\s+/g, " ");
+    assert.match(anyCompact, /SCS Only/);
+    assert.match(anyCompact, /External/);
   });
 
   it("hydrates only the window when the tab has 44,231 dwellings", async () => {

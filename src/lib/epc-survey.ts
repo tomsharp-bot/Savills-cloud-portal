@@ -1,7 +1,8 @@
-import { isFullSurveyStatus } from "./asset-status.js";
+import { isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
 
-/** Tom's labels for a completed dwelling on a Condition + EPC project. */
-export const SURVEY_TYPE_SCS_ONLY = "SCS only";
+/** Derived dwelling Survey Type labels. SCS Only uses a capital O. */
+export const SURVEY_TYPE_EXTERNAL = "External";
+export const SURVEY_TYPE_SCS_ONLY = "SCS Only";
 export const SURVEY_TYPE_SCS_EPC = "SCS + EPC";
 
 /**
@@ -29,6 +30,18 @@ export function epcRequiredFromSurveyType(surveyType: unknown): boolean | undefi
 
 export function surveyTypeForEpcRequired(epcRequired: boolean): string {
   return epcRequired ? SURVEY_TYPE_SCS_EPC : SURVEY_TYPE_SCS_ONLY;
+}
+
+/**
+ * Survey Type shown for a dwelling. A type appears only once the survey is finished.
+ * Ext-Only (including the older "External Only" label) is External.
+ * Full Survey without EPC Req is SCS Only. Full Survey with EPC Req is SCS + EPC.
+ * Every other status is blank. This does not depend on the project survey-type ticks.
+ */
+export function deriveDwellingSurveyType(assetStatus: unknown, epcRequired: unknown): string {
+  if (isExtOnlyStatus(assetStatus)) return SURVEY_TYPE_EXTERNAL;
+  if (isCompletedFullSurveyStatus(assetStatus)) return surveyTypeForEpcRequired(epcRequiredFlag(epcRequired));
+  return "";
 }
 
 const EPC_REQ_TRUE = new Set(["yes", "y", "true", "1", "tick", "ticked", "checked", "✓", "✔", "☑", "✅"]);
@@ -63,14 +76,13 @@ type EpcAsset = {
 };
 
 /**
- * On a Condition + EPC project, a completed dwelling's Survey Type follows EPC Req.
- * Other rows keep the survey type already stored.
+ * Dwellings on every project take their Survey Type from status and EPC Req.
+ * Blocks and garages keep the survey type already stored.
+ * The conditionEpc argument is unused; callers still pass the project flag.
  */
-export function applyEpcSurveyType<T extends EpcAsset>(asset: T, conditionEpc: boolean): T {
-  if (!conditionEpc) return asset;
+export function applyEpcSurveyType<T extends EpcAsset>(asset: T, _conditionEpc?: boolean): T {
   if (asset.kind !== "dwelling") return asset;
-  if (!isCompletedFullSurveyStatus(asset.assetStatus)) return asset;
-  const surveyType = surveyTypeForEpcRequired(epcRequiredFlag(asset.epcRequired));
+  const surveyType = deriveDwellingSurveyType(asset.assetStatus, asset.epcRequired);
   if (asset.surveyType === surveyType) return asset;
   return { ...asset, surveyType };
 }
