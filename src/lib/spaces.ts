@@ -233,9 +233,17 @@ export async function fetchSpacesObject(key: string): Promise<Buffer | null> {
 }
 
 /** PUT object bytes to Spaces. False when Spaces is unset or the upload fails. */
-export async function putSpacesObject(key: string, body: Buffer, contentType?: string): Promise<boolean> {
+export async function putSpacesObject(
+  key: string,
+  body: Buffer,
+  contentType?: string,
+  metadata?: Record<string, string>
+): Promise<boolean> {
   const s3 = spacesClient();
   if (!s3) return false;
+  const meta = metadata
+    ? Object.fromEntries(Object.entries(metadata).filter(([, value]) => String(value || "").length > 0))
+    : undefined;
   try {
     await s3.send(
       new PutObjectCommand({
@@ -244,6 +252,7 @@ export async function putSpacesObject(key: string, body: Buffer, contentType?: s
         Body: body,
         ContentType: contentType || "application/octet-stream",
         ACL: "private",
+        ...(meta && Object.keys(meta).length ? { Metadata: meta } : {}),
       })
     );
     return true;

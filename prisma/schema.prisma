@@ -306,8 +306,8 @@ model ProjectDocument {
   @@index([projectId])
 }
 
-/// Site-raised HHSRS issue (surveyor phone form). Photos on local disk for now.
-/// TODO: Spaces cloud-portal-vault / LON1
+/// Site-raised HHSRS issue (surveyor phone form). Original photos stay on local disk.
+/// When the case is marked actioned, a copy is indexed here and stored in Spaces.
 /// Office review / client-email draft fields are edited in /HHSRSreporter.
 model HhsrsSiteSubmission {
   id                   String    @id @default(cuid())
@@ -351,10 +351,53 @@ model HhsrsSiteSubmission {
   lastEditedBy         String    @default("")
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+  completedPhotos      HhsrsCompletedPhoto[]
+  photoCopy            HhsrsPhotoCopy?
 
   @@index([createdAt])
   @@index([projectId])
   @@index([status])
+}
+
+/// One logged HHSRS photo copied into Spaces under HHSRS - Completed.
+/// The address is kept on the row so Photo Storage can search it. Disk originals are not removed.
+model HhsrsCompletedPhoto {
+  id           String              @id @default(cuid())
+  submissionId String
+  submission   HhsrsSiteSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  projectId    String?
+  /// Project Progress name. No HHSRS or damp/mould wording is added.
+  projectName  String
+  uprn         String
+  fullAddress  String              @default("")
+  postcode     String              @default("")
+  /// Display address, including postcode when that was stored separately.
+  addressLine  String              @default("")
+  /// Short address used in the Spaces folder name.
+  shortAddress String              @default("")
+  fileName     String
+  /// Relative path under the upload directory, e.g. hhsrs-site-form/{id}/{file}
+  sourcePath   String
+  spacesKey    String
+  contentType  String              @default("")
+  copiedAt     DateTime            @default(now())
+
+  @@unique([submissionId, sourcePath])
+  @@index([projectName, uprn])
+  @@index([projectName])
+  @@index([uprn])
+}
+
+/// Latest copy attempt for a logged case. A failed row can be retried without logging again.
+model HhsrsPhotoCopy {
+  submissionId String              @id
+  submission   HhsrsSiteSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  /// copied | failed
+  status       String
+  error        String              @default("")
+  copiedCount  Int                 @default(0)
+  failedCount  Int                 @default(0)
+  updatedAt    DateTime            @updatedAt
 }
 
 /// Office archive flag for HHSRS Reporter → Project overview.

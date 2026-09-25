@@ -745,9 +745,221 @@
 .photo-completion-block h4 { margin: 0 0 6px; color: var(--navy); font-size: 0.95rem; }
 .photo-completion-meta { color: var(--muted); font-size: 0.78rem; font-weight: 400; }
 
+.photos-page .section-gap { margin-top: 28px; }
+.photos-page .empty-state {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+.photos-page .sort-note { font-size: 0.75rem; color: var(--muted); margin: 0 0 12px; }
+.photos-page .photos-landing {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 120px);
+}
+.photos-page .photos-landing .view-main { flex: 1 1 auto; }
+.photos-page .find-bar-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  margin: 0 -18px 14px;
+  padding: 10px 18px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.photos-page .find-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.photos-page .find-bar .find-field { flex: 1 1 280px; min-width: 200px; }
+.photos-page .find-bar label.find-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--navy);
+  margin: 0 0 5px;
+}
+.photos-page .find-bar input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+}
+.photos-page .find-bar input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+.photos-page .find-bar .find-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex: 1 1 220px;
+  margin: 0 0 2px;
+  line-height: 1.35;
+}
+.photos-page .find-bar .find-hint strong { color: var(--navy); }
+.photos-page .find-results-strip {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  margin: 16px -18px 0;
+  padding: 0 18px 12px;
+  background: linear-gradient(180deg, transparent 0%, var(--bg) 12px);
+}
+.photos-page .find-results-strip[hidden] { display: none !important; }
+.photos-page .find-results-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 10px 10px;
+  box-shadow: 0 -8px 28px rgba(11, 31, 51, 0.14);
+  overflow: hidden;
+  max-height: min(42vh, 380px);
+  display: flex;
+  flex-direction: column;
+}
+.photos-page .find-results-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f0f3f6;
+  border-bottom: 1px solid var(--border);
+}
+.photos-page .find-results-head h3 { margin: 0; font-size: 0.95rem; color: var(--navy); }
+.photos-page .find-results-head .meta { font-size: 0.78rem; color: var(--muted); }
+.photos-page .find-results-body { overflow: auto; padding: 10px 12px; }
+.photos-page .find-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.photos-page .find-result-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafbfc;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+.photos-page .find-result-row:hover { border-color: var(--blue); background: var(--blue-light); }
+.photos-page .find-result-row:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.photos-page .find-result-thumb {
+  width: 56px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #eef2f6;
+  display: block;
+}
+.photos-page .find-result-code {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--navy);
+  word-break: break-all;
+  line-height: 1.25;
+}
+.photos-page .find-result-meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+.photos-page .find-result-addr { font-size: 0.78rem; color: var(--text); line-height: 1.3; }
+.photos-page .find-result-loc {
+  justify-self: end;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: #6b5320;
+  border: 1px solid #e0cfa0;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.photos-page .find-result-loc.in-pool {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: #b8dcc8;
+}
+.photos-page .find-results-empty {
+  text-align: center;
+  padding: 18px 12px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.photos-page .copy-retry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gold-soft);
+  border: 1px solid #e0cfa0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  color: #6b5320;
+  font-size: 0.85rem;
+}
+.photos-page .copy-retry p { margin: 0; }
+.photos-page button.photo-card { cursor: pointer; }
+.photos-page .photo-thumb-img {
+  height: 140px;
+  width: 100%;
+  object-fit: cover;
+  display: block;
+  background: #eef2f6;
+}
+.photos-page .modal-close {
+  border: none;
+  background: transparent;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: var(--muted);
+  line-height: 1;
+  padding: 2px 6px;
+}
+.photos-page .modal-close:hover { color: var(--navy); }
+.photos-page .pool-count-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.photos-page .pool-count-bar h3 { margin: 0; font-size: 1rem; color: var(--navy); }
+
+@media (max-width: 720px) {
+  .photos-page .find-result-row { grid-template-columns: 48px 1fr; }
+  .photos-page .find-result-addr { grid-column: 2; }
+  .photos-page .find-result-loc { grid-column: 1 / -1; justify-self: start; }
+}
+
 @media (max-width: 560px) {
   .photos-page .wrap { padding: 12px 12px 28px; }
   .photos-page .grid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .photos-page .photo-grid,
   .photos-page .folder-photos { grid-template-columns: 1fr 1fr; }
+  .photos-page .find-bar-sticky,
+  .photos-page .find-results-strip { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; }
 }

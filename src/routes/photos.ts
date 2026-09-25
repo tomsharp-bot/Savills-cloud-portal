@@ -37,6 +37,18 @@ import {
 } from "../lib/photo-share.js";
 import { seededSurveyTypes } from "../lib/programme.js";
 import { fetchSpacesObject, spacesStatus } from "../lib/spaces.js";
+import {
+  countFailedHhsrsCopies,
+  copyLoggedHhsrsPhotos,
+  hhsrsCompletedProjectPath,
+  listFailedHhsrsCopyIds,
+  listHhsrsCompletedTiles,
+  listHhsrsProperties,
+  listHhsrsPropertyPhotos,
+  readHhsrsCompletedPhoto,
+  searchPhotoStorage,
+  HHSRS_COMPLETED_PREFIX,
+} from "../lib/hhsrs-completed-photos.js";
 
 export const photosRouter = Router();
 photosRouter.use(requireAdmin);
@@ -125,15 +137,27 @@ async function surveyNoteMap(): Promise<Map<string, string>> {
 }
 
 photosRouter.get("/", async (req: Request, res: Response) => {
+  const findQuery = String(req.query.find || "").trim().slice(0, 120);
   const projects = await prisma.project.findMany({
     where: { stage: "current" },
     orderBy: { createdAt: "asc" },
   });
-  const tiles = await listPhotoTiles(projects, await surveyNoteMap());
+  const notes = await surveyNoteMap();
+  const [tiles, hhsrsTiles, failedCopies, found] = await Promise.all([
+    listPhotoTiles(projects, notes),
+    listHhsrsCompletedTiles(projects),
+    countFailedHhsrsCopies(),
+    findQuery ? searchPhotoStorage(findQuery) : Promise.resolve({ query: "", hits: [], truncated: false }),
+  ]);
   res.render("photos", {
     title: "Photo Storage",
     user: req.user,
     tiles,
+    hhsrsTiles,
+    failedCopies,
+    findQuery: found.query || findQuery,
+    findHits: found.hits,
+    findTruncated: found.truncated,
     spacesHint: spacesHint(),
     spacesConfigured: spacesStatus().configured,
     view: "current",
@@ -554,4 +578,84 @@ photosRouter.get("/projects/:id/folders/:folderId/download", async (req: Request
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.send(zip);
+});
+
+/** Tests set this to stub Spaces reads for HHSRS completed photos. */
+export const HHSRS_PHOTO_READER = "hhsrsPhotoReader";
+
+function hhsrsObjectReader(req: Request): (key: string) => Promise<Buffer | null> {
+  const custom = req.app.get(HHSRS_PHOTO_READER);
+  if (typeof custom === "function") return custom as (key: string) => Promise<Buffer | null>;
+  return fetchSpacesObject;
+}
+
+photosRouter.get("/hhsrs-photo/:photoId", async (req: Request, res: Response) => {
+  const row = await readHhsrsCompletedPhoto(req.params.photoId);
+  if (!row) {
+    res.status(404).type("text/plain; charset=utf-8").send("Photo not found.");
+    return;
+  }
+  const body = await hhsrsObjectReader(req)(row.spacesKey);
+  if (!body) {
+    res.status(404).type("text/plain; charset=utf-8").send("Photo not found in storage.");
+    return;
+  }
+  const contentType = row.contentType || "application/octet-stream";
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Length", String(body.length));
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  res.setHeader("Cache-Control", "private, no-cache");
+  res.setHeader("Content-Disposition", inlineDisposition(row.fileName));
+  res.status(200).send(body);
+});
+
+photosRouter.post("/hhsrs/retry-failed", async (req: Request, res: Response) => {
+  const ids = (await listFailedHhsrsCopyIds()).slice(0, 25);
+  for (const id of ids) {
+    await copyLoggedHhsrsPhotos(id);
+  }
+  res.redirect("/photos#section-hhsrs");
+});
+
+photosRouter.get("/hhsrs/:projectName/:uprn", async (req: Request, res: Response) => {
+  const projectName = req.params.projectName;
+  const uprn = req.params.uprn;
+  const current = await prisma.project.findMany({
+    where: { stage: "current" },
+    orderBy: { name: "asc" },
+  });
+  const tiles = await listHhsrsCompletedTiles(current);
+  const tile = tiles.find((item) => item.projectName === projectName);
+  const property = await listHhsrsPropertyPhotos(projectName, uprn);
+  res.render("photos-hhsrs-property", {
+    title: `${uprn} — ${projectName} — Photos`,
+    user: req.user,
+    projectName,
+    leadFirst: tile?.leadFirst || "—",
+    uprn,
+    address: property.address,
+    photos: property.photos,
+    projectHref: hhsrsCompletedProjectPath(projectName),
+  });
+});
+
+photosRouter.get("/hhsrs/:projectName", async (req: Request, res: Response) => {
+  const projectName = req.params.projectName;
+  const current = await prisma.project.findMany({
+    where: { stage: "current" },
+    orderBy: { name: "asc" },
+  });
+  const tiles = await listHhsrsCompletedTiles(current);
+  const tile = tiles.find((item) => item.projectName === projectName);
+  const properties = await listHhsrsProperties(projectName);
+  res.render("photos-hhsrs-project", {
+    title: `${projectName} — HHSRS - Completed`,
+    user: req.user,
+    projectName,
+    leadFirst: tile?.leadFirst || "—",
+    accent: tile?.accent || "",
+    properties,
+    sectionLabel: HHSRS_COMPLETED_PREFIX,
+  });
 });

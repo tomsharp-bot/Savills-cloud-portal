@@ -11,11 +11,23 @@
 <div id="screen-app" class="photos-page">
   <%- include("partials/topbar") %>
   <%- include("partials/admin-hub", { active: "photos" }) %>
-  <main class="wrap">
+  <main class="wrap photos-landing">
+    <div class="find-bar-sticky">
+      <form class="find-bar" role="search" method="get" action="<%= baseUrl('/photos') %>" aria-label="Find photo by UPRN or address">
+        <div class="find-field">
+          <label class="find-label" for="findAnywhere">Find by UPRN or address</label>
+          <input type="search" id="findAnywhere" name="find" value="<%= findQuery %>" placeholder="e.g. 12 High Street or a UPRN" autocomplete="off" />
+        </div>
+        <p class="find-hint">Searches <strong>Photos Pool</strong>, <strong>Photo Folders</strong>, and <strong>HHSRS - Completed</strong>. Matches appear in the strip at the <strong>bottom of the screen</strong> (numerical UPRN order).</p>
+        <button type="submit" class="btn btn-primary">Find</button>
+      </form>
+    </div>
+
+    <div class="view-main">
     <div class="head">
       <div>
         <h1>Photo Storage</h1>
-        <p class="intro">Open a <strong>current project</strong> to browse its Photos Pool and Photo Folders. Archived programmes are kept separate.</p>
+        <p class="intro">Current portal projects sit above. <strong>HHSRS - Completed</strong> projects from Project Progress are listed in the same tile layout underneath — open one for its properties, in numerical UPRN order. Archived programmes stay under Archived Projects.</p>
       </div>
       <div>
         <a class="btn btn-gold" href="<%= baseUrl('/photos/archived') %>">Archived Projects →</a>
@@ -47,8 +59,79 @@
       </div>
     <% } %>
 
+    <div class="section-bar section-gap" id="section-hhsrs">
+      <h2>HHSRS - Completed</h2>
+      <span class="meta"><%= hhsrsTiles.length %> projects</span>
+    </div>
+    <% if (failedCopies) { %>
+      <form class="copy-retry" method="post" action="<%= baseUrl('/photos/hhsrs/retry-failed') %>">
+        <p>Some HHSRS photos did not reach storage. The cases are still on the Main Log.</p>
+        <button type="submit" class="btn btn-sm">Retry failed copies</button>
+      </form>
+    <% } %>
+    <% if (!hhsrsTiles.length) { %>
+      <p class="hint-muted">No completed HHSRS photos yet. Photos are copied here when a case is marked as actioned and moves to the Main Log.</p>
+    <% } else { %>
+      <div class="grid" role="list">
+        <% hhsrsTiles.forEach(function (t) { %>
+          <a class="tile" role="listitem" href="<%= baseUrl('/photos/hhsrs/' + encodeURIComponent(t.projectName)) %>" aria-label="Open photos for <%= t.projectName %>">
+            <div class="tile-accent <%= t.accent %>"></div>
+            <div class="tile-body">
+              <div class="tile-name"><%= t.projectName %></div>
+              <div class="tile-lead">Lead: <%= t.leadFirst %></div>
+              <div class="tile-survey">From Project Progress</div>
+              <div class="tile-counts">
+                <span class="pill">Properties: <%= t.propertyCount %></span>
+                <span class="pill">Photos: <%= t.photoCount %></span>
+              </div>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+
     <p class="footer-note"><%= spacesHint %></p>
+    </div>
+
+    <div class="find-results-strip" id="findResultsStrip" <%= findQuery ? "" : "hidden" %>>
+      <div class="find-results-panel" role="region" aria-live="polite" aria-label="Find results">
+        <div class="find-results-head">
+          <h3 id="findResultsTitle"><%= findHits.length ? "Find results (" + findHits.length + ")" : "Find results" %></h3>
+          <span class="meta"><%= findHits.length ? "Numerical UPRN order" : (findQuery ? "No matches" : "") %></span>
+        </div>
+        <div class="find-results-body" id="findResultsBody">
+          <% if (findQuery && !findHits.length) { %>
+            <div class="find-results-empty">No photos match <strong><%= findQuery %></strong> in the Photos Pool, Photo Folders, or HHSRS - Completed.</div>
+          <% } else if (findHits.length) { %>
+            <ul class="find-results-list">
+              <% findHits.forEach(function (hit) {
+                const locLabel = [hit.projectName, hit.location].filter(Boolean).join(" · ");
+                const locClass = hit.kind === "pool" && hit.location === "Photos Pool" ? " in-pool" : "";
+                const sub = ["UPRN " + hit.uprn, hit.address, locLabel].filter(Boolean).join(" · ");
+              %>
+                <li>
+                  <button type="button" class="find-result-row" data-photo-open data-src="<%= baseUrl(hit.imageUrl) %>" data-title="<%= hit.title %>" data-sub="<%= sub %>">
+                    <img class="find-result-thumb" src="<%= hit.thumbUrl.indexOf('data:') === 0 ? hit.thumbUrl : baseUrl(hit.thumbUrl) %>" alt="" />
+                    <span>
+                      <div class="find-result-code"><%= hit.title %></div>
+                      <div class="find-result-meta">UPRN <%= hit.uprn %></div>
+                    </span>
+                    <span class="find-result-addr"><%= hit.address %></span>
+                    <span class="find-result-loc<%= locClass %>" title="<%= locLabel %>"><%= locLabel %></span>
+                  </button>
+                </li>
+              <% }) %>
+            </ul>
+            <% if (findTruncated) { %>
+              <p class="hint-muted" style="margin:8px 0 0">Showing the first <%= findHits.length %> matches.</p>
+            <% } %>
+          <% } %>
+        </div>
+      </div>
+    </div>
   </main>
+  <%- include("partials/photo-lightbox") %>
 </div>
+<script src="<%= baseUrl('/js/hhsrs-completed-photos.js') %>"></script>
 </body>
 </html>

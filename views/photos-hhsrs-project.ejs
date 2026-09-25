@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= projectName %> — HHSRS - Completed — Savills Cloud Portal</title>
+  <%- include("partials/head-css") %>
+  <link rel="stylesheet" href="<%= baseUrl('/css/photos.css') %>" />
+</head>
+<body>
+<div id="screen-app" class="photos-page">
+  <%- include("partials/topbar") %>
+  <%- include("partials/admin-hub", { active: "photos" }) %>
+  <main class="wrap">
+    <div class="breadcrumb-mini">
+      <a href="<%= baseUrl('/photos') %>">Photo Storage</a>
+      · <a href="<%= baseUrl('/photos#section-hhsrs') %>">HHSRS - Completed</a>
+      · <%= projectName %>
+    </div>
+    <div class="project-head">
+      <div>
+        <h2><%= projectName %></h2>
+        <p class="project-lead">Lead: <strong><%= leadFirst %></strong></p>
+        <p class="intro" style="margin-top:4px">From Project Progress. Properties are listed in numerical UPRN order — open one to see its photos.</p>
+      </div>
+      <div>
+        <a class="btn" href="<%= baseUrl('/photos#section-hhsrs') %>">← Back to Photo Storage</a>
+      </div>
+    </div>
+
+    <div class="section-bar">
+      <h2>Properties</h2>
+      <span class="meta"><%= properties.length %> <%= properties.length === 1 ? "property" : "properties" %></span>
+    </div>
+    <p class="sort-note">Sorted by UPRN (numerical).</p>
+    <% if (!properties.length) { %>
+      <div class="empty-state">No properties copied for this project yet.</div>
+    <% } else { %>
+      <div class="table-wrap">
+        <table class="folders-table" aria-label="Properties">
+          <thead>
+            <tr>
+              <th scope="col">UPRN</th>
+              <th scope="col">Address</th>
+              <th scope="col">Photos</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% properties.forEach(function (row) { %>
+              <tr>
+                <td>
+                  <a href="<%= baseUrl('/photos/hhsrs/' + encodeURIComponent(projectName) + '/' + encodeURIComponent(row.uprn)) %>"><%= row.uprn %></a>
+                </td>
+                <td><%= row.address %></td>
+                <td><%= row.photoCount %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+</div>
+</body>
+</html>

@@ -11,6 +11,7 @@ import {
   isHhsrsRating,
 } from "../lib/hhsrs-categories.js";
 import { safeId, safeStoredName } from "../lib/hhsrs-site-form.js";
+import { copyLoggedHhsrsPhotos } from "../lib/hhsrs-completed-photos.js";
 import { ONWARD_TOPICS } from "../lib/hhsrs-reporter-draft.js";
 import {
   HHSRS_ACTIONED_STATUSES,
@@ -775,8 +776,30 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
     });
     return;
   }
+  // The case is already on the Main Log. Copy must not undo that, and a slow or
+  // failed Spaces upload must not hold the redirect open.
+  await archiveLoggedPhotos(req, row.id);
   flashOk(req, "Marked as actioned. Case moved to Main Log. Attach photos in Outlook before you send.");
   res.redirect(`${HHSRS_REPORTER_PATH}/main-log`);
+}
+
+/** Tests replace this with a stub. Production copies into Spaces. */
+export const HHSRS_PHOTO_COPY = "hhsrsPhotoCopy";
+const HHSRS_PHOTO_COPY_WAIT_MS = 20_000;
+
+async function archiveLoggedPhotos(req: Request, submissionId: string): Promise<void> {
+  const custom = req.app.get(HHSRS_PHOTO_COPY);
+  const run =
+    typeof custom === "function"
+      ? (custom as (id: string) => Promise<unknown>)
+      : copyLoggedHhsrsPhotos;
+  const task = Promise.resolve()
+    .then(() => run(submissionId))
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`HHSRS photo copy failed for ${submissionId}: ${message}`);
+    });
+  await Promise.race([task, new Promise<void>((resolve) => setTimeout(resolve, HHSRS_PHOTO_COPY_WAIT_MS))]);
 }
 
 async function handleAbandon(req: Request, res: Response, id: string): Promise<void> {

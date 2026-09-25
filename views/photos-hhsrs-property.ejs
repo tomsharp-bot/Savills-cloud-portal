@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UPRN <%= uprn %> — <%= projectName %> — Savills Cloud Portal</title>
+  <%- include("partials/head-css") %>
+  <link rel="stylesheet" href="<%= baseUrl('/css/photos.css') %>" />
+</head>
+<body>
+<div id="screen-app" class="photos-page">
+  <%- include("partials/topbar") %>
+  <%- include("partials/admin-hub", { active: "photos" }) %>
+  <main class="wrap">
+    <div class="breadcrumb-mini">
+      <a href="<%= baseUrl('/photos') %>">Photo Storage</a>
+      · <a href="<%= baseUrl('/photos#section-hhsrs') %>">HHSRS - Completed</a>
+      · <a href="<%= baseUrl(projectHref) %>"><%= projectName %></a>
+      · UPRN <%= uprn %>
+    </div>
+    <div class="project-head">
+      <div>
+        <h2>UPRN <%= uprn %></h2>
+        <p class="project-lead"><%= address || "Address not recorded" %></p>
+        <p class="intro" style="margin-top:4px"><%= projectName %> · HHSRS - Completed</p>
+      </div>
+      <div>
+        <a class="btn" href="<%= baseUrl(projectHref) %>">← Back to properties</a>
+      </div>
+    </div>
+
+    <div class="pool-count-bar">
+      <h3>Photos (<%= photos.length %>)</h3>
+      <p class="sort-note">Click a photo to view it full size.</p>
+    </div>
+    <% if (!photos.length) { %>
+      <div class="empty-state">No photos for this UPRN.</div>
+    <% } else { %>
+      <div class="photo-grid" role="list">
+        <% photos.forEach(function (photo) {
+          const sub = ["UPRN " + photo.uprn, photo.address, projectName].filter(Boolean).join(" · ");
+        %>
+          <button type="button" class="photo-card" role="listitem" data-photo-open data-src="<%= baseUrl(photo.imageUrl) %>" data-title="<%= photo.fileName %>" data-sub="<%= sub %>" aria-label="<%= photo.fileName %>">
+            <img class="photo-thumb-img" src="<%= baseUrl(photo.imageUrl) %>" alt="" loading="lazy" decoding="async" />
+            <div class="photo-name"><%= photo.fileName %></div>
+            <div class="photo-meta">UPRN <%= photo.uprn %></div>
+          </button>
+        <% }) %>
+      </div>
+    <% } %>
+  </main>
+  <%- include("partials/photo-lightbox") %>
+</div>
+<script src="<%= baseUrl('/js/hhsrs-completed-photos.js') %>"></script>
+</body>
+</html>
