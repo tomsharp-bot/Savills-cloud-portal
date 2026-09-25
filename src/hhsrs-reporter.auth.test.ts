@@ -174,6 +174,11 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(adminPage.body, /Copy link/);
     assert.match(adminPage.body, /Enable desktop alerts/);
     assert.match(adminPage.body, /Desktop alerts are off/);
+    assert.match(adminPage.body, /Send test alert/);
+    assert.match(
+      adminPage.body,
+      /No pop-up\? Turn on notifications for this browser in Windows Settings > System > Notifications, and make sure Do not disturb is off\./
+    );
     assert.match(adminPage.body, /Simulate alerts turned off/);
     assert.doesNotMatch(adminPage.body, /Desktop alerts ready/);
     assert.doesNotMatch(adminPage.body, /id="desktop-alerts-banner"/);

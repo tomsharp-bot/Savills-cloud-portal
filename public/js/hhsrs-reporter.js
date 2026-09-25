@@ -914,6 +914,7 @@
     var label = $("admin-alerts-status-text");
     var badge = $("admin-alerts-badge");
     var adminEnable = $("btn-admin-enable-desktop-alerts");
+    var testAlert = $("btn-admin-send-test-alert");
     var simNote = $("admin-alerts-sim-note");
     var hint = $("admin-alerts-hint");
     if (dot) {
@@ -925,6 +926,15 @@
     if (adminEnable) {
       adminEnable.hidden = on;
       adminEnable.disabled = perm === "unsupported";
+    }
+    if (testAlert) {
+      if (perm === "granted") {
+        testAlert.textContent = "Send test alert";
+        testAlert.disabled = false;
+      } else {
+        testAlert.textContent = "Permission not granted — Enable";
+        testAlert.disabled = perm === "unsupported";
+      }
     }
     if (simNote) simNote.hidden = !on;
     if (hint) {
@@ -976,11 +986,40 @@
     askNotificationPermission();
   }
 
+  /* Client-side only. Same title and options as a real pending alert.
+     Does not create a case or call the server. */
+  function sendTestDesktopAlert() {
+    if (notificationState() !== "granted") return;
+    try {
+      var note = new Notification("New HHSRS hazard", {
+        body: "HHSRS test alert - if you can see this, alerts are working",
+        tag: "hhsrs-test-" + Date.now(),
+        requireInteraction: true,
+      });
+      note.onclick = function () {
+        window.focus();
+        note.close();
+      };
+    } catch (e) {
+      /* the button stays available so they can try again */
+    }
+  }
+
+  function onAdminTestAlertClick() {
+    if (notificationState() !== "granted") {
+      enableDesktopAlerts();
+      return;
+    }
+    sendTestDesktopAlert();
+  }
+
   clearLegacyDesktopAlertsDismiss();
   var enableBtn = $("btn-enable-desktop-alerts");
   if (enableBtn) enableBtn.addEventListener("click", enableDesktopAlerts);
   var adminEnableBtn = $("btn-admin-enable-desktop-alerts");
   if (adminEnableBtn) adminEnableBtn.addEventListener("click", enableDesktopAlerts);
+  var adminTestBtn = $("btn-admin-send-test-alert");
+  if (adminTestBtn) adminTestBtn.addEventListener("click", onAdminTestAlertClick);
   var simOffBtn = $("btn-admin-simulate-alerts-off");
   if (simOffBtn) {
     simOffBtn.addEventListener("click", function () {

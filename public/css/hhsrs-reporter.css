@@ -2011,7 +2011,8 @@ body.hhsrs-reporter {
   font-weight: 650;
   color: var(--navy);
 }
-.admin-alerts-hint {
+.admin-alerts-hint,
+.admin-alerts-test-help {
   margin: 0.55rem 0 0;
   font-size: 0.75rem;
   color: var(--muted);

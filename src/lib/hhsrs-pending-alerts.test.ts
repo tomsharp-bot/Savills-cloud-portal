@@ -270,6 +270,12 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(admin, /id="admin-alerts-status-text"/);
     assert.match(admin, /Desktop alerts are off/);
     assert.match(admin, /id="btn-admin-enable-desktop-alerts"/);
+    assert.match(admin, /id="btn-admin-send-test-alert"/);
+    assert.match(admin, /Send test alert/);
+    assert.match(
+      admin,
+      /No pop-up\? Turn on notifications for this browser in Windows Settings > System > Notifications, and make sure Do not disturb is off\./
+    );
     assert.match(admin, /Simulate alerts turned off/);
     assert.doesNotMatch(admin, /Desktop alerts ready/);
     assert.match(control, /Enable desktop alerts/);
@@ -280,6 +286,12 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(js, /new Notification/);
     assert.match(js, /btn-enable-desktop-alerts/);
     assert.match(js, /btn-admin-simulate-alerts-off/);
+    assert.match(js, /btn-admin-send-test-alert/);
+    assert.match(js, /HHSRS test alert - if you can see this, alerts are working/);
+    assert.match(js, /New HHSRS hazard/);
+    assert.match(js, /Permission not granted — Enable/);
+    assert.match(reporterJs, /hhsrs-test-/);
+    assert.doesNotMatch(reporterJs, /pending-alerts\.json/);
     assert.match(js, /banner\.hidden = on/);
     assert.doesNotMatch(js, /btn-desktop-alerts-not-now/);
     assert.doesNotMatch(js, /is-ready/);
