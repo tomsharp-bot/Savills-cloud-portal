@@ -1,10 +1,13 @@
-import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { formatDocDate } from "../lib/dates.js";
-import { config } from "../config.js";
 import { safeId, safeStoredName } from "../lib/hhsrs-site-form.js";
+import {
+  loadSiteFormPhoto,
+  privateInlineHeaders,
+  sitePhotoStorageFromApp,
+} from "../lib/hhsrs-site-photos.js";
 
 export const hhsrsSubmissionsRouter = Router();
 
@@ -62,8 +65,12 @@ hhsrsSubmissionsRouter.get("/:id/photos/:name", async (req: Request, res: Respon
     res.status(404).send("Photo not found.");
     return;
   }
-  const dest = path.resolve(process.cwd(), config.uploadDir, expected);
-  res.sendFile(dest, (err?: Error) => {
-    if (err && !res.headersSent) res.status(404).send("File missing on disk. TODO: fetch from Spaces cloud-portal-vault.");
-  });
+  const loaded = await loadSiteFormPhoto(expected, sitePhotoStorageFromApp(req.app));
+  if (!loaded) {
+    res.status(404).send("Photo not found.");
+    return;
+  }
+  const headers = privateInlineHeaders(loaded.fileName, loaded.body.length, loaded.contentType);
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+  res.status(200).send(loaded.body);
 });

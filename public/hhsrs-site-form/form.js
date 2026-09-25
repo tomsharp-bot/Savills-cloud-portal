@@ -619,7 +619,7 @@
             return;
           }
           chosen.push(result.file);
-          if (result.heic) notes.push((result.file.name || "photo") + ": HEIC kept as-is (some phones).");
+          if (result.heic) notes.push((result.file.name || "photo") + ": HEIC will be saved as JPEG.");
           else if (result.shrunk) notes.push((result.file.name || "photo") + ": " + fmtMb(result.from) + " → " + fmtMb(result.to));
           else notes.push((result.file.name || "photo") + ": " + fmtMb(result.to) + " (already small enough)");
         });

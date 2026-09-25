@@ -2,18 +2,22 @@
  * Loads a case's site-form photos and sends one email inside a row lock.
  * Person-initiated only. Called from the Review send route.
  */
-import fs from "node:fs/promises";
-import path from "node:path";
 import type { HhsrsSiteSubmission } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { photoNames } from "./hhsrs-reporter.js";
-import { safeId, safeStoredName, submissionDir } from "./hhsrs-site-form.js";
+import {
+  readSiteFormPhotoBytes,
+  siteFormPhotoKey,
+  siteFormPhotoSize,
+  type SitePhotoStorage,
+} from "./hhsrs-site-photos.js";
 import {
   PortalSendError,
   checkAttachments,
   deliverPortalEmail,
   isTickChecked,
   smtpPasswordSet,
+  type OutboundAttachment,
   type SendCommit,
   type SentEmailRecord,
 } from "./hhsrs-send.js";
@@ -44,39 +48,47 @@ export function postedValues(value: unknown): string[] {
   return [String(value)];
 }
 
-function photoAbsPath(submissionId: string, filename: string): string | null {
+function photoKey(submissionId: string, filename: string): string | null {
   try {
-    const id = safeId(submissionId);
-    const stored = safeStoredName(filename);
-    const dir = path.resolve(submissionDir(id));
-    const dest = path.resolve(dir, stored);
-    if (!dest.startsWith(dir + path.sep)) return null;
-    return dest;
+    return siteFormPhotoKey(submissionId, filename);
   } catch {
     return null;
   }
 }
 
-export async function photoByteSize(submissionId: string, filename: string): Promise<number | null> {
-  const dest = photoAbsPath(submissionId, filename);
-  if (!dest) return null;
-  try {
-    const stat = await fs.stat(dest);
-    if (!stat.isFile()) return null;
-    return stat.size;
-  } catch {
-    return null;
-  }
+export async function photoByteSize(
+  submissionId: string,
+  filename: string,
+  storage?: SitePhotoStorage
+): Promise<number | null> {
+  const key = photoKey(submissionId, filename);
+  if (!key) return null;
+  return siteFormPhotoSize(key, storage);
 }
 
-async function readPhoto(submissionId: string, filename: string): Promise<Buffer | null> {
-  const dest = photoAbsPath(submissionId, filename);
-  if (!dest) return null;
-  try {
-    return await fs.readFile(dest);
-  } catch {
-    return null;
+/** Bytes for one case photo. Local cache first, then the private Spaces object. */
+export async function readCasePhoto(
+  submissionId: string,
+  filename: string,
+  storage?: SitePhotoStorage
+): Promise<Buffer | null> {
+  const key = photoKey(submissionId, filename);
+  if (!key) return null;
+  return readSiteFormPhotoBytes(key, storage);
+}
+
+export async function buildCasePhotoAttachments(
+  submissionId: string,
+  names: readonly string[],
+  storage?: SitePhotoStorage
+): Promise<{ ok: true; attachments: OutboundAttachment[] } | { ok: false; error: string }> {
+  const attachments: OutboundAttachment[] = [];
+  for (const name of names) {
+    const content = await readCasePhoto(submissionId, name, storage);
+    if (!content) return { ok: false, error: "A photo is missing. Not sent." };
+    attachments.push({ filename: name, content, contentType: contentTypeFor(name) });
   }
+  return { ok: true, attachments };
 }
 
 function toRecord(row: {
@@ -127,22 +139,20 @@ export async function sendCaseEmail(args: {
   sentBy: string;
   hasReporterAccess: boolean;
   body: Record<string, unknown>;
+  storage?: SitePhotoStorage;
 }): Promise<{ ok: true; warning: string } | { ok: false; error: string }> {
   const known = casePhotoFileNames(args.row.photoPaths);
   const requested = postedValues(args.body.photo);
   const sizes = new Map<string, number | null>();
   for (const name of known) {
-    sizes.set(name, await photoByteSize(args.row.id, name));
+    sizes.set(name, await photoByteSize(args.row.id, name, args.storage));
   }
   const picked = checkAttachments(known, requested, (name) => sizes.get(name) ?? null);
   if (!picked.ok) return picked;
 
-  const attachments = [];
-  for (const name of picked.names) {
-    const content = await readPhoto(args.row.id, name);
-    if (!content) return { ok: false, error: "A photo is missing. Not sent." };
-    attachments.push({ filename: name, content, contentType: contentTypeFor(name) });
-  }
+  const built = await buildCasePhotoAttachments(args.row.id, picked.names, args.storage);
+  if (!built.ok) return built;
+  const attachments = built.attachments;
 
   const submissionId = args.row.id;
   return deliverPortalEmail(
