@@ -224,6 +224,103 @@ describe("Sample Analysis metrics", () => {
     assert.equal(fromStock.surveyors.find((row) => row.initials === "AS")?.blocksDone, 1);
     assert.equal(fromStock.surveyorTotals?.blocksDone, 1);
   });
+
+  it("counts MTVH completion wording and leaves access attempts out of Full Survey", () => {
+    const analysis = buildSampleAnalysis({
+      projectTargetValue: 100,
+      projectTargetUnit: "percent",
+      assets: [
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Completed" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Access Attempted" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "No Visit Recorded" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Resident refused access" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Ext-Only" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "No Visit" }),
+        asset({ kind: "dwelling", patch: "", assetStatus: "Completed" }),
+      ],
+    });
+    const patch = analysis.patches[0];
+    assert.equal(patch.dwellings.fullDone, 1);
+    assert.equal(patch.dwellings.extDone, 1);
+    assert.equal(patch.dwellings.visitedYes, 3);
+    assert.equal(analysis.overview.dwellings.completed, 1);
+    assert.equal(analysis.overview.dwellings.extDone, 1);
+    assert.equal(analysis.overview.dwellings.pctProjectDone, formatSamplePercent(1, 6));
+    assert.equal(analysis.overview.dwellings.accessRate, formatSamplePercent(1, 3));
+  });
+
+  it("counts Surveyed By before Surveyor, and keeps an unmatched Surveyed By value", () => {
+    const known = [
+      { id: "1", name: "Peter May", initials: "PM" },
+      { id: "2", name: "Alex Surveyor", initials: "AS" },
+    ];
+    const analysis = buildSampleAnalysis({
+      projectTargetValue: 100,
+      projectTargetUnit: "percent",
+      allocatedSurveyors: known,
+      knownSurveyors: known,
+      assets: [
+        asset({
+          kind: "dwelling",
+          patch: "Patch 8",
+          assetStatus: "Full Survey Completed",
+          surveyedBy: "pm",
+          surveyor: "AS",
+        }),
+        asset({
+          kind: "dwelling",
+          patch: "Patch 8",
+          assetStatus: "Ext Only",
+          surveyedBy: "  ",
+          surveyor: "AS",
+        }),
+        asset({
+          kind: "dwelling",
+          patch: "Patch 8",
+          assetStatus: "Survey Complete",
+          surveyedBy: "ZZ",
+          surveyor: "PM",
+        }),
+        asset({
+          kind: "dwelling",
+          patch: "Patch 8",
+          assetStatus: "No Visit",
+          surveyor: "ZZ",
+        }),
+        asset({
+          kind: "block",
+          patch: "Patch 8",
+          assetStatus: "completed",
+          surveyedBy: "zz",
+          surveyor: "PM",
+        }),
+      ],
+    });
+    const patch = analysis.patches[0];
+    assert.equal(patch.patch, "Patch 8");
+    assert.equal(patch.dwellings.fullDone, 2);
+    assert.equal(patch.dwellings.extDone, 1);
+    assert.equal(patch.blocks.done, 1);
+    assert.equal(analysis.overview.dwellings.completed, 2);
+    assert.equal(analysis.overview.dwellings.extDone, 1);
+    assert.equal(analysis.overview.dwellings.pctProjectDone, formatSamplePercent(2, 4));
+    assert.equal(analysis.overview.dwellings.accessRate, formatSamplePercent(2, 2));
+    const peter = analysis.surveyors.find((row) => row.initials === "PM");
+    const alex = analysis.surveyors.find((row) => row.initials === "AS");
+    const zz = analysis.surveyors.find((row) => row.initials === "ZZ");
+    assert.equal(peter?.dwellingsDone, 1);
+    assert.equal(alex?.dwellingsDone, 0);
+    assert.equal(alex?.extDone, 1);
+    assert.equal(zz?.dwellingsDone, 1);
+    assert.equal(zz?.blocksDone, 1);
+    assert.equal(zz?.name, "ZZ");
+    assert.deepEqual(
+      analysis.surveyors.map((row) => row.initials),
+      ["AS", "PM", "ZZ"]
+    );
+    const route = readFileSync(join(process.cwd(), "src/routes/projects.ts"), "utf8");
+    assert.match(route, /surveyedBy:\s*true/);
+  });
 });
 
 describe("Sample Analysis UI wiring", () => {

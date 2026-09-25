@@ -121,7 +121,7 @@ const canEdit = !!sample.canEdit;
   <div class="sa-lower">
     <div class="sa-panel">
       <h3>Surveyor Breakdown</h3>
-      <p class="sa-note"><%= sample.usedProjectPersonnel ? "People allocated to this project." : "No one is allocated on Personnel yet, so this lists surveyors already on the stock." %></p>
+      <p class="sa-note">Counted from Surveyed By, or from Surveyor when Surveyed By is blank. <%= sample.usedProjectPersonnel ? "People allocated to this project are listed, and a Surveyed By value that matches none of them is shown on its own row." : "No one is allocated on Personnel yet, so this lists whoever is already on the stock." %></p>
       <% if (!sample.surveyors.length) { %>
         <p class="empty">No surveyors to show yet.</p>
       <% } else { %>

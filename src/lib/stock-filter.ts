@@ -7,6 +7,13 @@ export type StockFilterRow = Record<string, unknown>;
 /** Select value for an empty cell. A blank option value would mean "All". */
 export const BLANK_FILTER = "__blank__";
 
+/**
+ * Select value for every cell that has text.
+ * Distinct from All, which clears the filter.
+ * An empty string and whitespace-only text are blank, the same as NULL.
+ */
+export const NONBLANK_FILTER = "__nonblank__";
+
 /** Named-field lookup so Asset Status never falls through to Survey Type or Site Comments. */
 export function stockFilterCellText(row: StockFilterRow, column: string): string {
   if (column === "omitAsset") return row.omitAsset ? "omitted" : "included";
@@ -29,8 +36,10 @@ export function stockRowMatchesFilters(
     if (!q) continue;
     const text = stockFilterCellText(row, key).toLowerCase();
     const exact = selectCols.has(key) || key === "omitAsset";
-    if (exact && q === BLANK_FILTER) {
+    if (q === BLANK_FILTER) {
       if (text !== "") return false;
+    } else if (q === NONBLANK_FILTER) {
+      if (text === "") return false;
     } else if (exact) {
       if (text !== q) return false;
     } else if (!text.includes(q)) {

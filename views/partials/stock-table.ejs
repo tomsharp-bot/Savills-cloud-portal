@@ -59,17 +59,27 @@
             <% } else if (c === "epcRequired") { %>
               <select data-filter="epcRequired" class="<%= filterClass(current) %>">
                 <option value="">All</option>
+                <option value="__nonblank__" <%= current === "__nonblank__" ? "selected" : "" %>>(Non-blanks)</option>
                 <option value="YES" <%= current === "YES" ? "selected" : "" %>>YES</option>
                 <option value="__blank__" <%= current === "__blank__" ? "selected" : "" %>>(blank)</option>
               </select>
             <% } else if (selectCols.has(c) && Array.isArray(options[c])) { %>
               <select data-filter="<%= c %>" class="<%= filterClass(current) %>">
                 <option value="">All</option>
+                <option value="__nonblank__" <%= current === "__nonblank__" ? "selected" : "" %>>(Non-blanks)</option>
                 <% const vals = options[c] || (c === "assetStatus" && typeof assetStatusOptions !== "undefined" ? assetStatusOptions : []); %>
                 <% vals.forEach(v => { const shown = String(v ?? "").trim(); const value = shown ? shown : "__blank__"; %>
                   <option value="<%= value %>" <%= current === value ? "selected" : "" %>><%= shown || "(blank)" %></option>
                 <% }) %>
               </select>
+            <% } else if (selectCols.has(c)) { %>
+              <% const presence = current === "__nonblank__" || current === "__blank__"; %>
+              <select data-filter-presence="<%= c %>" class="<%= presence ? "filter-active" : "" %>">
+                <option value="">All</option>
+                <option value="__nonblank__" <%= current === "__nonblank__" ? "selected" : "" %>>(Non-blanks)</option>
+                <option value="__blank__" <%= current === "__blank__" ? "selected" : "" %>>(blank)</option>
+              </select>
+              <input type="text" data-filter="<%= c %>" class="<%= !presence && current ? "filter-active" : "" %>" value="<%= presence ? "" : current %>" placeholder="Filter" />
             <% } else { %>
               <input type="text" data-filter="<%= c %>" class="<%= filterClass(current) %>" value="<%= current %>" placeholder="Filter" />
             <% } %>

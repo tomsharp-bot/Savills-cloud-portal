@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
+import { ASSET_STATUS_SYNONYMS, type AssetStatus } from "./asset-status.js";
 import { STOCK_DATE_COLS, STOCK_SELECT_COLS } from "./stock-columns.js";
-import { BLANK_FILTER } from "./stock-filter.js";
+import { BLANK_FILTER, NONBLANK_FILTER } from "./stock-filter.js";
 import { STOCK_SELECT_OPTION_CAP } from "./stock-page.js";
 
 const IDENT = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -41,16 +42,40 @@ function agencyDisplaySql(): Prisma.Sql {
   return Prisma.sql`COALESCE(${lookup(assetCol("surveyedBy"))}, ${lookup(assetCol("surveyor"))}, '')`;
 }
 
+function statusKeys(status: AssetStatus): string[] {
+  return Object.entries(ASSET_STATUS_SYNONYMS)
+    .filter(([, label]) => label === status)
+    .map(([key]) => key);
+}
+
+/** Same folds as assetStatusKey: case, periods, apostrophes, hyphens, and extra spaces. */
+function normalizedAssetStatusKey(column: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`lower(btrim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(btrim(COALESCE(${column}::text, '')), '\\.', '', 'g'), '''', '', 'g'), '[-_]+', ' ', 'g'), '[[:space:]]+', ' ', 'g')))`;
+}
+
+function keyIn(keyExpr: Prisma.Sql, keys: string[]): Prisma.Sql {
+  return Prisma.sql`${keyExpr} IN (${Prisma.join(keys.map((key) => Prisma.sql`${key}`))})`;
+}
+
+function extOnlyStatusSql(keyExpr: Prisma.Sql): Prisma.Sql {
+  return keyIn(keyExpr, statusKeys("Ext-Only"));
+}
+
+function fullSurveyStatusSql(keyExpr: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`(
+    ${keyIn(keyExpr, statusKeys("Full Survey"))}
+    OR ${keyExpr} LIKE 'successful%'
+  )`;
+}
+
 function surveyTypeDisplaySql(_conditionEpc: boolean): Prisma.Sql {
   const stored = Prisma.sql`btrim(COALESCE(a."surveyType", ''))`;
-  const status = Prisma.sql`btrim(COALESCE(a."assetStatus", ''))`;
+  const keyExpr = normalizedAssetStatusKey(Prisma.sql`a."assetStatus"`);
   // Same rule as deriveDwellingSurveyType, on every project. Blocks and garages stay stored.
   return Prisma.sql`CASE
     WHEN a.kind::text <> 'dwelling' THEN ${stored}
-    WHEN ${status} IN ('Ext-Only', 'External Only') THEN 'External'
-    WHEN ${status} IN ('Full Survey', 'Full Surveys')
-      OR lower(${status}) IN ('completed', 'complete')
-    THEN CASE WHEN a."epcRequired" THEN 'SCS + EPC' ELSE 'SCS Only' END
+    WHEN ${extOnlyStatusSql(keyExpr)} THEN 'External'
+    WHEN ${fullSurveyStatusSql(keyExpr)} THEN CASE WHEN a."epcRequired" THEN 'SCS + EPC' ELSE 'SCS Only' END
     ELSE ''
   END`;
 }
@@ -97,12 +122,13 @@ function filterPredicate(column: string, q: string, exact: boolean, conditionEpc
     return Prisma.sql`FALSE`;
   }
   if (column === "epcRequired") {
-    if (q === "yes") return Prisma.sql`a."epcRequired" = TRUE`;
+    if (q === "yes" || q === NONBLANK_FILTER) return Prisma.sql`a."epcRequired" = TRUE`;
     if (q === BLANK_FILTER) return Prisma.sql`a."epcRequired" = FALSE`;
     return Prisma.sql`FALSE`;
   }
   const expr = stockDisplaySql(column, conditionEpc);
-  if (exact && q === BLANK_FILTER) return Prisma.sql`btrim(COALESCE(${expr}, '')) = ''`;
+  if (q === BLANK_FILTER) return Prisma.sql`btrim(COALESCE(${expr}, '')) = ''`;
+  if (q === NONBLANK_FILTER) return Prisma.sql`btrim(COALESCE(${expr}, '')) <> ''`;
   if (exact) return Prisma.sql`lower(btrim(COALESCE(${expr}, ''))) = ${q}`;
   const pattern = `%${escapeLike(q)}%`;
   return Prisma.sql`lower(btrim(COALESCE(${expr}, ''))) LIKE ${pattern} ESCAPE ${"\\"}`;

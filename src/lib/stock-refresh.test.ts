@@ -643,6 +643,13 @@ describe("Asset Status, survey date, surveyed by, and visit dates", () => {
   it("folds status from the file and keeps an unrecognised label", () => {
     assert.equal(mapStockAddress({ "Asset Status": "Full Surveys" }).assetStatus, "Full Survey");
     assert.equal(mapStockAddress({ "Access Status": "external only" }).assetStatus, "Ext-Only");
+    assert.equal(mapStockAddress({ "Asset Status": "Full Survey Completed" }).assetStatus, "Full Survey");
+    assert.equal(mapStockAddress({ "Asset Status": "Survey Complete" }).assetStatus, "Full Survey");
+    assert.equal(mapStockAddress({ Status: "Completed" }).assetStatus, "Full Survey");
+    assert.equal(mapStockAddress({ "Asset Status": "Access Attempted" }).assetStatus, "No Access");
+    assert.equal(mapStockAddress({ "Asset Status": "No Visit Recorded" }).assetStatus, "No Visit");
+    assert.equal(mapStockAddress({ "Asset Status": "Resident refused access" }).assetStatus, "Access Refused");
+    assert.equal(mapStockAddress({ "Access Status": "Ext Only" }).assetStatus, "Ext-Only");
     assert.equal(mapStockAddress({ Status: "NO ACCESS" }).assetStatus, "No Access");
     assert.equal(mapStockAddress({ "Asset Status": "  On hold  " }).assetStatus, "On hold");
     assert.equal(mapStockAddress({ "Asset Status": "   " }).assetStatus, undefined);

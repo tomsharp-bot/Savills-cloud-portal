@@ -25,6 +25,11 @@ describe("EPC Req. survey type", () => {
     assert.equal(deriveDwellingSurveyType("Full Survey", true), "SCS + EPC");
     assert.equal(deriveDwellingSurveyType("Full Surveys", true), "SCS + EPC");
     assert.equal(deriveDwellingSurveyType("Completed", false), "SCS Only");
+    assert.equal(deriveDwellingSurveyType("Survey Complete", true), "SCS + EPC");
+    assert.equal(deriveDwellingSurveyType("Full Survey Completed", false), "SCS Only");
+    assert.equal(deriveDwellingSurveyType("Access Attempted", true), "");
+    assert.equal(deriveDwellingSurveyType("No Visit Recorded", true), "");
+    assert.equal(deriveDwellingSurveyType("Resident refused access", false), "");
     for (const status of ["No Visit", "No Access", "Appt Made Not Kept", "Access Refused", "Void", "", "   "]) {
       assert.equal(deriveDwellingSurveyType(status, true), "", status);
     }
