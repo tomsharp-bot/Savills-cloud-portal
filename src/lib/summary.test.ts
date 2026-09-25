@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Asset, Project } from "@prisma/client";
+import { fullSurveysRemaining } from "./full-surveys-remaining.js";
 import { buildSummary } from "./summary.js";
 
 function project(partial: Partial<Project> = {}): Project {
@@ -110,9 +111,48 @@ describe("Summary counts and Omit Asset", () => {
     assert.equal(tile("dwellings", "External-only Remaining", assets), "0");
     const total = Number(tile("dwellings", "Total Dwellings", assets));
     const full = Number(tile("dwellings", "Full Surveys Completed", assets));
-    const ext = Number(tile("dwellings", "External-only Completed", assets));
-    const remaining = Number(tile("dwellings", "Full Surveys Remaining", assets));
-    assert.equal(full + ext + remaining, total);
+    assert.equal(
+      Number(tile("dwellings", "Full Surveys Remaining", assets)),
+      fullSurveysRemaining(total, full, project())
+    );
+  });
+
+  it("scales Full Surveys Remaining to the project target and ignores external-only", () => {
+    const proj = project({ projectTargetValue: 80, projectTargetUnit: "percent" });
+    const assets = [
+      ...Array.from({ length: 8 }, (_, i) => asset({ uprn: `open-${i}` })),
+      asset({ uprn: "full", assetStatus: "Full Survey" }),
+      asset({ uprn: "ext", assetStatus: "Ext-Only", external: "Yes" }),
+      asset({ uprn: "omit", assetStatus: "Full Survey", omitAsset: true }),
+    ];
+    assert.equal(tile("dwellings", "Total Dwellings", assets, proj), "10");
+    assert.equal(tile("dwellings", "Project Target", assets, proj), "80%");
+    assert.equal(tile("dwellings", "Full Surveys Completed", assets, proj), "1");
+    assert.equal(tile("dwellings", "External-only Completed", assets, proj), "1");
+    // round(10 × 80%) − 1 full survey. External-only and the omitted row stay out.
+    assert.equal(tile("dwellings", "Full Surveys Remaining", assets, proj), "7");
+  });
+
+  it("uses a count target as the full-survey goal", () => {
+    const proj = project({ projectTargetValue: 4, projectTargetUnit: "count" });
+    const assets = [
+      asset({ uprn: "full", assetStatus: "Full Survey" }),
+      asset({ uprn: "open" }),
+      asset({ uprn: "ext", assetStatus: "Ext-Only" }),
+    ];
+    assert.equal(tile("dwellings", "Total Dwellings", assets, proj), "3");
+    assert.equal(tile("dwellings", "Project Target", assets, proj), "4");
+    assert.equal(tile("dwellings", "Full Surveys Remaining", assets, proj), "3");
+  });
+
+  it("floors Full Surveys Remaining at 0 once the target is met", () => {
+    const proj = project({ projectTargetValue: 50, projectTargetUnit: "percent" });
+    const assets = [
+      asset({ uprn: "a", assetStatus: "Full Survey" }),
+      asset({ uprn: "b", assetStatus: "Full Survey" }),
+    ];
+    assert.equal(tile("dwellings", "Total Dwellings", assets, proj), "2");
+    assert.equal(tile("dwellings", "Full Surveys Remaining", assets, proj), "0");
   });
 
   it("counts legacy completed labels and ignores surrounding spaces", () => {

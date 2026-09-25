@@ -1,6 +1,7 @@
 import type { Project } from "@prisma/client";
 import { isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
 import { applyEpcSurveyType, isEpcSurveyType } from "./epc-survey.js";
+import { fullSurveysRemainingForAssets } from "./full-surveys-remaining.js";
 import { formatProjectTarget } from "./project-target.js";
 
 export type KpiStack = {
@@ -48,7 +49,8 @@ export function buildSummary(project: Project, assets: SummaryAsset[]): KpiStack
       ]
     : [{ label: "Full Surveys Completed", value: String(full) }];
   const ext = dwellCounted.filter((a) => isExtOnlyStatus(a.assetStatus)).length;
-  const remaining = Math.max(0, dwellCounted.length - full - ext);
+  // Same dwelling total as the tile above. External-only does not reduce this.
+  const remaining = fullSurveysRemainingForAssets(view, project);
   const extPending = dwellCounted.filter(
     (a) => String(a.external).trim().toLowerCase() === "yes" && !isExtOnlyStatus(a.assetStatus)
   ).length;

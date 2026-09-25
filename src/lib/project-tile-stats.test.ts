@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { fullSurveysRemaining } from "./full-surveys-remaining.js";
 import {
   buildCurrentProjectTileStats,
   buildProjectTileStats,
@@ -23,6 +24,7 @@ describe("buildProjectTileStats", () => {
     assert.equal(stats.surveysFull, 1);
     assert.equal(stats.surveysRelevant, 3);
     assert.equal(stats.surveysLabel, "1/3");
+    assert.equal(stats.fullSurveysRemaining, fullSurveysRemaining(3, 1, tileTarget(75)));
     assert.equal(stats.blocks, 2);
     assert.equal(stats.target, "75%");
     assert.equal(stats.accessPct, formatSamplePercent(1, 2));
@@ -37,6 +39,26 @@ describe("buildProjectTileStats", () => {
     assert.equal(stats.surveysLabel, "1/2");
     assert.equal(stats.target, "10");
     assert.equal(stats.completionPct, formatSamplePercent(1, 2));
+    assert.equal(stats.fullSurveysRemaining, 9);
+  });
+
+  it("bases remaining on every non-omitted dwelling, not only patched ones", () => {
+    const stats = buildProjectTileStats(tileTarget(80), [
+      { kind: "dwelling", patch: "A", assetStatus: "Full Survey" },
+      { kind: "dwelling", patch: "A", assetStatus: "No Visit" },
+      { kind: "dwelling", assetStatus: "No Visit" },
+      { kind: "dwelling", assetStatus: "Ext-Only", external: "Yes" },
+      { kind: "dwelling", assetStatus: "No Visit" },
+      { kind: "dwelling", assetStatus: "No Visit" },
+      { kind: "dwelling", assetStatus: "No Visit" },
+      { kind: "dwelling", assetStatus: "No Visit" },
+      { kind: "dwelling", assetStatus: "No Visit" },
+      { kind: "dwelling", assetStatus: "No Visit" },
+      { kind: "dwelling", omitAsset: true, assetStatus: "Full Survey" },
+    ]);
+    assert.equal(stats.dwellings, 10);
+    assert.equal(stats.surveysLabel, "1/2");
+    assert.equal(stats.fullSurveysRemaining, 7);
   });
 });
 

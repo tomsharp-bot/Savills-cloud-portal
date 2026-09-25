@@ -1,4 +1,5 @@
 import type { ProjectTargetUnit } from "@prisma/client";
+import { fullSurveysRemainingForAssets } from "./full-surveys-remaining.js";
 import {
   formatSamplePercent,
   hasAnyVisit,
@@ -13,6 +14,8 @@ export type ProjectTileStats = {
   surveysFull: number;
   surveysRelevant: number;
   surveysLabel: string;
+  /** Full surveys still to do: round(all dwellings × target) − full surveys done. */
+  fullSurveysRemaining: number;
   blocks: number;
   accessPct: string;
   target: string;
@@ -45,6 +48,7 @@ export function buildProjectTileStats(
     surveysFull: full,
     surveysRelevant: relevant.length,
     surveysLabel: `${full}/${relevant.length}`,
+    fullSurveysRemaining: fullSurveysRemainingForAssets(assets, project),
     blocks: blocks.length,
     accessPct: formatSamplePercent(full, visited),
     target: formatProjectTarget(project),
