@@ -680,23 +680,28 @@ a.linkish.active, .linkish.active {
 .tool-header {
   display: flex; flex-wrap: wrap; align-items: flex-start;
   justify-content: space-between; gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.85rem;
+  /* Match .content-pane padding so the title and meta stay put while the
+     bar reaches the rounded edges of .work-panel. */
+  margin: -20px -22px 1rem;
+  padding: 20px 22px 0.85rem;
+  background: #dde2e8;
   border-bottom: 1px solid var(--border);
+  border-top-left-radius: var(--radius-panel);
+  border-top-right-radius: var(--radius-panel);
 }
 .tool-header .tool-eyebrow {
   font-size: 0.625rem; font-weight: 700; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--muted); margin: 0 0 0.35rem;
+  text-transform: uppercase; color: #526070; margin: 0 0 0.35rem;
 }
 .tool-header .tool-title {
   margin: 0; font-size: 1.85rem; font-weight: 700;
   color: var(--navy); letter-spacing: -0.03em; line-height: 1.15;
 }
 .tool-header .tool-sub {
-  margin: 0.35rem 0 0; font-size: 0.8125rem; color: var(--muted); max-width: 36rem;
+  margin: 0.35rem 0 0; font-size: 0.8125rem; color: #526070; max-width: 36rem;
 }
 .tool-header .tool-meta {
-  text-align: right; font-size: 0.75rem; color: var(--muted);
+  text-align: right; font-size: 0.75rem; color: #526070;
 }
 .tool-header .tool-meta strong {
   display: block; color: var(--text); font-size: 0.8125rem;
@@ -837,6 +842,14 @@ a.linkish.active, .linkish.active {
     font-size: 0.6rem;
   }
   .content-pane { padding: 16px 16px 20px; }
+  .tool-header {
+    margin-top: -16px;
+    margin-right: -16px;
+    margin-left: -16px;
+    padding-top: 16px;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
   .summary-row { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -874,6 +887,10 @@ a.linkish.active, .linkish.active {
   .side-tabs .tab-link .tab-badge { position: static; }
   .side-footnote { display: none; }
   .work-panel { border-radius: 16px; }
+  .tool-header {
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+  }
   .bottom-grid, .review-grid, .email-meta-row { grid-template-columns: 1fr; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .page-header .header-meta { text-align: left; }
@@ -954,7 +971,7 @@ a.linkish.active, .linkish.active {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #526070;
   margin: 0 0 0.3rem;
 }
 .tool-header .tool-title {
