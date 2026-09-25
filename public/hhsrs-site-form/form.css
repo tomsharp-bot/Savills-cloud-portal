@@ -555,7 +555,7 @@ body.hhsrs-form-page {
 }
 .hhsrs-form-page .info-box > .field-row + label:first-of-type,
 .hhsrs-form-page #extra-box > label[for="otherDetails"] {
-  margin-top: 12px;
+  margin-top: 14px;
 }
 .hhsrs-form-page .hhsrs-form label.hhsrs-check {
   display: flex;
@@ -574,7 +574,7 @@ body.hhsrs-form-page {
   font-size: inherit;
   font-weight: 700;
   color: #fff;
-  margin: 8px 0 0 !important;
+  margin: 14px 0 0 !important;
 }
 .hhsrs-form-page .hhsrs-form input[type=text],
 .hhsrs-form-page .hhsrs-form input[type=date],
@@ -584,7 +584,7 @@ body.hhsrs-form-page {
   min-height: 48px;
   padding: 12px;
 }
-.hhsrs-form-page .field-row { gap: 10px; }
+.hhsrs-form-page .field-row { column-gap: 10px; row-gap: 14px; }
 .hhsrs-form-page .hhsrs-photos {
   border: 0;
   margin: 0;
@@ -837,7 +837,7 @@ body.hhsrs-form-page {
 }
 /* Hazard: HHSRS category names are long (e.g. "Carbon Monoxide & Indoor Air Pollutants"),
    so category and rating stack at every width; category gets the full width and shows in full */
-.hhsrs-form-page .info-box.hazard > .field-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.hhsrs-form-page .info-box.hazard > .field-row { grid-template-columns: minmax(0, 1fr); row-gap: 14px; }
 
 /* ===== v4: respect the surveyor's own text size (browser / phone "larger text" setting).
    Live has html { font-size: 16px } which ignores it; 100% = 16px for everyone who has not changed it. ===== */
@@ -848,7 +848,7 @@ body.hhsrs-flow-room .play-layout { margin-bottom: 75vh; }
 
 /* ===== v4: Take photo + Add from gallery buttons (goes into live form.css with the v4 JS add-on) ===== */
 .photo-camera-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
-.photo-buttons { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+.photo-buttons { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 14px; }
 .hhsrs-form-page .hhsrs-form .photo-buttons label.hhsrs-file-btn {
   margin: 0 !important;
   min-height: 56px;
@@ -1012,5 +1012,15 @@ body.hhsrs-flow-room .play-layout { margin-bottom: 75vh; }
   .hhsrs-form-page .panel-body { padding: 16px 18px 22px; }
   .hhsrs-form-page .panel-body > h1 { padding: 12px 14px 4px; }
   .hhsrs-form-page .panel-body > .hhsrs-lead { padding: 2px 14px 12px; }
+}
+
+/* 14px from a field box down to the next field label, at every width. */
+.hhsrs-form-page .hhsrs-form select + .field-row,
+.hhsrs-form-page .hhsrs-form .field-error + .field-row,
+.hhsrs-form-page .addr-card > .field-row {
+  margin-top: 14px;
+}
+.hhsrs-form-page #call-ref-why > label {
+  margin-top: 14px;
 }
 

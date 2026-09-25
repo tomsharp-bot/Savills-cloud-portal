@@ -387,6 +387,30 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /step-visit\|step-property\|step-hazard\|extra-box\|step-photos/);
   });
 
+  it("keeps 14px between a field box and the next field label", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const css = await request(app, "GET", "/HHSRS-site-form/assets/form.css");
+    assert.equal(css.status, 200);
+    assert.match(css.body, /\.hhsrs-form-page \.field-row \{ column-gap: 10px; row-gap: 14px; \}/);
+    assert.match(
+      css.body,
+      /\.hhsrs-form-page \.info-box\.hazard > \.field-row \{[^}]*row-gap: 14px; \}/
+    );
+    assert.match(
+      css.body,
+      /\.hhsrs-form-page \.info-box > \.field-row \+ label:first-of-type,\s*\.hhsrs-form-page #extra-box > label\[for="otherDetails"\]\s*\{\s*margin-top:\s*14px;/
+    );
+    assert.match(
+      css.body,
+      /\.hhsrs-form-page \.hhsrs-form select \+ \.field-row,\s*\.hhsrs-form-page \.hhsrs-form \.field-error \+ \.field-row,\s*\.hhsrs-form-page \.addr-card > \.field-row\s*\{\s*margin-top:\s*14px;/
+    );
+    assert.match(css.body, /\.hhsrs-form-page #call-ref-why > label\s*\{\s*margin-top:\s*14px;/);
+    assert.doesNotMatch(css.body, /hazard > \.field-row \{[^}]*\sgap: 0/);
+
+    const form = await request(app, "GET", "/HHSRS-site-form/new");
+    assert.doesNotMatch(form.body, /field-row" style="margin-top:4px"/);
+  });
+
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
     const app = createApp({ basePath: "/projectprogress" });
     const okUpload = multipartForm(hhsrsReviewFields(), [
