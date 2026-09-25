@@ -822,223 +822,8 @@
   var hintEl = $("rv-photos-hint");
   if (hintEl && !hintEl.textContent) hintEl.textContent = DRAG_HINT;
 
-  /* Live new-hazard toast. Baseline is the pending ids rendered with this page
-     (plus ids already seen in this tab). Later polls toast anything new.
-     The in-page toast always shows. OS notifications only fire when allowed. */
-  var SEEN_KEY = "hhsrs-reporter-seen-pending-ids";
-  var POLL_MS = Number(cfg.alertsPollMs) || 30000;
-  var seen = {};
-  var seeded = false;
-  var pollInFlight = false;
-  var lastPollAt = 0;
-
-  function rememberId(id) {
-    if (typeof id === "string" && id) seen[id] = true;
-  }
-
-  function loadSeen() {
-    try {
-      var raw = sessionStorage.getItem(SEEN_KEY);
-      if (raw == null) return;
-      var ids = JSON.parse(raw);
-      if (!Array.isArray(ids)) return;
-      ids.forEach(rememberId);
-      seeded = true;
-    } catch (e) {
-      /* ignore private-mode storage failures */
-    }
-  }
-
-  function saveSeen() {
-    var ids = Object.keys(seen);
-    if (ids.length > 300) ids = ids.slice(ids.length - 300);
-    try {
-      sessionStorage.setItem(SEEN_KEY, JSON.stringify(ids));
-    } catch (e) {
-      /* ignore */
-    }
-  }
-
-  function seedFromTable() {
-    document.querySelectorAll("#waiting-table a.btn-review-create").forEach(function (link) {
-      var href = link.getAttribute("href") || "";
-      var match = href.match(/\/review\/([^/?#]+)/);
-      if (match) rememberId(decodeURIComponent(match[1]));
-    });
-  }
-
-  function bootstrapSeen() {
-    loadSeen();
-    if (Array.isArray(cfg.initialPendingIds)) {
-      cfg.initialPendingIds.forEach(rememberId);
-      seeded = true;
-      saveSeen();
-      return;
-    }
-    if (cfg.mode === "pending") {
-      seedFromTable();
-      seeded = true;
-      saveSeen();
-    }
-  }
-
-  function hideToast() {
-    var toast = $("hhsrs-alert-toast");
-    if (toast) toast.classList.remove("is-visible");
-  }
-
-  function reviewUrl(id) {
-    return (cfg.base || "/HHSRSreporter") + "/review/" + encodeURIComponent(id);
-  }
-
-  var alertAudio = null;
-
-  function alertAudioContext() {
-    if (alertAudio) return alertAudio;
-    var AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return null;
-    try {
-      alertAudio = new AudioCtx();
-    } catch (e) {
-      return null;
-    }
-    return alertAudio;
-  }
-
-  /* Browsers block audio until a gesture. Resume during that click so later
-     polls can chime. If resume fails, the toast still shows with no sound. */
-  function unlockAlertSound() {
-    var ctx = alertAudioContext();
-    if (!ctx || typeof ctx.resume !== "function") return;
-    try {
-      var pending = ctx.resume();
-      if (pending && typeof pending.catch === "function") pending.catch(function () {});
-    } catch (e) {
-      /* toast still shows */
-    }
-  }
-
-  function playTone(ctx, frequency, startAt, duration) {
-    var osc = ctx.createOscillator();
-    var gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(frequency, startAt);
-    gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.04, startAt + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(startAt);
-    osc.stop(startAt + duration + 0.02);
-  }
-
-  function playAlertChime() {
-    var ctx = alertAudioContext();
-    if (!ctx || ctx.state !== "running") return;
-    try {
-      var startAt = ctx.currentTime + 0.01;
-      playTone(ctx, 523.25, startAt, 0.16);
-      playTone(ctx, 659.25, startAt + 0.11, 0.2);
-    } catch (e) {
-      /* toast still shows */
-    }
-  }
-
-  function showToast(fresh) {
-    var toast = $("hhsrs-alert-toast");
-    if (!toast || !fresh.length) return;
-    var item = fresh[0];
-    var extra = fresh.length - 1;
-    var kicker = $("hhsrs-toast-kicker");
-    var title = $("hhsrs-toast-title");
-    var body = $("hhsrs-toast-body");
-    var open = $("hhsrs-toast-open");
-    if (kicker) kicker.textContent = fresh.length === 1 ? "New hazard" : fresh.length + " new hazards";
-    if (title) title.textContent = item.fullAddress || "New pending issue";
-    var summary = item.summary || [item.category, item.rating].filter(Boolean).join(" · ");
-    var text = [item.projectName, summary].filter(Boolean).join(" — ");
-    if (extra === 1) text += " + 1 more new hazard is waiting.";
-    else if (extra > 1) text += " + " + extra + " more new hazards are waiting.";
-    if (body) body.textContent = text;
-    if (open) open.href = reviewUrl(item.id);
-    toast.classList.add("is-visible");
-    playAlertChime();
-  }
-
-  function desktopNotify(item) {
-    if (!desktopAlertsOn()) return;
-    var summary = item.summary || [item.category, item.rating].filter(Boolean).join(" · ");
-    var body = [item.projectName, item.fullAddress, summary].filter(Boolean).join(" — ");
-    try {
-      var note = new Notification("New HHSRS hazard", {
-        body: body,
-        tag: "hhsrs-" + item.id,
-        requireInteraction: true,
-      });
-      note.onclick = function () {
-        window.focus();
-        window.location.href = reviewUrl(item.id);
-        note.close();
-      };
-    } catch (e) {
-      /* in-page toast already shown */
-    }
-  }
-
-  function applyPending(pending) {
-    var fresh = [];
-    for (var i = 0; i < pending.length; i++) {
-      var item = pending[i];
-      if (!item || !item.id || seen[item.id]) continue;
-      fresh.push(item);
-    }
-    if (!seeded) {
-      pending.forEach(function (item) {
-        if (item) rememberId(item.id);
-      });
-      seeded = true;
-      saveSeen();
-      return;
-    }
-    if (!fresh.length) return;
-    var loud = [];
-    fresh.forEach(function (item) {
-      rememberId(item.id);
-      if (item.claimStatus === "claimed" || item.claimStatus === "stale") return;
-      loud.push(item);
-    });
-    saveSeen();
-    if (!loud.length) return;
-    showToast(loud);
-    var limit = Math.min(loud.length, 3);
-    for (var n = 0; n < limit; n++) desktopNotify(loud[n]);
-  }
-
-  function pollPending() {
-    if (pollInFlight) return;
-    pollInFlight = true;
-    lastPollAt = Date.now();
-    var url = (cfg.base || "/HHSRSreporter") + "/pending-alerts.json";
-    fetch(url, {
-      credentials: "same-origin",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    })
-      .then(function (res) {
-        if (!res.ok) return null;
-        var ct = res.headers.get("content-type") || "";
-        if (ct.indexOf("json") === -1) return null;
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data || !Array.isArray(data.pending)) return;
-        applyPending(data.pending);
-      })
-      .catch(function () {})
-      .then(function () {
-        pollInFlight = false;
-      });
-  }
+  /* New-pending polling, the toast, and desktop notifications live in
+     hhsrs-pending-alerts.js so every admin portal page shares one leader poll. */
 
   function notificationState() {
     if (typeof Notification === "undefined") return "unsupported";
@@ -1073,6 +858,9 @@
   }
 
   function desktopAlertsOn() {
+    if (window.HhsrsPendingAlerts && window.HhsrsPendingAlerts.desktopAlertsOn) {
+      return window.HhsrsPendingAlerts.desktopAlertsOn();
+    }
     return notificationState() === "granted" && !alertsSimulatedOff();
   }
 
@@ -1126,6 +914,7 @@
     var label = $("admin-alerts-status-text");
     var badge = $("admin-alerts-badge");
     var adminEnable = $("btn-admin-enable-desktop-alerts");
+    var testAlert = $("btn-admin-send-test-alert");
     var simNote = $("admin-alerts-sim-note");
     var hint = $("admin-alerts-hint");
     if (dot) {
@@ -1137,6 +926,15 @@
     if (adminEnable) {
       adminEnable.hidden = on;
       adminEnable.disabled = perm === "unsupported";
+    }
+    if (testAlert) {
+      if (perm === "granted") {
+        testAlert.textContent = "Send test alert";
+        testAlert.disabled = false;
+      } else {
+        testAlert.textContent = "Permission not granted — Enable";
+        testAlert.disabled = perm === "unsupported";
+      }
     }
     if (simNote) simNote.hidden = !on;
     if (hint) {
@@ -1177,7 +975,9 @@
   }
 
   function enableDesktopAlerts() {
-    unlockAlertSound();
+    if (window.HhsrsPendingAlerts && window.HhsrsPendingAlerts.unlockAlertSound) {
+      window.HhsrsPendingAlerts.unlockAlertSound();
+    }
     if (notificationState() === "granted") {
       markDesktopAlertsOn();
       paintNotifStatus();
@@ -1186,17 +986,40 @@
     askNotificationPermission();
   }
 
-  var dismissBtn = $("hhsrs-toast-dismiss");
-  if (dismissBtn) dismissBtn.addEventListener("click", hideToast);
-  document.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape") hideToast();
-  });
+  /* Client-side only. Same title and options as a real pending alert.
+     Does not create a case or call the server. */
+  function sendTestDesktopAlert() {
+    if (notificationState() !== "granted") return;
+    try {
+      var note = new Notification("🔴 New HHSRS Hazard", {
+        body: "Test · Project · Rating",
+        tag: "hhsrs-test-" + Date.now(),
+        requireInteraction: true,
+      });
+      note.onclick = function () {
+        window.focus();
+        note.close();
+      };
+    } catch (e) {
+      /* the button stays available so they can try again */
+    }
+  }
+
+  function onAdminTestAlertClick() {
+    if (notificationState() !== "granted") {
+      enableDesktopAlerts();
+      return;
+    }
+    sendTestDesktopAlert();
+  }
 
   clearLegacyDesktopAlertsDismiss();
   var enableBtn = $("btn-enable-desktop-alerts");
   if (enableBtn) enableBtn.addEventListener("click", enableDesktopAlerts);
   var adminEnableBtn = $("btn-admin-enable-desktop-alerts");
   if (adminEnableBtn) adminEnableBtn.addEventListener("click", enableDesktopAlerts);
+  var adminTestBtn = $("btn-admin-send-test-alert");
+  if (adminTestBtn) adminTestBtn.addEventListener("click", onAdminTestAlertClick);
   var simOffBtn = $("btn-admin-simulate-alerts-off");
   if (simOffBtn) {
     simOffBtn.addEventListener("click", function () {
@@ -1204,18 +1027,7 @@
       paintNotifStatus();
     });
   }
-  document.addEventListener("pointerdown", unlockAlertSound, true);
-  document.addEventListener("keydown", unlockAlertSound, true);
   paintNotifStatus();
-
-  bootstrapSeen();
-  pollPending();
-  setInterval(pollPending, POLL_MS);
-  document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState !== "visible") return;
-    if (Date.now() - lastPollAt < 15000) return;
-    pollPending();
-  });
 
   /* Project overview: Total / By project, archive confirm, restore. */
   var poRoot = document.getElementById("po-overview");
