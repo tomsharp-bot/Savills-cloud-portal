@@ -991,8 +991,8 @@
   function sendTestDesktopAlert() {
     if (notificationState() !== "granted") return;
     try {
-      var note = new Notification("New HHSRS hazard", {
-        body: "HHSRS test alert - if you can see this, alerts are working",
+      var note = new Notification("New HHSRS Hazard", {
+        body: "Test · Project · Rating",
         tag: "hhsrs-test-" + Date.now(),
         requireInteraction: true,
       });

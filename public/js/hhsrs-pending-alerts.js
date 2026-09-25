@@ -291,14 +291,22 @@
     return true;
   }
 
+  function desktopAlertCopy(item) {
+    var project = item && item.projectName ? String(item.projectName).trim() : "";
+    var rating = item && item.rating ? String(item.rating).trim() : "";
+    var parts = [];
+    if (project) parts.push(project);
+    if (rating) parts.push(rating);
+    return { title: "New HHSRS Hazard", body: parts.join(" · ") };
+  }
+
   function desktopNotify(item, cfg) {
     if (!item || !desktopAlertsOn()) return;
-    var summary = item.summary || [item.category, item.rating].filter(Boolean).join(" · ");
-    var body = [item.projectName, item.fullAddress, summary].filter(Boolean).join(" — ");
+    var copy = desktopAlertCopy(item);
     var href = cfg.surface === "reporter" ? reviewUrl(cfg, item.id) : pendingUrl(cfg);
     try {
-      var note = new Notification("New HHSRS hazard", {
-        body: body,
+      var note = new Notification(copy.title, {
+        body: copy.body,
         tag: "hhsrs-" + item.id,
         requireInteraction: true,
       });
@@ -475,8 +483,7 @@
     if (cfg.surface === "reporter") showToast(unseen, cfg);
     else showPortalNotice(unseen, cfg);
     if (!notifyDesktop) return;
-    var limit = Math.min(unseen.length, 3);
-    for (var n = 0; n < limit; n++) desktopNotify(unseen[n], cfg);
+    for (var n = 0; n < unseen.length; n++) desktopNotify(unseen[n], cfg);
     publish({ type: "cases", from: tabId, at: Date.now(), items: unseen });
   }
 
@@ -614,6 +621,7 @@
     shouldPausePoll: shouldPausePoll,
     leaderHoldsLock: leaderHoldsLock,
     homeNoticeText: homeNoticeText,
+    desktopAlertCopy: desktopAlertCopy,
     desktopAlertsOn: desktopAlertsOn,
     unlockAlertSound: unlockAlertSound,
     start: start,

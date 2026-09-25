@@ -24,6 +24,10 @@ const pendingAlertScript = require("../../public/js/hhsrs-pending-alerts.js") as
   }) => boolean;
   leaderHoldsLock: (record: { id?: string; at?: number } | null, now: number, ttl?: number) => boolean;
   homeNoticeText: (count: number) => string;
+  desktopAlertCopy: (item: { projectName?: string; rating?: string; fullAddress?: string }) => {
+    title: string;
+    body: string;
+  };
 };
 
 describe("HHSRS pending alert summary", () => {
@@ -187,6 +191,23 @@ describe("HHSRS pending alert marker", () => {
     );
   });
 
+  it("names only the project and rating on the desktop notification", () => {
+    assert.deepEqual(
+      pendingAlertScript.desktopAlertCopy({
+        projectName: "MTVH 2026",
+        rating: "Category 1",
+        fullAddress: "14 Harbour Lane",
+      }),
+      { title: "New HHSRS Hazard", body: "MTVH 2026 · Category 1" }
+    );
+    assert.equal(
+      pendingAlertScript.desktopAlertCopy({ projectName: "  MTVH 2026  ", rating: "  " }).body,
+      "MTVH 2026"
+    );
+    assert.equal(pendingAlertScript.desktopAlertCopy({ projectName: "", rating: "High" }).body, "High");
+    assert.equal(pendingAlertScript.desktopAlertCopy({}).body, "");
+  });
+
   it("uses one short home notice for a single new case", () => {
     assert.equal(pendingAlertScript.homeNoticeText(1), "New HHSRS case waiting in Pending");
     assert.equal(pendingAlertScript.homeNoticeText(2), "2 new HHSRS cases waiting in Pending");
@@ -287,8 +308,11 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(js, /btn-enable-desktop-alerts/);
     assert.match(js, /btn-admin-simulate-alerts-off/);
     assert.match(js, /btn-admin-send-test-alert/);
-    assert.match(js, /HHSRS test alert - if you can see this, alerts are working/);
-    assert.match(js, /New HHSRS hazard/);
+    assert.match(js, /Test · Project · Rating/);
+    assert.match(js, /New HHSRS Hazard/);
+    assert.doesNotMatch(js, /New HHSRS hazard/);
+    assert.doesNotMatch(js, /HHSRS test alert - if you can see this/);
+    assert.doesNotMatch(sharedJs, /Math\.min\(unseen\.length, 3\)/);
     assert.match(js, /Permission not granted — Enable/);
     assert.match(reporterJs, /hhsrs-test-/);
     assert.doesNotMatch(reporterJs, /pending-alerts\.json/);
