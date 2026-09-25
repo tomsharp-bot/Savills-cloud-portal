@@ -23,8 +23,9 @@ services:
     instance_count: 1
     instance_size_slug: basic-xxs
     # HHSRS site form accepts up to 4 photos × 40MB (≈162MB multipart).
-    # App Platform does not expose a client_max_body_size knob; file uploads
-    # time out after 600s. Body-size checks live in Express/multer.
+    # Morning photo ingest sends about 20 JPEGs per request (~50MB). Each file
+    # may be up to 50MB. App Platform does not expose a client_max_body_size
+    # knob; file uploads time out after 600s. Body-size checks live in Express/multer.
     health_check:
       http_path: /health
       initial_delay_seconds: 30
@@ -63,5 +64,10 @@ services:
       # Ideal Postcodes key for HHSRS Find address. Set the value in the App Platform UI.
       # Declared here so the name is part of the spec; do not paste the key into this file.
       - key: IDEAL_POSTCODES_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      # Morning Photos Pool import (/api/projects/:project/photos/ingest).
+      # Set the value in the App Platform UI. If it is unset the endpoint returns 503.
+      - key: PHOTO_INGEST_KEY
         type: SECRET
         scope: RUN_TIME

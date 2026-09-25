@@ -138,8 +138,20 @@ describe("Photo Storage routes", () => {
     const bootMatch = project.body.match(/window\.__PHOTOS__ = (\{[\s\S]*?\});\s*<\/script>/);
     assert.ok(bootMatch, "expected bootstrap JSON");
     const boot = JSON.parse(bootMatch![1]);
-    assert.ok(boot.pool.length > 0);
-    const codes = boot.pool
+    assert.equal(boot.poolQueryApi, `/photos/projects/${projectId}/pool`);
+    assert.equal(boot.pool, undefined);
+    assert.match(project.body, /id="btnPoolShowAll"/);
+    assert.match(project.body, /Showing photos added in the last 7 days/);
+    const listed = await request(
+      port,
+      "GET",
+      `/projectprogress/photos/projects/${projectId}/pool?window=all&limit=2`,
+      { cookie }
+    );
+    assert.equal(listed.status, 200);
+    const listedJson = JSON.parse(listed.body);
+    assert.ok(listedJson.photos.length > 0);
+    const codes = listedJson.photos
       .slice(0, 2)
       .map((p: { code: string }) => p.code)
       .concat(["9999999-Kitchen-1"]);
@@ -191,6 +203,11 @@ describe("Photo Storage routes", () => {
       body: {},
     });
     assert.equal(surveyorUpload.status, 403);
+    const surveyorBlur = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/pool/nope/blur`, {
+      cookie: surveyorCookie,
+      body: {},
+    });
+    assert.equal(surveyorBlur.status, 403);
     assert.equal(boot.uploadConcurrency, 4);
     assert.equal(typeof boot.poolUploadApi, "string");
     assert.match(boot.poolUploadApi, /\/pool\/upload$/);
@@ -940,11 +957,24 @@ describe("Photo Storage routes", () => {
 
     const page = await request(port, "GET", `/projectprogress/photos/projects/${projectId}`, { cookie });
     assert.equal(page.status, 200);
-    const bootMatch = page.body.match(/window\.__PHOTOS__ = (\{[\s\S]*?\});\s*<\/script>/);
-    assert.ok(bootMatch, "expected bootstrap JSON");
-    const boot = JSON.parse(bootMatch![1]);
-    const liveView = boot.pool.find((p: { code: string }) => p.code === code);
-    const bareView = boot.pool.find((p: { code: string }) => p.code === bareCode);
+    assert.match(page.body, /id="btnPoolShowAll"/);
+    const liveListed = await request(
+      port,
+      "GET",
+      `/projectprogress/photos/projects/${projectId}/pool?q=${encodeURIComponent(code)}`,
+      { cookie }
+    );
+    assert.equal(liveListed.status, 200);
+    const liveJson = JSON.parse(liveListed.body);
+    assert.equal(liveJson.window, "search");
+    const liveView = liveJson.photos.find((p: { code: string }) => p.code === code);
+    const bareListed = await request(
+      port,
+      "GET",
+      `/projectprogress/photos/projects/${projectId}/pool?q=${encodeURIComponent(bareCode)}`,
+      { cookie }
+    );
+    const bareView = JSON.parse(bareListed.body).photos.find((p: { code: string }) => p.code === bareCode);
     assert.ok(liveView);
     assert.equal(liveView.thumbUrl, poolPhotoImagePath(projectId, code));
     assert.match(liveView.thumbUrl, /^\/photos\/projects\//);

@@ -22,6 +22,7 @@ import { isAdmin, roleLabel } from "./lib/access.js";
 import { postLoginPath } from "./lib/landing.js";
 import { photosRouter } from "./routes/photos.js";
 import { photoShareRouter } from "./routes/photo-share.js";
+import { photoIngestRouter } from "./routes/photo-ingest.js";
 import { referenceDocumentsRouter } from "./routes/reference-documents.js";
 import { surveyorRouter } from "./routes/surveyor.js";
 import { prisma } from "./lib/prisma.js";
@@ -147,6 +148,9 @@ export function createApp(options: CreateAppOptions = {}) {
   // Excel photo sharing lives at the domain root, even when Mark Up is under BASE_PATH.
   // It is not behind portal login. The token cannot open the app UI.
   app.use("/photos/share", photoShareRouter);
+
+  // Morning photo import. Shared secret, not a portal session. Domain root, not BASE_PATH.
+  app.use("/api/projects", photoIngestRouter);
 
   if (basePath) {
     app.get("/", (_req: express.Request, res: express.Response) => {

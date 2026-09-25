@@ -212,7 +212,19 @@ export function formatActivityWhen(d: Date | null | undefined): string | null {
   return `${day} ${mon} ${year} ${hh}:${mm}`;
 }
 
-export function toPoolView(item: PhotoPoolItem): PhotoPoolView {
+type PoolViewSource = Pick<PhotoPoolItem, "id" | "projectId" | "code" | "fileName" | "spacesKey"> & {
+  revision?: number;
+  createdAt?: Date;
+};
+
+/** Authenticated thumb path. A revision above 0 adds ?v= so a replaced image is not shown from cache. */
+export function poolThumbPath(item: PoolViewSource): string {
+  const base = poolPhotoImagePath(item.projectId, item.code);
+  const revision = Math.max(0, Math.floor(Number(item.revision) || 0));
+  return revision > 0 ? `${base}?v=${revision}` : base;
+}
+
+export function toPoolView(item: PoolViewSource): PhotoPoolView {
   const spacesKey = item.spacesKey || "";
   const storedHere = Boolean(spacesKey) && isProjectPoolKey(item.projectId, spacesKey);
   return {
@@ -221,7 +233,7 @@ export function toPoolView(item: PhotoPoolItem): PhotoPoolView {
     fileName: item.fileName || fileNameForCode(item.code),
     uprn: uprnFromCode(item.code),
     spacesKey,
-    thumbUrl: storedHere ? poolPhotoImagePath(item.projectId, item.code) : placeholderThumbUrl(item.code),
+    thumbUrl: storedHere ? poolThumbPath(item) : placeholderThumbUrl(item.code),
   };
 }
 
@@ -448,21 +460,157 @@ export async function listPhotoTiles(
   }));
 }
 
+export async function loadProjectFolders(projectId: string): Promise<PhotoFolderView[]> {
+  const folderRows = await prisma.photoFolder.findMany({
+    where: { projectId },
+    include: { activities: { orderBy: { who: "asc" } } },
+    orderBy: { createdAt: "asc" },
+  });
+  return folderRows.map(toFolderView);
+}
+
 export async function loadProjectPhotos(projectId: string): Promise<{
   pool: PhotoPoolView[];
   folders: PhotoFolderView[];
 }> {
-  const [poolRows, folderRows] = await Promise.all([
+  const [poolRows, folders] = await Promise.all([
     prisma.photoPoolItem.findMany({ where: { projectId }, orderBy: { code: "asc" } }),
-    prisma.photoFolder.findMany({
-      where: { projectId },
-      include: { activities: { orderBy: { who: "asc" } } },
-      orderBy: { createdAt: "asc" },
-    }),
+    loadProjectFolders(projectId),
   ]);
   return {
     pool: poolRows.map(toPoolView),
-    folders: folderRows.map(toFolderView),
+    folders,
+  };
+}
+
+/** Photos Pool grid defaults to this many days of uploads (createdAt). */
+export const POOL_RECENT_DAYS = 7;
+export const POOL_PAGE_SIZE = 48;
+export const POOL_PAGE_MAX = 100;
+
+export type PoolWindow = "recent" | "all" | "search" | "codes";
+
+export function poolRecentSince(now: Date = new Date(), days = POOL_RECENT_DAYS): Date {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Server-side pool filter.
+ * A photo-code search covers the whole pool. The 7-day window applies only when there is no search
+ * and the caller has not asked for every photo.
+ */
+export function poolListWhere(
+  projectId: string,
+  opts: { q?: string; showAll?: boolean; now?: Date } = {}
+): { where: Prisma.PhotoPoolItemWhereInput; window: Exclude<PoolWindow, "codes"> } {
+  const q = String(opts.q || "").trim().slice(0, 120);
+  const where: Prisma.PhotoPoolItemWhereInput = { projectId };
+  if (q) {
+    where.OR = [
+      { code: { contains: q, mode: "insensitive" } },
+      { fileName: { contains: q, mode: "insensitive" } },
+    ];
+    return { where, window: "search" };
+  }
+  if (!opts.showAll) {
+    where.createdAt = { gte: poolRecentSince(opts.now ?? new Date()) };
+    return { where, window: "recent" };
+  }
+  return { where, window: "all" };
+}
+
+export type PoolQueryResult = {
+  photos: PhotoPoolView[];
+  codes: string[];
+  total: number;
+  matched: number;
+  window: PoolWindow;
+  nextCursor: string | null;
+  truncated: boolean;
+};
+
+function clampPoolLimit(limit: number | undefined): number {
+  const n = Number(limit);
+  if (!Number.isFinite(n) || n <= 0) return POOL_PAGE_SIZE;
+  return Math.min(POOL_PAGE_MAX, Math.max(1, Math.floor(n)));
+}
+
+/**
+ * One page of Photos Pool rows, or a code list for find/replace.
+ * `codes` loads those rows only (folder thumbs) and ignores the date window.
+ * `view: "codes"` returns matching codes, capped at PHOTO_DELETE_MAX.
+ */
+export async function queryProjectPool(
+  projectId: string,
+  opts: {
+    q?: string;
+    showAll?: boolean;
+    cursor?: string;
+    limit?: number;
+    now?: Date;
+    codes?: string[];
+    view?: string;
+  } = {}
+): Promise<PoolQueryResult> {
+  const total = await prisma.photoPoolItem.count({ where: { projectId } });
+  const requestedCodes = (opts.codes || []).map((c) => String(c || "").trim()).filter(Boolean).slice(0, 200);
+  if (requestedCodes.length) {
+    const rows = await prisma.photoPoolItem.findMany({
+      where: { projectId, code: { in: requestedCodes } },
+      orderBy: { code: "asc" },
+    });
+    return {
+      photos: rows.map(toPoolView),
+      codes: rows.map((row) => row.code),
+      total,
+      matched: rows.length,
+      window: "codes",
+      nextCursor: null,
+      truncated: false,
+    };
+  }
+
+  const { where, window } = poolListWhere(projectId, opts);
+  const matched = await prisma.photoPoolItem.count({ where });
+  if (opts.view === "codes") {
+    const rows = await prisma.photoPoolItem.findMany({
+      where,
+      orderBy: { code: "asc" },
+      select: { code: true },
+      take: PHOTO_DELETE_MAX + 1,
+    });
+    const truncated = rows.length > PHOTO_DELETE_MAX;
+    return {
+      photos: [],
+      codes: rows.slice(0, PHOTO_DELETE_MAX).map((row) => row.code),
+      total,
+      matched,
+      window,
+      nextCursor: null,
+      truncated,
+    };
+  }
+
+  const limit = clampPoolLimit(opts.limit);
+  const cursor = String(opts.cursor || "");
+  const pageWhere: Prisma.PhotoPoolItemWhereInput = cursor
+    ? { AND: [where, { code: { gt: cursor } }] }
+    : where;
+  const rows = await prisma.photoPoolItem.findMany({
+    where: pageWhere,
+    orderBy: { code: "asc" },
+    take: limit + 1,
+  });
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    photos: page.map(toPoolView),
+    codes: page.map((row) => row.code),
+    total,
+    matched,
+    window,
+    nextCursor: hasMore && page.length ? page[page.length - 1].code : null,
+    truncated: false,
   };
 }
 
@@ -1298,11 +1446,90 @@ async function rollbackUploadedPhoto(
  * The database row is written first so a failed put cannot overwrite an existing object;
  * if the put fails, the new row and folder code are removed.
  */
+/** Formats the browser can pixelate and write back without changing the Spaces key extension. */
+export function blurContentTypeForExt(ext: string): string | null {
+  switch (String(ext || "").toLowerCase()) {
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".png":
+      return "image/png";
+    case ".webp":
+      return "image/webp";
+    default:
+      return null;
+  }
+}
+
+export function blurMimeMatches(ext: string, mime: string | undefined): boolean {
+  const expected = blurContentTypeForExt(ext);
+  if (!expected) return false;
+  const type = String(mime || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (!type) return false;
+  if (expected === "image/jpeg") return type === "image/jpeg" || type === "image/jpg";
+  return type === expected;
+}
+
+/**
+ * Replace the bytes of one pool photo in place. The Spaces key, code, and file name stay.
+ * revision is incremented only after the put succeeds so the next thumb URL is new.
+ */
+export async function overwriteProjectPhotoBytes(
+  projectId: string,
+  requestedCode: string,
+  file: { buffer: Buffer; mime?: string },
+  ops: PhotoStorageOps = defaultPhotoStorageOps()
+): Promise<{ ok: true; photo: PhotoPoolView } | { ok: false; error: string; status: number }> {
+  const code = String(requestedCode || "").trim();
+  if (!code || /[/\\]/.test(code) || code.includes("..")) {
+    return { ok: false, error: "That photo is not in this pool.", status: 400 };
+  }
+  const buffer = file.buffer;
+  if (!buffer || buffer.length === 0) return { ok: false, error: "That file is empty.", status: 400 };
+  if (buffer.length > PHOTO_UPLOAD_MAX_BYTES) {
+    return { ok: false, error: photoTooLargeMessage(), status: 413 };
+  }
+
+  const item = await prisma.photoPoolItem.findFirst({
+    where: { projectId, code: { equals: code, mode: "insensitive" } },
+  });
+  if (!item) return { ok: false, error: "That photo is not in this pool.", status: 404 };
+
+  const key = String(item.spacesKey || "");
+  if (!key || !isProjectPoolKey(projectId, key)) {
+    return { ok: false, error: "That photo has no stored image to replace.", status: 400 };
+  }
+  const ext = extensionOfKey(key);
+  if (!blurContentTypeForExt(ext)) {
+    return { ok: false, error: "This photo format cannot be blurred in the browser.", status: 400 };
+  }
+  if (!blurMimeMatches(ext, file.mime)) {
+    return { ok: false, error: "The blurred photo must stay the same image type.", status: 400 };
+  }
+  if (!ops.configured()) return { ok: false, error: "Photo storage is not available.", status: 503 };
+
+  const stored = await ops.put(key, buffer, contentTypeForPhotoExt(ext));
+  if (!stored) return { ok: false, error: "Could not store that photo.", status: 502 };
+
+  const updated = await prisma.photoPoolItem.update({
+    where: { id: item.id },
+    data: { revision: { increment: 1 } },
+  });
+  if (updated.spacesKey !== key || updated.code !== item.code || updated.fileName !== item.fileName) {
+    return { ok: false, error: "Could not store that photo.", status: 500 };
+  }
+  return { ok: true, photo: toPoolView(updated) };
+}
+
 export async function uploadProjectPhoto(
   projectId: string,
   file: PhotoUploadFile,
   scope: PhotoMutationScope,
-  ops: PhotoStorageOps = defaultPhotoStorageOps()
+  ops: PhotoStorageOps = defaultPhotoStorageOps(),
+  limits?: { maxBytes?: number }
 ): Promise<
   | {
       ok: true;
@@ -1313,8 +1540,10 @@ export async function uploadProjectPhoto(
 > {
   const buffer = file.buffer;
   if (!buffer || buffer.length === 0) return { ok: false, error: "That file is empty.", status: 400 };
-  if (buffer.length > PHOTO_UPLOAD_MAX_BYTES) {
-    return { ok: false, error: photoTooLargeMessage(), status: 413 };
+  const maxBytes = limits?.maxBytes && limits.maxBytes > 0 ? limits.maxBytes : PHOTO_UPLOAD_MAX_BYTES;
+  if (buffer.length > maxBytes) {
+    const mb = maxBytes / (1024 * 1024);
+    return { ok: false, error: `That photo is larger than ${mb} MB.`, status: 413 };
   }
   const parsed = parseUploadedPhotoName(file.originalName);
   if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };

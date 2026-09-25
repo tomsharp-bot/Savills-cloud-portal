@@ -75,7 +75,7 @@
     </div>
 
     <div id="panel-pool" class="panel active" role="tabpanel" aria-labelledby="tab-pool">
-      <p class="hint-muted">Coloured placeholders until Spaces serves real thumbs. Photo codes are usually <strong>UPRN-room-seq</strong> (e.g. 2245623-Kitchen-1). Upload uses the file name as that code. Extracts <strong>copy</strong> code lists from here; the file itself stays one Spaces object. Select images to download a zip, rename one photo, or delete.</p>
+      <p class="hint-muted">Coloured placeholders until Spaces serves real thumbs. Photo codes are usually <strong>UPRN-room-seq</strong> (e.g. 2245623-Kitchen-1). Upload uses the file name as that code. Extracts <strong>copy</strong> code lists from here; the file itself stays one Spaces object. Select images to download a zip, rename one photo, or delete. The grid starts with photos added in the last 7 days. Search looks through the whole pool.</p>
       <label class="upload-zone" data-upload-zone>
         <input type="file" id="poolUploadInput" class="upload-input visually-hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple />
         <span class="upload-zone-copy">
@@ -108,7 +108,14 @@
         </div>
         <p class="replace-scope" id="poolReplaceScope"></p>
       </div>
+      <div class="pool-window" id="poolWindowBar">
+        <p class="pool-window-status" id="poolWindowStatus">Showing photos added in the last 7 days — …</p>
+        <button type="button" class="btn" id="btnPoolShowAll" aria-pressed="false">Show all</button>
+      </div>
       <div class="photo-grid" id="photoPool" role="list"></div>
+      <div class="pool-more">
+        <button type="button" class="btn" id="btnPoolLoadMore" hidden>Load more</button>
+      </div>
     </div>
 
     <div id="panel-folders" class="panel" role="tabpanel" aria-labelledby="tab-folders">
@@ -187,19 +194,35 @@
     </div>
     <div class="lightbox-stage">
       <div class="lightbox-body">
-        <img id="lightboxImg" alt="" />
-      </div>
-      <form class="lightbox-rename" id="lightboxRenameForm">
-        <h4>Rename</h4>
-        <p class="hint-muted">The extension stays. Enter the new name only.</p>
-        <label for="lightboxRenameInput">New name</label>
-        <div class="name-prefix">
-          <input type="text" id="lightboxRenameInput" autocomplete="off" maxlength="140" spellcheck="false" />
-          <span class="prefix" id="lightboxRenameExt">.jpg</span>
+        <div class="lightbox-frame" id="lightboxFrame">
+          <img id="lightboxImg" alt="" />
+          <canvas id="lightboxBlurCanvas" hidden></canvas>
         </div>
-        <p class="err-msg" id="lightboxRenameErr">Enter a file name.</p>
-        <button type="submit" class="btn btn-primary" id="btnLightboxSaveName">Save name</button>
-      </form>
+      </div>
+      <div class="lightbox-side">
+        <form class="lightbox-rename" id="lightboxRenameForm">
+          <h4>Rename</h4>
+          <p class="hint-muted">The extension stays. Enter the new name only.</p>
+          <label for="lightboxRenameInput">New name</label>
+          <div class="name-prefix">
+            <input type="text" id="lightboxRenameInput" autocomplete="off" maxlength="140" spellcheck="false" />
+            <span class="prefix" id="lightboxRenameExt">.jpg</span>
+          </div>
+          <p class="err-msg" id="lightboxRenameErr">Enter a file name.</p>
+          <button type="submit" class="btn btn-primary" id="btnLightboxSaveName">Save name</button>
+        </form>
+        <div class="lightbox-blur" id="lightboxBlurPanel">
+          <h4>Blur</h4>
+          <p class="hint-muted">Drag a rectangle over a face or a name. Add another if you need to. Pixelation cannot be reversed.</p>
+          <p class="err-msg" id="lightboxBlurErr">Could not blur that photo.</p>
+          <div class="blur-actions">
+            <button type="button" class="btn" id="btnBlurStart">Blur</button>
+            <button type="button" class="btn" id="btnBlurUndo" hidden>Undo last</button>
+            <button type="button" class="btn" id="btnBlurCancel" hidden>Cancel</button>
+            <button type="button" class="btn btn-primary" id="btnBlurSave" hidden>Save blur</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="lightbox-foot">
       <button type="button" class="btn" id="btnLightboxRename">Rename</button>

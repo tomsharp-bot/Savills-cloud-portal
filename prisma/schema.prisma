@@ -225,10 +225,13 @@ model PhotoPoolItem {
   fileName  String
   /// Spaces object key when live; empty means demo / placeholder thumb
   spacesKey String   @default("")
+  /// Incremented when the stored bytes are replaced in place (GDPR blur) so image URLs change.
+  revision  Int      @default(0)
   createdAt DateTime @default(now())
 
   @@unique([projectId, code])
   @@index([projectId])
+  @@index([projectId, createdAt])
 }
 
 /// Excel photo-share grant for one project's Photos Pool. The secret is not stored.

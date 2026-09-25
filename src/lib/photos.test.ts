@@ -18,6 +18,11 @@ import {
   parseUploadedPhotoName,
   photoObjectKey,
   poolPhotoImagePath,
+  poolListWhere,
+  poolRecentSince,
+  poolThumbPath,
+  blurMimeMatches,
+  POOL_RECENT_DAYS,
   photoTooLargeMessage,
   placeholderThumbUrl,
   toPoolView,
@@ -292,6 +297,59 @@ describe("Spaces photo delete and rename", () => {
   });
 });
 
+describe("pool recent window", () => {
+  it("limits the default query to the last 7 days and lets a code search cover the whole pool", () => {
+    assert.equal(POOL_RECENT_DAYS, 7);
+    const now = new Date("2026-09-25T12:00:00.000Z");
+    assert.equal(poolRecentSince(now).toISOString(), "2026-09-18T12:00:00.000Z");
+    const recent = poolListWhere("proj", { now });
+    assert.equal(recent.window, "recent");
+    assert.equal(recent.where.projectId, "proj");
+    assert.deepEqual(recent.where.createdAt, { gte: new Date("2026-09-18T12:00:00.000Z") });
+    assert.equal(recent.where.OR, undefined);
+
+    const search = poolListWhere("proj", { q: " Kitchen ", showAll: false, now });
+    assert.equal(search.window, "search");
+    assert.equal(search.where.createdAt, undefined);
+    assert.deepEqual(search.where.OR, [
+      { code: { contains: "Kitchen", mode: "insensitive" } },
+      { fileName: { contains: "Kitchen", mode: "insensitive" } },
+    ]);
+
+    const all = poolListWhere("proj", { showAll: true, now });
+    assert.equal(all.window, "all");
+    assert.equal(all.where.createdAt, undefined);
+    assert.equal(all.where.OR, undefined);
+  });
+
+  it("adds a cache-busting version only after the stored bytes have been replaced", () => {
+    assert.equal(
+      poolThumbPath({
+        id: "row",
+        projectId: "proj1",
+        code: "Kitchen",
+        fileName: "Kitchen.jpg",
+        spacesKey: "photos/proj1/pool/Kitchen.jpg",
+      }),
+      "/photos/projects/proj1/pool/Kitchen/image"
+    );
+    assert.equal(
+      poolThumbPath({
+        id: "row",
+        projectId: "proj1",
+        code: "Kitchen",
+        fileName: "Kitchen.jpg",
+        spacesKey: "photos/proj1/pool/Kitchen.jpg",
+        revision: 2,
+      }),
+      "/photos/projects/proj1/pool/Kitchen/image?v=2"
+    );
+    assert.equal(blurMimeMatches(".jpg", "image/jpeg"), true);
+    assert.equal(blurMimeMatches(".png", "image/jpeg"), false);
+    assert.equal(blurMimeMatches(".heic", "image/heic"), false);
+  });
+});
+
 describe("photo lightbox markup", () => {
   it("keeps the lightbox inside Photo Storage so overlay styles apply, and sizes it to the viewport", () => {
     const view = readFileSync(join(process.cwd(), "views/photos-project.ejs"), "utf8");
@@ -310,7 +368,12 @@ describe("photo lightbox markup", () => {
     assert.match(css, /\.lightbox-rename\s*\{/);
     assert.match(css, /#renameModal\s*\{[^}]*z-index:\s*500/s);
     assert.match(view, /id="lightboxRenameInput"/);
+    assert.match(view, /id="btnBlurSave"/);
+    assert.match(view, /id="lightboxBlurPanel"/);
     assert.match(view, /class="lightbox-stage"/);
+    const blurBox = view.indexOf('id="lightboxBlurPanel"');
+    const renameBoxEarly = view.indexOf('id="lightboxRenameForm"');
+    assert.ok(blurBox > renameBoxEarly, "blur sits under the rename section");
     const renameBox = view.indexOf('id="lightboxRenameInput"');
     const lightboxEnd = view.indexOf('id="renameModal"');
     assert.ok(renameBox > lightbox && renameBox < lightboxEnd, "rename box sits inside the lightbox");
@@ -357,6 +420,13 @@ describe("photo lightbox markup", () => {
     assert.doesNotMatch(css, /repeat\(15,\s*minmax\(0,\s*1fr\)\)/);
     assert.match(js, /data-folder-replace-confirm/);
     assert.match(js, /poolReplaceApi/);
+    assert.match(view, /id="btnPoolShowAll"/);
+    assert.match(view, />Show all</);
+    assert.match(view, /Showing photos added in the last 7 days/);
+    assert.match(js, /This replaces the stored photo; the unblurred version will not be kept/);
+    assert.match(js, /imageOrientation:\s*"from-image"/);
+    assert.match(js, /quality:\s*0\.95/);
+    assert.match(js, /Showing photos added in the last 7 days/);
   });
 });
 

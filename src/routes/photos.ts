@@ -11,12 +11,15 @@ import {
   fileNameForCode,
   leadFirstName,
   listPhotoTiles,
-  loadProjectPhotos,
+  loadProjectFolders,
   markFolderDownloaded,
+  overwriteProjectPhotoBytes,
   PHOTO_UPLOAD_CONCURRENCY,
   PHOTO_UPLOAD_MAX_BYTES,
+  POOL_RECENT_DAYS,
   photoCodesOf,
   photoTooLargeMessage,
+  queryProjectPool,
   readProjectPoolImage,
   renameProjectPhoto,
   replaceProjectPhotoCodes,
@@ -82,7 +85,10 @@ function sendPoolImage(res: Response, image: PoolImageResult): void {
   res.setHeader("Content-Length", String(image.body.length));
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
-  res.setHeader("Cache-Control", image.placeholder ? "private, no-store" : "private, no-cache");
+  res.setHeader(
+    "Cache-Control",
+    image.placeholder ? "private, no-store" : "private, no-cache, must-revalidate"
+  );
   res.setHeader("Content-Disposition", inlineDisposition(image.fileName));
   res.status(200).send(image.body);
 }
@@ -191,7 +197,7 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
   const surveyTypes = notes.has(project.id)
     ? String(notes.get(project.id) ?? "")
     : seededSurveyTypes(project);
-  const { pool, folders } = await loadProjectPhotos(project.id);
+  const folders = await loadProjectFolders(project.id);
   const photoShare = await activePhotoShareSummary(project.id);
   const from = project.stage === "archive" ? "archived" : "current";
   res.render("photos-project", {
@@ -201,14 +207,12 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
     leadFirst: leadFirstName(project.projectManager),
     surveyTypes,
     from,
-    pool,
     folders,
     spacesHint: spacesHint(),
     spacesConfigured: spacesStatus().configured,
     bootstrap: {
       projectId: project.id,
       projectName: project.name,
-      pool,
       folders,
       extractApi: `/photos/projects/${project.id}/extract`,
       clientAccessApiBase: `/photos/projects/${project.id}/folders`,
@@ -217,6 +221,8 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
       poolRenameApi: `/photos/projects/${project.id}/pool/rename`,
       poolReplaceApi: `/photos/projects/${project.id}/pool/replace`,
       poolUploadApi: `/photos/projects/${project.id}/pool/upload`,
+      poolQueryApi: `/photos/projects/${project.id}/pool`,
+      poolRecentDays: POOL_RECENT_DAYS,
       photoShareApi: `/photos/projects/${project.id}/photo-share`,
       photoShare,
       uploadConcurrency: PHOTO_UPLOAD_CONCURRENCY,
@@ -373,9 +379,64 @@ function sendZip(res: Response, filename: string, files: Array<{ name: string; b
   res.send(zip);
 }
 
+function queryFlag(value: unknown): string {
+  if (Array.isArray(value)) return String(value[0] ?? "");
+  return String(value ?? "");
+}
+
+function codesFromList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((c) => String(c).trim()).filter(Boolean);
+  return String(value || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+photosRouter.get("/projects/:id/pool", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!project) {
+    res.status(404).json({ error: "Project not found." });
+    return;
+  }
+  const q = queryFlag(req.query.q);
+  const windowName = queryFlag(req.query.window);
+  const showAll = windowName === "all";
+  const cursor = queryFlag(req.query.cursor);
+  const view = queryFlag(req.query.view);
+  const limitRaw = Number(queryFlag(req.query.limit));
+  const codes = codesFromList(req.query.codes);
+  const result = await queryProjectPool(project.id, {
+    q,
+    showAll,
+    cursor,
+    view,
+    codes,
+    limit: Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined,
+  });
+  res.json({ ok: true, ...result });
+});
+
 photosRouter.get("/projects/:id/pool/:code/image", async (req: Request, res: Response) => {
   const image = await readProjectPoolImage(req.params.id, req.params.code, poolObjectReader(req));
   sendPoolImage(res, image);
+});
+
+photosRouter.post("/projects/:id/pool/:code/blur", acceptPhotoUpload, async (req: Request, res: Response) => {
+  const file = req.file;
+  if (!file || !file.buffer) {
+    res.status(400).json({ ok: false, error: "Choose a photo to upload." });
+    return;
+  }
+  const result = await overwriteProjectPhotoBytes(
+    req.params.id,
+    req.params.code,
+    { buffer: file.buffer, mime: file.mimetype }
+  );
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error });
+    return;
+  }
+  res.json({ ok: true, photo: result.photo });
 });
 
 photosRouter.get("/projects/:id/pool/download-zip", async (req: Request, res: Response) => {
