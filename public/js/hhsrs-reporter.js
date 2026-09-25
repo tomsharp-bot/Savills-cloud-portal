@@ -606,10 +606,12 @@
   function fillDraftFields(draft) {
     var toEl = $("rv-email-to");
     var ccEl = $("rv-email-cc");
+    var bccEl = $("rv-email-bcc");
     var subEl = $("rv-email-subject");
     var bodyEl = $("rv-email-body");
     if (toEl) toEl.value = draft.to || "";
     if (ccEl) ccEl.value = draft.cc || "";
+    if (bccEl) bccEl.value = draft.bcc || "";
     if (subEl) subEl.value = draft.subject || "";
     if (bodyEl) bodyEl.value = draft.body || "";
     var hint = $("rv-email-empty-hint");
@@ -719,6 +721,16 @@
       requestAnimationFrame(park);
     }, 60);
   }
+
+  /* Assigned before resume/restore. Those calls sit above the function
+     declarations, and var initialisers are not hoisted with their values. */
+  var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
+  var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
+  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-status", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
+  var REVIEW_EMAIL_FIELD_IDS = ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"];
+  var reviewDraftSaveTimer = null;
+  var resumeCleared = false;
+  var skipDraftSave = false;
 
   ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
     var el = $(id);
@@ -1326,14 +1338,6 @@
   }
 
   /* Review email draft stays in this browser until sent or abandoned. */
-  var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
-  var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
-  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-status", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
-  var REVIEW_EMAIL_FIELD_IDS = ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"];
-  var reviewDraftSaveTimer = null;
-  var resumeCleared = false;
-  var skipDraftSave = false;
-
   function reviewDraftKey() {
     return cfg.caseId ? String(cfg.caseId) : "blank";
   }

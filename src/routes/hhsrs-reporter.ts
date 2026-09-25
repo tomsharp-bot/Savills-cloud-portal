@@ -24,6 +24,7 @@ import {
   isHhsrsCaseStatus,
   isWaitingStatus,
   draftEmailFromReviewFields,
+  emailRecipientsFromProject,
   mergeReviewDraftFields,
   photoAttachmentCount,
   photoNames,
@@ -350,6 +351,7 @@ function renderReview(
   const currentNames = opts.progress.filter((project) => project.stage === "current").map((project) => project.name);
   const reviewProjectValue = progressNameForCase(row.projectName, currentNames);
   const matched = matchDemoProject(reviewProjectValue) || matchDemoProject(row.projectName);
+  const recipients = emailRecipientsFromProject(matched);
   const flash = takeFlash(req);
   res.render("hhsrs-reporter/review", {
     ...shellLocals({
@@ -364,9 +366,9 @@ function renderReview(
     photos,
     draftSubject: draft.subject || row.emailSubject,
     draftBody: draft.body || row.emailBody,
-    draftTo: matched ? matched.to.join("; ") : "",
-    draftCc: matched ? matched.cc.join("; ") : "",
-    draftBcc: "",
+    draftTo: recipients.to,
+    draftCc: recipients.cc,
+    draftBcc: recipients.bcc,
     draftError: opts.draftError || draft.error,
     alsoWaiting: opts.alsoWaiting.filter((r) => r.id !== row.id),
     demoProjects: REPORTER_DEMO_PROJECTS,

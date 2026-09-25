@@ -24,20 +24,7 @@
 
 <section class="actions-row">
   <a class="btn btn-ghost" href="<%= reporterBase %>">← Back to Pending Issues</a>
-  <% if (isFilled) { %>
-    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" id="mark-actioned-form" style="display:inline">
-      <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
-      <button type="submit" class="btn btn-primary" id="btn-mark-actioned">Mark as actioned → Main Log</button>
-    </form>
-  <% } else { %>
-    <button type="button" class="btn btn-primary" id="btn-mark-actioned" disabled title="Open a waiting case from Pending Issues first">Mark as actioned → Main Log</button>
-  <% } %>
   <a class="btn btn-create-email" id="btn-create-plain-email" href="<%= reporterBase %>/review?compose=1">Create new email</a>
-  <% if (isFilled) { %>
-    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form" style="display:inline">
-      <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
-    </form>
-  <% } %>
 </section>
 
 <div id="review-workspace">
@@ -334,10 +321,31 @@
             <button type="button" class="btn btn-sm btn-photo-fallback" id="btn-download-photos" disabled>Download photos</button>
           </div>
         </div>
-        <p class="review-project-hint" style="margin-top:0.75rem">Copy into Outlook, attach photos, then send. Use <strong>Mark as actioned → Main Log</strong> when done.</p>
+        <p class="review-project-hint" style="margin-top:0.75rem">Copy into Outlook, attach photos, then send. <strong>Mark as actioned</strong> at the bottom when done.</p>
       </form>
     </section>
   </div>
+
+  <section class="finish-bar" id="rv-finish-bar" aria-label="Finish this case">
+    <div class="finish-bar-left">
+      <% if (isFilled) { %>
+        <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form">
+          <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
+        </form>
+      <% } %>
+    </div>
+    <div class="finish-bar-right">
+      <p class="finish-hint" id="rv-finish-hint">Finished? Mark it as actioned.</p>
+      <% if (isFilled) { %>
+        <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" id="mark-actioned-form">
+          <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
+          <button type="submit" class="btn btn-primary" id="btn-mark-actioned">Mark as actioned → Main Log</button>
+        </form>
+      <% } else { %>
+        <button type="button" class="btn btn-primary" id="btn-mark-actioned" disabled title="Open a waiting case from Pending Issues first">Mark as actioned → Main Log</button>
+      <% } %>
+    </div>
+  </section>
 </div>
 
 <p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>

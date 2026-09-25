@@ -1842,6 +1842,48 @@ body.hhsrs-reporter {
   color: #7c2d12;
 }
 .hhsrs-reporter .btn-abandon-claim[hidden] { display: none !important; }
+.hhsrs-reporter .actions-row:has(#btn-create-plain-email) { flex-wrap: nowrap; }
+.hhsrs-reporter .finish-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.hhsrs-reporter .finish-bar form { margin: 0; display: block; }
+.hhsrs-reporter .finish-bar-left,
+.hhsrs-reporter .finish-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.hhsrs-reporter .finish-bar-right { margin-left: auto; justify-content: flex-end; }
+.hhsrs-reporter .finish-bar .btn { min-height: var(--tap); padding: 11px 16px; }
+.hhsrs-reporter .finish-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+@media (max-width: 720px) {
+  .hhsrs-reporter .finish-bar { flex-direction: column-reverse; align-items: stretch; }
+  .hhsrs-reporter .finish-bar-left,
+  .hhsrs-reporter .finish-bar-right {
+    flex-direction: column;
+    align-items: stretch;
+    margin-left: 0;
+    gap: 0.4rem;
+  }
+  .hhsrs-reporter .finish-bar-right .finish-hint { order: 2; text-align: center; }
+  .hhsrs-reporter .finish-bar .btn { width: 100%; }
+}
 .hhsrs-reporter .review-draft-status {
   margin: 0;
   padding: 0.45rem 1.1rem 0;
