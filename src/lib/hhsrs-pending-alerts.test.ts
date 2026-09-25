@@ -6,7 +6,7 @@ import path from "node:path";
 import { newPendingAlerts, pendingAlertSummary } from "./hhsrs-pending-alerts.js";
 
 const root = process.cwd();
-const require = createRequire(import.meta.url);
+const require = createRequire(path.join(root, "src/lib/hhsrs-pending-alerts.test.ts"));
 const pendingAlertScript = require("../../public/js/hhsrs-pending-alerts.js") as {
   resolvePendingAlerts: (
     marker: { lastSeenAt: string; seenIds: string[] } | null,
