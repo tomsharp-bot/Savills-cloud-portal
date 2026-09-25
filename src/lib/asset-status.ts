@@ -266,17 +266,20 @@ export function inferStockKind(raw: Record<string, unknown> | null | undefined):
 /**
  * Spreadsheet labels that mean one of the seven grid statuses.
  * Keys are already passed through assetStatusKey (lower case, punctuation folded).
- * "Full Survey Completed", "Completed", "Survey Complete", and "Ext Only"
- * are the forms a stocklist actually arrives with.
+ * MTVH stores "Completed", "Access Attempted", "No Visit Recorded", and
+ * "Resident refused access". Those fold here, and the same keys drive the
+ * upload, Survey Type derivation, Sample Analysis, and the deploy migration.
  */
 export const ASSET_STATUS_SYNONYMS: Readonly<Record<string, AssetStatus>> = {
   "no visit": "No Visit",
   "no visits": "No Visit",
   "not visited": "No Visit",
+  "no visit recorded": "No Visit",
 
   "no access": "No Access",
   "no answer": "No Access",
   none: "No Access",
+  "access attempted": "No Access",
 
   "appt made not kept": "Appt Made Not Kept",
   "appointment made not kept": "Appt Made Not Kept",
@@ -287,6 +290,7 @@ export const ASSET_STATUS_SYNONYMS: Readonly<Record<string, AssetStatus>> = {
 
   "access refused": "Access Refused",
   "refused access": "Access Refused",
+  "resident refused access": "Access Refused",
   "not convenient": "Access Refused",
   refused: "Access Refused",
 

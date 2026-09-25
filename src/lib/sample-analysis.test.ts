@@ -225,6 +225,30 @@ describe("Sample Analysis metrics", () => {
     assert.equal(fromStock.surveyorTotals?.blocksDone, 1);
   });
 
+  it("counts MTVH completion wording and leaves access attempts out of Full Survey", () => {
+    const analysis = buildSampleAnalysis({
+      projectTargetValue: 100,
+      projectTargetUnit: "percent",
+      assets: [
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Completed" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Access Attempted" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "No Visit Recorded" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Resident refused access" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "Ext-Only" }),
+        asset({ kind: "dwelling", patch: "Patch 8", assetStatus: "No Visit" }),
+        asset({ kind: "dwelling", patch: "", assetStatus: "Completed" }),
+      ],
+    });
+    const patch = analysis.patches[0];
+    assert.equal(patch.dwellings.fullDone, 1);
+    assert.equal(patch.dwellings.extDone, 1);
+    assert.equal(patch.dwellings.visitedYes, 3);
+    assert.equal(analysis.overview.dwellings.completed, 1);
+    assert.equal(analysis.overview.dwellings.extDone, 1);
+    assert.equal(analysis.overview.dwellings.pctProjectDone, formatSamplePercent(1, 6));
+    assert.equal(analysis.overview.dwellings.accessRate, formatSamplePercent(1, 3));
+  });
+
   it("counts Surveyed By before Surveyor, and keeps an unmatched Surveyed By value", () => {
     const known = [
       { id: "1", name: "Peter May", initials: "PM" },

@@ -222,4 +222,30 @@ describe("Visit import → Full Survey Asset Status filter", () => {
       ["dated", "other"]
     );
   });
+
+  it("treats an empty string as blank for Survey Date, Surveyed By, and Patch", () => {
+    const rows = [
+      { uprn: "empty", surveyDate: "", surveyedBy: "", patch: "" },
+      { uprn: "dated", surveyDate: "01/02/26", surveyedBy: "", patch: "" },
+      { uprn: "named", surveyDate: "", surveyedBy: "PM", patch: "" },
+      { uprn: "patched", surveyDate: "", surveyedBy: "", patch: "Patch 8" },
+    ];
+    const exact = new Set(["surveyDate", "surveyedBy", "patch"]);
+    assert.deepEqual(
+      filterStockRows(rows, { surveyDate: NONBLANK_FILTER }, exact).map((row) => row.uprn),
+      ["dated"]
+    );
+    assert.deepEqual(
+      filterStockRows(rows, { surveyedBy: NONBLANK_FILTER }, exact).map((row) => row.uprn),
+      ["named"]
+    );
+    assert.deepEqual(
+      filterStockRows(rows, { patch: NONBLANK_FILTER }, exact).map((row) => row.uprn),
+      ["patched"]
+    );
+    assert.deepEqual(
+      filterStockRows(rows, { surveyDate: BLANK_FILTER }, exact).map((row) => row.uprn),
+      ["empty", "named", "patched"]
+    );
+  });
 });

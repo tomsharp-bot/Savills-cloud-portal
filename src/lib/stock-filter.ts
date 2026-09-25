@@ -7,7 +7,11 @@ export type StockFilterRow = Record<string, unknown>;
 /** Select value for an empty cell. A blank option value would mean "All". */
 export const BLANK_FILTER = "__blank__";
 
-/** Select value for every cell that has text. Distinct from All, which clears the filter. */
+/**
+ * Select value for every cell that has text.
+ * Distinct from All, which clears the filter.
+ * An empty string and whitespace-only text are blank, the same as NULL.
+ */
 export const NONBLANK_FILTER = "__nonblank__";
 
 /** Named-field lookup so Asset Status never falls through to Survey Type or Site Comments. */

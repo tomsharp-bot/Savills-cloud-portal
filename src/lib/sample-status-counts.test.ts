@@ -93,6 +93,9 @@ describe("dwelling asset status counts", () => {
     assert.equal(dwellingStatusBucket("  survey complete "), "Full Survey");
     assert.equal(dwellingStatusBucket("completed"), "Full Survey");
     assert.equal(dwellingStatusBucket("Ext Only"), "Ext-Only");
+    assert.equal(dwellingStatusBucket("Access Attempted"), "No Access");
+    assert.equal(dwellingStatusBucket("No Visit Recorded"), "No Visit");
+    assert.equal(dwellingStatusBucket("Resident refused access"), "Access Refused");
     assert.equal(dwellingStatusBucket("  NO ACCESS  "), "No Access");
     assert.equal(dwellingStatusBucket("Something else"), "Other");
   });

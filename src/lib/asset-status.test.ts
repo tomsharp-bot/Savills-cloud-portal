@@ -136,6 +136,15 @@ describe("Stocklist Asset Status folding", () => {
       assert.equal(foldAssetStatus(raw), "Ext-Only", raw);
     }
     assert.equal(canonicalAssetStatus("  no access  "), "No Access");
+    assert.equal(canonicalAssetStatus("Access Attempted"), "No Access");
+    assert.equal(foldAssetStatus("Access Attempted"), "No Access");
+    assert.equal(canonicalAssetStatus("No Visit Recorded"), "No Visit");
+    assert.equal(foldAssetStatus("No Visit Recorded"), "No Visit");
+    assert.equal(canonicalAssetStatus("Resident refused access"), "Access Refused");
+    assert.equal(foldAssetStatus("Resident refused access"), "Access Refused");
+    assert.equal(isFullSurveyStatus("Access Attempted"), false);
+    assert.equal(isFullSurveyStatus("No Visit Recorded"), false);
+    assert.equal(isFullSurveyStatus("Resident refused access"), false);
     assert.equal(canonicalAssetStatus("Failed Appointment 2"), "Appt Made Not Kept");
     assert.equal(canonicalAssetStatus("Successful Access"), "Full Survey");
     assert.equal(canonicalAssetStatus("On hold"), undefined);

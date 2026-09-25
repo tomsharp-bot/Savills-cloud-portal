@@ -1,7 +1,11 @@
 -- Fold stored Asset Status onto the seven grid labels, then refresh dwelling Survey Type.
 -- Case, extra spaces, hyphens, underscores, periods, and apostrophes are ignored.
--- "Completed", "Survey Complete", "Full Survey Completed" become Full Survey.
--- "Ext Only" and "External" become Ext-Only. Anything unrecognised is left as stored.
+-- MTVH labels stored today:
+--   Completed, Complete, Survey Complete(d), Full Survey Completed → Full Survey
+--   Access Attempted → No Access
+--   No Visit Recorded → No Visit
+--   Resident refused access → Access Refused
+-- Ext Only and External become Ext-Only. Anything unrecognised is left as stored.
 -- One set-based update, so a stock the size of MTVH (~44k dwellings) is corrected on deploy.
 -- Blocks and garages keep their Survey Type. Their status is still folded.
 -- The same folds are in assetStatusKey / ASSET_STATUS_SYNONYMS.
@@ -38,9 +42,11 @@ mapped AS (
       WHEN status_key = 'no visit' THEN 'No Visit'
       WHEN status_key = 'no visits' THEN 'No Visit'
       WHEN status_key = 'not visited' THEN 'No Visit'
+      WHEN status_key = 'no visit recorded' THEN 'No Visit'
       WHEN status_key = 'no access' THEN 'No Access'
       WHEN status_key = 'no answer' THEN 'No Access'
       WHEN status_key = 'none' THEN 'No Access'
+      WHEN status_key = 'access attempted' THEN 'No Access'
       WHEN status_key = 'appt made not kept' THEN 'Appt Made Not Kept'
       WHEN status_key = 'appointment made not kept' THEN 'Appt Made Not Kept'
       WHEN status_key = 'appointment not kept' THEN 'Appt Made Not Kept'
@@ -49,6 +55,7 @@ mapped AS (
       WHEN status_key = 'failed appt' THEN 'Appt Made Not Kept'
       WHEN status_key = 'access refused' THEN 'Access Refused'
       WHEN status_key = 'refused access' THEN 'Access Refused'
+      WHEN status_key = 'resident refused access' THEN 'Access Refused'
       WHEN status_key = 'not convenient' THEN 'Access Refused'
       WHEN status_key = 'refused' THEN 'Access Refused'
       WHEN status_key = 'void' THEN 'Void'
