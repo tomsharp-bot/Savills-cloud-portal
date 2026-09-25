@@ -11,7 +11,7 @@ import {
   draftEmailFromReviewFields,
   emailRecipientsFromProject,
 } from "./hhsrs-reporter.js";
-import { matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
+import { HHSRS_PROJECT_ROSTER, hhsrsKey, matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
 
 describe("HHSRS Reporter UI helpers", () => {
   it("formats relative time-ago under 48 hours as urgent", () => {
@@ -115,6 +115,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(unchanged.clientDescription, "");
     assert.equal(unchanged.postcode, "EX1 1AA");
     const draft = draftEmailFromReviewFields(unchanged);
+    assert.equal(draft.to, "");
+    assert.equal(draft.cc, "");
     assert.match(draft.subject, /Demo Housing - HHSRS/);
     assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
@@ -141,6 +143,8 @@ describe("HHSRS Reporter UI helpers", () => {
       }
     );
     const attemptedDraft = draftEmailFromReviewFields(attempted);
+    assert.equal(attemptedDraft.to, "");
+    assert.equal(attemptedDraft.cc, "");
     assert.match(attemptedDraft.body, /• Onward call: Voicemail full/);
     assert.doesNotMatch(attemptedDraft.body, /couldn't get through/i);
 
@@ -151,6 +155,78 @@ describe("HHSRS Reporter UI helpers", () => {
     });
     assert.equal(edited.clientDescription, "Loose socket in the kitchen.");
     assert.match(draftEmailFromReviewFields(edited).body, /Loose socket in the kitchen/);
+  });
+
+  it("keeps Test Housing as the only roster address and leaves other projects blank", () => {
+    const addressed = HHSRS_PROJECT_ROSTER.filter(
+      (project) => project.to.length > 0 || project.cc.length > 0 || (project.bcc?.length ?? 0) > 0
+    );
+    assert.deepEqual(
+      addressed.map((project) => project.name),
+      ["Test Housing"]
+    );
+    assert.deepEqual(addressed[0].to, ["cfarrell@savillshousing.co.uk"]);
+    assert.deepEqual(addressed[0].cc, []);
+
+    for (const project of HHSRS_PROJECT_ROSTER) {
+      const draft = draftEmailFromReviewFields(
+        mergeReviewDraftFields(null, {
+          projectName: project.name,
+          address: "1 High Street",
+          notes: "Loose socket in the kitchen.",
+          hazard: "Electrical Hazards",
+          rating: "High",
+          uprn: "100123",
+          surveyDate: "2026-09-20",
+          callOutcome: "Attempted",
+          callNotes: "Voicemail full",
+          onwardTopic: "Electrical",
+          cat1Confirmed: true,
+          includeCause: true,
+          photoCount: 0,
+        })
+      );
+      if (project.name === "Test Housing") {
+        assert.equal(draft.to, "cfarrell@savillshousing.co.uk");
+      } else {
+        assert.equal(draft.to, "", project.name);
+      }
+      assert.equal(draft.cc, "", project.name);
+      assert.equal(draft.bcc, "", project.name);
+      assert.equal(draft.to.includes("undefined"), false);
+      assert.equal(draft.cc.includes("undefined"), false);
+      assert.equal(draft.bcc.includes("undefined"), false);
+    }
+  });
+
+  it("fills Test Housing To and leaves MTVH blank", () => {
+    assert.equal(hhsrsKey("Test Housing"), "Test Housing");
+    assert.equal(matchDemoProject("Test Housing")?.name, "Test Housing");
+    assert.deepEqual(matchDemoProject("Test Housing")?.to, ["cfarrell@savillshousing.co.uk"]);
+    assert.deepEqual(matchDemoProject("Test Housing")?.cc, []);
+
+    const fields = {
+      address: "1 High Street",
+      notes: "Loose socket in the kitchen.",
+      hazard: "Electrical Hazards",
+      rating: "High",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      includeCause: true,
+      photoCount: 0,
+    };
+    const testHousing = draftEmailFromReviewFields(
+      mergeReviewDraftFields(null, { ...fields, projectName: "Test Housing" })
+    );
+    assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
+    assert.equal(testHousing.cc, "");
+
+    const mtvh = draftEmailFromReviewFields(
+      mergeReviewDraftFields(null, { ...fields, projectName: "MTVH 2026" })
+    );
+    assert.equal(matchDemoProject("MTVH 2026")?.name, "MTVH Pilot 2026");
+    assert.equal(mtvh.to, "");
+    assert.equal(mtvh.cc, "");
   });
 
   it("keeps email photos and amend lock out of the case photo box", () => {
@@ -298,9 +374,41 @@ describe("HHSRS Reporter UI helpers", () => {
       clientDescription: "damaged light fitting in lounge",
       photoCount: 0,
     });
-    assert.equal(gateway.to, "hhsrs@gatewayhousing.org.uk");
-    assert.equal(gateway.cc, "gwheeler@savills.com");
+    assert.equal(gateway.to, "");
+    assert.equal(gateway.cc, "");
     assert.equal(gateway.bcc, "");
+
+    for (const project of HHSRS_PROJECT_ROSTER) {
+      if (project.name === "Test Housing") continue;
+      const recipients = emailRecipientsFromProject(project);
+      assert.equal(recipients.to, "", project.name);
+      assert.equal(recipients.cc, "", project.name);
+      assert.equal(recipients.bcc, "", project.name);
+      const draft = draftEmailFromReviewFields(
+        mergeReviewDraftFields(null, {
+          projectName: project.name,
+          address: "1 High Street",
+          notes: "Loose socket in the kitchen.",
+          hazard: "Electrical Hazards",
+          rating: "High",
+          uprn: "100123",
+          surveyDate: "2026-09-20",
+          callOutcome: "Attempted",
+          callNotes: "Voicemail full",
+          onwardTopic: "Electrical",
+          cat1Confirmed: true,
+          includeCause: true,
+          photoCount: 0,
+        })
+      );
+      assert.equal(draft.to, "", project.name);
+      assert.equal(draft.cc, "", project.name);
+      assert.equal(draft.bcc, "", project.name);
+    }
+    const testHousing = emailRecipientsFromProject(matchDemoProject("Test Housing"));
+    assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
+    assert.equal(testHousing.cc, "");
+    assert.equal(testHousing.bcc, "");
   });
 
   it("declares review draft storage keys before restore runs", () => {
