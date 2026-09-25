@@ -22,6 +22,7 @@ const pendingAlertScript = require("../../public/js/hhsrs-pending-alerts.js") as
     contentType?: string;
     pendingIsArray?: boolean;
   }) => boolean;
+  leaderHoldsLock: (record: { id?: string; at?: number } | null, now: number, ttl?: number) => boolean;
   homeNoticeText: (count: number) => string;
 };
 
@@ -190,6 +191,15 @@ describe("HHSRS pending alert marker", () => {
     assert.equal(pendingAlertScript.homeNoticeText(1), "New HHSRS case waiting in Pending");
     assert.equal(pendingAlertScript.homeNoticeText(2), "2 new HHSRS cases waiting in Pending");
   });
+
+  it("lets one fresh leader record block every other tab", () => {
+    const now = 1_700_000_000_000;
+    const leader = { id: "tab-a", at: now - 1000 };
+    assert.equal(pendingAlertScript.leaderHoldsLock(leader, now, 150000), true);
+    assert.equal(pendingAlertScript.leaderHoldsLock(leader, now + 150000, 150000), false);
+    assert.equal(pendingAlertScript.leaderHoldsLock(null, now, 150000), false);
+    assert.equal(pendingAlertScript.leaderHoldsLock({ id: "", at: now }, now, 150000), false);
+  });
 });
 
 describe("HHSRS Reporter alert wiring", () => {
@@ -212,20 +222,45 @@ describe("HHSRS Reporter alert wiring", () => {
     const sharedJs = fs.readFileSync(path.join(root, "public/js/hhsrs-pending-alerts.js"), "utf8");
     const portalHome = fs.readFileSync(path.join(root, "views/admin.ejs"), "utf8");
     const surveyorHome = fs.readFileSync(path.join(root, "views/surveyor.ejs"), "utf8");
+    const partial = fs.readFileSync(path.join(root, "views/partials/pending-alerts.ejs"), "utf8");
+    const appScripts = fs.readFileSync(path.join(root, "views/partials/app-scripts.ejs"), "utf8");
+    const projects = fs.readFileSync(path.join(root, "views/projects.ejs"), "utf8");
+    const project = fs.readFileSync(path.join(root, "views/project.ejs"), "utf8");
     const js = `${reporterJs}\n${sharedJs}`;
 
     assert.match(layout, /hhsrs-pending-alerts\.js/);
     assert.match(layoutOpen, /hhsrs-pending-alerts\.css/);
     assert.doesNotMatch(reporterJs, /initialPendingIds\.forEach/);
     assert.match(sharedJs, /hhsrsPendingAlertMarker/);
+    assert.match(sharedJs, /hhsrsPendingAlertLeader/);
+    assert.match(sharedJs, /BroadcastChannel/);
+    assert.match(sharedJs, /navigator\.locks/);
+    assert.match(sharedJs, /LEADER_TTL_MS = 150000/);
+    assert.doesNotMatch(sharedJs, /serviceWorker/);
     assert.match(sharedJs, /Alerts are paused/);
     assert.match(sharedJs, /clearInterval/);
-    assert.match(portalHome, /if \(isAdmin\)/);
-    assert.match(portalHome, /hhsrs-pending-alerts\.js/);
-    assert.match(portalHome, /New HHSRS case waiting in Pending/);
-    assert.doesNotMatch(portalHome, /Enable desktop alerts/);
-    assert.doesNotMatch(portalHome, /desktop-alerts-banner/);
+    assert.match(partial, /if \(typeof isAdmin !== "undefined" && isAdmin\)/);
+    assert.match(partial, /hhsrs-pending-alerts\.js/);
+    assert.match(partial, /New HHSRS case waiting in Pending/);
+    assert.match(partial, /surface: "portal"/);
+    assert.doesNotMatch(partial, /Enable desktop alerts/);
+    assert.doesNotMatch(partial, /desktop-alerts-banner/);
+    assert.match(appScripts, /pending-alerts/);
+    assert.match(projects, /partials\/app-scripts/);
+    assert.match(project, /partials\/app-scripts/);
+    assert.match(portalHome, /partials\/pending-alerts/);
+    for (const page of [
+      "views/photos.ejs",
+      "views/photos-archived.ejs",
+      "views/photos-project.ejs",
+      "views/projects-programme.ejs",
+      "views/reference-documents.ejs",
+    ]) {
+      const source = fs.readFileSync(path.join(root, page), "utf8");
+      assert.match(source, /partials\/pending-alerts/, page);
+    }
     assert.doesNotMatch(surveyorHome, /hhsrs-pending-alerts/);
+    assert.doesNotMatch(surveyorHome, /pending-alerts/);
 
     assert.match(layout, /id="hhsrs-alert-toast"/);
     assert.match(layout, /class="alert-toast"/);

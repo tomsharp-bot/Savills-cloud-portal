@@ -1,7 +1,8 @@
-/* Shared new-Pending alerts for HHSRS Reporter and the portal home page.
-   One localStorage marker is shared across tabs. The first run on a browser
-   only records a baseline. Later polls and page loads alert for unclaimed
-   cases newer than that marker. Claimed and stale cases stay quiet. */
+/* Shared new-Pending alerts for every admin portal page and HHSRS Reporter.
+   One localStorage marker records what this browser has already handled.
+   One leader tab polls and raises the desktop notification. Other open tabs
+   only show the small in-page notice. A minimised or background leader keeps
+   its timer; Chrome may slow that to about once a minute. */
 (function (factory) {
   var api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -10,10 +11,16 @@
   api.start();
 })(function () {
   var MARKER_KEY = "hhsrsPendingAlertMarker";
+  var LEADER_KEY = "hhsrsPendingAlertLeader";
+  var BROADCAST_KEY = "hhsrsPendingAlertBroadcast";
   var DESKTOP_ON_KEY = "hhsrsDesktopAlertsOn";
+  var CHANNEL_NAME = "hhsrs-pending-alerts";
   var SEEN_CAP = 300;
   var VISIBLE_GAP_MS = 15000;
+  /* Longer than Chrome's background timer clamp so a minimised leader is not replaced. */
+  var LEADER_TTL_MS = 150000;
   var PAUSE_TEXT = "Alerts are paused. The login may have expired.";
+  var tabId = String(Date.now()) + "-" + Math.random().toString(36).slice(2);
 
   var memoryMarker = null;
   var started = false;
@@ -22,6 +29,15 @@
   var lastPollAt = 0;
   var pollTimer = null;
   var alertAudio = null;
+  var channel = null;
+  var displayed = {};
+  var activeCfg = null;
+  var isLeader = false;
+  var releaseLockWait = null;
+
+  function usingWebLocks() {
+    return typeof navigator !== "undefined" && navigator.locks && typeof navigator.locks.request === "function";
+  }
 
   function rememberIds(existing, extra) {
     var next = existing.slice();
@@ -109,6 +125,79 @@
         seenIds: rememberIds(stored.seenIds, touched),
       },
     };
+  }
+
+  /* True while a leader record is still inside the ttl window. */
+  function leaderHoldsLock(record, now, ttl) {
+    if (!record || typeof record.id !== "string" || !record.id) return false;
+    if (typeof record.at !== "number" || typeof now !== "number") return false;
+    var windowMs = typeof ttl === "number" ? ttl : LEADER_TTL_MS;
+    return now - record.at < windowMs;
+  }
+
+  function readLeaderRecord() {
+    try {
+      var raw = localStorage.getItem(LEADER_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.id !== "string" || typeof parsed.at !== "number") return null;
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function ensureLeader() {
+    var now = Date.now();
+    var current = readLeaderRecord();
+    if (leaderHoldsLock(current, now, LEADER_TTL_MS) && current.id !== tabId) return false;
+    var next = { id: tabId, at: now };
+    try {
+      localStorage.setItem(LEADER_KEY, JSON.stringify(next));
+      var confirmed = readLeaderRecord();
+      return !!(confirmed && confirmed.id === tabId);
+    } catch (e) {
+      /* One window with storage blocked still polls. */
+      return true;
+    }
+  }
+
+  function releaseLeader() {
+    if (releaseLockWait) {
+      var done = releaseLockWait;
+      releaseLockWait = null;
+      isLeader = false;
+      done();
+      return;
+    }
+    var current = readLeaderRecord();
+    if (current && current.id === tabId) {
+      try {
+        localStorage.removeItem(LEADER_KEY);
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    isLeader = false;
+  }
+
+  function requestLeaderLock() {
+    if (!usingWebLocks()) {
+      isLeader = true;
+      return;
+    }
+    navigator.locks.request(CHANNEL_NAME, function () {
+      isLeader = true;
+      if (activeCfg && !paused) pollPending(activeCfg);
+      return new Promise(function (resolve) {
+        releaseLockWait = function () {
+          isLeader = false;
+          resolve();
+        };
+      });
+    }).catch(function () {
+      isLeader = true;
+    });
   }
 
   function shouldPausePoll(info) {
@@ -206,7 +295,7 @@
     if (!item || !desktopAlertsOn()) return;
     var summary = item.summary || [item.category, item.rating].filter(Boolean).join(" · ");
     var body = [item.projectName, item.fullAddress, summary].filter(Boolean).join(" — ");
-    var href = cfg.surface === "home" ? pendingUrl(cfg) : reviewUrl(cfg, item.id);
+    var href = cfg.surface === "reporter" ? reviewUrl(cfg, item.id) : pendingUrl(cfg);
     try {
       var note = new Notification("New HHSRS hazard", {
         body: body,
@@ -302,7 +391,7 @@
     playAlertChime();
   }
 
-  function showHomeNotice(fresh, cfg) {
+  function showPortalNotice(fresh, cfg) {
     var box = document.getElementById("hhsrs-home-alert");
     if (!box || !fresh.length) return;
     var text = document.getElementById("hhsrs-home-alert-text");
@@ -310,6 +399,47 @@
     if (text) text.textContent = homeNoticeText(fresh.length);
     if (link) link.href = pendingUrl(cfg);
     box.hidden = false;
+  }
+
+  function unseenCases(fresh) {
+    var next = [];
+    for (var i = 0; i < fresh.length; i++) {
+      var item = fresh[i];
+      if (!item || !item.id || displayed[item.id]) continue;
+      displayed[item.id] = true;
+      next.push(item);
+    }
+    return next;
+  }
+
+  function publish(msg) {
+    if (channel) {
+      try {
+        channel.postMessage(msg);
+      } catch (e) {
+        /* followers still hear the localStorage copy */
+      }
+    }
+    try {
+      localStorage.setItem(BROADCAST_KEY, JSON.stringify(msg));
+    } catch (e2) {
+      /* this tab already showed its own notice */
+    }
+  }
+
+  function applyBroadcast(msg, cfg) {
+    if (!msg || msg.from === tabId) return;
+    if (msg.type === "paused") {
+      if (paused) return;
+      paused = true;
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      showPaused();
+      return;
+    }
+    if (msg.type === "cases" && Array.isArray(msg.items)) present(msg.items, cfg, false);
   }
 
   function showPaused() {
@@ -335,14 +465,19 @@
       pollTimer = null;
     }
     showPaused();
+    publish({ type: "paused", from: tabId, at: Date.now() });
+    releaseLeader();
   }
 
-  function present(fresh, cfg) {
-    if (!fresh.length) return;
-    if (cfg.surface === "home") showHomeNotice(fresh, cfg);
-    else showToast(fresh, cfg);
-    var limit = Math.min(fresh.length, 3);
-    for (var n = 0; n < limit; n++) desktopNotify(fresh[n], cfg);
+  function present(fresh, cfg, notifyDesktop) {
+    var unseen = unseenCases(fresh);
+    if (!unseen.length) return;
+    if (cfg.surface === "reporter") showToast(unseen, cfg);
+    else showPortalNotice(unseen, cfg);
+    if (!notifyDesktop) return;
+    var limit = Math.min(unseen.length, 3);
+    for (var n = 0; n < limit; n++) desktopNotify(unseen[n], cfg);
+    publish({ type: "cases", from: tabId, at: Date.now(), items: unseen });
   }
 
   function pollPending(cfg) {
@@ -379,7 +514,7 @@
       .then(function (data) {
         if (!data) return;
         var fresh = claimFresh(data.pending, new Date().toISOString());
-        present(fresh, cfg);
+        present(fresh, cfg, true);
       })
       .catch(function () {
         pauseAlerts();
@@ -406,7 +541,7 @@
         if (ev.key === "Escape") hideToast();
       }, true);
     }
-    if (cfg.surface === "home") {
+    if (cfg.surface !== "reporter") {
       document.addEventListener("keydown", function (ev) {
         if (ev.key !== "Escape") return;
         var box = document.getElementById("hhsrs-home-alert");
@@ -415,25 +550,69 @@
     }
   }
 
+  function openChannel(cfg) {
+    if (typeof BroadcastChannel !== "function") return;
+    try {
+      channel = new BroadcastChannel(CHANNEL_NAME);
+    } catch (e) {
+      channel = null;
+      return;
+    }
+    channel.onmessage = function (ev) {
+      applyBroadcast(ev.data, cfg);
+    };
+  }
+
+  function onStorage(ev) {
+    if (ev.key !== BROADCAST_KEY || !ev.newValue || !activeCfg) return;
+    try {
+      applyBroadcast(JSON.parse(ev.newValue), activeCfg);
+    } catch (e) {
+      /* ignore a bad broadcast payload */
+    }
+  }
+
+  function tick(cfg) {
+    if (paused) return;
+    if (usingWebLocks()) {
+      if (!isLeader) return;
+      pollPending(cfg);
+      return;
+    }
+    if (!ensureLeader()) return;
+    isLeader = true;
+    pollPending(cfg);
+  }
+
   function start() {
     if (started || typeof document === "undefined") return;
     started = true;
     var cfg = readConfig();
+    if (document.getElementById("hhsrs-alert-toast")) cfg.surface = "reporter";
+    activeCfg = cfg;
     wireChrome(cfg);
-    pollPending(cfg);
+    openChannel(cfg);
+    window.addEventListener("pagehide", releaseLeader);
+    window.addEventListener("storage", onStorage);
+    /* Keep polling while the window is minimised. Chrome may clamp the timer
+       to about once a minute; that is still often enough for a desktop pop-up.
+       Web Locks keeps a single leader until that tab closes. */
+    if (usingWebLocks()) requestLeaderLock();
+    else tick(cfg);
     pollTimer = setInterval(function () {
-      pollPending(cfg);
+      tick(cfg);
     }, cfg.pollMs);
     document.addEventListener("visibilitychange", function () {
       if (paused || document.visibilityState !== "visible") return;
       if (Date.now() - lastPollAt < VISIBLE_GAP_MS) return;
-      pollPending(cfg);
+      tick(cfg);
     });
   }
 
   return {
     resolvePendingAlerts: resolvePendingAlerts,
     shouldPausePoll: shouldPausePoll,
+    leaderHoldsLock: leaderHoldsLock,
     homeNoticeText: homeNoticeText,
     desktopAlertsOn: desktopAlertsOn,
     unlockAlertSound: unlockAlertSound,

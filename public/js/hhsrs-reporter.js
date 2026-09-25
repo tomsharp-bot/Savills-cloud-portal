@@ -823,7 +823,7 @@
   if (hintEl && !hintEl.textContent) hintEl.textContent = DRAG_HINT;
 
   /* New-pending polling, the toast, and desktop notifications live in
-     hhsrs-pending-alerts.js so portal home shares the same last-seen marker. */
+     hhsrs-pending-alerts.js so every admin portal page shares one leader poll. */
 
   function notificationState() {
     if (typeof Notification === "undefined") return "unsupported";

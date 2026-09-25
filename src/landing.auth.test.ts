@@ -143,7 +143,20 @@ describe("post-login landing by role", () => {
     assert.equal(photos.status, 200);
     assert.match(photos.body, /Photo Storage/);
     assert.match(photos.body, /Current projects/);
-    assert.match(photos.body, /href="\/projectprogress\/admin"/);
+    assert.match(photos.body, /hhsrs-pending-alerts\.js/);
+    assert.match(photos.body, /New HHSRS case waiting in Pending/);
+    assert.doesNotMatch(photos.body, /Enable desktop alerts/);
+
+    const progress = await request(app, "GET", "/projectprogress/projects", { cookie: adminCookie });
+    assert.equal(progress.status, 200);
+    assert.match(progress.body, /hhsrs-pending-alerts\.js/);
+    assert.match(progress.body, /New HHSRS case waiting in Pending/);
+    assert.doesNotMatch(progress.body, /Enable desktop alerts/);
+
+    const programme = await request(app, "GET", "/projectprogress/projects-programme", { cookie: adminCookie });
+    assert.equal(programme.status, 200);
+    assert.match(programme.body, /hhsrs-pending-alerts\.js/);
+    assert.doesNotMatch(programme.body, /Enable desktop alerts/);
 
     const surveyorLogin = await login(app, "peter.m", "PeterMay2468");
     const surveyorCookie = cookieHeader(surveyorLogin.setCookie);
@@ -174,5 +187,6 @@ describe("post-login landing by role", () => {
     assert.match(projects.body, /class="brand" href="\/projectprogress\/surveyor"/);
     assert.match(projects.body, /href="\/projectprogress\/reference-documents"/);
     assert.doesNotMatch(projects.body, /href="\/projectprogress\/admin"/);
+    assert.doesNotMatch(projects.body, /hhsrs-pending-alerts/);
   });
 });

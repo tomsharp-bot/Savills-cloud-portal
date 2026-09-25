@@ -6,9 +6,6 @@
   <title>Home — Savills Cloud Portal</title>
   <%- include("partials/head-css") %>
   <link rel="stylesheet" href="<%= baseUrl('/css/programme.css') %>" />
-  <% if (isAdmin) { %>
-  <link rel="stylesheet" href="<%= baseUrl('/css/hhsrs-pending-alerts.css') %>" />
-  <% } %>
 </head>
 <body>
 <div id="screen-app" class="programme-page">
@@ -20,16 +17,6 @@
         <p class="intro">Choose a section. Projects Programme stays available from this page and from Project Progress.</p>
       </div>
     </div>
-    <% if (isAdmin) { %>
-    <div class="hhsrs-home-alerts" id="hhsrs-home-alerts">
-      <div class="hhsrs-home-alert" id="hhsrs-home-alert" role="status" hidden>
-        <span class="hhsrs-home-alert-text" id="hhsrs-home-alert-text">New HHSRS case waiting in Pending</span>
-        <a class="hhsrs-home-alert-link" id="hhsrs-home-alert-link" href="<%= baseUrl('/HHSRSreporter') %>">Open Pending</a>
-        <button type="button" class="hhsrs-home-alert-dismiss" id="hhsrs-home-alert-dismiss">Dismiss</button>
-      </div>
-      <div class="hhsrs-alerts-paused" id="hhsrs-alerts-paused" role="status" hidden>Alerts are paused. The login may have expired.</div>
-    </div>
-    <% } %>
     <div class="admin-grid">
       <a class="admin-tile" href="<%= baseUrl('/HHSRSreporter') %>">
         <h2>HHSRS Reporter</h2>
@@ -58,15 +45,6 @@
     </div>
   </main>
 </div>
-<% if (isAdmin) { %>
-<script>
-  window.HHSRS_PENDING_ALERTS = {
-    base: "/HHSRSreporter",
-    surface: "home",
-    alertsPollMs: 30000
-  };
-</script>
-<script src="<%= baseUrl('/js/hhsrs-pending-alerts.js') %>" defer></script>
-<% } %>
+<%- include("partials/pending-alerts") %>
 </body>
 </html>
