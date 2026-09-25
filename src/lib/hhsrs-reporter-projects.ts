@@ -24,6 +24,8 @@ export type ReporterProjectDemo = {
   extras: ProjectExtras;
   to: string[];
   cc: string[];
+  /** Optional. Generate email fills Bcc only when a project has addresses here. */
+  bcc?: string[];
   hint: string;
 };
 

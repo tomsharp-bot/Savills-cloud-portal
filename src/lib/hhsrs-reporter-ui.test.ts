@@ -9,6 +9,7 @@ import {
   reporterCasePhotos,
   mergeReviewDraftFields,
   draftEmailFromReviewFields,
+  emailRecipientsFromProject,
 } from "./hhsrs-reporter.js";
 import { matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
 
@@ -217,7 +218,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /function showPhotoPreview/);
     assert.match(js, /rv-photo-preview/);
     assert.match(css, /btn-photo-fallback/);
-    assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*450px/);
+    assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*300px/);
+    assert.match(css, /#rv-email-body\s*\{[^}]*resize:\s*vertical/);
+    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*align-self:\s*start/);
+    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*height:\s*42px/);
   });
 
   it("paints the tool header as a full-width bar and leaves the navy top bar", () => {
@@ -229,5 +233,83 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.tool-header \.tool-sub[^{]*\{[^}]*color:\s*#526070/);
     assert.match(css, /\.tool-header \.tool-meta\s*\{[^}]*color:\s*#526070/);
     assert.match(css, /\.tool-header \.tool-meta strong\s*\{[^}]*color:\s*var\(--text\)/);
+  });
+
+  it("keeps finishing actions in a bottom bar inside the review workspace", () => {
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const actions = review.slice(review.indexOf('class="actions-row"'), review.indexOf('id="review-workspace"'));
+    const workspace = review.slice(review.indexOf('id="review-workspace"'), review.indexOf('class="footer-note"'));
+    const gridAt = workspace.indexOf('class="review-grid"');
+    const finishAt = workspace.indexOf('id="rv-finish-bar"');
+    assert.match(actions, /← Back to Pending Issues/);
+    assert.match(actions, /id="btn-create-plain-email"/);
+    assert.doesNotMatch(actions, /id="btn-mark-actioned"/);
+    assert.doesNotMatch(actions, /id="btn-abandon-claim"/);
+    assert.ok(gridAt >= 0 && finishAt > gridAt, "finish bar follows the review grid inside the workspace");
+    assert.match(workspace, /id="mark-actioned-form"/);
+    assert.match(workspace, /name="expectedUpdatedAt"/);
+    assert.match(workspace, /id="abandon-claim-form"/);
+    assert.match(workspace, /id="btn-abandon-claim"/);
+    assert.match(workspace, /showAbandon \? "" : "hidden"/);
+    assert.match(workspace, /Abandon claim — return to pending/);
+    assert.match(workspace, /Finished\? Mark it as actioned\./);
+    assert.match(workspace, /Mark as actioned → Main Log/);
+    assert.match(workspace, /Open a waiting case from Pending Issues first/);
+    assert.match(workspace, /disabled title="Open a waiting case from Pending Issues first"/);
+    assert.match(review, /<strong>Mark as actioned<\/strong> at the bottom when done\./);
+    assert.doesNotMatch(review, /Use <strong>Mark as actioned → Main Log<\/strong> when done/);
+    assert.match(css, /#review-workspace\s*\{[^}]*padding-bottom:\s*85vh/);
+    assert.match(css, /\.finish-bar\s*\{[^}]*background:\s*var\(--surface\)/);
+    assert.match(css, /\.finish-bar\s*\{[^}]*border-radius:\s*var\(--radius\)/);
+    assert.match(css, /\.finish-bar \.btn\s*\{[^}]*min-height:\s*var\(--tap\)/);
+    assert.match(css, /@media \(max-width:\s*720px\)\s*\{[^}]*\.finish-bar\s*\{[^}]*flex-direction:\s*column-reverse/);
+    assert.match(css, /\.finish-bar-right \.finish-hint\s*\{[^}]*order:\s*2/);
+    assert.match(css, /\.finish-bar \.btn\s*\{[^}]*width:\s*100%/);
+  });
+
+  it("fills Bcc from project settings the same way as To and Cc", () => {
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const fill = js.slice(js.indexOf("function fillDraftFields"), js.indexOf("function generateEmail"));
+    assert.match(fill, /bccEl\.value = draft\.bcc \|\| ""/);
+    assert.deepEqual(
+      emailRecipientsFromProject({
+        to: ["to@example.com"],
+        cc: ["cc1@example.com", "cc2@example.com"],
+        bcc: ["bcc@example.com"],
+      }),
+      {
+        to: "to@example.com",
+        cc: "cc1@example.com; cc2@example.com",
+        bcc: "bcc@example.com",
+      }
+    );
+    assert.equal(emailRecipientsFromProject({ to: ["to@example.com"], cc: ["cc@example.com"] }).bcc, "");
+    assert.equal(emailRecipientsFromProject(null).bcc, "");
+    const gateway = draftEmailFromReviewFields({
+      projectName: "Gateway 2026",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "123",
+      surveyDate: "2026-09-20",
+      category: "Electrical Hazards",
+      rating: "High",
+      comment: "damaged light fitting in lounge",
+      clientDescription: "damaged light fitting in lounge",
+      photoCount: 0,
+    });
+    assert.equal(gateway.to, "hhsrs@gatewayhousing.org.uk");
+    assert.equal(gateway.cc, "gwheeler@savills.com");
+    assert.equal(gateway.bcc, "");
+  });
+
+  it("declares review draft storage keys before restore runs", () => {
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const draftsAt = js.indexOf('var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1"');
+    const lastAt = js.indexOf('var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1"');
+    const resumeAt = js.indexOf("var reviewLeavingForResume = initReviewResume()");
+    const restoreAt = js.indexOf("restoreReviewDraft(reviewDraftKey())");
+    assert.ok(draftsAt >= 0 && lastAt > draftsAt);
+    assert.ok(lastAt < resumeAt && draftsAt < restoreAt);
   });
 });

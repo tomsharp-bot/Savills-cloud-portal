@@ -195,6 +195,22 @@ export function mergeReviewDraftFields(
   };
 }
 
+export function joinAddressList(values: readonly string[] | null | undefined): string {
+  if (!values || !values.length) return "";
+  return values.map((value) => value.trim()).filter(Boolean).join("; ");
+}
+
+/** To, Cc, and Bcc lines from project settings. Bcc stays blank when the project has none. */
+export function emailRecipientsFromProject(
+  project: { to?: readonly string[] | null; cc?: readonly string[] | null; bcc?: readonly string[] | null } | null | undefined
+): { to: string; cc: string; bcc: string } {
+  return {
+    to: joinAddressList(project?.to),
+    cc: joinAddressList(project?.cc),
+    bcc: joinAddressList(project?.bcc),
+  };
+}
+
 export function draftEmailFromReviewFields(fields: ReviewDraftFields): {
   to: string;
   cc: string;
@@ -204,10 +220,11 @@ export function draftEmailFromReviewFields(fields: ReviewDraftFields): {
 } {
   const matched = matchDemoProject(fields.projectName);
   const draft = draftFromSubmission(fields);
+  const recipients = emailRecipientsFromProject(matched);
   return {
-    to: matched ? matched.to.join("; ") : "",
-    cc: matched ? matched.cc.join("; ") : "",
-    bcc: "",
+    to: recipients.to,
+    cc: recipients.cc,
+    bcc: recipients.bcc,
     subject: draft.subject,
     body: draft.body,
   };
