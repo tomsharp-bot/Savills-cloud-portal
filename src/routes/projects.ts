@@ -299,6 +299,7 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
           epcRequired: true,
           patch: true,
           surveyor: true,
+          surveyedBy: true,
           visit1: true,
           visit2: true,
           visit3: true,

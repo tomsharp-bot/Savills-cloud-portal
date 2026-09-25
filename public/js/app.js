@@ -117,15 +117,25 @@
   function stockQuery(table, overrides) {
     const kind = table.dataset.stock;
     const params = new URLSearchParams();
+    const presence = new Set(["__nonblank__", "__blank__"]);
     params.set("kind", kind);
     params.set("offset", String(overrides && overrides.offset != null ? overrides.offset : (table.dataset.offset || "0")));
     params.set("limit", String(table.dataset.limit || "100"));
     params.set("sort", (overrides && overrides.sort) || table.dataset.sort || "uprn");
     params.set("dir", (overrides && overrides.dir) || table.dataset.dir || "asc");
+    document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter-presence]').forEach((el) => {
+      markFilterActive(el);
+      const value = String(el.value || "").trim();
+      if (presence.has(value)) params.set("f_" + el.dataset.filterPresence, value);
+    });
     document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
       markFilterActive(el);
       const value = String(el.value || "").trim();
-      if (value) params.set("f_" + el.dataset.filter, value);
+      if (!value) return;
+      const key = "f_" + el.dataset.filter;
+      const chosen = params.get(key);
+      if (chosen && presence.has(chosen)) return;
+      params.set("f_" + el.dataset.filter, value);
     });
     return params;
   }
@@ -331,17 +341,32 @@
   document.querySelectorAll("table[data-stock]").forEach((table) => {
     const kind = table.dataset.stock;
     const wrap = table.closest(".stock-table-wrap");
-    document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
+    const filterRoot = document.querySelector('[data-stock-filters="' + kind + '"]');
+    document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter], [data-stock-filters="' + kind + '"] [data-filter-presence]').forEach((el) => {
       markFilterActive(el);
       let timer = 0;
       const run = () => loadStockWindow(table, { offset: "0", scrollTop: true });
       el.addEventListener("input", () => {
+        if (filterRoot && el.matches("input[data-filter]") && el.value.trim()) {
+          const presenceEl = filterRoot.querySelector('[data-filter-presence="' + el.dataset.filter + '"]');
+          if (presenceEl) {
+            presenceEl.value = "";
+            markFilterActive(presenceEl);
+          }
+        }
         markFilterActive(el);
         if (el.tagName === "SELECT") return;
         clearTimeout(timer);
         timer = setTimeout(run, 250);
       });
       el.addEventListener("change", () => {
+        if (filterRoot && el.matches("[data-filter-presence]") && el.value.trim()) {
+          const text = filterRoot.querySelector('input[data-filter="' + el.dataset.filterPresence + '"]');
+          if (text) {
+            text.value = "";
+            markFilterActive(text);
+          }
+        }
         markFilterActive(el);
         clearTimeout(timer);
         run();
@@ -366,7 +391,7 @@
   document.querySelectorAll("[data-clear-filters]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const kind = btn.getAttribute("data-clear-filters");
-      document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
+      document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter], [data-stock-filters="' + kind + '"] [data-filter-presence]').forEach((el) => {
         el.value = "";
         markFilterActive(el);
       });

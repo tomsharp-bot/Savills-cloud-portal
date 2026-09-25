@@ -1,9 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
+  ASSET_STATUS_SYNONYMS,
   assetStatusFilterOptions,
+  canonicalAssetStatus,
   foldAssetStatus,
   inferStockKind,
+  isExtOnlyStatus,
+  isFullSurveyStatus,
   statusFromVisit,
   statusFromVisitLogs,
 } from "./asset-status.js";
@@ -108,6 +114,51 @@ describe("Stocklist Asset Status folding", () => {
     assert.equal(foldAssetStatus("On hold"), "On hold");
     assert.equal(foldAssetStatus("  "), undefined);
     assert.equal(foldAssetStatus(null), undefined);
+  });
+
+  it("folds real stocklist wording, ignoring case and extra spaces", () => {
+    for (const raw of [
+      "Full Survey Completed",
+      "full survey completed",
+      "  Survey Complete  ",
+      "Survey Completed",
+      "Completed",
+      "complete",
+      "FULL SURVEYS",
+    ]) {
+      assert.equal(canonicalAssetStatus(raw), "Full Survey", raw);
+      assert.equal(isFullSurveyStatus(raw), true, raw);
+      assert.equal(foldAssetStatus(raw), "Full Survey", raw);
+    }
+    for (const raw of ["Ext Only", "ext. only", "EXT-ONLY", "External", "  External Only  "]) {
+      assert.equal(canonicalAssetStatus(raw), "Ext-Only", raw);
+      assert.equal(isExtOnlyStatus(raw), true, raw);
+      assert.equal(foldAssetStatus(raw), "Ext-Only", raw);
+    }
+    assert.equal(canonicalAssetStatus("  no access  "), "No Access");
+    assert.equal(canonicalAssetStatus("Failed Appointment 2"), "Appt Made Not Kept");
+    assert.equal(canonicalAssetStatus("Successful Access"), "Full Survey");
+    assert.equal(canonicalAssetStatus("On hold"), undefined);
+    assert.equal(isFullSurveyStatus("On hold"), false);
+    assert.equal(isExtOnlyStatus("On hold"), false);
+  });
+
+  it("ships a set-based migration that normalises every status synonym", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "prisma/migrations/20260925150000_normalise_asset_status/migration.sql"),
+      "utf8"
+    );
+    assert.match(sql, /UPDATE "Asset"/);
+    assert.match(sql, /SCS Only/);
+    assert.match(sql, /SCS \+ EPC/);
+    assert.match(sql, /External/);
+    assert.match(sql, /successful%/);
+    assert.match(sql, /failed appt%/);
+    assert.match(sql, /failed appointment/);
+    assert.doesNotMatch(sql, /FOR\s+\w+\s+IN/);
+    for (const key of Object.keys(ASSET_STATUS_SYNONYMS)) {
+      assert.ok(sql.includes(`'${key}'`), key);
+    }
   });
 });
 

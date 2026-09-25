@@ -195,6 +195,21 @@ describe("Virtual stock window for a 44k dwellings tab", () => {
     assert.match(compact, /SCS \+ EPC/);
     assert.match(compact, /SCS Only/);
     assert.match(compact, /External/);
+    assert.ok(flat.values.includes("full survey completed"));
+    assert.ok(flat.values.includes("survey complete"));
+    assert.ok(flat.values.includes("completed"));
+    assert.ok(flat.values.includes("ext only"));
+    const nonBlank = stockFilterSql(
+      { surveyDate: "__nonblank__", patch: "Patch 8" },
+      new Set(["surveyDate", "patch"]),
+      false,
+      new Set(["surveyDate", "patch"])
+    );
+    const nonBlankFlat = flattenSql(nonBlank);
+    const nonBlankSql = nonBlankFlat.text.replace(/\s+/g, " ");
+    assert.match(nonBlankSql, /<> ''/);
+    assert.match(nonBlankSql, /AND/);
+    assert.ok(nonBlankFlat.values.some((value) => String(value).toLowerCase() === "patch 8"));
     const anyProject = stockIdQuery({
       projectId: "proj",
       kind: "dwelling",

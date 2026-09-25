@@ -56,15 +56,15 @@ describe("dwelling asset status counts", () => {
       group({ assetStatus: "completed", count: 2 }),
     ]);
     const byStatus = Object.fromEntries(rows.map((row) => [row.status, row.count]));
-    assert.equal(byStatus["Full Survey"], 13);
+    assert.equal(byStatus["Full Survey"], 15);
     assert.equal(byStatus["Ext-Only"], 7);
     assert.equal(byStatus["Access Refused"], 5);
     assert.equal(byStatus["Appt Made Not Kept"], 6);
     assert.equal(byStatus.Void, 7);
     assert.equal(byStatus["No Access"], 8);
     assert.equal(byStatus["No Visit"], 13);
-    assert.equal(byStatus.Other, 5);
-    assert.equal(byStatus.Total, 13 + 7 + 5 + 6 + 7 + 8 + 13 + 5);
+    assert.equal(byStatus.Other, 3);
+    assert.equal(byStatus.Total, 15 + 7 + 5 + 6 + 7 + 8 + 13 + 3);
     assert.equal(rows.at(-2)?.status, "Other");
     assert.equal(rows.at(-1)?.status, "Total");
   });
@@ -89,6 +89,11 @@ describe("dwelling asset status counts", () => {
     assert.equal(dwellingStatusBucket(""), "No Visit");
     assert.equal(dwellingStatusBucket("Full Surveys"), "Full Survey");
     assert.equal(dwellingStatusBucket("External Only"), "Ext-Only");
+    assert.equal(dwellingStatusBucket("Full Survey Completed"), "Full Survey");
+    assert.equal(dwellingStatusBucket("  survey complete "), "Full Survey");
+    assert.equal(dwellingStatusBucket("completed"), "Full Survey");
+    assert.equal(dwellingStatusBucket("Ext Only"), "Ext-Only");
+    assert.equal(dwellingStatusBucket("  NO ACCESS  "), "No Access");
     assert.equal(dwellingStatusBucket("Something else"), "Other");
   });
 
@@ -147,6 +152,29 @@ describe("Condition Only and Condition + EPC completed counts", () => {
     ]);
     assert.equal(result.conditionOnly, 3);
     assert.equal(result.conditionEpc, 0);
+  });
+
+  it("counts stocklist completion wording as Full Survey, and Ext Only as Ext-Only", () => {
+    const rows = foldDwellingStatusCounts([
+      group({ assetStatus: "Full Survey Completed", epcRequired: false, count: 4 }),
+      group({ assetStatus: "Survey Complete", epcRequired: true, count: 3 }),
+      group({ assetStatus: "Completed", epcRequired: false, count: 2 }),
+      group({ assetStatus: "Ext Only", epcRequired: true, count: 5 }),
+      group({ assetStatus: "External", count: 1 }),
+      group({ assetStatus: "On hold", count: 6 }),
+    ]);
+    const byStatus = Object.fromEntries(rows.map((row) => [row.status, row.count]));
+    assert.equal(byStatus["Full Survey"], 9);
+    assert.equal(byStatus["Ext-Only"], 6);
+    assert.equal(byStatus.Other, 6);
+    const split = conditionSurveyCompletion(bothTypes, [
+      group({ assetStatus: "Full Survey Completed", surveyType: "", epcRequired: false, count: 4 }),
+      group({ assetStatus: "Survey Complete", surveyType: "Condition Only", epcRequired: true, count: 3 }),
+      group({ assetStatus: "Ext Only", epcRequired: true, count: 5 }),
+      group({ assetStatus: "No Visit", surveyType: "SCS + EPC", epcRequired: true, count: 8 }),
+    ]);
+    assert.equal(split.conditionOnly, 4);
+    assert.equal(split.conditionEpc, 3);
   });
 
   it("splits completed dwellings by the derived SCS Only and SCS + EPC labels", () => {

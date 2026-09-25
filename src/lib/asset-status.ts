@@ -263,33 +263,101 @@ export function inferStockKind(raw: Record<string, unknown> | null | undefined):
   return "dwelling";
 }
 
-/** Completed stock statuses, including the labels sometimes stored before they were canonical. */
+/**
+ * Spreadsheet labels that mean one of the seven grid statuses.
+ * Keys are already passed through assetStatusKey (lower case, punctuation folded).
+ * "Full Survey Completed", "Completed", "Survey Complete", and "Ext Only"
+ * are the forms a stocklist actually arrives with.
+ */
+export const ASSET_STATUS_SYNONYMS: Readonly<Record<string, AssetStatus>> = {
+  "no visit": "No Visit",
+  "no visits": "No Visit",
+  "not visited": "No Visit",
+
+  "no access": "No Access",
+  "no answer": "No Access",
+  none: "No Access",
+
+  "appt made not kept": "Appt Made Not Kept",
+  "appointment made not kept": "Appt Made Not Kept",
+  "appointment not kept": "Appt Made Not Kept",
+  "appt not kept": "Appt Made Not Kept",
+  "failed appointment": "Appt Made Not Kept",
+  "failed appt": "Appt Made Not Kept",
+
+  "access refused": "Access Refused",
+  "refused access": "Access Refused",
+  "not convenient": "Access Refused",
+  refused: "Access Refused",
+
+  void: "Void",
+  "void property": "Void",
+
+  "full survey": "Full Survey",
+  "full surveys": "Full Survey",
+  "full survey completed": "Full Survey",
+  "full survey complete": "Full Survey",
+  "full surveys completed": "Full Survey",
+  "full surveys complete": "Full Survey",
+  "survey complete": "Full Survey",
+  "survey completed": "Full Survey",
+  completed: "Full Survey",
+  complete: "Full Survey",
+  successful: "Full Survey",
+  success: "Full Survey",
+
+  "ext only": "Ext-Only",
+  "external only": "Ext-Only",
+  external: "Ext-Only",
+  "ext survey": "Ext-Only",
+  "external survey": "Ext-Only",
+};
+
+/**
+ * Case, space, hyphen, and period folded key.
+ * "Ext. Only", "ext-only", and "  EXT   ONLY  " all become "ext only".
+ * The stocklist SQL and the deploy migration use the same folds.
+ */
+export function assetStatusKey(raw: unknown): string {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/'/g, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** One of the seven labels, or undefined when the text is blank or not a known synonym. */
+export function canonicalAssetStatus(raw: unknown): AssetStatus | undefined {
+  const key = assetStatusKey(raw);
+  if (!key) return undefined;
+  const exact = ASSET_STATUS_SYNONYMS[key];
+  if (exact) return exact;
+  if (key.startsWith("failed appt") || key.includes("failed appointment")) return "Appt Made Not Kept";
+  if (key.startsWith("successful")) return "Full Survey";
+  return undefined;
+}
+
+/** Completed stock statuses, including the labels a stocklist stores before they are folded. */
 export function isFullSurveyStatus(status: unknown): boolean {
-  const s = String(status ?? "").trim();
-  return s === "Full Survey" || s === "Full Surveys";
+  return canonicalAssetStatus(status) === "Full Survey";
 }
 
 export function isExtOnlyStatus(status: unknown): boolean {
-  const s = String(status ?? "").trim();
-  return s === "Ext-Only" || s === "External Only";
+  return canonicalAssetStatus(status) === "Ext-Only";
 }
-
-const ASSET_STATUS_BY_KEY = new Map<string, AssetStatus>(
-  ASSET_STATUSES.map((status) => [status.toLowerCase(), status])
-);
-ASSET_STATUS_BY_KEY.set("full surveys", "Full Survey");
-ASSET_STATUS_BY_KEY.set("external only", "Ext-Only");
 
 /**
  * Fold a stocklist Asset Status onto one of the seven grid labels.
- * Matching is case-insensitive. "Full Surveys" becomes Full Survey and
- * "External Only" becomes Ext-Only. Blank is left unset. Any other
- * non-blank text is kept as typed, trimmed, the same way the grid keeps it.
+ * Matching ignores case, extra spaces, hyphens, and periods.
+ * Blank is left unset. Any other non-blank text is kept as typed, trimmed.
  */
 export function foldAssetStatus(raw: unknown): string | undefined {
-  const text = String(raw ?? "").trim();
+  const text = String(raw ?? "").trim().replace(/\s+/g, " ");
   if (!text) return undefined;
-  return ASSET_STATUS_BY_KEY.get(text.toLowerCase()) ?? text;
+  return canonicalAssetStatus(text) ?? text;
 }
 
 export function isCompletedAssetStatus(status: unknown): boolean {

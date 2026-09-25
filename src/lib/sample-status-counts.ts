@@ -1,13 +1,13 @@
 import type { AssetKind } from "@prisma/client";
-import { ASSET_STATUSES, isExtOnlyStatus, isFullSurveyStatus, type AssetStatus } from "./asset-status.js";
+import { canonicalAssetStatus } from "./asset-status.js";
 import { applyEpcSurveyType, isEpcSurveyType } from "./epc-survey.js";
 import { isFullSurveyAsset } from "./sample-analysis.js";
 import { prisma } from "./prisma.js";
 
 /**
  * Dwelling Asset Status rows on Sample Analysis, in the order the table shows.
- * Legacy labels fold into these: "Full Surveys" → Full Survey, "External Only" → Ext-Only.
- * A blank status folds into No Visit.
+ * Synonyms fold into these: "Full Survey Completed" / "Completed" → Full Survey,
+ * "Ext Only" → Ext-Only. A blank status folds into No Visit.
  */
 export const DWELLING_STATUS_COUNT_ORDER = [
   "Full Survey",
@@ -43,8 +43,6 @@ export type ConditionSurveyCompletion = {
   conditionEpc: number;
 };
 
-const CANONICAL = new Set<string>(ASSET_STATUSES);
-
 /**
  * Dwellings on this project, with Omit Asset left out.
  * Same exclusion Sample Analysis already uses for its counts.
@@ -71,12 +69,8 @@ function countedGroup(group: DwellingSurveyGroup): boolean {
 
 /** Map a stored Asset Status onto a table row. Blank counts as No Visit. */
 export function dwellingStatusBucket(status: unknown): Exclude<DwellingStatusCountLabel, "Total"> {
-  const text = String(status ?? "").trim();
-  if (!text) return "No Visit";
-  if (isFullSurveyStatus(text)) return "Full Survey";
-  if (isExtOnlyStatus(text)) return "Ext-Only";
-  if (CANONICAL.has(text)) return text as AssetStatus;
-  return "Other";
+  if (!String(status ?? "").trim()) return "No Visit";
+  return canonicalAssetStatus(status) ?? "Other";
 }
 
 /**
@@ -114,9 +108,9 @@ export function projectHasBothConditionTypes(project: {
  * Completed full surveys split into Condition Only and Condition + EPC.
  *
  * Completed matches Sample Analysis Full Surveys Done (`isFullSurveyAsset`):
- * Asset Status Full Survey or the older "Full Surveys" label. A blank or
- * No Visit status also counts when Survey Type is itself Full Survey.
- * Ext-Only does not count.
+ * Asset Status Full Survey, including Completed / Survey Complete / Full Survey
+ * Completed. A blank or No Visit status also counts when Survey Type is itself
+ * Full Survey. Ext-Only does not count.
  *
  * Which of the two rows a full survey belongs to follows the Dwellings grid:
  * a completed dwelling is SCS + EPC or SCS Only from EPC Req, on every project.

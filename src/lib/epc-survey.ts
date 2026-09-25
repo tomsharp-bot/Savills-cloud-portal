@@ -6,13 +6,11 @@ export const SURVEY_TYPE_SCS_ONLY = "SCS Only";
 export const SURVEY_TYPE_SCS_EPC = "SCS + EPC";
 
 /**
- * Full Survey is the stock grid's completed survey status (visit access
- * "Completed" already maps to it). The literal "Completed" is accepted too.
+ * Full Survey, including stocklist wording such as Completed, Survey Complete,
+ * and Full Survey Completed. Same rule as isFullSurveyStatus.
  */
 export function isCompletedFullSurveyStatus(status: unknown): boolean {
-  if (isFullSurveyStatus(status)) return true;
-  const s = String(status ?? "").trim().toLowerCase();
-  return s === "completed" || s === "complete";
+  return isFullSurveyStatus(status);
 }
 
 export function isEpcSurveyType(surveyType: unknown): boolean {

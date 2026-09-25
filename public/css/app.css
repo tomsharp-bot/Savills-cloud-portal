@@ -170,6 +170,7 @@ th{font-size:.54rem;text-transform:uppercase;color:var(--muted);background:#fafb
 .personnel-table .btn-sm{padding:2px 6px;font-size:.7rem}
 .col-filter-row th{padding:3px 4px;background:#f0f3f6;vertical-align:bottom;font-weight:500;text-transform:none}
 .col-filter-row input,.col-filter-row select{width:100%;min-width:52px;margin:0;padding:3px 4px;font-size:.65rem;border:1px solid var(--border);border-radius:4px}
+.col-filter-row select + input{margin-top:2px}
 .stock-table-wrap{overflow:auto;max-height:calc(100vh - 220px);border:1px solid var(--border);border-radius:10px;background:#fff;margin-top:8px;overflow-anchor:none}
 .stock-table{margin:0;border-collapse:separate;border-spacing:0}
 .stock-table tbody{overflow-anchor:none}

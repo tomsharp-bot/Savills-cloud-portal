@@ -1,5 +1,5 @@
 import type { ProjectTargetUnit } from "@prisma/client";
-import { isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
+import { canonicalAssetStatus, isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
 import { formatProjectTarget, type ProjectTargetFields } from "./project-target.js";
 
 export type SampleAsset = {
@@ -10,6 +10,7 @@ export type SampleAsset = {
   surveyType?: string | null;
   external?: string | null;
   surveyor?: string | null;
+  surveyedBy?: string | null;
   visit1?: string | null;
   visit2?: string | null;
   visit3?: string | null;
@@ -124,7 +125,13 @@ function statusText(asset: SampleAsset): string {
 
 function openStatus(asset: SampleAsset): boolean {
   const status = statusText(asset);
-  return status === "" || status === "No Visit";
+  if (!status) return true;
+  return canonicalAssetStatus(status) === "No Visit";
+}
+
+/** Surveyed By is who finished the visit. Surveyor is only the allocated name. */
+export function creditedSurveyor(asset: SampleAsset): string {
+  return text(asset.surveyedBy) || text(asset.surveyor);
 }
 
 /** Full survey wins over external-only. Asset Status is checked before Survey Type. */
@@ -153,7 +160,7 @@ export function isCompletedAsset(asset: SampleAsset): boolean {
 export function hasAnyVisit(asset: SampleAsset): boolean {
   if (isFullSurveyAsset(asset)) return true;
   const status = statusText(asset);
-  if (status && status !== "No Visit" && !isExtOnlyStatus(status)) return true;
+  if (status && canonicalAssetStatus(status) !== "No Visit" && !isExtOnlyStatus(status)) return true;
   return [asset.visit1, asset.visit2, asset.visit3].some((v) => text(v) !== "");
 }
 
@@ -226,7 +233,7 @@ function fallbackSurveyors(assets: SampleAsset[], known: SamplePerson[]): Sample
   const rows: SamplePerson[] = [];
   const seen = new Set<string>();
   for (const asset of counted(assets)) {
-    const raw = text(asset.surveyor);
+    const raw = creditedSurveyor(asset);
     if (!raw) continue;
     const hit = known.find((person) => matchesPerson(person, raw));
     const row = hit || { name: raw, initials: raw };
@@ -237,6 +244,25 @@ function fallbackSurveyors(assets: SampleAsset[], known: SamplePerson[]): Sample
   }
   rows.sort((a, b) => a.name.localeCompare(b.name, "en-GB"));
   return rows;
+}
+
+/**
+ * A Surveyed By value that matches none of the rows already listed.
+ * The allocated Surveyor column is not used here: a blank Surveyed By still
+ * falls through to those people, and an unmatched allocated name stays hidden
+ * when the project already has personnel.
+ */
+function unmatchedSurveyedBy(assets: SampleAsset[], people: SamplePerson[]): SamplePerson[] {
+  const extras: SamplePerson[] = [];
+  for (const asset of counted(assets)) {
+    const raw = text(asset.surveyedBy);
+    if (!raw) continue;
+    if (people.some((person) => matchesPerson(person, raw))) continue;
+    if (extras.some((person) => matchesPerson(person, raw))) continue;
+    extras.push({ name: raw, initials: raw });
+  }
+  extras.sort((a, b) => a.name.localeCompare(b.name, "en-GB"));
+  return extras;
 }
 
 function emptyDwelling(): DwellingCounts {
@@ -374,16 +400,17 @@ export function buildSampleAnalysis(input: {
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, "en-GB"));
   const usedProjectPersonnel = allocated.length > 0;
-  const people = usedProjectPersonnel
+  const listed = usedProjectPersonnel
     ? allocated
     : fallbackSurveyors(input.assets, input.knownSurveyors || []);
+  const people = listed.concat(unmatchedSurveyedBy(input.assets, listed));
 
   const buckets = people.map(() => ({
     dwellings: [] as SampleAsset[],
     blocks: [] as SampleAsset[],
   }));
   for (const asset of live) {
-    const index = people.findIndex((person) => matchesPerson(person, text(asset.surveyor)));
+    const index = people.findIndex((person) => matchesPerson(person, creditedSurveyor(asset)));
     if (index < 0) continue;
     if (asset.kind === "dwelling") buckets[index].dwellings.push(asset);
     else if (asset.kind === "block") buckets[index].blocks.push(asset);
