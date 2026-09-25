@@ -97,7 +97,7 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
   next();
 });
 
-/** Ids already on screen when this Reporter page was rendered. Null if the lookup failed. */
+/** Waiting ids rendered with this page. The alert script does not treat them as already seen. */
 hhsrsReporterRouter.use(async (req: Request, res: Response, next) => {
   res.locals.initialPendingIds = null;
   const skip =

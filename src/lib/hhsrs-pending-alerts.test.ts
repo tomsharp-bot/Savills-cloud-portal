@@ -1,10 +1,29 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { newPendingAlerts, pendingAlertSummary } from "./hhsrs-pending-alerts.js";
 
 const root = process.cwd();
+const require = createRequire(import.meta.url);
+const pendingAlertScript = require("../../public/js/hhsrs-pending-alerts.js") as {
+  resolvePendingAlerts: (
+    marker: { lastSeenAt: string; seenIds: string[] } | null,
+    pending: Array<{ id: string; createdAt?: string; claimStatus?: string; fullAddress?: string }>,
+    nowIso: string
+  ) => {
+    alert: Array<{ id: string }>;
+    marker: { lastSeenAt: string; seenIds: string[] };
+  };
+  shouldPausePoll: (info: {
+    ok?: boolean;
+    redirected?: boolean;
+    contentType?: string;
+    pendingIsArray?: boolean;
+  }) => boolean;
+  homeNoticeText: (count: number) => string;
+};
 
 describe("HHSRS pending alert summary", () => {
   it("joins category, rating, and a shortened comment", () => {
@@ -39,10 +58,148 @@ describe("HHSRS pending alert summary", () => {
   });
 });
 
+describe("HHSRS pending alert marker", () => {
+  const earlier = {
+    id: "case-old",
+    createdAt: "2026-09-25T09:00:00.000Z",
+    claimStatus: "open",
+    fullAddress: "1 High Street",
+  };
+  const arrived = {
+    id: "case-new",
+    createdAt: "2026-09-25T10:15:00.000Z",
+    claimStatus: "open",
+    fullAddress: "9 Harbour Road",
+  };
+
+  it("alerts on the second page load for a case created between loads", () => {
+    const first = pendingAlertScript.resolvePendingAlerts(null, [earlier], "2026-09-25T09:05:00.000Z");
+    assert.deepEqual(first.alert, []);
+    assert.equal(first.marker.lastSeenAt, earlier.createdAt);
+    assert.deepEqual(first.marker.seenIds, [earlier.id]);
+
+    const second = pendingAlertScript.resolvePendingAlerts(
+      first.marker,
+      [arrived, earlier],
+      "2026-09-25T10:16:00.000Z"
+    );
+    assert.deepEqual(
+      second.alert.map((row) => row.id),
+      [arrived.id]
+    );
+
+    const again = pendingAlertScript.resolvePendingAlerts(
+      second.marker,
+      [arrived, earlier],
+      "2026-09-25T10:20:00.000Z"
+    );
+    assert.deepEqual(again.alert, []);
+  });
+
+  it("sets a first-run baseline and does not alert the backlog", () => {
+    const backlog = [
+      arrived,
+      earlier,
+      { id: "case-mid", createdAt: "2026-09-25T09:30:00.000Z", claimStatus: "open" },
+    ];
+    const first = pendingAlertScript.resolvePendingAlerts(null, backlog, "2026-09-25T11:00:00.000Z");
+    assert.deepEqual(first.alert, []);
+    assert.equal(first.marker.lastSeenAt, arrived.createdAt);
+    assert.deepEqual(first.marker.seenIds, [arrived.id, earlier.id, "case-mid"]);
+
+    const sameList = pendingAlertScript.resolvePendingAlerts(
+      first.marker,
+      backlog,
+      "2026-09-25T11:01:00.000Z"
+    );
+    assert.deepEqual(sameList.alert, []);
+  });
+
+  it("keeps claimed and stale cases quiet and still advances the marker", () => {
+    const baseline = pendingAlertScript.resolvePendingAlerts(null, [], "2026-09-25T08:00:00.000Z");
+    const claimed = {
+      id: "case-claimed",
+      createdAt: "2026-09-25T12:00:00.000Z",
+      claimStatus: "claimed",
+    };
+    const stale = {
+      id: "case-stale",
+      createdAt: "2026-09-25T12:05:00.000Z",
+      claimStatus: "stale",
+    };
+    const next = pendingAlertScript.resolvePendingAlerts(
+      baseline.marker,
+      [stale, claimed],
+      "2026-09-25T12:06:00.000Z"
+    );
+    assert.deepEqual(next.alert, []);
+    assert.equal(next.marker.lastSeenAt, stale.createdAt);
+    assert.ok(next.marker.seenIds.includes(claimed.id));
+    assert.ok(next.marker.seenIds.includes(stale.id));
+  });
+
+  it("pauses when the poll is a login page, a redirect, or not JSON", () => {
+    assert.equal(
+      pendingAlertScript.shouldPausePoll({
+        ok: true,
+        redirected: true,
+        contentType: "text/html",
+        pendingIsArray: false,
+      }),
+      true
+    );
+    assert.equal(
+      pendingAlertScript.shouldPausePoll({
+        ok: false,
+        redirected: false,
+        contentType: "application/json",
+        pendingIsArray: false,
+      }),
+      true
+    );
+    assert.equal(
+      pendingAlertScript.shouldPausePoll({
+        ok: true,
+        redirected: false,
+        contentType: "text/html; charset=utf-8",
+        pendingIsArray: false,
+      }),
+      true
+    );
+    assert.equal(
+      pendingAlertScript.shouldPausePoll({
+        ok: true,
+        redirected: false,
+        contentType: "application/json",
+        pendingIsArray: false,
+      }),
+      true
+    );
+    assert.equal(
+      pendingAlertScript.shouldPausePoll({
+        ok: true,
+        redirected: false,
+        contentType: "application/json; charset=utf-8",
+        pendingIsArray: true,
+      }),
+      false
+    );
+  });
+
+  it("uses one short home notice for a single new case", () => {
+    assert.equal(pendingAlertScript.homeNoticeText(1), "New HHSRS case waiting in Pending");
+    assert.equal(pendingAlertScript.homeNoticeText(2), "2 new HHSRS cases waiting in Pending");
+  });
+});
+
 describe("HHSRS Reporter alert wiring", () => {
   it("renders the toast shell and polls from the reporter script", () => {
     const layout = fs.readFileSync(
       path.join(root, "views/hhsrs-reporter/partials/layout-close.ejs"),
+      "utf8"
+    );
+    const layoutOpen = fs.readFileSync(
+      path.join(root, "views/hhsrs-reporter/partials/layout-open.ejs"),
       "utf8"
     );
     const pending = fs.readFileSync(path.join(root, "views/hhsrs-reporter/pending.ejs"), "utf8");
@@ -51,7 +208,24 @@ describe("HHSRS Reporter alert wiring", () => {
       path.join(root, "views/hhsrs-reporter/partials/desktop-alerts-control.ejs"),
       "utf8"
     );
-    const js = fs.readFileSync(path.join(root, "public/js/hhsrs-reporter.js"), "utf8");
+    const reporterJs = fs.readFileSync(path.join(root, "public/js/hhsrs-reporter.js"), "utf8");
+    const sharedJs = fs.readFileSync(path.join(root, "public/js/hhsrs-pending-alerts.js"), "utf8");
+    const portalHome = fs.readFileSync(path.join(root, "views/admin.ejs"), "utf8");
+    const surveyorHome = fs.readFileSync(path.join(root, "views/surveyor.ejs"), "utf8");
+    const js = `${reporterJs}\n${sharedJs}`;
+
+    assert.match(layout, /hhsrs-pending-alerts\.js/);
+    assert.match(layoutOpen, /hhsrs-pending-alerts\.css/);
+    assert.doesNotMatch(reporterJs, /initialPendingIds\.forEach/);
+    assert.match(sharedJs, /hhsrsPendingAlertMarker/);
+    assert.match(sharedJs, /Alerts are paused/);
+    assert.match(sharedJs, /clearInterval/);
+    assert.match(portalHome, /if \(isAdmin\)/);
+    assert.match(portalHome, /hhsrs-pending-alerts\.js/);
+    assert.match(portalHome, /New HHSRS case waiting in Pending/);
+    assert.doesNotMatch(portalHome, /Enable desktop alerts/);
+    assert.doesNotMatch(portalHome, /desktop-alerts-banner/);
+    assert.doesNotMatch(surveyorHome, /hhsrs-pending-alerts/);
 
     assert.match(layout, /id="hhsrs-alert-toast"/);
     assert.match(layout, /class="alert-toast"/);
