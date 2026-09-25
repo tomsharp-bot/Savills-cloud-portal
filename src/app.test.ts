@@ -332,7 +332,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(css.body, /--navy-deep:\s*#071522/);
     assert.match(css.body, /\.hhsrs-form-page \.work-panel/);
     assert.match(css.body, /\.hhsrs-form-page \.info-box\.hazard/);
-    assert.match(css.body, /--grey-top:\s*#e8ecef/);
+    assert.match(css.body, /body\.hhsrs-landing\s*\{[^}]*--grey-top:\s*#dde2e8/);
+    assert.match(css.body, /--info:\s*#e8ecef/);
     assert.match(css.body, /\.hhsrs-form-page \.panel-top\s*\{[^}]*background:\s*var\(--info\)/);
     assert.match(css.body, /filter:\s*saturate\(\.72\)\s*contrast\(\.95\)/);
     assert.match(css.body, /background:\s*#dde2e8/);

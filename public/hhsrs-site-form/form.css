@@ -196,7 +196,7 @@ body.hhsrs-body {
 /* Landing only — do not restyle the form, review, or thanks pages. */
 body.hhsrs-landing {
   --red: #ce171e;
-  --grey-top: #e8ecef;
+  --grey-top: #dde2e8;
   --panel: #f4f7fa;
   font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   background: var(--navy);
