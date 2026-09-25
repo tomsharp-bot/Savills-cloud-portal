@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import ejs from "ejs";
 import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS, isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import {
   composeCallNotes,
@@ -9,6 +12,7 @@ import {
   HHSRS_MAX_FILE_MB,
   HHSRS_MAX_PHOTOS,
   HHSRS_MIN_PHOTOS,
+  CALL_REF_BLANK_REASONS,
   HHSRS_MAX_REQUEST_BYTES,
   hhsrsMulterLimits,
   hhsrsPhotoHint,
@@ -474,5 +478,61 @@ describe("stock UPRN address", () => {
       "Onward 2026"
     );
     assert.equal(onwardCalled.extras, true);
+  });
+});
+
+describe("HHSRS site form project option flags", () => {
+  it("renders data-calls, data-saxon and data-online unescaped", () => {
+    const template = readFileSync(join(process.cwd(), "views/hhsrs-site-form/form.ejs"), "utf8");
+    const html = ejs.render(
+      template,
+      {
+        title: "New issue",
+        hhsrsUrl,
+        minPhotos: HHSRS_MIN_PHOTOS,
+        maxPhotos: HHSRS_MAX_PHOTOS,
+        maxFileBytes: HHSRS_MAX_FILE_BYTES,
+        maxFileMb: HHSRS_MAX_FILE_MB,
+        photoHint: hhsrsPhotoHint(),
+        formError: "",
+        errors: {},
+        values: { ...emptyHhsrsValues(), projectId: "a2" },
+        draft: null,
+        surveyors: [{ id: "s1", name: "Alex Surveyor" }],
+        categories: HHSRS_CATEGORIES,
+        ratings: HHSRS_SITE_FORM_RATINGS,
+        callBlankReasons: CALL_REF_BLANK_REASONS,
+        steps: siteFormSectionState(emptyHhsrsValues(), ""),
+        jump: "",
+        projects: [
+          { id: "a2", name: "A2Dominion 2026 - Ph4", flags: { calls: true, onward: false, saxon: false, online: false } },
+          { id: "sx", name: "Saxon Weald 2026", flags: { calls: true, onward: false, saxon: true, online: false } },
+          { id: "cw", name: "Cornwall 2026", flags: { calls: false, onward: false, saxon: false, online: true } },
+          { id: "gw", name: "Gateway 2026", flags: { calls: false, onward: false, saxon: false, online: false } },
+        ],
+      },
+      { filename: join(process.cwd(), "views/hhsrs-site-form/form.ejs") }
+    );
+
+    const option = (id: string) => {
+      const match = html.match(new RegExp(`<option[^>]*value="${id}"[^>]*>`));
+      assert.ok(match, `option ${id} rendered`);
+      return match[1] ? match[0] : match[0];
+    };
+    const a2 = option("a2");
+    assert.match(a2, /data-calls="1"/);
+    assert.match(a2, /\bselected\b/);
+    assert.doesNotMatch(a2, /&#34;|data-calls=&/);
+    const saxon = option("sx");
+    assert.match(saxon, /data-calls="1"/);
+    assert.match(saxon, /data-saxon="1"/);
+    const cornwall = option("cw");
+    assert.match(cornwall, /data-online="1"/);
+    assert.doesNotMatch(cornwall, /data-calls=/);
+    const gateway = option("gw");
+    assert.doesNotMatch(gateway, /data-calls=|data-saxon=|data-online=/);
+    assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
+    assert.match(html, /data-jump=""/);
+    assert.match(html, /viewport-fit=cover/);
   });
 });

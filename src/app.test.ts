@@ -315,7 +315,11 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /High - Severe Risk/);
     assert.doesNotMatch(form.body, /<option value="High">/);
     assert.doesNotMatch(form.body, /Extreme/);
+    assert.match(form.body, /viewport-fit=cover/);
+    assert.match(form.body, /data-jump=""/);
     assert.match(form.body, /id="addressConfirmed"/);
+    assert.match(form.body, /Address is correct — I confirm this is the property/);
+    assert.doesNotMatch(form.body, /OFFLINE MOCK|Mock only|btn-example/);
     assert.ok(
       form.body.indexOf('id="uprn"') < form.body.indexOf('id="fullAddress"') &&
         form.body.indexOf('id="fullAddress"') < form.body.indexOf('id="postcode"'),
@@ -332,6 +336,19 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(css.body, /--navy-deep:\s*#071522/);
     assert.match(css.body, /\.hhsrs-form-page \.work-panel/);
     assert.match(css.body, /\.hhsrs-form-page \.info-box\.hazard/);
+    assert.match(css.body, /html \{ font-size: 100%; \}/);
+    assert.match(css.body, /\.hhsrs-form-page \.hhsrs-form input\[type=checkbox\] \{[^}]*width: 22px;/);
+    assert.match(css.body, /\.hhsrs-form-page \.hhsrs-form input\[type=checkbox\] \{[^}]*height: 22px;/);
+    assert.match(css.body, /label\.confirm-row,\s*\n\.hhsrs-form-page \.hhsrs-form label\.hhsrs-check \{[^}]*min-height: 44px;/);
+    assert.match(css.body, /label\.confirm-row \{[^}]*font-size: 0\.95rem;/);
+    assert.match(css.body, /label\.confirm-row \{[^}]*text-transform: none;/);
+    assert.match(css.body, /11\.5rem/);
+    assert.match(css.body, /houses-alt-calm\.jpg/);
+    assert.match(css.body, /\.hhsrs-rv-card/);
+    assert.match(css.body, /\.hhsrs-rv-pill/);
+    assert.match(css.body, /\.hhsrs-done-tick/);
+    assert.match(css.body, /hhsrs-flow-room/);
+    assert.doesNotMatch(css.body, /OFFLINE MOCK/);
     assert.match(css.body, /--top-bar:\s*#dde2e8/);
     assert.match(css.body, /body\.hhsrs-landing\s*\{[^}]*--grey-top:\s*var\(--top-bar\)/);
     assert.match(css.body, /\.hhsrs-top\s*\{[^}]*background:\s*var\(--top-bar\)/);
@@ -358,7 +375,16 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /callUnreached/);
     assert.match(js.body, /callRefBlankReason/);
     assert.match(js.body, /Add at least 1 photo/);
-    assert.doesNotMatch(js.body, /photo-modal|capture=/);
+    assert.doesNotMatch(js.body, /photo-modal/);
+    assert.match(js.body, /setAttribute\("capture", "environment"\)/);
+    assert.match(js.body, /photos-camera/);
+    assert.match(js.body, /Take photo/);
+    assert.match(js.body, /Add from gallery/);
+    assert.match(js.body, /box\.disabled = !callsShown/);
+    assert.match(js.body, /visualViewport/);
+    assert.match(js.body, /prefers-reduced-motion/);
+    assert.match(js.body, /data-jump/);
+    assert.match(js.body, /step-visit\|step-property\|step-hazard\|extra-box\|step-photos/);
   });
 
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
@@ -424,8 +450,74 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(review.body, /No access issues/);
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);
-    assert.match(review.body, />Cancel</);
+    assert.match(review.body, /Cancel and discard this issue/);
+    assert.match(review.body, /action="\/HHSRS-site-form\/submit"/);
+    assert.match(review.body, /action="\/HHSRS-site-form\/edit"/);
+    assert.match(review.body, /action="\/HHSRS-site-form\/cancel"/);
+    assert.match(review.body, /name="jump" value="step-visit"/);
+    assert.match(review.body, /name="jump" value="step-property"/);
+    assert.match(review.body, /name="jump" value="step-hazard"/);
+    assert.match(review.body, /name="jump" value="extra-box"/);
+    assert.match(review.body, /name="jump" value="step-photos"/);
+    assert.match(review.body, /hhsrs-rv-pill is-high/);
+    assert.match(review.body, /Nothing is saved until you tap Submit/);
     assert.doesNotMatch(review.body, /Clear Form/);
+    assert.doesNotMatch(review.body, /OFFLINE MOCK/);
+  });
+
+  it("whitelists the Review Edit jump and keeps the submitted reference line", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const upload = multipartForm(hhsrsReviewFields(), [
+      { field: "photos", filename: "room.jpg", type: "image/jpeg", data: fakeJpeg(128) },
+    ]);
+    const reviewPost = await request(app, "POST", "/HHSRS-site-form/review", upload);
+    assert.equal(reviewPost.status, 302);
+    const draftId = new URL(reviewPost.location, "http://127.0.0.1").searchParams.get("draft") || "";
+    assert.ok(draftId);
+
+    const hazard = await request(app, "POST", "/HHSRS-site-form/edit", {
+      body: `draftId=${encodeURIComponent(draftId)}&jump=step-hazard`,
+    });
+    assert.equal(hazard.status, 200);
+    assert.match(hazard.body, /data-jump="step-hazard"/);
+    assert.match(hazard.body, /id="step-hazard"/);
+
+    for (const jump of ["step-visit", "step-property", "extra-box", "step-photos"]) {
+      const ok = await request(app, "POST", "/HHSRS-site-form/edit", {
+        body: `draftId=${encodeURIComponent(draftId)}&jump=${encodeURIComponent(jump)}`,
+      });
+      assert.equal(ok.status, 200);
+      assert.match(ok.body, new RegExp(`data-jump="${jump}"`));
+    }
+
+    const rejected = await request(app, "POST", "/HHSRS-site-form/edit", {
+      body: `draftId=${encodeURIComponent(draftId)}&jump=${encodeURIComponent('"><script>alert(1)</script>')}`,
+    });
+    assert.equal(rejected.status, 200);
+    assert.match(rejected.body, /data-jump=""/);
+    assert.doesNotMatch(rejected.body, /<script>alert/);
+
+    const unknown = await request(app, "POST", "/HHSRS-site-form/edit", {
+      body: `draftId=${encodeURIComponent(draftId)}&jump=step-admin`,
+    });
+    assert.match(unknown.body, /data-jump=""/);
+    assert.doesNotMatch(unknown.body, /data-jump="step-admin"/);
+
+    const back = await request(app, "POST", "/HHSRS-site-form/edit", {
+      body: `draftId=${encodeURIComponent(draftId)}`,
+    });
+    assert.match(back.body, /data-jump=""/);
+
+    const thanks = await request(app, "GET", "/HHSRS-site-form/thanks?id=cmexample1");
+    assert.equal(thanks.status, 200);
+    assert.match(thanks.body, /Issue submitted/);
+    assert.match(thanks.body, /Thanks, the office has it\./);
+    assert.match(thanks.body, /The issue has been submitted \(ref cmexample1\)\./);
+    assert.match(thanks.body, /Report another issue/);
+    assert.match(thanks.body, /href="\/HHSRS-site-form\/new"/);
+    assert.match(thanks.body, /href="\/HHSRS-site-form">Back to start/);
+    assert.match(thanks.body, /class="hhsrs-body hhsrs-form-page"/);
+    assert.doesNotMatch(thanks.body, /OFFLINE MOCK/);
   });
 
   it("keeps the rest of the form hidden until project, date and surveyor are filled", async () => {

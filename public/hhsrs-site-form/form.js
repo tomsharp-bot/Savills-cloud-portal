@@ -74,22 +74,33 @@
     if (el) el.classList.add("is-current");
   }
 
+  // v4: section auto-advance. Scrolls the newly opened section's heading to near the top of the screen
+  // (smooth unless reduced motion) and focuses its first field ONLY if that field does not raise the
+  // on-screen keyboard (select, date, checkbox). Text fields are just scrolled to, never focused.
   function focusAndScroll(el, fieldId) {
     if (!el || !progressive()) return;
-    try {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    } catch (e) {
-      el.scrollIntoView(true);
-    }
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.setTimeout(function () {
+      var vv = window.visualViewport;
+      var shift = 0; // ignore the 12px "arrive" slide-in that may still be running
+      try { shift = new DOMMatrixReadOnly(getComputedStyle(el).transform).m42 || 0; } catch (e) { shift = 0; }
+      var top = el.getBoundingClientRect().top - shift + window.pageYOffset - (vv ? vv.offsetTop : 0) - 12;
+      try {
+        window.scrollTo({ top: Math.max(0, top), behavior: reduce ? "auto" : "smooth" });
+      } catch (e) {
+        window.scrollTo(0, Math.max(0, top));
+      }
+    }, 40);
     var field = fieldId ? $(fieldId) : null;
-    if (field && !field.disabled && !field.readOnly) {
+    var noKeyboard = field && (field.tagName === "SELECT" || /^(date|checkbox|radio)$/i.test(field.type || ""));
+    if (field && noKeyboard && !field.disabled && !field.readOnly) {
       window.setTimeout(function () {
         try {
           field.focus({ preventScroll: true });
         } catch (err) {
           field.focus();
         }
-      }, 280);
+      }, 320);
     }
   }
 
@@ -300,6 +311,7 @@
     var ref = $("clientCallReference");
     var calls = document.querySelector('.project-extra[data-extra="calls"]');
     var callsShown = !!(calls && !calls.hidden);
+    if (box) box.disabled = !callsShown;
     var on = !!(box && box.checked && callsShown);
     if (wrap) wrap.hidden = !on;
     if (note) note.disabled = !on;
@@ -731,5 +743,204 @@
       if (!confirm("Clear the form? This cannot be undone.")) return;
       resetFormToDefaults();
     });
+  }
+})();
+
+/* ---------- PART B: touch add-on (after form.js) ---------- */
+/* HHSRS site form - v4 touch add-on (append after form.js, or paste at the end of form.js).
+   1. Keyboard helper: a focused text box / textarea / UPRN box is moved to roughly the top third of the
+      visible area above the on-screen keyboard (window.visualViewport), re-checked while the keyboard animates in.
+   2. Next-field advance: after a dropdown (or date) is chosen and the section is not yet complete,
+      move to the next empty field in that section (focus only if it is a dropdown/date; text fields are only scrolled to).
+   3. Take photo: a big camera button (capture="environment") that feeds the SAME photo list as "Add from gallery".
+   Touch / narrow screens only (<=1024px or pointer:coarse); desktop unchanged. Respects prefers-reduced-motion.
+   Never fights the user: any manual scroll (touchmove / wheel) cancels pending automatic scrolls. */
+(function () {
+  var form = document.getElementById("hhsrs-form");
+  if (!form) return;
+  var mqTouch = window.matchMedia("(max-width: 1024px), (pointer: coarse)");
+  var mqReduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function touchUi() { return mqTouch.matches; }
+  function behavior() { return mqReduce.matches ? "auto" : "smooth"; }
+
+  var userMovedAt = 0;
+  ["touchmove", "wheel"].forEach(function (ev) {
+    window.addEventListener(ev, function () { userMovedAt = Date.now(); }, { passive: true });
+  });
+
+  function visibleArea() {
+    var vv = window.visualViewport;
+    return vv ? { top: vv.offsetTop, h: vv.height } : { top: 0, h: window.innerHeight };
+  }
+  function anchorFor(el) {
+    var lab = el.id ? form.querySelector('label[for="' + el.id + '"]') : null;
+    if (lab && lab.getClientRects().length && !lab.classList.contains("confirm-row")) {
+      var lr = lab.getBoundingClientRect(), er = el.getBoundingClientRect();
+      if (lr.top <= er.top && er.top - lr.bottom < 40) return lab;
+    }
+    return el;
+  }
+  // put the field (with its label) at ~18% of the visible height; leave it if already in the top ~40%
+  function placeInTopThird(el) {
+    var v = visibleArea();
+    var a = anchorFor(el).getBoundingClientRect();
+    if (a.top >= v.top + 8 && a.top <= v.top + v.h * 0.4) return false;
+    var delta = a.top - (v.top + v.h * 0.18);
+    if (Math.abs(delta) < 16) return false;
+    try { window.scrollBy({ top: delta, behavior: behavior() }); } catch (e) { window.scrollBy(0, delta); }
+    return true;
+  }
+  function isTextField(el) {
+    return el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && /^(text|search|email|tel|number|url|password)$/i.test(el.type));
+  }
+  function isChoice(el) {
+    return el.tagName === "SELECT" || (el.tagName === "INPUT" && /^(date|radio)$/i.test(el.type));
+  }
+
+  /* 0. scroll room: while sections are still opening on a touch/narrow screen, leave space under the form
+        so the section being worked on can sit near the top of the screen (and above the keyboard) */
+  var actionsEl = document.getElementById("form-actions");
+  var mqSteps = window.matchMedia("(max-width: 1024px)"); // same test form.js uses for the step-by-step flow
+  function syncRoom() {
+    var finished = actionsEl && !actionsEl.hidden && actionsEl.classList.contains("is-current");
+    document.body.classList.toggle("hhsrs-flow-room", mqSteps.matches && !!actionsEl && !finished);
+  }
+  if (actionsEl && window.MutationObserver) {
+    new MutationObserver(syncRoom).observe(actionsEl, { attributes: true, attributeFilter: ["hidden", "class"] });
+  }
+  if (mqSteps.addEventListener) mqSteps.addEventListener("change", syncRoom);
+  syncRoom();
+
+  /* 1. keyboard helper */
+  var kb = null, kbTimer = 0;
+  form.addEventListener("focusin", function (e) {
+    var el = e.target;
+    if (!touchUi() || !isTextField(el) || el.readOnly || el.disabled) return;
+    var started = Date.now();
+    kb = { el: el, started: started };
+    window.setTimeout(function () {
+      if (kb && kb.el === el && userMovedAt < started) placeInTopThird(el);
+    }, 150);
+  });
+  form.addEventListener("focusout", function (e) {
+    if (kb && kb.el === e.target) kb = null;
+  });
+  if (window.visualViewport) {
+    var onViewport = function () {
+      if (!kb || !touchUi()) return;
+      if (userMovedAt > kb.started) return;          // user scrolled by hand: leave it alone
+      if (Date.now() - kb.started > 1500) return;    // only while the keyboard is animating in
+      window.clearTimeout(kbTimer);
+      kbTimer = window.setTimeout(function () {
+        if (kb && userMovedAt <= kb.started) placeInTopThird(kb.el);
+      }, 80);
+    };
+    window.visualViewport.addEventListener("resize", onViewport);
+    window.visualViewport.addEventListener("scroll", onViewport);
+  }
+
+  /* 2. next field in the same section after a dropdown/date is chosen */
+  function nextEmptyField(step, from) {
+    var list = Array.prototype.slice.call(step.querySelectorAll("input, select, textarea"));
+    for (var j = list.indexOf(from) + 1; j < list.length; j++) {
+      var f = list[j];
+      if (f.disabled || f.readOnly || /^(hidden|file|checkbox|button|submit)$/i.test(f.type || "")) continue;
+      if ((f.closest && f.closest("[hidden]")) || !f.getClientRects().length) continue;
+      if (String(f.value || "").trim()) continue;
+      return f;
+    }
+    return null;
+  }
+  form.addEventListener("change", function (e) {
+    var el = e.target;
+    if (!touchUi() || !isChoice(el)) return;
+    var step = el.closest && el.closest(".flow-step");
+    if (!step) return;
+    var at = Date.now();
+    window.setTimeout(function () {
+      if (userMovedAt > at) return;
+      if (!step.classList.contains("is-current")) return; // section finished: the section auto-advance takes over
+      var next = nextEmptyField(step, el);
+      if (!next) return;
+      if (isChoice(next)) {
+        try { next.focus({ preventScroll: true }); } catch (err) { next.focus(); }
+      }
+      placeInTopThird(next);
+    }, 60);
+  });
+
+  /* 4. Review page "Edit <section>" lands back on that section (live: POST /edit with jump=..., form gets data-jump) */
+  var jump = form.getAttribute("data-jump") || "";
+  if (/^(step-visit|step-property|step-hazard|extra-box|step-photos)$/.test(jump)) {
+    window.setTimeout(function () {
+      var t = document.getElementById(jump);
+      if (t && !t.hidden) window.scrollTo(0, Math.max(0, t.getBoundingClientRect().top + window.pageYOffset - 12));
+    }, 60);
+  }
+
+  /* 3. Take photo (camera) + Add from gallery, both feeding the one photo list (#photos) */
+  var gallery = document.getElementById("photos");
+  var galleryBtn = form.querySelector('label.hhsrs-file-btn[for="photos"]');
+  if (gallery && galleryBtn && window.DataTransfer) {
+    var max = parseInt(form.getAttribute("data-max-photos") || "4", 10);
+    var cam = document.createElement("input");
+    cam.type = "file";
+    cam.accept = "image/*";
+    cam.setAttribute("capture", "environment");
+    cam.id = "photos-camera";
+    cam.className = "photo-camera-input";
+    cam.tabIndex = -1; // no name attribute: never submitted itself, files are handed to #photos
+    var camBtn = document.createElement("label");
+    camBtn.htmlFor = "photos-camera";
+    camBtn.className = "hhsrs-file-btn photo-btn-camera";
+    var row = document.createElement("div");
+    row.className = "photo-buttons";
+    galleryBtn.parentNode.insertBefore(row, galleryBtn);
+    row.appendChild(camBtn);
+    row.appendChild(galleryBtn);
+    row.parentNode.insertBefore(cam, row.nextSibling); // hidden input sits outside the button grid
+    galleryBtn.classList.add("photo-btn-gallery");
+    galleryBtn.innerHTML = '<span class="photo-when-touch">Add from gallery</span><span class="photo-when-desktop">Add photos</span>';
+
+    var count = function () {
+      return form.querySelectorAll("#new-photos .photo-card, #existing-photos [data-existing]").length;
+    };
+    var sync = function () {
+      var n = count(), full = n >= max;
+      camBtn.innerHTML = full
+        ? '<span aria-hidden="true">📷</span> ' + max + " of " + max + " photos added"
+        : '<span aria-hidden="true">📷</span> ' + (n ? "Take another photo" : "Take photo");
+      [camBtn, galleryBtn].forEach(function (b) {
+        b.classList.toggle("is-disabled", full);
+        b.setAttribute("aria-disabled", full ? "true" : "false");
+      });
+      cam.disabled = full;
+    };
+    [camBtn, galleryBtn].forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        if (count() >= max) {
+          e.preventDefault();
+          var st = document.getElementById("photo-status");
+          if (st) { st.textContent = "You already have " + max + " photos. Remove one to add another."; st.className = "find-status is-err"; }
+        }
+      });
+    });
+    cam.addEventListener("change", function () {
+      var files = cam.files;
+      if (!files || !files.length) return;
+      var dt = new DataTransfer();
+      for (var i = 0; i < files.length; i++) dt.items.add(files[i]);
+      gallery.files = dt.files;                                        // same path as a gallery pick:
+      gallery.dispatchEvent(new Event("change", { bubbles: true }));   // limit, resize and checks all apply
+      cam.value = "";
+    });
+    if (window.MutationObserver) {
+      var mo = new MutationObserver(sync);
+      ["new-photos", "existing-photos"].forEach(function (id) {
+        var g = document.getElementById(id);
+        if (g) mo.observe(g, { childList: true, subtree: true });
+      });
+    }
+    sync();
   }
 })();
