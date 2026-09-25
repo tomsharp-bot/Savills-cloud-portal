@@ -31,7 +31,7 @@
               <div class="hhsrs-rv-head"><h2 class="hhsrs-rv-title">Project &amp; visit</h2><%- edit("step-visit", "Project & visit") %></div>
               <dl class="hhsrs-rv-list">
                 <div><dt>Project</dt><dd><%= draft.projectName %></dd></div>
-                <div><dt>Survey date</dt><dd><%= draft.surveyDate %></dd></div>
+                <div><dt>Survey date</dt><dd><%= formatHhsrsSurveyDate(draft.surveyDate) %></dd></div>
                 <div><dt>Surveyor</dt><dd><%= draft.surveyorName %></dd></div>
               </dl>
             </section>

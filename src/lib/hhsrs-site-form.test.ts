@@ -6,6 +6,7 @@ import ejs from "ejs";
 import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS, isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import {
   composeCallNotes,
+  formatHhsrsSurveyDate,
   emptyHhsrsValues,
   formatStockAddressLine,
   HHSRS_MAX_FILE_BYTES,
@@ -152,6 +153,15 @@ describe("validateHhsrsForm", () => {
     assert.equal(legacy.callUnreached, true);
     assert.equal(legacy.callRefBlankReason, "No answer");
     assert.equal(legacy.callUnreachedNote, "");
+  });
+
+  it("shows a stored YYYY-MM-DD survey date as DD/MM/YYYY", () => {
+    const stored = "2026-09-25";
+    assert.equal(formatHhsrsSurveyDate(stored), "25/09/2026");
+    assert.equal(formatHhsrsSurveyDate("2026-09-20"), "20/09/2026");
+    assert.equal(stored, "2026-09-25");
+    assert.equal(formatHhsrsSurveyDate(""), "");
+    assert.equal(formatHhsrsSurveyDate("25/09/2026"), "25/09/2026");
   });
 
   it("does not store Category 1 from the site form, and flags Saxon and call extras", () => {

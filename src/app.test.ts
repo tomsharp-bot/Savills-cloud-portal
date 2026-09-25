@@ -469,6 +469,8 @@ describe("HHSRS site form at domain-root paths", () => {
     const review = await request(app, "GET", reviewPost.location);
     assert.equal(review.status, 200);
     assert.match(review.body, /Review issue/);
+    assert.match(review.body, /<dt>Survey date<\/dt><dd>20\/09\/2026<\/dd>/);
+    assert.doesNotMatch(review.body, /2026-09-20/);
     assert.match(review.body, /Damp &amp; Mould Growth/);
     assert.match(review.body, /Visible mould in bathroom/);
     assert.match(review.body, /No access issues/);
@@ -505,6 +507,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.equal(hazard.status, 200);
     assert.match(hazard.body, /data-jump="step-hazard"/);
     assert.match(hazard.body, /id="step-hazard"/);
+    assert.match(hazard.body, /name="surveyDate"[^>]*value="2026-09-20"/);
 
     for (const jump of ["step-visit", "step-property", "extra-box", "step-photos"]) {
       const ok = await request(app, "POST", "/HHSRS-site-form/edit", {
