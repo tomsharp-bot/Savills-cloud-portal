@@ -1,24 +1,36 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { execFile, execFileSync } from "node:child_process";
+import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
 import { createApp } from "../app.js";
 import { prisma } from "./prisma.js";
 import {
   bearerToken,
   ingestProjectPhotos,
   photoIngestAuthorized,
+  photoIngestBaseName,
   photoIngestConfigured,
+  PHOTO_INGEST_BATCH_FILES,
   PHOTO_INGEST_MAX_BYTES,
+  PHOTO_INGEST_MAX_FILES,
 } from "./photo-ingest.js";
 import { PHOTO_INGEST_STORAGE } from "../routes/photo-ingest.js";
+import { listSharedPoolCodes } from "./photo-share.js";
 import {
   overwriteProjectPhotoBytes,
   photoObjectKey,
   poolListWhere,
+  poolPhotoImagePath,
   queryProjectPool,
+  readProjectPoolImage,
+  toPoolView,
   type PhotoStorageOps,
 } from "./photos.js";
+import { spacesCopySource } from "./spaces.js";
 
 process.env.DATABASE_URL ||=
   "postgresql://portal:portal@127.0.0.1:5432/savills_cloud_portal?schema=public";
@@ -82,6 +94,24 @@ describe("photo ingest key", () => {
     assert.equal(photoIngestAuthorized("Bearer morning", "morning-key"), false);
     assert.equal(photoIngestAuthorized(undefined, "morning-key"), false);
     assert.equal(photoIngestAuthorized("Bearer morning-key", ""), false);
+    assert.equal(
+      photoIngestBaseName("635770-Challice Way Tillman House 16/635770-Front Door1.jpg"),
+      "635770-Front Door1.jpg"
+    );
+    assert.equal(
+      photoIngestBaseName("635770-Challice Way Tillman House 16\\635770-nullNo Access1.jpg"),
+      "635770-nullNo Access1.jpg"
+    );
+    assert.equal(photoIngestBaseName("635770-nullDamp and mould growth-1.jpg"), "635770-nullDamp and mould growth-1.jpg");
+    assert.equal(PHOTO_INGEST_BATCH_FILES, 20);
+    assert.ok(PHOTO_INGEST_MAX_FILES >= PHOTO_INGEST_BATCH_FILES);
+    assert.equal(PHOTO_INGEST_MAX_BYTES, 50 * 1024 * 1024);
+    const doorKey = "photos/proj/pool/635770-Front Door1.jpg";
+    assert.equal(doorKey.includes("%20"), false);
+    assert.equal(
+      spacesCopySource("cloud-portal-vault", doorKey),
+      "cloud-portal-vault/photos/proj/pool/635770-Front%20Door1.jpg"
+    );
     const previous = process.env.PHOTO_INGEST_KEY;
     delete process.env.PHOTO_INGEST_KEY;
     assert.equal(photoIngestConfigured(), false);
@@ -309,5 +339,230 @@ describe("photo ingest and pool window", () => {
     assert.deepEqual(directSkip.uploaded, []);
     assert.deepEqual(directSkip.skipped, [uploadName]);
     assert.equal(PHOTO_INGEST_MAX_BYTES, 50 * 1024 * 1024);
+  });
+
+  it("stores M3Vision base names with spaces and accepts a request larger than the JSON body limit", async (t) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      t.skip("Postgres not available");
+      return;
+    }
+
+    const previousKey = process.env.PHOTO_INGEST_KEY;
+    process.env.PHOTO_INGEST_KEY = "morning-secret";
+    const stamp = Date.now().toString(36);
+    const project = await prisma.project.create({
+      data: { name: `M3Vision ${stamp}`, projectManager: "Test Lead", stage: "current" },
+    });
+    const puts: string[] = [];
+    const storage: PhotoStorageOps = {
+      configured: () => true,
+      remove: async () => true,
+      copy: async () => "copied",
+      put: async (key, body) => {
+        puts.push(`${key}:${body.length}`);
+        return true;
+      },
+    };
+    const app = createApp({ basePath: "/projectprogress" });
+    app.set(PHOTO_INGEST_STORAGE, storage);
+    const { server, port } = await listen(app);
+    t.after(async () => {
+      server.close();
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
+      if (previousKey === undefined) delete process.env.PHOTO_INGEST_KEY;
+      else process.env.PHOTO_INGEST_KEY = previousKey;
+    });
+
+    const door = "635770-Front Door1.jpg";
+    const kitchen = "635770-Kitchen Renewal1.jpg";
+    const noAccess = "635770-nullNo Access1.jpg";
+    const damp = "635770-nullDamp and mould growth-1.jpg";
+    const kitchenBytes = Buffer.alloc(2_500_000, 7);
+    const form = multipartBody([
+      {
+        name: "files",
+        filename: `635770-Challice Way Tillman House 16/${door}`,
+        type: "image/jpeg",
+        data: Buffer.from("door"),
+      },
+      { name: "files", filename: kitchen, type: "image/jpeg", data: kitchenBytes },
+      {
+        name: "files",
+        filename: `635770-Challice Way Tillman House 16\\${noAccess}`,
+        type: "image/jpeg",
+        data: Buffer.from("no-access"),
+      },
+      { name: "files", filename: damp, type: "image/jpeg", data: Buffer.from("damp") },
+    ]);
+    assert.ok(form.body.length > 2 * 1024 * 1024);
+    const ingested = await request(port, "POST", `/api/projects/${encodeURIComponent(project.name)}/photos/ingest`, {
+      authorization: "Bearer morning-secret",
+      raw: form.body,
+      contentType: form.contentType,
+    });
+    assert.equal(ingested.status, 200, ingested.body);
+    const body = JSON.parse(ingested.body);
+    assert.deepEqual(body.uploaded, [door, kitchen, noAccess, damp]);
+    assert.deepEqual(body.skipped, []);
+    assert.deepEqual(body.failed, []);
+
+    const expected = [
+      { file: door, code: "635770-Front Door1" },
+      { file: kitchen, code: "635770-Kitchen Renewal1" },
+      { file: noAccess, code: "635770-nullNo Access1" },
+      { file: damp, code: "635770-nullDamp and mould growth-1" },
+    ];
+    for (const item of expected) {
+      const row = await prisma.photoPoolItem.findFirst({ where: { projectId: project.id, code: item.code } });
+      assert.ok(row, item.code);
+      assert.equal(row?.code, item.code);
+      assert.equal(row?.fileName, item.file);
+      const key = photoObjectKey(project.id, item.code, ".jpg");
+      assert.equal(row?.spacesKey, key);
+      assert.equal(String(key).includes("%20"), false);
+      assert.equal(String(key).includes("Tillman"), false);
+      assert.equal(String(row?.spacesKey).includes(" "), item.code.includes(" "));
+      const view = toPoolView(row!);
+      assert.equal(view.thumbUrl, poolPhotoImagePath(project.id, item.code));
+      if (item.code.includes(" ")) assert.match(view.thumbUrl, /%20/);
+    }
+    const doorKey = photoObjectKey(project.id, "635770-Front Door1", ".jpg");
+    assert.ok(doorKey);
+    const fetched: string[] = [];
+    const image = await readProjectPoolImage(project.id, "635770-Front Door1", async (key) => {
+      fetched.push(key);
+      return Buffer.from("door-bytes");
+    });
+    assert.deepEqual(fetched, [doorKey]);
+    assert.equal(image.ok, true);
+    if (image.ok) {
+      assert.equal(image.placeholder, false);
+      assert.equal(image.fileName, door);
+    }
+    const codes = await listSharedPoolCodes(project.id);
+    assert.deepEqual(
+      codes,
+      expected.map((item) => item.code).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    );
+
+    const again = multipartBody([
+      { name: "files", filename: door, type: "image/jpeg", data: Buffer.from("replace-me") },
+    ]);
+    const skipped = await request(port, "POST", `/api/projects/${project.id}/photos/ingest`, {
+      authorization: "Bearer morning-secret",
+      raw: again.body,
+      contentType: again.contentType,
+    });
+    assert.equal(skipped.status, 200);
+    assert.deepEqual(JSON.parse(skipped.body).skipped, [door]);
+    assert.equal(puts.length, 4);
+    assert.equal(puts.some((line) => line.startsWith(`${doorKey}:`) && line.endsWith(":4")), true);
+    assert.equal(puts.some((line) => line.endsWith(`:${kitchenBytes.length}`)), true);
+  });
+
+  it("uploads only missing M3Vision files from a folder and a zip", async (t) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      t.skip("Postgres not available");
+      return;
+    }
+
+    const previousKey = process.env.PHOTO_INGEST_KEY;
+    process.env.PHOTO_INGEST_KEY = "morning-secret";
+    const stamp = Date.now().toString(36);
+    const project = await prisma.project.create({
+      data: { name: `M3 client ${stamp}`, projectManager: "Test Lead", stage: "current" },
+    });
+    const door = "635770-Front Door1.jpg";
+    const doorCode = "635770-Front Door1";
+    const doorKey = photoObjectKey(project.id, doorCode, ".jpg");
+    assert.ok(doorKey);
+    await prisma.photoPoolItem.create({
+      data: { projectId: project.id, code: doorCode, fileName: door, spacesKey: doorKey! },
+    });
+    const puts: string[] = [];
+    const storage: PhotoStorageOps = {
+      configured: () => true,
+      remove: async () => true,
+      copy: async () => "copied",
+      put: async (key) => {
+        puts.push(key);
+        return true;
+      },
+    };
+    const app = createApp({ basePath: "/projectprogress" });
+    app.set(PHOTO_INGEST_STORAGE, storage);
+    const { server, port } = await listen(app);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "photo-ingest-"));
+    t.after(async () => {
+      server.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
+      if (previousKey === undefined) delete process.env.PHOTO_INGEST_KEY;
+      else process.env.PHOTO_INGEST_KEY = previousKey;
+    });
+
+    const property = path.join(dir, "635770-Challice Way Tillman House 16");
+    fs.mkdirSync(property);
+    fs.writeFileSync(path.join(dir, door), Buffer.from("already"));
+    fs.writeFileSync(path.join(property, "635770-Kitchen Renewal1.jpg"), Buffer.from("kitchen"));
+    fs.writeFileSync(path.join(property, "635770-nullNo Access1.jpg"), Buffer.from("no-access"));
+    fs.writeFileSync(path.join(property, "notes.txt"), Buffer.from("ignore"));
+    const zipPath = path.join(dir, "more.zip");
+    execFileSync("python3", [
+      "-c",
+      "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1], 'w'); z.writestr('635770-Challice Way Tillman House 16/635770-nullDamp and mould growth-1.jpg', b'damp'); z.writestr('635770-Kitchen Renewal1.JPEG', b'again'); z.close()",
+      zipPath,
+    ]);
+
+    const script = path.join(process.cwd(), "scripts", "photo-ingest.py");
+    const runClient = (source: string) =>
+      new Promise<{ uploaded: string[]; skipped: string[]; failed: unknown[] }>((resolve, reject) => {
+        execFile(
+          "python3",
+          [script, "--base-url", `http://127.0.0.1:${port}`, "--project", project.name, "--batch-size", "20", "--retries", "1", source],
+          {
+            env: { ...process.env, PHOTO_INGEST_KEY: "morning-secret" },
+            encoding: "utf8",
+          },
+          (err, stdout, stderr) => {
+            if (err) {
+              reject(new Error(`${err.message}\n${stderr || ""}\n${stdout || ""}`));
+              return;
+            }
+            resolve(JSON.parse(stdout));
+          }
+        );
+      });
+
+    const fromFolder = await runClient(dir);
+    assert.deepEqual(fromFolder.failed, []);
+    assert.deepEqual(fromFolder.uploaded.sort(), ["635770-Kitchen Renewal1.jpg", "635770-nullNo Access1.jpg"]);
+    assert.deepEqual(fromFolder.skipped, [door]);
+
+    const fromZip = await runClient(zipPath);
+    assert.deepEqual(fromZip.failed, []);
+    assert.deepEqual(fromZip.uploaded, ["635770-nullDamp and mould growth-1.jpg"]);
+    assert.deepEqual(fromZip.skipped, ["635770-Kitchen Renewal1.JPEG"]);
+
+    const kitchen = await prisma.photoPoolItem.findFirst({
+      where: { projectId: project.id, code: "635770-Kitchen Renewal1" },
+    });
+    assert.equal(kitchen?.fileName, "635770-Kitchen Renewal1.jpg");
+    assert.equal(kitchen?.spacesKey, photoObjectKey(project.id, "635770-Kitchen Renewal1", ".jpg"));
+    const dampRow = await prisma.photoPoolItem.findFirst({
+      where: { projectId: project.id, code: "635770-nullDamp and mould growth-1" },
+    });
+    assert.equal(dampRow?.fileName, "635770-nullDamp and mould growth-1.jpg");
+    assert.equal(dampRow?.spacesKey?.includes(" "), true);
+    assert.equal(dampRow?.spacesKey?.includes("%20"), false);
+    assert.equal(puts.length, 3);
+    const doorRow = await prisma.photoPoolItem.findUnique({
+      where: { projectId_code: { projectId: project.id, code: doorCode } },
+    });
+    assert.equal(doorRow?.spacesKey, doorKey);
   });
 });

@@ -120,7 +120,7 @@ Set these in **App Settings → App-Level / web component Environment Variables*
 | `SPACES_SECRET` | **Yes (production)** | Spaces secret key. **Set in the App Platform UI as a secret.** Do not commit it. |
 | `REQUIRE_SPACES` | No | `true` in `.do/app.yaml`. Production also forces Spaces because `NODE_ENV=production`. Set `true` on any non-production app that must not use local disk. |
 | `IDEAL_POSTCODES_API_KEY` | No (Find address stays off until set) | Ideal Postcodes key (`ak_…`). **Set in the App Platform UI as an encrypted secret** (App-Level or the web component → Environment Variables). Server-only: `GET /HHSRS-site-form/address-lookup`. Do not commit it and do not expose it to the browser. Without it, Find address returns HTTP 503 and the form says lookup is not configured. |
-| `PHOTO_INGEST_KEY` | Yes, for the morning photo import | Shared secret for `GET/POST /api/projects/:projectIdOrName/photos` at the **domain root** (not under `/projectprogress`). **Set in the App Platform UI as an encrypted secret.** If it is unset those endpoints return HTTP 503. See `docs/photo-ingest.md`. |
+| `PHOTO_INGEST_KEY` | Yes, for the morning photo import | Shared secret for `GET/POST /api/projects/:projectIdOrName/photos` at the **domain root** (not under `/projectprogress`). **Set in the App Platform UI as an encrypted secret.** If it is unset those endpoints return HTTP 503. The Linux client is `scripts/photo-ingest.py`. See `docs/photo-ingest.md`. |
 
 Never commit real keys. The spec file only declares the names.
 

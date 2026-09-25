@@ -23,8 +23,9 @@ services:
     instance_count: 1
     instance_size_slug: basic-xxs
     # HHSRS site form accepts up to 4 photos × 40MB (≈162MB multipart).
-    # App Platform does not expose a client_max_body_size knob; file uploads
-    # time out after 600s. Body-size checks live in Express/multer.
+    # Morning photo ingest sends about 20 JPEGs per request (~50MB). Each file
+    # may be up to 50MB. App Platform does not expose a client_max_body_size
+    # knob; file uploads time out after 600s. Body-size checks live in Express/multer.
     health_check:
       http_path: /health
       initial_delay_seconds: 30

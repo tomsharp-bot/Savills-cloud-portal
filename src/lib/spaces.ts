@@ -277,14 +277,24 @@ function spacesObjectMissing(err: unknown): boolean {
  * Server-side copy inside the bucket. "missing" means the source key is not there
  * (nothing was written to the destination). "failed" means the copy did not happen.
  */
+/**
+ * CopySource for a key that may contain spaces (M3Vision names such as
+ * `635770-Front Door1.jpg`). The stored key keeps the space. Each path
+ * segment is percent-encoded so the space travels as %20.
+ */
+export function spacesCopySource(bucket: string, key: string): string {
+  const encoded = String(key || "")
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  return `${bucket}/${encoded}`;
+}
+
 export async function copySpacesObject(fromKey: string, toKey: string): Promise<SpacesCopyResult> {
   const s3 = spacesClient();
   if (!s3) return "failed";
   const bucket = spacesStatus().bucket;
-  const copySource = `${bucket}/${fromKey
-    .split("/")
-    .map((part) => encodeURIComponent(part))
-    .join("/")}`;
+  const copySource = spacesCopySource(bucket, fromKey);
   try {
     await s3.send(
       new CopyObjectCommand({

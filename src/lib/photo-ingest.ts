@@ -7,10 +7,16 @@ import {
   type PhotoStorageOps,
 } from "./photos.js";
 
-/** Morning import limit. The Photos Pool drag-and-drop upload stays at its own limit. */
+/**
+ * Per-file cap. A morning batch is about 20 JPEGs of about 2 MB (about 50 MB
+ * for the request). This stays at 50 MB so one large file, or that whole batch,
+ * is accepted. Drag-and-drop uploads keep their own smaller cap.
+ */
 export const PHOTO_INGEST_MAX_BYTES = 50 * 1024 * 1024;
-/** One request. The morning job can call again for the next batch. */
+/** One request. scripts/photo-ingest.py sends 20 files and calls again for the next batch. */
 export const PHOTO_INGEST_MAX_FILES = 40;
+/** Suggested batch size for the morning client. The server accepts up to PHOTO_INGEST_MAX_FILES. */
+export const PHOTO_INGEST_BATCH_FILES = 20;
 
 export type IngestFile = {
   originalName: string;
@@ -69,6 +75,17 @@ export async function resolveIngestProject(
   return { ok: false, status: 404, error: "Project not found." };
 }
 
+/**
+ * Base filename only. An M3Vision zip has one folder per property
+ * (`635770-Challice Way Tillman House 16/635770-Front Door1.jpg`). The pool
+ * name is the file, never the folder. Slashes and backslashes are both stripped.
+ */
+export function photoIngestBaseName(originalName: string): string {
+  const trimmed = String(originalName || "").trim();
+  const parts = trimmed.split(/[/\\]+/).filter((part) => part.length > 0 && part !== ".");
+  return parts.length ? parts[parts.length - 1] : "";
+}
+
 /** Stored file names, for the morning job to skip files it already sent. */
 export async function listProjectPhotoNames(projectId: string): Promise<string[]> {
   const rows = await prisma.photoPoolItem.findMany({
@@ -86,10 +103,12 @@ function tooLargeMessage(): string {
 
 /**
  * Store new pool photos the same way a drag-and-drop upload does.
- * The photo code is the filename stem, with that stem's characters and case unchanged.
+ * The photo code is the base-filename stem, with spaces, hyphens, the letters
+ * `null`, and capitals unchanged. A folder path in the client filename is ignored.
  * The extension is normalised like the portal upload (lower case, `.jpeg` stored as `.jpg`)
- * so the Spaces key matches. An existing name is skipped and the stored object is not replaced.
- * `uploaded` / `skipped` / `failed` use the original uploaded filename.
+ * so the Spaces key matches a drag-and-drop of the same file. An existing name is
+ * skipped and the stored object is not replaced.
+ * `uploaded` / `skipped` / `failed` use that base filename.
  */
 export async function ingestProjectPhotos(
   projectId: string,
@@ -102,8 +121,8 @@ export async function ingestProjectPhotos(
   const seen = new Set<string>();
 
   for (const file of files) {
-    const name = String(file.originalName || "").trim() || "Untitled";
-    const parsed = parseUploadedPhotoName(file.originalName);
+    const name = photoIngestBaseName(file.originalName) || "Untitled";
+    const parsed = parseUploadedPhotoName(name);
     if (!parsed.ok) {
       failed.push({ name, error: parsed.error });
       continue;
@@ -124,7 +143,7 @@ export async function ingestProjectPhotos(
 
     const result = await uploadProjectPhoto(
       projectId,
-      { originalName: file.originalName, buffer: file.buffer, mime: file.mime },
+      { originalName: name, buffer: file.buffer, mime: file.mime },
       { kind: "pool" },
       ops,
       { maxBytes: PHOTO_INGEST_MAX_BYTES }

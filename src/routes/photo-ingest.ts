@@ -50,10 +50,23 @@ function requireIngestKey(req: Request, res: Response, next: NextFunction): void
 
 photoIngestRouter.use(requireIngestKey);
 
-const ingestUpload = multer({
+const ingestOptions: multer.Options = {
   storage: multer.memoryStorage(),
-  limits: { fileSize: PHOTO_INGEST_MAX_BYTES, files: PHOTO_INGEST_MAX_FILES },
-});
+  // A batch of ~20 JPEGs is about 50 MB. fileSize is per file; the morning
+  // client stays near 50 MB for the whole request.
+  limits: {
+    fileSize: PHOTO_INGEST_MAX_BYTES,
+    files: PHOTO_INGEST_MAX_FILES,
+    parts: PHOTO_INGEST_MAX_FILES + 8,
+  },
+  // Drop a property-folder prefix if the part still has one. Busboy also
+  // strips paths unless preservePath is set.
+  preservePath: false,
+};
+// Linux curl/Python send UTF-8 filenames. The default latin1 reading would
+// change any non-ASCII character. Spaces in "Front Door1" are the same either way.
+(ingestOptions as multer.Options & { defParamCharset?: string }).defParamCharset = "utf8";
+const ingestUpload = multer(ingestOptions);
 
 function acceptIngestFiles(req: Request, res: Response, next: NextFunction): void {
   ingestUpload.fields([
