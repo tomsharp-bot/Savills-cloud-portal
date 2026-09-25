@@ -10,6 +10,7 @@ import {
   deleteDraft,
   draftPhotoPath,
   emptyHhsrsValues,
+  formatHhsrsSurveyDate,
   HHSRS_MAX_FILE_BYTES,
   HHSRS_MAX_FILE_MB,
   HHSRS_MAX_PHOTOS,
@@ -379,6 +380,7 @@ hhsrsSiteFormRouter.get("/review", async (req: Request, res: Response) => {
   res.render("hhsrs-site-form/review", {
     title: "Review issue — Savills HHSRS Site Reporting",
     draft,
+    formatHhsrsSurveyDate,
   });
 });
 

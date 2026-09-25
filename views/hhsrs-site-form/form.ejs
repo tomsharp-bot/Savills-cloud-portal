@@ -89,7 +89,7 @@
                   <label for="fullAddress" style="margin-top:0">Full address *</label>
                   <input id="fullAddress" name="fullAddress" type="text" required autocomplete="street-address" value="<%= values.fullAddress %>" class="<%= errors.fullAddress ? 'is-invalid' : '' %>" />
                   <% if (errors.fullAddress) { %><p class="field-error"><%= errors.fullAddress %></p><% } %>
-                  <div class="field-row" style="margin-top:4px">
+                  <div class="field-row">
                     <div>
                       <label for="postcode">Postcode *</label>
                       <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" value="<%= values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" />

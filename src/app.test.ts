@@ -387,6 +387,30 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /step-visit\|step-property\|step-hazard\|extra-box\|step-photos/);
   });
 
+  it("keeps 14px between a field box and the next field label", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const css = await request(app, "GET", "/HHSRS-site-form/assets/form.css");
+    assert.equal(css.status, 200);
+    assert.match(css.body, /\.hhsrs-form-page \.field-row \{ column-gap: 10px; row-gap: 14px; \}/);
+    assert.match(
+      css.body,
+      /\.hhsrs-form-page \.info-box\.hazard > \.field-row \{[^}]*row-gap: 14px; \}/
+    );
+    assert.match(
+      css.body,
+      /\.hhsrs-form-page \.info-box > \.field-row \+ label:first-of-type,\s*\.hhsrs-form-page #extra-box > label\[for="otherDetails"\]\s*\{\s*margin-top:\s*14px;/
+    );
+    assert.match(
+      css.body,
+      /\.hhsrs-form-page \.hhsrs-form select \+ \.field-row,\s*\.hhsrs-form-page \.hhsrs-form \.field-error \+ \.field-row,\s*\.hhsrs-form-page \.addr-card > \.field-row\s*\{\s*margin-top:\s*14px;/
+    );
+    assert.match(css.body, /\.hhsrs-form-page #call-ref-why > label\s*\{\s*margin-top:\s*14px;/);
+    assert.doesNotMatch(css.body, /hazard > \.field-row \{[^}]*\sgap: 0/);
+
+    const form = await request(app, "GET", "/HHSRS-site-form/new");
+    assert.doesNotMatch(form.body, /field-row" style="margin-top:4px"/);
+  });
+
   it("accepts a JPEG larger than the old 8MB cap and rejects over 40MB", async () => {
     const app = createApp({ basePath: "/projectprogress" });
     const okUpload = multipartForm(hhsrsReviewFields(), [
@@ -445,6 +469,8 @@ describe("HHSRS site form at domain-root paths", () => {
     const review = await request(app, "GET", reviewPost.location);
     assert.equal(review.status, 200);
     assert.match(review.body, /Review issue/);
+    assert.match(review.body, /<dt>Survey date<\/dt><dd>20\/09\/2026<\/dd>/);
+    assert.doesNotMatch(review.body, /2026-09-20/);
     assert.match(review.body, /Damp &amp; Mould Growth/);
     assert.match(review.body, /Visible mould in bathroom/);
     assert.match(review.body, /No access issues/);
@@ -481,6 +507,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.equal(hazard.status, 200);
     assert.match(hazard.body, /data-jump="step-hazard"/);
     assert.match(hazard.body, /id="step-hazard"/);
+    assert.match(hazard.body, /name="surveyDate"[^>]*value="2026-09-20"/);
 
     for (const jump of ["step-visit", "step-property", "extra-box", "step-photos"]) {
       const ok = await request(app, "POST", "/HHSRS-site-form/edit", {
