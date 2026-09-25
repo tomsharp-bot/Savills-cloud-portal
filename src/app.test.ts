@@ -332,12 +332,15 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(css.body, /--navy-deep:\s*#071522/);
     assert.match(css.body, /\.hhsrs-form-page \.work-panel/);
     assert.match(css.body, /\.hhsrs-form-page \.info-box\.hazard/);
-    assert.match(css.body, /body\.hhsrs-landing\s*\{[^}]*--grey-top:\s*#dde2e8/);
+    assert.match(css.body, /--top-bar:\s*#dde2e8/);
+    assert.match(css.body, /body\.hhsrs-landing\s*\{[^}]*--grey-top:\s*var\(--top-bar\)/);
+    assert.match(css.body, /\.hhsrs-top\s*\{[^}]*background:\s*var\(--top-bar\)/);
     assert.match(css.body, /--info:\s*#e8ecef/);
-    assert.match(css.body, /\.hhsrs-form-page \.panel-top\s*\{[^}]*background:\s*var\(--info\)/);
+    assert.match(css.body, /\.hhsrs-form-page \.panel-top\s*\{[^}]*background:\s*var\(--top-bar\)/);
+    assert.match(css.body, /\.hhsrs-form-page \.info-box\s*\{[^}]*background:\s*var\(--info\)/);
     assert.match(css.body, /filter:\s*saturate\(\.72\)\s*contrast\(\.95\)/);
     assert.match(css.body, /background:\s*#dde2e8/);
-    assert.match(css.body, /0 18px 50px rgba\(10,\s*25,\s*45,\s*\.35\),\s*0 4px 12px rgba\(10,\s*25,\s*45,\s*\.18\)/);
+    assert.match(css.body, /0 18px 50px rgba\(10,\s*25,\s*45,\s*0\.35\),\s*0 4px 12px rgba\(10,\s*25,\s*45,\s*0\.18\)/);
 
     const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
     assert.equal(js.status, 200);

@@ -219,4 +219,15 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /btn-photo-fallback/);
     assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*450px/);
   });
+
+  it("paints the tool header as a full-width bar and leaves the navy top bar", () => {
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    assert.match(css, /\.topbar\s*\{[^}]*background:\s*var\(--navy\)/);
+    assert.match(css, /\.tool-header\s*\{[^}]*background:\s*#dde2e8/);
+    assert.match(css, /\.tool-header\s*\{[^}]*margin:\s*-20px -22px 1rem/);
+    assert.match(css, /\.tool-header\s*\{[^}]*border-top-left-radius:\s*var\(--radius-panel\)/);
+    assert.match(css, /\.tool-header \.tool-sub[^{]*\{[^}]*color:\s*#526070/);
+    assert.match(css, /\.tool-header \.tool-meta\s*\{[^}]*color:\s*#526070/);
+    assert.match(css, /\.tool-header \.tool-meta strong\s*\{[^}]*color:\s*var\(--text\)/);
+  });
 });

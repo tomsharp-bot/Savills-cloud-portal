@@ -12,6 +12,7 @@
 * { box-sizing: border-box; }
 html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 body.hhsrs-body {
+  --top-bar: #dde2e8;
   margin: 0;
   font-family: "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
@@ -21,8 +22,8 @@ body.hhsrs-body {
   overflow-x: hidden;
 }
 .hhsrs-top {
-  background: var(--navy);
-  color: #fff;
+  background: var(--top-bar);
+  color: var(--navy);
   padding: 14px max(16px, env(safe-area-inset-right)) 14px max(16px, env(safe-area-inset-left));
   display: flex;
   align-items: center;
@@ -32,7 +33,7 @@ body.hhsrs-body {
 .hhsrs-logo svg { width: 100%; height: auto; display: block; border-radius: 6px; }
 .hhsrs-brand, .hhsrs-home {
   margin: 0;
-  color: #fff;
+  color: var(--navy);
   font-weight: 700;
   text-decoration: none;
   font-size: 1rem;
@@ -193,10 +194,10 @@ body.hhsrs-body {
   .hhsrs-home { font-size: 0.95rem; }
   .hhsrs-review dd, .hhsrs-form select { overflow-wrap: anywhere; }
 }
-/* Landing only — do not restyle the form, review, or thanks pages. */
+/* Landing hero. Header colour is --top-bar, shared with the other site-form top bars. */
 body.hhsrs-landing {
   --red: #ce171e;
-  --grey-top: #dde2e8;
+  --grey-top: var(--top-bar);
   --panel: #f4f7fa;
   font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   background: var(--navy);
@@ -245,7 +246,7 @@ body.hhsrs-landing {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #526070;
 }
 .hhsrs-landing .hhsrs-land-top h1 {
   display: block;
@@ -460,7 +461,7 @@ body.hhsrs-form-page {
   flex-direction: column;
 }
 .hhsrs-form-page .panel-top {
-  background: var(--info);
+  background: var(--top-bar);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -487,7 +488,7 @@ body.hhsrs-form-page {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #526070;
 }
 .hhsrs-form-page .panel-top strong {
   display: block;
