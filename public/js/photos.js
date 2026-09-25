@@ -19,7 +19,18 @@
   }
 
   let folders = Array.isArray(data.folders) ? data.folders.slice() : [];
-  const pool = Array.isArray(data.pool) ? data.pool.slice() : [];
+  let pool = [];
+  const knownPhotos = new Map();
+  let poolShowAll = false;
+  let poolNextCursor = null;
+  let poolTotal = 0;
+  let poolMatched = 0;
+  let poolWindow = "recent";
+  let poolLoading = false;
+  let poolLoadError = "";
+  let poolRequestId = 0;
+  let poolSearchTimer = null;
+  let blurMode = false;
 
   let poolSelectMode = false;
   const selectedPoolCodes = new Set();
@@ -66,32 +77,35 @@
   }
 
   function poolReplaceTargets() {
-    const filtered = pool.filter((meta) => matchesPoolSearch(meta, poolSearchQuery));
     if (poolSelectMode && selectedPoolCodes.size) {
       return { codes: Array.from(selectedPoolCodes), scope: "selected" };
     }
-    return {
-      codes: filtered.map((meta) => meta.code),
-      scope: poolSearchQuery.trim() ? "filtered" : "all",
-    };
+    if (poolSearchQuery.trim()) return { codes: [], scope: "filtered" };
+    return { codes: [], scope: "all" };
   }
 
   function updatePoolReplaceScope() {
     const el = document.getElementById("poolReplaceScope");
     if (!el) return;
     const targets = poolReplaceTargets();
-    const n = targets.codes.length;
-    const noun = n === 1 ? "photo" : "photos";
     if (targets.scope === "selected") {
+      const n = targets.codes.length;
+      const noun = n === 1 ? "photo" : "photos";
       el.textContent =
         "Scope: " + n + " selected " + noun + ". The search box is ignored while photos are selected.";
-    } else if (targets.scope === "filtered") {
+      return;
+    }
+    if (targets.scope === "filtered") {
+      const n = poolMatched;
+      const noun = n === 1 ? "photo" : "photos";
       el.textContent =
         "Scope: " + n + " " + noun + " matching the search. Nothing is selected, so only these are changed.";
-    } else {
-      el.textContent =
-        "Scope: all " + n + " " + noun + " in the Photos Pool. Nothing is selected, so every pool photo is included.";
+      return;
     }
+    const n = poolTotal;
+    const noun = n === 1 ? "photo" : "photos";
+    el.textContent =
+      "Scope: all " + n + " " + noun + " in the Photos Pool. Nothing is selected, so every pool photo is included.";
   }
 
   function folderReplaceTargets(folder) {
@@ -199,8 +213,24 @@
     return String(code || "").trim().toUpperCase();
   }
 
+  function rememberPhoto(photo) {
+    if (!photo || !photo.code) return photo;
+    knownPhotos.set(normCode(photo.code), photo);
+    return photo;
+  }
+
   function poolMetaFor(code) {
-    return pool.find((p) => normCode(p.code) === normCode(code)) || null;
+    return knownPhotos.get(normCode(code)) || pool.find((p) => normCode(p.code) === normCode(code)) || null;
+  }
+
+  function poolImagePath(code) {
+    return (
+      "/photos/projects/" +
+      encodeURIComponent(data.projectId) +
+      "/pool/" +
+      encodeURIComponent(code) +
+      "/image"
+    );
   }
 
   function contentsLabelFor(folder) {
@@ -240,8 +270,17 @@
 
   function removeCodesEverywhere(codes) {
     const drop = new Set((codes || []).map(normCode));
+    let removedVisible = 0;
     for (let i = pool.length - 1; i >= 0; i--) {
-      if (drop.has(normCode(pool[i].code))) pool.splice(i, 1);
+      if (drop.has(normCode(pool[i].code))) {
+        pool.splice(i, 1);
+        removedVisible += 1;
+      }
+    }
+    drop.forEach((key) => knownPhotos.delete(key));
+    if (removedVisible) {
+      poolTotal = Math.max(0, poolTotal - removedVisible);
+      poolMatched = Math.max(0, poolMatched - removedVisible);
     }
     folders.forEach((f) => {
       if (!Array.isArray(f.photoCodes)) return;
@@ -261,6 +300,8 @@
 
   function applyRename(previousCode, photo) {
     const key = normCode(previousCode);
+    knownPhotos.delete(key);
+    rememberPhoto(photo);
     const idx = pool.findIndex((p) => normCode(p.code) === key);
     if (idx >= 0) pool[idx] = photo;
     else pool.push(photo);
@@ -336,6 +377,7 @@
     if (renameInput) renameInput.value = fileStem(meta.fileName || meta.code);
     if (renameExt) renameExt.textContent = fileExtension(meta.fileName || meta.code);
     if (renameErr) renameErr.classList.remove("show");
+    resetBlur();
     openModal("photoLightbox");
   }
 
@@ -490,18 +532,27 @@
 
   function renderPhotoPool() {
     const host = document.getElementById("photoPool");
-    const filtered = pool.filter((meta) => matchesPoolSearch(meta, poolSearchQuery));
+    updatePoolWindowUi();
+    if (!host) return;
+    if (poolLoading && !pool.length) {
+      host.innerHTML = '<p class="hint-muted">Loading photos…</p>';
+      updateSelectUi();
+      return;
+    }
+    if (poolLoadError && !pool.length) {
+      host.innerHTML = '<p class="hint-muted">' + escapeHtml(poolLoadError) + "</p>";
+      updateSelectUi();
+      return;
+    }
     if (!pool.length) {
-      host.innerHTML = '<p class="hint-muted">No photos in pool.</p>';
+      if (poolSearchQuery.trim()) host.innerHTML = '<p class="hint-muted">No photos match that search.</p>';
+      else if (!poolShowAll && poolTotal > 0) {
+        host.innerHTML = '<p class="hint-muted">No photos added in the last 7 days.</p>';
+      } else host.innerHTML = '<p class="hint-muted">No photos in pool.</p>';
       updateSelectUi();
       return;
     }
-    if (!filtered.length) {
-      host.innerHTML = '<p class="hint-muted">No photos match that search.</p>';
-      updateSelectUi();
-      return;
-    }
-    host.innerHTML = filtered
+    host.innerHTML = pool
       .map((meta) =>
         photoCardHtml(meta, {
           selected: selectedPoolCodes.has(meta.code),
@@ -530,7 +581,7 @@
       code: code,
       fileName: code,
       uprn: String(code || "").split("-")[0] || "",
-      thumbUrl: "",
+      thumbUrl: poolImagePath(code),
       spacesKey: "",
     };
   }
@@ -745,12 +796,16 @@
     });
 
     body.querySelectorAll("[data-expand]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-expand");
         expandedFolderId = expandedFolderId === id ? null : id;
         if (folderSelectId && folderSelectId !== expandedFolderId) {
           folderSelectId = null;
           selectedFolderCodes.clear();
+        }
+        if (expandedFolderId) {
+          const folder = folders.find((f) => f.id === expandedFolderId);
+          if (folder) await ensureKnownPhotos(folder.photoCodes);
         }
         renderFolders();
       });
@@ -1053,8 +1108,28 @@
 
   document.getElementById("poolSearch").addEventListener("input", (e) => {
     poolSearchQuery = e.target.value || "";
-    renderPhotoPool();
+    updatePoolReplaceScope();
+    if (poolSearchTimer) clearTimeout(poolSearchTimer);
+    poolSearchTimer = setTimeout(() => {
+      poolSearchTimer = null;
+      loadPool(true);
+    }, 250);
   });
+  const showAllBtn = document.getElementById("btnPoolShowAll");
+  if (showAllBtn) {
+    showAllBtn.addEventListener("click", () => {
+      if (poolSearchQuery.trim()) return;
+      poolShowAll = !poolShowAll;
+      loadPool(true);
+    });
+  }
+  const loadMoreBtn = document.getElementById("btnPoolLoadMore");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => {
+      if (!poolNextCursor || poolLoading) return;
+      loadPool(false);
+    });
+  }
   document.getElementById("btnSelectImages").addEventListener("click", () => {
     poolSelectMode = !poolSelectMode;
     if (!poolSelectMode) selectedPoolCodes.clear();
@@ -1179,6 +1254,7 @@
   });
 
   function closeLb() {
+    resetBlur();
     closeModal("photoLightbox");
   }
   document.getElementById("btnCloseLightbox").addEventListener("click", closeLb);
@@ -1415,12 +1491,26 @@
     if (e.target === e.currentTarget) closeShareModal();
   });
 
-  document.getElementById("btnPoolReplace").addEventListener("click", () => {
+  document.getElementById("btnPoolReplace").addEventListener("click", async () => {
     const targets = poolReplaceTargets();
     const scopeEl = document.getElementById("poolReplaceScope");
+    let codes = targets.codes;
+    if (targets.scope !== "selected") {
+      try {
+        const listed = await fetchReplaceCodes();
+        if (listed.truncated) {
+          window.alert("Too many photos to change at once. Select the photos, or search to narrow the list.");
+          return;
+        }
+        codes = listed.codes || [];
+      } catch (err) {
+        window.alert(err.message || "Could not list those photos.");
+        return;
+      }
+    }
     runReplace(
       { kind: "pool" },
-      targets.codes,
+      codes,
       scopeEl ? scopeEl.textContent : "",
       document.getElementById("poolFind").value,
       document.getElementById("poolReplaceWith").value
@@ -1443,6 +1533,10 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      if (blurMode) {
+        cancelBlur();
+        return;
+      }
       closeModal("activityModal");
       closeLb();
       if (document.getElementById("renameModal").classList.contains("open")) {
@@ -1507,6 +1601,7 @@
 
   function photoNameTaken(parsed) {
     const fileName = parsed.fileName.toLowerCase();
+    if (knownPhotos.has(parsed.key)) return true;
     return pool.some(
       (p) => normCode(p.code) === parsed.key || String(p.fileName || "").toLowerCase() === fileName
     );
@@ -1549,13 +1644,25 @@
     return next;
   }
 
+  function photoBelongsInView(photo) {
+    if (poolSearchQuery.trim()) return matchesPoolSearch(photo, poolSearchQuery);
+    return true;
+  }
+
   function applyUploadedPhoto(photo, scope, file) {
     const next = Object.assign({}, photo);
     if (file) next.thumbUrl = URL.createObjectURL(file);
+    rememberPhoto(next);
     const idx = pool.findIndex((p) => normCode(p.code) === normCode(next.code));
     if (idx >= 0) pool[idx] = next;
-    else pool.push(next);
-    pool.sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+    else if (photoBelongsInView(next)) {
+      pool.push(next);
+      pool.sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+      poolTotal += 1;
+      poolMatched += 1;
+    } else {
+      poolTotal += 1;
+    }
     if (scope && scope.kind === "folder") {
       const folder = folders.find((f) => f.id === scope.folderId);
       if (folder) {
@@ -1843,7 +1950,420 @@
     pumpUploads(session);
   });
 
-  renderPhotoPool();
+  function updatePoolWindowUi() {
+    const status = document.getElementById("poolWindowStatus");
+    const toggle = document.getElementById("btnPoolShowAll");
+    const more = document.getElementById("btnPoolLoadMore");
+    const searching = !!poolSearchQuery.trim();
+    if (status) {
+      if (searching) {
+        const noun = poolMatched === 1 ? "photo" : "photos";
+        status.textContent = "Showing " + poolMatched + " " + noun + " matching the search in the whole pool";
+      } else if (poolShowAll) {
+        status.textContent = "Showing all photos — " + poolTotal;
+      } else {
+        status.textContent =
+          "Showing photos added in the last 7 days — " + poolMatched + " of " + poolTotal;
+      }
+    }
+    if (toggle) {
+      toggle.disabled = searching && !!poolSearchQuery.trim();
+      toggle.setAttribute("aria-pressed", poolShowAll && !poolSearchQuery.trim() ? "true" : "false");
+      toggle.textContent = poolShowAll && !poolSearchQuery.trim() ? "Show last 7 days" : "Show all";
+      toggle.title = poolSearchQuery.trim() ? "Search already covers the whole Photos Pool." : "";
+    }
+    if (more) {
+      more.hidden = !poolNextCursor;
+      more.disabled = poolLoading;
+    }
+  }
+
+  function poolFetchParams(extra) {
+    const params = new URLSearchParams();
+    if (extra && extra.codes) {
+      params.set("codes", extra.codes);
+      return params;
+    }
+    if (extra && extra.view) params.set("view", extra.view);
+    const q = poolSearchQuery.trim();
+    if (q) params.set("q", q);
+    else params.set("window", poolShowAll ? "all" : "recent");
+    if (extra && extra.cursor) params.set("cursor", extra.cursor);
+    return params;
+  }
+
+  async function loadPool(reset) {
+    if (!data.poolQueryApi) return;
+    const id = ++poolRequestId;
+    poolLoading = true;
+    poolLoadError = "";
+    const cursor = reset ? "" : poolNextCursor || "";
+    if (reset) poolNextCursor = null;
+    updatePoolWindowUi();
+    const params = poolFetchParams(cursor ? { cursor: cursor } : null);
+    try {
+      const res = await fetch(url(data.poolQueryApi + "?" + params.toString()), {
+        headers: { Accept: "application/json" },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (id !== poolRequestId) return;
+      if (!res.ok) throw new Error(json.error || "Could not load photos.");
+      const photos = Array.isArray(json.photos) ? json.photos : [];
+      photos.forEach(rememberPhoto);
+      if (reset) pool = photos.slice();
+      else {
+        const have = new Set(pool.map((p) => normCode(p.code)));
+        photos.forEach((p) => {
+          if (!have.has(normCode(p.code))) pool.push(p);
+        });
+      }
+      poolTotal = Number(json.total) || 0;
+      poolMatched = Number(json.matched) || 0;
+      poolWindow = json.window || (poolSearchQuery.trim() ? "search" : poolShowAll ? "all" : "recent");
+      poolNextCursor = json.nextCursor || null;
+    } catch (err) {
+      if (id !== poolRequestId) return;
+      poolNextCursor = null;
+      poolLoadError = err.message || "Could not load photos.";
+      if (reset) pool = [];
+    } finally {
+      if (id === poolRequestId) {
+        poolLoading = false;
+        renderPhotoPool();
+      }
+    }
+  }
+
+  async function fetchReplaceCodes() {
+    const params = new URLSearchParams();
+    params.set("view", "codes");
+    if (poolSearchQuery.trim()) params.set("q", poolSearchQuery.trim());
+    else params.set("window", "all");
+    const res = await fetch(url(data.poolQueryApi + "?" + params.toString()), {
+      headers: { Accept: "application/json" },
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || "Could not list those photos.");
+    return json;
+  }
+
+  async function ensureKnownPhotos(codes) {
+    const missing = (codes || []).filter((code) => code && !poolMetaFor(code));
+    if (!missing.length || !data.poolQueryApi) return;
+    const params = new URLSearchParams();
+    params.set("codes", missing.slice(0, 200).join(","));
+    try {
+      const res = await fetch(url(data.poolQueryApi + "?" + params.toString()), {
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      const json = await res.json().catch(() => ({}));
+      (json.photos || []).forEach(rememberPhoto);
+    } catch (err) {
+      return;
+    }
+  }
+
+  let blurRects = [];
+  let blurDrag = null;
+  let blurSource = null;
+  let blurBusy = false;
+
+  function showBlurError(message) {
+    const errEl = document.getElementById("lightboxBlurErr");
+    if (!errEl) return;
+    errEl.textContent = message || "Could not blur that photo.";
+    errEl.classList.add("show");
+  }
+
+  function updateBlurButtons() {
+    const start = document.getElementById("btnBlurStart");
+    const undo = document.getElementById("btnBlurUndo");
+    const cancel = document.getElementById("btnBlurCancel");
+    const save = document.getElementById("btnBlurSave");
+    if (start) start.hidden = blurMode;
+    if (undo) undo.hidden = !blurMode;
+    if (cancel) cancel.hidden = !blurMode;
+    if (save) {
+      save.hidden = !blurMode;
+      save.disabled = blurBusy || blurRects.length === 0;
+    }
+  }
+
+  function cancelBlur() {
+    blurMode = false;
+    blurRects = [];
+    blurDrag = null;
+    blurSource = null;
+    const canvas = document.getElementById("lightboxBlurCanvas");
+    const frame = document.getElementById("lightboxFrame");
+    if (frame) frame.classList.remove("is-blurring");
+    if (canvas) {
+      canvas.hidden = true;
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    updateBlurButtons();
+  }
+
+  function resetBlur() {
+    const errEl = document.getElementById("lightboxBlurErr");
+    if (errEl) errEl.classList.remove("show");
+    cancelBlur();
+  }
+
+  function blurExportType(fileName) {
+    const ext = fileExtension(fileName).toLowerCase();
+    if (ext === ".png") return { type: "image/png" };
+    if (ext === ".webp") return { type: "image/webp", quality: 0.95 };
+    if (ext === ".jpg" || ext === ".jpeg") return { type: "image/jpeg", quality: 0.95 };
+    return null;
+  }
+
+  function blurBlockSize(width, height) {
+    return Math.max(18, Math.round(Math.min(width, height) / 32));
+  }
+
+  function normalizeRect(rect) {
+    const w = rect.w || 0;
+    const h = rect.h || 0;
+    return {
+      x: w < 0 ? rect.x + w : rect.x,
+      y: h < 0 ? rect.y + h : rect.y,
+      w: Math.abs(w),
+      h: Math.abs(h),
+    };
+  }
+
+  function pixelateRect(ctx, source, rect) {
+    const box = normalizeRect(rect);
+    const x = Math.max(0, Math.floor(box.x));
+    const y = Math.max(0, Math.floor(box.y));
+    const w = Math.min(source.width - x, Math.ceil(box.w));
+    const h = Math.min(source.height - y, Math.ceil(box.h));
+    if (w < 2 || h < 2) return;
+    const block = blurBlockSize(source.width, source.height);
+    const tw = Math.max(1, Math.floor(w / block));
+    const th = Math.max(1, Math.floor(h / block));
+    const tmp = document.createElement("canvas");
+    tmp.width = tw;
+    tmp.height = th;
+    const tctx = tmp.getContext("2d");
+    if (!tctx) return;
+    tctx.imageSmoothingEnabled = false;
+    tctx.drawImage(source, x, y, w, h, 0, 0, tw, th);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmp, 0, 0, tw, th, x, y, w, h);
+    ctx.imageSmoothingEnabled = true;
+  }
+
+  function strokeBlurRect(ctx, rect) {
+    const box = normalizeRect(rect);
+    ctx.save();
+    ctx.strokeStyle = "#f4c400";
+    ctx.lineWidth = Math.max(2, Math.round(Math.min(ctx.canvas.width, ctx.canvas.height) / 400));
+    ctx.strokeRect(box.x, box.y, box.w, box.h);
+    ctx.restore();
+  }
+
+  function redrawBlur() {
+    const canvas = document.getElementById("lightboxBlurCanvas");
+    if (!canvas || !blurSource) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = true;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(blurSource, 0, 0);
+    blurRects.forEach((rect) => pixelateRect(ctx, blurSource, rect));
+    if (blurDrag) {
+      pixelateRect(ctx, blurSource, blurDrag);
+      strokeBlurRect(ctx, blurDrag);
+    }
+  }
+
+  function blurPoint(event, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) * canvas.width) / (rect.width || 1),
+      y: ((event.clientY - rect.top) * canvas.height) / (rect.height || 1),
+    };
+  }
+
+  async function orientedBitmap(blob) {
+    if (typeof createImageBitmap === "function") {
+      try {
+        return await createImageBitmap(blob, { imageOrientation: "from-image" });
+      } catch (err) {
+        try {
+          return await createImageBitmap(blob);
+        } catch (err2) {
+          /* draw via an Image element, which also respects EXIF in current browsers */
+        }
+      }
+    }
+    return new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Could not read that photo."));
+      };
+      img.src = objectUrl;
+    });
+  }
+
+  async function startBlur() {
+    if (!lightboxPhoto || blurBusy || blurMode) return;
+    const meta = lightboxPhoto.meta;
+    const errEl = document.getElementById("lightboxBlurErr");
+    if (errEl) errEl.classList.remove("show");
+    if (!meta.spacesKey) {
+      showBlurError("This photo has no stored image to blur.");
+      return;
+    }
+    if (!blurExportType(meta.fileName || meta.code)) {
+      showBlurError("This photo format cannot be blurred in the browser.");
+      return;
+    }
+    blurBusy = true;
+    updateBlurButtons();
+    try {
+      const src = thumbSrc(meta.thumbUrl || poolImagePath(meta.code));
+      const res = await fetch(src, { credentials: "same-origin", cache: "no-store" });
+      if (!res.ok) throw new Error("Could not load that photo.");
+      const blob = await res.blob();
+      const bitmap = await orientedBitmap(blob);
+      const source = document.createElement("canvas");
+      source.width = bitmap.width || bitmap.naturalWidth;
+      source.height = bitmap.height || bitmap.naturalHeight;
+      if (!source.width || !source.height) throw new Error("Could not read that photo.");
+      const sourceCtx = source.getContext("2d");
+      if (!sourceCtx) throw new Error("Could not blur that photo.");
+      sourceCtx.drawImage(bitmap, 0, 0);
+      if (typeof bitmap.close === "function") bitmap.close();
+      blurSource = source;
+      const canvas = document.getElementById("lightboxBlurCanvas");
+      canvas.width = source.width;
+      canvas.height = source.height;
+      canvas.hidden = false;
+      const frame = document.getElementById("lightboxFrame");
+      if (frame) frame.classList.add("is-blurring");
+      blurMode = true;
+      blurRects = [];
+      blurDrag = null;
+      redrawBlur();
+    } catch (err) {
+      showBlurError(err.message || "Could not load that photo.");
+      cancelBlur();
+    } finally {
+      blurBusy = false;
+      updateBlurButtons();
+    }
+  }
+
+  async function saveBlur() {
+    if (!lightboxPhoto || !blurMode || blurBusy || !blurRects.length) return;
+    const confirmed = window.confirm("This replaces the stored photo; the unblurred version will not be kept");
+    if (!confirmed) return;
+    const meta = lightboxPhoto.meta;
+    const exportType = blurExportType(meta.fileName || meta.code);
+    const canvas = document.getElementById("lightboxBlurCanvas");
+    if (!exportType || !canvas) {
+      showBlurError("This photo format cannot be blurred in the browser.");
+      return;
+    }
+    blurBusy = true;
+    updateBlurButtons();
+    try {
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (out) => (out ? resolve(out) : reject(new Error("Could not blur that photo."))),
+          exportType.type,
+          exportType.quality
+        );
+      });
+      const body = new FormData();
+      body.append("file", blob, meta.fileName || "photo.jpg");
+      const res = await fetch(url(data.poolQueryApi + "/" + encodeURIComponent(meta.code) + "/blur"), {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: body,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.ok === false) throw new Error(json.error || "Could not save that blur.");
+      const photo = json.photo || meta;
+      if (photo.thumbUrl && String(photo.thumbUrl).indexOf("v=") === -1) {
+        photo.thumbUrl += (String(photo.thumbUrl).indexOf("?") === -1 ? "?" : "&") + "v=" + Date.now();
+      }
+      applyRename(meta.code, photo);
+      const img = document.getElementById("lightboxImg");
+      if (img && photo.thumbUrl) img.src = thumbSrc(photo.thumbUrl);
+      cancelBlur();
+      renderPhotoPool();
+      renderFolders();
+    } catch (err) {
+      showBlurError(err.message || "Could not save that blur.");
+    } finally {
+      blurBusy = false;
+      updateBlurButtons();
+    }
+  }
+
+  const blurStartBtn = document.getElementById("btnBlurStart");
+  if (blurStartBtn) blurStartBtn.addEventListener("click", () => startBlur());
+  const blurUndoBtn = document.getElementById("btnBlurUndo");
+  if (blurUndoBtn) {
+    blurUndoBtn.addEventListener("click", () => {
+      if (!blurMode || blurBusy) return;
+      blurRects.pop();
+      redrawBlur();
+      updateBlurButtons();
+    });
+  }
+  const blurCancelBtn = document.getElementById("btnBlurCancel");
+  if (blurCancelBtn) blurCancelBtn.addEventListener("click", () => cancelBlur());
+  const blurSaveBtn = document.getElementById("btnBlurSave");
+  if (blurSaveBtn) blurSaveBtn.addEventListener("click", () => saveBlur());
+
+  const blurCanvas = document.getElementById("lightboxBlurCanvas");
+  if (blurCanvas) {
+    blurCanvas.addEventListener("pointerdown", (event) => {
+      if (!blurMode || blurBusy) return;
+      try {
+        blurCanvas.setPointerCapture(event.pointerId);
+      } catch (err) {
+        /* A pointer that is already gone should still start the rectangle. */
+      }
+      const point = blurPoint(event, blurCanvas);
+      blurDrag = { x: point.x, y: point.y, w: 0, h: 0 };
+    });
+    blurCanvas.addEventListener("pointermove", (event) => {
+      if (!blurDrag) return;
+      const point = blurPoint(event, blurCanvas);
+      blurDrag.w = point.x - blurDrag.x;
+      blurDrag.h = point.y - blurDrag.y;
+      redrawBlur();
+    });
+    function finishBlurDrag() {
+      if (!blurDrag) return;
+      const box = normalizeRect(blurDrag);
+      blurDrag = null;
+      if (box.w >= 8 && box.h >= 8) blurRects.push(box);
+      redrawBlur();
+      updateBlurButtons();
+    }
+    blurCanvas.addEventListener("pointerup", finishBlurDrag);
+    blurCanvas.addEventListener("pointercancel", () => {
+      blurDrag = null;
+      redrawBlur();
+    });
+  }
+
+  loadPool(true);
   renderFolders();
   renderCompletions();
 })();

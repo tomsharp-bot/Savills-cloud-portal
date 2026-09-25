@@ -688,6 +688,7 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+.photos-page .lightbox-frame { position: relative; width: 100%; display: flex; justify-content: center; }
 .photos-page .lightbox-body img {
   width: 100%;
   max-width: min(860px, 70vw);
@@ -698,16 +699,61 @@
   display: block;
   max-height: min(78vh, 820px);
 }
-.photos-page .lightbox-rename {
+.photos-page .lightbox-frame.is-blurring img { visibility: hidden; position: absolute; }
+.photos-page .lightbox-frame canvas {
+  width: 100%;
+  max-width: min(860px, 70vw);
+  height: auto;
+  max-height: min(78vh, 820px);
+  border-radius: 8px;
+  display: none;
+  cursor: crosshair;
+  touch-action: none;
+  background: #d5dde6;
+}
+.photos-page .lightbox-frame.is-blurring canvas { display: block; }
+.photos-page .lightbox-side {
   flex: 0 0 280px;
   width: 280px;
-  padding: 14px 14px 16px;
   border-left: 1px solid var(--border);
   background: #fff;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+.photos-page .lightbox-rename {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 14px 14px 16px;
+  border-left: none;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
+.photos-page .lightbox-blur {
+  padding: 0 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 14px;
+}
+.photos-page .lightbox-blur h4 { margin: 0; font-size: 0.95rem; color: var(--navy); }
+.photos-page .lightbox-blur .hint-muted { margin: 0; }
+.photos-page .blur-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.photos-page .pool-window {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.photos-page .pool-window-status { margin: 0; font-size: 0.88rem; color: var(--navy); font-weight: 600; }
+.photos-page .pool-more { margin-top: 12px; }
 .photos-page .lightbox-rename h4 { margin: 0; font-size: 0.95rem; color: var(--navy); }
 .photos-page .lightbox-rename label { font-weight: 600; font-size: 0.82rem; color: var(--navy); }
 .photos-page .lightbox-rename .hint-muted { margin: 0; }
@@ -715,13 +761,20 @@
 .photos-page .lightbox-rename .btn { align-self: flex-start; }
 @media (max-width: 800px) {
   .photos-page .lightbox-stage { flex-direction: column; }
-  .photos-page .lightbox-rename {
+  .photos-page .lightbox-side {
     width: auto;
     flex: none;
     border-left: none;
     border-top: 1px solid var(--border);
   }
-  .photos-page .lightbox-body img { max-height: min(48vh, 420px); max-width: 100%; }
+  .photos-page .lightbox-rename {
+    width: auto;
+    flex: none;
+    border-left: none;
+    border-top: none;
+  }
+  .photos-page .lightbox-body img,
+  .photos-page .lightbox-frame canvas { max-height: min(48vh, 420px); max-width: 100%; }
 }
 .photos-page .lightbox-foot {
   padding: 12px 14px;

@@ -65,3 +65,8 @@ services:
       - key: IDEAL_POSTCODES_API_KEY
         type: SECRET
         scope: RUN_TIME
+      # Morning Photos Pool import (/api/projects/:project/photos/ingest).
+      # Set the value in the App Platform UI. If it is unset the endpoint returns 503.
+      - key: PHOTO_INGEST_KEY
+        type: SECRET
+        scope: RUN_TIME
