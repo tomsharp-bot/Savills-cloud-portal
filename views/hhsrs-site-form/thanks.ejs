@@ -3,16 +3,29 @@
 <head>
   <%- include("partials/head") %>
 </head>
-<body class="hhsrs-body">
-  <header class="hhsrs-top">
-    <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
-    <p class="hhsrs-brand">Savills</p>
-  </header>
-  <main class="hhsrs-shell">
-    <h1>Thank you</h1>
-    <p class="hhsrs-lead">The issue has been submitted<%= submissionId ? " (ref " + submissionId + ")" : "" %>.</p>
-    <a class="hhsrs-btn hhsrs-btn-primary" href="<%= hhsrsUrl('/new') %>">Submit another issue</a>
-    <a class="hhsrs-btn hhsrs-btn-ghost" href="<%= hhsrsUrl('/') %>">Back to start</a>
-  </main>
+<body class="hhsrs-body hhsrs-form-page">
+  <div class="stage">
+    <div class="play-layout">
+      <div class="work-panel">
+        <header class="panel-top">
+          <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
+          <div class="brand-text">
+            <p class="eyebrow">Housing · Survey reporting</p>
+            <strong>HHSRS Site Reporting</strong>
+          </div>
+        </header>
+        <div class="panel-body">
+          <div class="hhsrs-done">
+            <div class="hhsrs-done-tick"><svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h1>Issue submitted</h1>
+            <p class="hhsrs-done-thanks">Thanks, the office has it.</p>
+            <p class="hhsrs-done-ref">The issue has been submitted<%= submissionId ? " (ref " + submissionId + ")" : "" %>.</p>
+            <a class="hhsrs-btn hhsrs-btn-primary hhsrs-done-again" href="<%= hhsrsUrl('/new') %>">Report another issue</a>
+            <a class="hhsrs-done-start" href="<%= hhsrsUrl('/') %>">Back to start</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

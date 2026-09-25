@@ -45,6 +45,15 @@ import {
 
 export const hhsrsSiteFormRouter = Router();
 
+/** Review "Edit" may scroll the form back to one of these sections. Anything else is ignored. */
+const EDIT_JUMPS = new Set(["step-visit", "step-property", "step-hazard", "extra-box", "step-photos"]);
+
+function reviewEditJump(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const jump = String(raw ?? "").trim();
+  return EDIT_JUMPS.has(jump) ? jump : "";
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: hhsrsMulterLimits,
@@ -183,6 +192,7 @@ function renderForm(
     projects: { id: string; name: string }[];
     surveyors: SurveyorOption[];
     formError?: string;
+    jump?: string;
   }
 ): void {
   const projects = opts.projects.map((project) => ({
@@ -207,6 +217,7 @@ function renderForm(
     maxFileMb: HHSRS_MAX_FILE_MB,
     maxFileBytes: HHSRS_MAX_FILE_BYTES,
     photoHint: hhsrsPhotoHint(),
+    jump: reviewEditJump(opts.jump),
   });
 }
 
@@ -379,7 +390,7 @@ hhsrsSiteFormRouter.post("/edit", async (req: Request, res: Response) => {
     return;
   }
   const [projects, surveyors] = await Promise.all([loadActiveProjects(), loadSurveyors()]);
-  renderForm(res, { values: draft, draft, projects, surveyors });
+  renderForm(res, { values: draft, draft, projects, surveyors, jump: reviewEditJump(req.body?.jump) });
 });
 
 hhsrsSiteFormRouter.post("/cancel", async (req: Request, res: Response) => {

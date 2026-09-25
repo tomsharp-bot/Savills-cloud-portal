@@ -721,3 +721,266 @@ body.hhsrs-form-page {
   }
   .hhsrs-form-page .hhsrs-btn-find { width: 100%; }
 }
+
+/* =====================================================================================================
+   HHSRS site form v4. Appended after the live rules: date/surveyor row, 22px tick boxes,
+   text size, photo buttons, review and submitted pages, and the house picture in the centre strip.
+   ===================================================================================================== */
+
+/* ===== v3 FIX: survey date + surveyor row overlapping on tablets (goes straight into live form.css) ===== */
+/* Cause: .field-row uses grid-template-columns: 1fr 1fr. 1fr = minmax(auto, 1fr), and grid cells
+   default to min-width:auto, so a date input with a wide intrinsic width (iPadOS Safari / Android
+   Chrome) forces its column wider than half and it spills over the Surveyor select. */
+.field-row > * { min-width: 0; }
+.hhsrs-form input[type=date] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.hhsrs-form input[type=date]::-webkit-date-and-time-value { text-align: left; }
+@media (min-width: 521px) {
+  .field-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  /* survey date row: compact fixed-ish date column (dd/mm/yyyy + calendar icon), surveyor gets the rest */
+  .field-row:has(> div > input[type=date]) { grid-template-columns: minmax(0, 11.5rem) minmax(0, 1fr); }
+}
+/* phone (<=520px): unchanged, the existing @media (max-width: 520px) { .field-row { grid-template-columns: 1fr; } } still stacks the rows */
+
+/* ===== v4: tick boxes 22px, whole label row tappable (min-height 44px) ===== */
+.hhsrs-form-page .hhsrs-form input[type=checkbox] {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  flex: 0 0 22px;
+  margin: 0;
+  cursor: pointer;
+}
+.hhsrs-form-page .hhsrs-form label.confirm-row,
+.hhsrs-form-page .hhsrs-form label.hhsrs-check {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(26, 75, 124, 0.12);
+}
+/* label.confirm-row: the generic ".hhsrs-form-page .hhsrs-form label" rule (small uppercase caps)
+   out-ranks the old ".hhsrs-form-page .confirm-row", so the confirm text was rendering tiny and uppercase */
+.hhsrs-form-page .hhsrs-form label.confirm-row {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.hhsrs-form-page .hhsrs-form label.hhsrs-check {
+  margin-top: 14px;
+  padding: 8px 0;
+  line-height: 1.35;
+}
+.hhsrs-form-page .hhsrs-form label.hhsrs-check input[disabled] { cursor: not-allowed; }
+/* "Change UPRN" was 12px text and 35px tall: make it a proper finger-sized button */
+.hhsrs-form-page .hhsrs-btn-change { min-height: 44px; font-size: 0.9rem; padding: 10px 12px; }
+
+/* ===== v4: no overlap / no bad truncation anywhere on the form (goes straight into live form.css) ===== */
+/* every select, text input and textarea can shrink to its cell, never pushes past it */
+.hhsrs-form select,
+.hhsrs-form input[type=text],
+.hhsrs-form textarea {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+/* long option text is cut with an ellipsis inside the box instead of running under the arrow */
+.hhsrs-form select {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Hazard: HHSRS category names are long (e.g. "Carbon Monoxide & Indoor Air Pollutants"),
+   so category and rating stack at every width; category gets the full width and shows in full */
+.hhsrs-form-page .info-box.hazard > .field-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+
+/* ===== v4: respect the surveyor's own text size (browser / phone "larger text" setting).
+   Live has html { font-size: 16px } which ignores it; 100% = 16px for everyone who has not changed it. ===== */
+html { font-size: 100%; }
+
+/* ===== v4: scroll room under the form while sections are still opening (touch/narrow; class set by the v4 JS add-on) ===== */
+body.hhsrs-flow-room .play-layout { margin-bottom: 75vh; }
+
+/* ===== v4: Take photo + Add from gallery buttons (goes into live form.css with the v4 JS add-on) ===== */
+.photo-camera-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.photo-buttons { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+.hhsrs-form-page .hhsrs-form .photo-buttons label.hhsrs-file-btn {
+  margin: 0 !important;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  text-align: center;
+  touch-action: manipulation;
+}
+.hhsrs-form-page .hhsrs-form .photo-buttons label.photo-btn-gallery {
+  background: #fff;
+  color: var(--blue);
+  border: 2px solid var(--blue);
+}
+.hhsrs-form-page .hhsrs-form .photo-buttons label.is-disabled { opacity: 0.5; cursor: not-allowed; }
+.photo-btn-camera, .photo-when-touch { display: none !important; }
+@media (max-width: 1024px), (pointer: coarse) {
+  .photo-buttons { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .hhsrs-form-page .hhsrs-form .photo-buttons label.photo-btn-camera { display: flex !important; }
+  .photo-when-touch { display: inline !important; }
+  .photo-when-desktop { display: none !important; }
+}
+@media (max-width: 430px) {
+  .photo-buttons { grid-template-columns: minmax(0, 1fr); }   /* phone: stacked, camera on top */
+}
+
+/* ===== v4: Review + Submitted pages (goes into live form.css with the new review.ejs / thanks.ejs) ===== */
+.hhsrs-rv-intro {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px 16px; margin: 0 0 14px;
+}
+.hhsrs-rv-intro h1 { margin: 0 0 4px; color: var(--navy); font-size: 1.45rem; letter-spacing: -0.02em; line-height: 1.2; }
+.hhsrs-rv-intro p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.4; }
+.hhsrs-rv-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 10px 16px 6px; margin: 0 0 14px; box-shadow: 0 2px 8px rgba(10, 25, 45, 0.10);
+}
+.hhsrs-rv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 4px; }
+.hhsrs-rv-title {
+  margin: 0; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.hhsrs-rv-edit {
+  min-height: 44px; min-width: 72px; padding: 8px 16px; border-radius: 10px;
+  border: 1px solid var(--border); background: #fff; color: var(--blue);
+  font: inherit; font-size: 0.95rem; font-weight: 700; cursor: pointer; touch-action: manipulation;
+}
+.hhsrs-rv-list { margin: 0; }
+.hhsrs-rv-list > div {
+  display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: 2px 14px;
+  padding: 11px 0; border-top: 1px solid #e1e7ed;
+}
+.hhsrs-rv-list dt { color: var(--muted); font-size: 0.875rem; font-weight: 600; line-height: 1.4; }
+.hhsrs-rv-list dd { margin: 0; color: var(--navy); font-size: 1rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.hhsrs-rv-list dd.prewrap { white-space: pre-wrap; font-weight: 500; color: var(--text); }
+.hhsrs-rv-pill { display: inline-block; padding: 2px 12px; border-radius: 999px; font-size: 0.9rem; font-weight: 700; }
+.hhsrs-rv-pill.is-high { background: #fde3e3; color: #8a1111; }
+.hhsrs-rv-pill.is-mid { background: #fff1c7; color: #6b4d00; }
+.hhsrs-rv-pill.is-low { background: #e2f1e7; color: #1e6b3a; }
+.hhsrs-rv-photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 6px 0 10px; }
+.hhsrs-rv-photos figure { margin: 0; }
+.hhsrs-rv-photos img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); background: #e8edf2; }
+.hhsrs-rv-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; margin: 4px 0 0; }
+.hhsrs-form-page .hhsrs-rv-actions .hhsrs-btn { margin: 0; min-height: 58px; font-size: 1.15rem; font-weight: 700; }
+.hhsrs-rv-discard {
+  display: block; width: 100%; min-height: 44px; margin: 12px 0 0; background: none; border: 0;
+  color: var(--danger); font: inherit; font-size: 0.9rem; font-weight: 600; text-decoration: underline; cursor: pointer;
+}
+@media (max-width: 600px) {
+  .hhsrs-rv-list > div { grid-template-columns: minmax(0, 1fr); }
+  .hhsrs-rv-photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px), (max-height: 500px) {
+  /* phone (portrait or landscape): Back + Submit stay in reach at the bottom of the screen */
+  .hhsrs-rv-actions {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0;
+    padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    background: rgba(244, 246, 248, 0.97); border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 18px rgba(10, 25, 45, 0.18);
+  }
+  .hhsrs-rv { padding-bottom: 84px; }
+}
+/* Submitted */
+.hhsrs-done {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
+  padding: 30px 22px 22px; margin: 8px 0; text-align: center;
+  box-shadow: 0 18px 50px rgba(10, 25, 45, 0.22), 0 4px 12px rgba(10, 25, 45, 0.12);
+}
+.hhsrs-done-tick {
+  width: 88px; height: 88px; margin: 6px auto 18px; border-radius: 50%; background: #1f8a4c;
+  display: grid; place-items: center; box-shadow: 0 0 0 10px rgba(31, 138, 76, 0.14);
+}
+.hhsrs-done h1 { margin: 0 0 8px; color: var(--navy); font-size: 1.8rem; letter-spacing: -0.02em; }
+.hhsrs-done-thanks { margin: 0 0 10px; color: var(--text); font-size: 1.15rem; font-weight: 600; }
+.hhsrs-done-ref { margin: 0 0 22px; color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+.hhsrs-form-page .hhsrs-done-again {
+  display: flex; align-items: center; justify-content: center; width: 100%; max-width: 380px; margin: 0 auto;
+  min-height: 60px; font-size: 1.15rem; font-weight: 700; text-decoration: none;
+}
+.hhsrs-done-start { display: inline-block; margin-top: 14px; padding: 10px; color: var(--blue); font-weight: 600; }
+
+
+/* =====================================================================================================
+   Faded house photo inside the centre
+   strip, behind the form sections, on every screen size. Uses the photo already on the live site
+   (public/hhsrs-site-form/houses-alt-calm.jpg, served at /HHSRS-site-form/assets/houses-alt-calm.jpg).
+   ===================================================================================================== */
+/* Page background, strip width, radius, outline and shadow all stay exactly as live.
+   Faded house picture (same photo, fade and wash as the live landing hero) fills the
+   rounded centre strip behind the form sections, on PC and phone. */
+.hhsrs-form-page .panel-body {
+  position: relative;
+  isolation: isolate;
+  background: #eef2f5;
+  padding: 24px 40px 30px;            /* live: 20px 18px 24px - form a little narrower */
+}
+/* picture layer: same fade as landing .hhsrs-land-hero-img */
+.hhsrs-form-page .panel-body::before {
+  content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: #eef2f5 url("/HHSRS-site-form/assets/houses-alt-calm.jpg") center 55% / cover no-repeat;
+  filter: saturate(.72) contrast(.95);
+}
+/* pale wash: same as landing .hhsrs-land-hero::after */
+.hhsrs-form-page .panel-body::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, rgba(244,247,250,.46) 0%, rgba(244,247,250,.40) 50%, rgba(244,247,250,.48) 100%);
+}
+/* Desktop (all sections open, tall strip): picture stays put behind the strip while scrolling */
+@media (min-width: 1025px) {
+  .hhsrs-form-page .panel-body::before { background-attachment: fixed; }
+  .hhsrs-form-page .panel-body::after { background-attachment: fixed; }
+}
+/* heading + intro sit on a solid card so they are never over the picture */
+.hhsrs-form-page .panel-body > h1 {
+  background: var(--panel);
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  margin: 0; padding: 14px 16px 4px;
+}
+.hhsrs-form-page .panel-body > .hhsrs-lead {
+  background: var(--panel);
+  border: 1px solid var(--border); border-top: 0;
+  border-radius: 0 0 14px 14px;
+  margin: 0 0 16px; padding: 2px 16px 14px;
+}
+/* section boxes stay solid; soft lift so they read cleanly over the picture */
+.hhsrs-form-page .info-box,
+.hhsrs-form-page .gate-hint { box-shadow: 0 2px 8px rgba(10,25,45,.10); }
+.hhsrs-form-page .gate-hint { background: #eef2f7; }
+@media (max-width: 600px) {
+  .hhsrs-form-page .panel-body::before { background-position: center 60%; }
+  /* a little less navy each side, a little more picture each side: fields keep their width */
+  .hhsrs-form-page .stage { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+  .hhsrs-form-page .panel-body { padding: 18px 20px 24px; }
+}
+@media (max-width: 430px) {
+  .hhsrs-form-page .panel-body { padding: 16px 18px 22px; }
+  .hhsrs-form-page .panel-body > h1 { padding: 12px 14px 4px; }
+  .hhsrs-form-page .panel-body > .hhsrs-lead { padding: 2px 14px 12px; }
+}
+
