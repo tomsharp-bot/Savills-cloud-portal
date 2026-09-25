@@ -158,7 +158,9 @@ describe("HHSRS Reporter UI helpers", () => {
   });
 
   it("keeps Test Housing as the only roster address and leaves other projects blank", () => {
-    const addressed = HHSRS_PROJECT_ROSTER.filter((project) => project.to.length > 0 || project.cc.length > 0);
+    const addressed = HHSRS_PROJECT_ROSTER.filter(
+      (project) => project.to.length > 0 || project.cc.length > 0 || (project.bcc?.length ?? 0) > 0
+    );
     assert.deepEqual(
       addressed.map((project) => project.name),
       ["Test Housing"]
@@ -190,8 +192,10 @@ describe("HHSRS Reporter UI helpers", () => {
         assert.equal(draft.to, "", project.name);
       }
       assert.equal(draft.cc, "", project.name);
+      assert.equal(draft.bcc, "", project.name);
       assert.equal(draft.to.includes("undefined"), false);
       assert.equal(draft.cc.includes("undefined"), false);
+      assert.equal(draft.bcc.includes("undefined"), false);
     }
   });
 
@@ -370,9 +374,41 @@ describe("HHSRS Reporter UI helpers", () => {
       clientDescription: "damaged light fitting in lounge",
       photoCount: 0,
     });
-    assert.equal(gateway.to, "hhsrs@gatewayhousing.org.uk");
-    assert.equal(gateway.cc, "gwheeler@savills.com");
+    assert.equal(gateway.to, "");
+    assert.equal(gateway.cc, "");
     assert.equal(gateway.bcc, "");
+
+    for (const project of HHSRS_PROJECT_ROSTER) {
+      if (project.name === "Test Housing") continue;
+      const recipients = emailRecipientsFromProject(project);
+      assert.equal(recipients.to, "", project.name);
+      assert.equal(recipients.cc, "", project.name);
+      assert.equal(recipients.bcc, "", project.name);
+      const draft = draftEmailFromReviewFields(
+        mergeReviewDraftFields(null, {
+          projectName: project.name,
+          address: "1 High Street",
+          notes: "Loose socket in the kitchen.",
+          hazard: "Electrical Hazards",
+          rating: "High",
+          uprn: "100123",
+          surveyDate: "2026-09-20",
+          callOutcome: "Attempted",
+          callNotes: "Voicemail full",
+          onwardTopic: "Electrical",
+          cat1Confirmed: true,
+          includeCause: true,
+          photoCount: 0,
+        })
+      );
+      assert.equal(draft.to, "", project.name);
+      assert.equal(draft.cc, "", project.name);
+      assert.equal(draft.bcc, "", project.name);
+    }
+    const testHousing = emailRecipientsFromProject(matchDemoProject("Test Housing"));
+    assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
+    assert.equal(testHousing.cc, "");
+    assert.equal(testHousing.bcc, "");
   });
 
   it("declares review draft storage keys before restore runs", () => {
