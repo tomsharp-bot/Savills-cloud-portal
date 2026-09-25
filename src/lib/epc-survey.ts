@@ -31,10 +31,28 @@ export function surveyTypeForEpcRequired(epcRequired: boolean): string {
   return epcRequired ? SURVEY_TYPE_SCS_EPC : SURVEY_TYPE_SCS_ONLY;
 }
 
+const EPC_REQ_TRUE = new Set(["yes", "y", "true", "1", "tick", "ticked", "checked", "✓", "✔", "☑", "✅"]);
+const EPC_REQ_FALSE = new Set(["no", "n", "false", "0"]);
+
+/**
+ * Tri-state EPC Req. cell. True and false are explicit answers.
+ * Blank or unrecognised is undefined so an upload does not overwrite a hand-set tick.
+ * Excel boolean TRUE/FALSE and numeric 1/0 are included.
+ */
+export function parseEpcRequired(value: unknown): boolean | undefined {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  if (typeof value === "number" || value == null) return undefined;
+  const s = String(value).trim().toLowerCase();
+  if (!s) return undefined;
+  if (EPC_REQ_TRUE.has(s)) return true;
+  if (EPC_REQ_FALSE.has(s)) return false;
+  return undefined;
+}
+
+/** True only for an explicit Yes. Blank, No, and anything unrecognised are false. */
 export function epcRequiredFlag(value: unknown): boolean {
-  if (value === true) return true;
-  const s = String(value ?? "").trim().toLowerCase();
-  return s === "yes" || s === "true" || s === "y" || s === "1";
+  return parseEpcRequired(value) === true;
 }
 
 type EpcAsset = {

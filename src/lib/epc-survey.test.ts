@@ -4,7 +4,9 @@ import {
   SURVEY_TYPE_SCS_EPC,
   SURVEY_TYPE_SCS_ONLY,
   applyEpcSurveyType,
+  epcRequiredFlag,
   epcRequiredFromSurveyType,
+  parseEpcRequired,
 } from "./epc-survey.js";
 
 describe("EPC Req. survey type", () => {
@@ -48,5 +50,20 @@ describe("EPC Req. survey type", () => {
     assert.equal(epcRequiredFromSurveyType("Condition Only"), false);
     assert.equal(epcRequiredFromSurveyType("SCS only"), false);
     assert.equal(epcRequiredFromSurveyType("Blocks"), undefined);
+  });
+
+  it("parses an EPC Req cell as yes, no, or blank", () => {
+    for (const value of ["Yes", "yes", "Y", "TRUE", "1", " Yes ", true, 1, "ticked", "✓"]) {
+      assert.equal(parseEpcRequired(value), true, String(value));
+      assert.equal(epcRequiredFlag(value), true, String(value));
+    }
+    for (const value of ["No", "N", "False", "0", " no ", false, 0]) {
+      assert.equal(parseEpcRequired(value), false, String(value));
+      assert.equal(epcRequiredFlag(value), false, String(value));
+    }
+    for (const value of ["", "   ", "maybe", null, undefined]) {
+      assert.equal(parseEpcRequired(value), undefined, String(value));
+      assert.equal(epcRequiredFlag(value), false, String(value));
+    }
   });
 });

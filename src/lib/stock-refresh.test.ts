@@ -13,6 +13,7 @@ import {
   buildStockRefreshFlash,
   formatStockRefreshResult,
   kindForStockRow,
+  mapStockAddress,
   planStocklistRefresh,
   stockCreateInput,
   type RefreshAsset,
@@ -425,6 +426,73 @@ describe("Large stocklists and partial imports", () => {
     assert.equal(input.surveyType, "Condition Only");
     assert.equal(input.assetStatus, "No Visit");
     assert.equal(input.epcRequired, true);
+  });
+});
+
+describe("EPC Req. column on stocklist refresh", () => {
+  it("reads Yes, yes, Y, TRUE, and 1 as ticked", () => {
+    for (const value of ["Yes", "yes", "Y", "TRUE", "1", true, 1]) {
+      assert.equal(mapStockAddress({ "EPC Req": value }).epcRequired, true, String(value));
+    }
+  });
+
+  it("reads No and 0 as not ticked", () => {
+    for (const value of ["No", "0", false, 0]) {
+      assert.equal(mapStockAddress({ "EPC Req": value }).epcRequired, false, String(value));
+    }
+  });
+
+  it("leaves epcRequired unset when the cell is blank or unrecognised", () => {
+    assert.equal(mapStockAddress({ "EPC Req": "" }).epcRequired, undefined);
+    assert.equal(mapStockAddress({ "EPC Req": "   " }).epcRequired, undefined);
+    assert.equal(mapStockAddress({ "EPC Req": "maybe" }).epcRequired, undefined);
+    assert.equal(mapStockAddress({ UPRN: "1", Street: "High St" }).epcRequired, undefined);
+    const created = stockCreateInput("p", {
+      uprn: "1",
+      kind: "dwelling",
+      address: mapStockAddress({ UPRN: "1", "EPC Req": "" }),
+    });
+    assert.equal(Object.hasOwn(created, "epcRequired"), false);
+  });
+
+  it("accepts the dwellings export header EPC Req. and the other EPC Req aliases", () => {
+    assert.equal(mapStockAddress({ "EPC Req.": "Yes" }).epcRequired, true);
+    assert.equal(mapStockAddress({ "EPC_Req.": "yes" }).epcRequired, true);
+    assert.equal(mapStockAddress({ "EPC Required": "Y" }).epcRequired, true);
+    assert.equal(mapStockAddress({ "EPC Reqd": "1" }).epcRequired, true);
+    assert.equal(mapStockAddress({ EPC: "TRUE" }).epcRequired, true);
+  });
+
+  it("lets an explicit EPC Req value win over Survey Type", () => {
+    const yes = mapStockAddress({ "Survey Type": "Condition Only", "EPC Req": "Yes" });
+    assert.equal(yes.surveyType, "Condition Only");
+    assert.equal(yes.epcRequired, true);
+    const no = mapStockAddress({ "Survey Type": "Condition + EPC", "EPC Req.": "No" });
+    assert.equal(no.epcRequired, false);
+    const blank = mapStockAddress({ "Survey Type": "Condition + EPC", "EPC Req": "" });
+    assert.equal(blank.epcRequired, true);
+  });
+
+  it("puts the tick on added, matched, and reclassified assets", () => {
+    const existing = [row({ uprn: "M", kind: "dwelling" }), row({ uprn: "R", kind: "dwelling" })];
+    const plan = planStocklistRefresh(
+      existing,
+      [
+        { UPRN: "N", "EPC Req": "Yes" },
+        { UPRN: "M", "EPC Req.": "Yes" },
+        { UPRN: "R", Archetype: "Block", "EPC Req": "Yes" },
+      ],
+      false,
+      "auto"
+    );
+    const added = plan.added.find((item) => item.uprn === "N");
+    const matched = plan.matched.find((item) => item.uprn === "M");
+    const moved = plan.reclassified.find((item) => item.uprn === "R");
+    assert.equal(added?.address.epcRequired, true);
+    assert.equal(matched?.address.epcRequired, true);
+    assert.equal(moved?.address.epcRequired, true);
+    assert.equal(moved?.to, "block");
+    assert.equal(stockCreateInput("p", added!).epcRequired, true);
   });
 });
 

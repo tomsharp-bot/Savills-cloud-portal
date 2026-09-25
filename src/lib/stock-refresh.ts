@@ -1,10 +1,11 @@
 import type { AssetKind, Prisma } from "@prisma/client";
 import { cellVal, isCompletedAssetStatus, surveyTypeForKind } from "./asset-status.js";
 import { dwellingMisrouteWarning, routeStockRow, type StockRouteTarget } from "./stock-route.js";
-import { epcRequiredFromSurveyType } from "./epc-survey.js";
+import { epcRequiredFromSurveyType, parseEpcRequired } from "./epc-survey.js";
 import { formatStockDate } from "./dates.js";
 import { uprnText, type RawRow } from "./excel.js";
 import { prisma } from "./prisma.js";
+import { STOCK_LABELS } from "./stock-columns.js";
 
 export const OMITTED_SURVEYED_NOTE = "Omitted but already surveyed";
 
@@ -267,6 +268,13 @@ function trimmedCell(raw: RawRow, aliases: string[]): string {
   return String(v).trim();
 }
 
+/**
+ * EPC Req. column names. The dwellings grid export header is "EPC Req."
+ * normHeader strips ".", so "EPC Req." and "EPC Req" both match "epcreq".
+ * "EPC" is last so a more specific header wins when several are filled in.
+ */
+const EPC_REQ_ALIASES = [STOCK_LABELS.epcRequired, "EPC Req", "EPC Required", "EPC Reqd", "EPC"];
+
 export function mapStockAddress(raw: RawRow): AddressPatch {
   let number = trimmedCell(raw, ["Number"]);
   let block = trimmedCell(raw, ["Block"]);
@@ -308,9 +316,12 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   if (surveyor) patch.surveyor = surveyor;
   if (surveyType) {
     patch.surveyType = surveyType;
-    const epcRequired = epcRequiredFromSurveyType(surveyType);
-    if (epcRequired !== undefined) patch.epcRequired = epcRequired;
+    const fromSurveyType = epcRequiredFromSurveyType(surveyType);
+    if (fromSurveyType !== undefined) patch.epcRequired = fromSurveyType;
   }
+  // Explicit EPC Req. wins over Survey Type. Blank or unrecognised stays off the patch.
+  const epcRequired = parseEpcRequired(cellValAliases(raw, EPC_REQ_ALIASES));
+  if (epcRequired !== undefined) patch.epcRequired = epcRequired;
 
   const residentName = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentName);
   const residentNumber = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentNumber);
