@@ -26,6 +26,7 @@
     projectAliases: <%- JSON.stringify(typeof projectAliases !== 'undefined' ? projectAliases : {}) %>,
     waitingIds: <%- JSON.stringify(typeof waitingIds !== 'undefined' ? waitingIds : []) %>,
     alertsPollMs: 30000,
+    send: <%- JSON.stringify(typeof sendConfig !== 'undefined' ? sendConfig : null) %>,
     serverDraft: <%- JSON.stringify({
       to: typeof draftTo !== 'undefined' ? draftTo : '',
       cc: typeof draftCc !== 'undefined' ? draftCc : '',
