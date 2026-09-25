@@ -11,7 +11,7 @@ import {
   draftEmailFromReviewFields,
   emailRecipientsFromProject,
 } from "./hhsrs-reporter.js";
-import { matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
+import { HHSRS_PROJECT_ROSTER, matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
 
 describe("HHSRS Reporter UI helpers", () => {
   it("formats relative time-ago under 48 hours as urgent", () => {
@@ -115,6 +115,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(unchanged.clientDescription, "");
     assert.equal(unchanged.postcode, "EX1 1AA");
     const draft = draftEmailFromReviewFields(unchanged);
+    assert.equal(draft.to, "");
+    assert.equal(draft.cc, "");
     assert.match(draft.subject, /Demo Housing - HHSRS/);
     assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
@@ -141,6 +143,8 @@ describe("HHSRS Reporter UI helpers", () => {
       }
     );
     const attemptedDraft = draftEmailFromReviewFields(attempted);
+    assert.equal(attemptedDraft.to, "");
+    assert.equal(attemptedDraft.cc, "");
     assert.match(attemptedDraft.body, /• Onward call: Voicemail full/);
     assert.doesNotMatch(attemptedDraft.body, /couldn't get through/i);
 
@@ -151,6 +155,29 @@ describe("HHSRS Reporter UI helpers", () => {
     });
     assert.equal(edited.clientDescription, "Loose socket in the kitchen.");
     assert.match(draftEmailFromReviewFields(edited).body, /Loose socket in the kitchen/);
+  });
+
+  it("leaves To and Cc blank for every roster project", () => {
+    assert.ok(HHSRS_PROJECT_ROSTER.length > 0);
+    for (const project of HHSRS_PROJECT_ROSTER) {
+      assert.deepEqual(project.to, [], `${project.name} to`);
+      assert.deepEqual(project.cc, [], `${project.name} cc`);
+      const draft = draftEmailFromReviewFields(
+        mergeReviewDraftFields(null, {
+          projectName: project.name,
+          address: "1 High Street",
+          notes: "Loose socket in the kitchen.",
+          hazard: "Electrical Hazards",
+          rating: "High",
+          includeCause: true,
+          photoCount: 0,
+        })
+      );
+      assert.equal(draft.to, "", project.name);
+      assert.equal(draft.cc, "", project.name);
+      assert.equal(draft.to.includes("undefined"), false);
+      assert.equal(draft.cc.includes("undefined"), false);
+    }
   });
 
   it("keeps email photos and amend lock out of the case photo box", () => {
