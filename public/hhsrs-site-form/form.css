@@ -225,6 +225,9 @@ body.hhsrs-landing {
   padding: 22px 24px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 14px rgba(11, 31, 51, 0.08);
 }
 .hhsrs-landing .hhsrs-logo {
   width: 56px;
@@ -253,68 +256,95 @@ body.hhsrs-landing {
   color: var(--navy);
   letter-spacing: -0.02em;
 }
-.hhsrs-landing .hhsrs-land-action {
-  flex: 0 0 auto;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  padding: 36px 28px 40px;
+.hhsrs-landing .hhsrs-land-hero {
+  position: relative;
+  flex: 1;
+  min-height: 420px;
+  overflow: hidden;
+  background: #eef2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+}
+.hhsrs-landing .hhsrs-land-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 55%;
+  display: block;
+  filter: saturate(.72) contrast(.95);
+}
+.hhsrs-landing .hhsrs-land-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(244, 247, 250, 0.46) 0%, rgba(244, 247, 250, 0.40) 50%, rgba(244, 247, 250, 0.48) 100%);
+}
+.hhsrs-landing .hhsrs-land-panel {
+  position: relative;
+  z-index: 1;
+  width: min(620px, 100%);
+  background: #dde2e8;
+  border: 1px solid rgba(213, 221, 229, 0.9);
+  border-radius: 20px;
+  box-shadow: 0 18px 50px rgba(10, 25, 45, 0.35), 0 4px 12px rgba(10, 25, 45, 0.18);
+  padding: 64px 56px 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 18px;
+  gap: 32px;
 }
 .hhsrs-landing .hhsrs-land-lead {
   margin: 0;
   max-width: 28rem;
-  font-size: 1.05rem;
-  line-height: 1.45;
+  text-wrap: balance;
+  font-size: 1.7rem;
+  line-height: 1.35;
   color: var(--navy);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .hhsrs-landing .hhsrs-land-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: auto;
-  min-height: 52px;
-  padding: 14px 32px;
-  border-radius: 12px;
+  gap: 10px;
+  min-height: 64px;
+  padding: 18px 48px;
+  border-radius: 14px;
   background: var(--yellow);
   color: var(--navy);
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   text-decoration: none;
   border: 0;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08), 0 8px 20px rgba(11, 31, 51, 0.16);
 }
 .hhsrs-landing .hhsrs-land-cta::after {
   content: "↗";
   color: var(--red);
 }
-.hhsrs-landing .hhsrs-land-visual {
-  flex: 1;
-  min-height: 280px;
-  background: #d8e2eb;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-}
-.hhsrs-landing .hhsrs-land-visual img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 45%;
-  display: block;
+.hhsrs-landing .hhsrs-land-cta:hover { filter: brightness(0.97); }
+.hhsrs-landing .hhsrs-land-cta:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 3px;
 }
 @media (min-width: 800px) {
   .hhsrs-landing .hhsrs-stage { min-height: 640px; }
   .hhsrs-landing .hhsrs-land-top { padding: 24px 28px; }
   .hhsrs-landing .hhsrs-land-top h1 { font-size: 1.45rem; }
-  .hhsrs-landing .hhsrs-land-action { padding: 44px 32px 48px; }
-  .hhsrs-landing .hhsrs-land-lead { font-size: 1.15rem; }
-  .hhsrs-landing .hhsrs-land-visual { min-height: 360px; }
+}
+@media (max-width: 600px) {
+  .hhsrs-landing .hhsrs-land-hero { padding: 24px 16px; min-height: 0; }
+  .hhsrs-landing .hhsrs-land-hero-img { object-position: center 60%; }
+  .hhsrs-landing .hhsrs-land-panel { padding: 36px 24px 28px; gap: 26px; border-radius: 18px; }
+  .hhsrs-landing .hhsrs-land-lead { font-size: 1.3rem; max-width: 18rem; }
+  .hhsrs-landing .hhsrs-land-cta { width: 100%; min-height: 60px; padding: 16px 24px; font-size: 1.2rem; }
 }
 @media (max-width: 430px) {
   .hhsrs-landing .hhsrs-land-top {
@@ -328,7 +358,6 @@ body.hhsrs-landing {
     flex-basis: 48px;
   }
   .hhsrs-landing .hhsrs-land-top h1 { font-size: 1.15rem; }
-  .hhsrs-landing .hhsrs-land-action { padding: 28px 16px 32px; }
 }
 .field-row {
   display: grid;

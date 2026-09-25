@@ -247,10 +247,13 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.doesNotMatch(res.body, /Click Here For New Issue Form/);
     assert.match(res.body, /href="\/HHSRS-site-form\/new"/);
     assert.match(res.body, /href="\/HHSRS-site-form\/assets\/form.css"/);
-    assert.match(res.body, /src="\/HHSRS-site-form\/assets\/houses-alt-calm\.jpg"/);
+    assert.match(res.body, /class="hhsrs-land-hero"/);
+    assert.match(res.body, /class="hhsrs-land-panel"/);
+    assert.match(res.body, /src="\/HHSRS-site-form\/assets\/house-terrace-brick\.jpg"/);
+    assert.doesNotMatch(res.body, /houses-alt-calm\.jpg/);
     assert.doesNotMatch(res.body, /\/projectprogress\/HHSRS-site-form/);
 
-    const photo = await request(app, "GET", "/HHSRS-site-form/assets/houses-alt-calm.jpg");
+    const photo = await request(app, "GET", "/HHSRS-site-form/assets/house-terrace-brick.jpg");
     assert.equal(photo.status, 200);
     assert.match(photo.contentType, /jpeg/);
   });
@@ -329,6 +332,11 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(css.body, /--navy-deep:\s*#071522/);
     assert.match(css.body, /\.hhsrs-form-page \.work-panel/);
     assert.match(css.body, /\.hhsrs-form-page \.info-box\.hazard/);
+    assert.match(css.body, /--grey-top:\s*#e8ecef/);
+    assert.match(css.body, /\.hhsrs-form-page \.panel-top\s*\{[^}]*background:\s*var\(--info\)/);
+    assert.match(css.body, /filter:\s*saturate\(\.72\)\s*contrast\(\.95\)/);
+    assert.match(css.body, /background:\s*#dde2e8/);
+    assert.match(css.body, /0 18px 50px rgba\(10,\s*25,\s*45,\s*\.35\),\s*0 4px 12px rgba\(10,\s*25,\s*45,\s*\.18\)/);
 
     const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
     assert.equal(js.status, 200);
