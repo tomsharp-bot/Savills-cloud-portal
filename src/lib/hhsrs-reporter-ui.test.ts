@@ -218,7 +218,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /function showPhotoPreview/);
     assert.match(js, /rv-photo-preview/);
     assert.match(css, /btn-photo-fallback/);
-    assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*450px/);
+    assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*300px/);
+    assert.match(css, /#rv-email-body\s*\{[^}]*resize:\s*vertical/);
+    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*align-self:\s*start/);
+    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*height:\s*42px/);
   });
 
   it("paints the tool header as a full-width bar and leaves the navy top bar", () => {

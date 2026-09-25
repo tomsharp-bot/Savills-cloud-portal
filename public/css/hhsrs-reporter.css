@@ -1121,8 +1121,12 @@ a.linkish.active, .linkish.active {
 }
 .email-form .field-with-copy textarea { min-height: 160px; }
 .hhsrs-reporter #rv-email-body {
-  min-height: 450px;
+  min-height: 300px;
   resize: vertical;
+}
+.hhsrs-reporter .btn-copy[data-copy="rv-email-body"] {
+  align-self: start;
+  height: 42px;
 }
 .review-mode-badge {
   display: inline-block;
