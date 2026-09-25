@@ -11,7 +11,7 @@ import {
   draftEmailFromReviewFields,
   emailRecipientsFromProject,
 } from "./hhsrs-reporter.js";
-import { HHSRS_PROJECT_ROSTER, matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
+import { HHSRS_PROJECT_ROSTER, hhsrsKey, matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
 
 describe("HHSRS Reporter UI helpers", () => {
   it("formats relative time-ago under 48 hours as urgent", () => {
@@ -157,11 +157,16 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(draftEmailFromReviewFields(edited).body, /Loose socket in the kitchen/);
   });
 
-  it("leaves To and Cc blank for every roster project", () => {
-    assert.ok(HHSRS_PROJECT_ROSTER.length > 0);
+  it("keeps Test Housing as the only roster address and leaves other projects blank", () => {
+    const addressed = HHSRS_PROJECT_ROSTER.filter((project) => project.to.length > 0 || project.cc.length > 0);
+    assert.deepEqual(
+      addressed.map((project) => project.name),
+      ["Test Housing"]
+    );
+    assert.deepEqual(addressed[0].to, ["cfarrell@savillshousing.co.uk"]);
+    assert.deepEqual(addressed[0].cc, []);
+
     for (const project of HHSRS_PROJECT_ROSTER) {
-      assert.deepEqual(project.to, [], `${project.name} to`);
-      assert.deepEqual(project.cc, [], `${project.name} cc`);
       const draft = draftEmailFromReviewFields(
         mergeReviewDraftFields(null, {
           projectName: project.name,
@@ -179,11 +184,45 @@ describe("HHSRS Reporter UI helpers", () => {
           photoCount: 0,
         })
       );
-      assert.equal(draft.to, "", project.name);
+      if (project.name === "Test Housing") {
+        assert.equal(draft.to, "cfarrell@savillshousing.co.uk");
+      } else {
+        assert.equal(draft.to, "", project.name);
+      }
       assert.equal(draft.cc, "", project.name);
       assert.equal(draft.to.includes("undefined"), false);
       assert.equal(draft.cc.includes("undefined"), false);
     }
+  });
+
+  it("fills Test Housing To and leaves MTVH blank", () => {
+    assert.equal(hhsrsKey("Test Housing"), "Test Housing");
+    assert.equal(matchDemoProject("Test Housing")?.name, "Test Housing");
+    assert.deepEqual(matchDemoProject("Test Housing")?.to, ["cfarrell@savillshousing.co.uk"]);
+    assert.deepEqual(matchDemoProject("Test Housing")?.cc, []);
+
+    const fields = {
+      address: "1 High Street",
+      notes: "Loose socket in the kitchen.",
+      hazard: "Electrical Hazards",
+      rating: "High",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      includeCause: true,
+      photoCount: 0,
+    };
+    const testHousing = draftEmailFromReviewFields(
+      mergeReviewDraftFields(null, { ...fields, projectName: "Test Housing" })
+    );
+    assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
+    assert.equal(testHousing.cc, "");
+
+    const mtvh = draftEmailFromReviewFields(
+      mergeReviewDraftFields(null, { ...fields, projectName: "MTVH 2026" })
+    );
+    assert.equal(matchDemoProject("MTVH 2026")?.name, "MTVH Pilot 2026");
+    assert.equal(mtvh.to, "");
+    assert.equal(mtvh.cc, "");
   });
 
   it("keeps email photos and amend lock out of the case photo box", () => {

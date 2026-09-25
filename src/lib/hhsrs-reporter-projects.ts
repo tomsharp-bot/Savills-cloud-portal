@@ -54,6 +54,18 @@ const NONE: ProjectExtras = {
  */
 export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
+    name: "Test Housing",
+    template: "Standard",
+    ratingScheme: "NEW",
+    extras: { ...NONE },
+    to: ["cfarrell@savillshousing.co.uk"],
+    cc: [],
+    hint: "Test Housing: dummy project for testing. Not a client.",
+    demoCompleted: 0,
+    demoWaiting: 0,
+    seedArchived: false,
+  },
+  {
     name: "Gateway 2026",
     template: "Standard",
     ratingScheme: "NEW",
