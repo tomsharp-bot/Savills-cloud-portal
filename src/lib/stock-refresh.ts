@@ -32,6 +32,7 @@ export type AddressPatch = {
   x1?: string;
   x2?: string;
   x3?: string;
+  siteComments?: string;
 };
 
 export type RefreshAsset = {
@@ -331,6 +332,9 @@ function trimmedCell(raw: RawRow, aliases: string[]): string {
  */
 const EPC_REQ_ALIASES = [STOCK_LABELS.epcRequired, "EPC Req", "EPC Required", "EPC Reqd", "EPC"];
 
+/** Dwellings export header is "Site Comments". More specific names are listed first. */
+const SITE_COMMENT_ALIASES = [STOCK_LABELS.siteComments, "Site Comment", "Comments", "Comment", "Notes"];
+
 export function mapStockAddress(raw: RawRow): AddressPatch {
   let number = trimmedCell(raw, ["Number"]);
   let block = trimmedCell(raw, ["Block"]);
@@ -378,6 +382,8 @@ export function mapStockAddress(raw: RawRow): AddressPatch {
   }
   const epcRequired = parseEpcRequired(cellValAliases(raw, EPC_REQ_ALIASES));
   if (epcRequired !== undefined) patch.epcRequired = epcRequired;
+  const siteComments = trimmedCell(raw, SITE_COMMENT_ALIASES);
+  if (siteComments) patch.siteComments = siteComments;
 
   const residentName = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentName);
   const residentNumber = cellValAliases(raw, ADMIN_STOCK_ALIASES.residentNumber);
@@ -423,6 +429,19 @@ export function appendSurveyedNote(comments: string): string {
   const c = String(comments || "").trim();
   if (c.includes(OMITTED_SURVEYED_NOTE)) return c;
   return c ? `${c} · ${OMITTED_SURVEYED_NOTE}` : OMITTED_SURVEYED_NOTE;
+}
+
+/**
+ * Comment written on a matched or reclassified row.
+ * A blank file cell keeps the stored comment. A file comment replaces it, and
+ * the omitted-but-surveyed note is put back if either stored comment had it.
+ */
+export function siteCommentsToStore(fileComment: string | undefined, stored: string, alsoStored = ""): string {
+  const file = String(fileComment ?? "").trim();
+  const kept = String(stored || alsoStored || "");
+  if (!file) return kept;
+  const hadNote = [stored, alsoStored].some((comment) => String(comment || "").includes(OMITTED_SURVEYED_NOTE));
+  return hadNote ? appendSurveyedNote(file) : file;
 }
 
 /**
@@ -629,13 +648,13 @@ export async function applyStocklistRefresh(opts: {
         data: {
           stockMissing: false,
           ...m.address,
-          siteComments: row.siteComments,
           external: row.external,
           visit1: row.visit1,
           visit2: row.visit2,
           visit3: row.visit3,
           surveyDate: row.surveyDate,
           surveyedBy: row.surveyedBy,
+          siteComments: siteCommentsToStore(m.address.siteComments, row.siteComments),
           ...typed,
         },
       });
@@ -662,13 +681,13 @@ export async function applyStocklistRefresh(opts: {
           data: {
             stockMissing: false,
             ...r.address,
-            siteComments: conflict.siteComments || row.siteComments,
             external,
             visit1: takeVisits ? row.visit1 : conflict.visit1,
             visit2: takeVisits ? row.visit2 : conflict.visit2,
             visit3: takeVisits ? row.visit3 : conflict.visit3,
             surveyDate: takeVisits ? row.surveyDate : conflict.surveyDate,
             surveyedBy: takeVisits ? row.surveyedBy : conflict.surveyedBy,
+            siteComments: siteCommentsToStore(r.address.siteComments, conflict.siteComments, row.siteComments),
             ...typed,
           },
         });
@@ -689,13 +708,13 @@ export async function applyStocklistRefresh(opts: {
             kind: r.to,
             stockMissing: false,
             ...r.address,
-            siteComments: row.siteComments,
             external: row.external,
             visit1: row.visit1,
             visit2: row.visit2,
             visit3: row.visit3,
             surveyDate: row.surveyDate,
             surveyedBy: row.surveyedBy,
+            siteComments: siteCommentsToStore(r.address.siteComments, row.siteComments),
             ...typed,
           },
         });

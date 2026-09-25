@@ -15,6 +15,7 @@ import {
   kindForStockRow,
   mapStockAddress,
   planStocklistRefresh,
+  siteCommentsToStore,
   stockCreateInput,
   surveyTypeForStockWrite,
   type RefreshAsset,
@@ -137,6 +138,58 @@ describe("Stocklist refresh plan", () => {
   it("errors when no UPRN values are present", () => {
     const plan = planStocklistRefresh([row({ uprn: "A" })], [{ Street: "Nope" }], true);
     assert.equal(plan.error, "No UPRN column / values found in file");
+  });
+
+  it("reads Site Comments onto new and matched dwellings", () => {
+    const plan = planStocklistRefresh(
+      [row({ uprn: "A", siteComments: "Old note" })],
+      [
+        { UPRN: "A", "Site Comments": "  Gate code 1234  " },
+        { UPRN: "B", Comments: "Ring the bell" },
+        { UPRN: "C", Notes: "Side entrance" },
+        { UPRN: "D", Site_Comments: "Underscored export header" },
+        { UPRN: "E", Comment: "Short" },
+        { UPRN: "F", "Site Comments": "   " },
+        { UPRN: "G", Street: "High St" },
+      ],
+      false
+    );
+    assert.equal(plan.matched[0].address.siteComments, "Gate code 1234");
+    const byUprn = Object.fromEntries(plan.added.map((item) => [item.uprn, item]));
+    assert.equal(stockCreateInput("p", byUprn.B).siteComments, "Ring the bell");
+    assert.equal(byUprn.C.address.siteComments, "Side entrance");
+    assert.equal(byUprn.D.address.siteComments, "Underscored export header");
+    assert.equal(mapStockAddress({ "Site Comment": "Singular" }).siteComments, "Singular");
+    assert.equal(byUprn.E.address.siteComments, "Short");
+    assert.equal(byUprn.F.address.siteComments, undefined);
+    assert.equal(stockCreateInput("p", byUprn.F).siteComments, undefined);
+    assert.equal(byUprn.G.address.siteComments, undefined);
+    const moved = planStocklistRefresh(
+      [row({ uprn: "R", kind: "dwelling" })],
+      [{ UPRN: "R", Archetype: "Block", "Site Comments": "Block note" }],
+      false,
+      "auto"
+    );
+    assert.equal(moved.reclassified[0].address.siteComments, "Block note");
+  });
+
+  it("replaces a stored comment from the file and keeps the omitted-survey note", () => {
+    assert.equal(siteCommentsToStore("Gate code 1234", "Old note"), "Gate code 1234");
+    assert.equal(siteCommentsToStore("  ", "Old note"), "Old note");
+    assert.equal(siteCommentsToStore(undefined, "Old note"), "Old note");
+    assert.equal(
+      siteCommentsToStore("Gate code 1234", `Old note · ${OMITTED_SURVEYED_NOTE}`),
+      `Gate code 1234 · ${OMITTED_SURVEYED_NOTE}`
+    );
+    assert.equal(
+      siteCommentsToStore(`Already noted · ${OMITTED_SURVEYED_NOTE}`, OMITTED_SURVEYED_NOTE),
+      `Already noted · ${OMITTED_SURVEYED_NOTE}`
+    );
+    assert.equal(siteCommentsToStore("", "Kept", `Moved · ${OMITTED_SURVEYED_NOTE}`), "Kept");
+    assert.equal(
+      siteCommentsToStore("From the file", "", `Moved · ${OMITTED_SURVEYED_NOTE}`),
+      `From the file · ${OMITTED_SURVEYED_NOTE}`
+    );
   });
 
   it("appends the surveyed-omit note once", () => {
