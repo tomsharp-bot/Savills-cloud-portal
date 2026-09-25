@@ -169,6 +169,12 @@ describe("HHSRS Reporter UI helpers", () => {
           notes: "Loose socket in the kitchen.",
           hazard: "Electrical Hazards",
           rating: "High",
+          uprn: "100123",
+          surveyDate: "2026-09-20",
+          callOutcome: "Attempted",
+          callNotes: "Voicemail full",
+          onwardTopic: "Electrical",
+          cat1Confirmed: true,
           includeCause: true,
           photoCount: 0,
         })
