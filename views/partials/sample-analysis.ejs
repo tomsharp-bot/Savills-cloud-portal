@@ -187,49 +187,73 @@ const canEdit = !!sample.canEdit;
 
     <div class="sa-panel sa-job">
       <h3>Whole Project Overview</h3>
-      <% const d = sample.overview.dwellings; const b = sample.overview.blocks; const g = sample.overview.garages; %>
+      <div class="job-section">Asset Status</div>
+      <div class="sa-status-wrap">
+        <table class="sa-status">
+          <thead>
+            <tr>
+              <th>Asset Status</th>
+              <th class="num">Dwellings</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% (sample.statusCounts || []).forEach(function (row) { %>
+            <tr class="<%= row.status === 'Total' ? 'status-total' : '' %>">
+              <td><%= row.status %></td>
+              <td class="num <%= row.status === 'Total' ? '' : hi(row.count) %>"><%= fmt(row.count) %></td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <p class="sa-note">Dwellings on this project. Omit Asset rows are left out. A blank status counts as No Visit.</p>
+      <% const d = sample.overview.dwellings; const b = sample.overview.blocks; const g = sample.overview.garages; const cond = sample.conditionCompletion; %>
       <div class="job-section">Dwellings</div>
       <div class="job-grid">
-        <div class="job-item"><div class="label">Total Dwellings</div><div class="value"><%= fmt(d.total) %></div></div>
-        <div class="job-item"><div class="label">Omitted</div><div class="value"><%= fmt(d.omitted) %></div></div>
-        <div class="job-item"><div class="label">Viable</div><div class="value"><%= fmt(d.viable) %></div></div>
-        <div class="job-item"><div class="label">Project Target</div><div class="value"><%= d.projectTarget %></div></div>
-        <div class="job-item"><div class="label">Completed</div><div class="value"><%= fmt(d.completed) %></div></div>
-        <div class="job-item"><div class="label">Remaining</div><div class="value"><%= fmt(d.remaining) %></div></div>
-        <div class="job-item"><div class="label">% Project Done</div><div class="value"><%= d.pctProjectDone %></div></div>
-        <div class="job-item"><div class="label">Access Rate</div><div class="value"><%= d.accessRate %></div></div>
-        <div class="job-item"><div class="label">Ext-Only Done</div><div class="value"><%= fmt(d.extDone) %></div></div>
-        <div class="job-item"><div class="label">Ext-Only To Do</div><div class="value"><%= fmt(d.extToDo) %></div></div>
+        <div class="job-item"><span class="label">Total Dwellings:</span><span class="value"><%= fmt(d.total) %></span></div>
+        <div class="job-item"><span class="label">Omitted:</span><span class="value"><%= fmt(d.omitted) %></span></div>
+        <div class="job-item"><span class="label">Viable:</span><span class="value"><%= fmt(d.viable) %></span></div>
+        <div class="job-item"><span class="label">Project Target:</span><span class="value"><%= d.projectTarget %></span></div>
+        <div class="job-item"><span class="label">Completed:</span><span class="value"><%= fmt(d.completed) %></span></div>
+        <% if (cond && cond.show) { %>
+        <div class="job-item"><span class="label">Condition Only completed:</span><span class="value"><%= fmt(cond.conditionOnly) %></span></div>
+        <div class="job-item"><span class="label">Condition + EPC completed:</span><span class="value"><%= fmt(cond.conditionEpc) %></span></div>
+        <% } %>
+        <div class="job-item"><span class="label">Remaining:</span><span class="value"><%= fmt(d.remaining) %></span></div>
+        <div class="job-item"><span class="label">% Project Done:</span><span class="value"><%= d.pctProjectDone %></span></div>
+        <div class="job-item"><span class="label">Access Rate:</span><span class="value"><%= d.accessRate %></span></div>
+        <div class="job-item"><span class="label">Ext-Only Done:</span><span class="value"><%= fmt(d.extDone) %></span></div>
+        <div class="job-item"><span class="label">Ext-Only To Do:</span><span class="value"><%= fmt(d.extToDo) %></span></div>
       </div>
       <div class="job-section">Blocks</div>
       <div class="job-grid">
-        <div class="job-item"><div class="label">Total Blocks</div><div class="value"><%= fmt(b.total) %></div></div>
-        <div class="job-item"><div class="label">Viable</div><div class="value"><%= fmt(b.viable) %></div></div>
-        <div class="job-item"><div class="label">Completed</div><div class="value"><%= fmt(b.completed) %></div></div>
-        <div class="job-item"><div class="label">Remaining</div><div class="value"><%= fmt(b.remaining) %></div></div>
+        <div class="job-item"><span class="label">Total Blocks:</span><span class="value"><%= fmt(b.total) %></span></div>
+        <div class="job-item"><span class="label">Viable:</span><span class="value"><%= fmt(b.viable) %></span></div>
+        <div class="job-item"><span class="label">Completed:</span><span class="value"><%= fmt(b.completed) %></span></div>
+        <div class="job-item"><span class="label">Remaining:</span><span class="value"><%= fmt(b.remaining) %></span></div>
       </div>
       <div class="job-section">Garages</div>
       <div class="job-grid">
-        <div class="job-item"><div class="label">Total Garages</div><div class="value"><%= fmt(g.total) %></div></div>
-        <div class="job-item"><div class="label">Completed</div><div class="value"><%= fmt(g.completed) %></div></div>
-        <div class="job-item"><div class="label">Remaining</div><div class="value"><%= fmt(g.remaining) %></div></div>
+        <div class="job-item"><span class="label">Total Garages:</span><span class="value"><%= fmt(g.total) %></span></div>
+        <div class="job-item"><span class="label">Completed:</span><span class="value"><%= fmt(g.completed) %></span></div>
+        <div class="job-item"><span class="label">Remaining:</span><span class="value"><%= fmt(g.remaining) %></span></div>
       </div>
       <div class="job-section">Schedule</div>
       <div class="job-grid">
         <div class="job-item">
-          <div class="label">Start Date</div>
+          <span class="label">Start Date:</span>
           <% if (canEdit) { %>
             <input type="date" id="job-start-date" value="<%= project.sampleStartDate || '' %>" data-sa-date="sampleStartDate" aria-label="Start Date" />
           <% } else { %>
-            <div class="value"><%= project.sampleStartDate ? project.sampleStartDate.split("-").reverse().join("/") : "—" %></div>
+            <span class="value"><%= project.sampleStartDate ? project.sampleStartDate.split("-").reverse().join("/") : "—" %></span>
           <% } %>
         </div>
         <div class="job-item">
-          <div class="label">Target End Date</div>
+          <span class="label">Target End Date:</span>
           <% if (canEdit) { %>
             <input type="date" id="job-target-end-date" value="<%= project.sampleTargetEndDate || '' %>" data-sa-date="sampleTargetEndDate" aria-label="Target End Date" />
           <% } else { %>
-            <div class="value"><%= project.sampleTargetEndDate ? project.sampleTargetEndDate.split("-").reverse().join("/") : "—" %></div>
+            <span class="value"><%= project.sampleTargetEndDate ? project.sampleTargetEndDate.split("-").reverse().join("/") : "—" %></span>
           <% } %>
         </div>
       </div>
@@ -238,4 +262,7 @@ const canEdit = !!sample.canEdit;
 
   <p class="sa-footer">% Project Done: Full Surveys Done (not external-only) ÷ dwellings that have a patch. Omit Asset rows stay in stock but are left out of the counts.</p>
   <p class="sa-access">Access rate: Full Surveys Done ÷ dwellings that have had any visit (no answer, successful, failed appointment, access refused, and so on).</p>
+  <% if (sample.conditionCompletion && sample.conditionCompletion.show) { %>
+  <p class="sa-access">Condition Only completed and Condition + EPC completed count Full Surveys Done on every dwelling, including dwellings with no patch. Ext-Only is not included. EPC Req. puts a full survey on Condition + EPC; otherwise it is Condition Only.</p>
+  <% } %>
 </div>
