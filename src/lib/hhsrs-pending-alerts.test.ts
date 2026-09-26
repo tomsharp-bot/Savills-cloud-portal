@@ -6,8 +6,8 @@ import path from "node:path";
 import { newPendingAlerts, pendingAlertSummary } from "./hhsrs-pending-alerts.js";
 
 const root = process.cwd();
-const require = createRequire(path.join(root, "src/lib/hhsrs-pending-alerts.test.ts"));
-const pendingAlertScript = require("../../public/js/hhsrs-pending-alerts.js") as {
+const nodeRequire = createRequire(path.join(root, "src/lib/hhsrs-pending-alerts.test.ts"));
+const pendingAlertScript = nodeRequire("../../public/js/hhsrs-pending-alerts.js") as {
   resolvePendingAlerts: (
     marker: { lastSeenAt: string; seenIds: string[] } | null,
     pending: Array<{ id: string; createdAt?: string; claimStatus?: string; fullAddress?: string }>,
