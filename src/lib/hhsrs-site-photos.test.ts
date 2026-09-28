@@ -9,6 +9,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { createApp } from "../app.js";
 import { prisma } from "./prisma.js";
+import { siteFormAccessCookieHeader, useMemorySiteFormAccess } from "./hhsrs-site-access.js";
 import {
   deleteDraft,
   persistSubmissionPhotos,
@@ -329,6 +330,11 @@ async function request(
   };
 }
 
+function siteFormCookie(): string {
+  useMemorySiteFormAccess({ code: "135790" });
+  return siteFormAccessCookieHeader();
+}
+
 describe("HHSRS site-form photo routes", () => {
   it("submits, then serves the photo from Spaces after the uploads folder is cleared", async (t) => {
     try {
@@ -363,7 +369,10 @@ describe("HHSRS site-form photo routes", () => {
     t.after(() => server.close());
     let submissionId = "";
     try {
-      const submitted = await request(port, "POST", "/HHSRS-site-form/submit", { form: { draftId } });
+      const submitted = await request(port, "POST", "/HHSRS-site-form/submit", {
+        form: { draftId },
+        cookie: siteFormCookie(),
+      });
       assert.equal(submitted.status, 302);
       const id = new URL(submitted.location, "http://127.0.0.1").searchParams.get("id") || "";
       assert.ok(id);
@@ -441,7 +450,10 @@ describe("HHSRS site-form photo routes", () => {
     const { server, port } = await listen(app);
     t.after(() => server.close());
     try {
-      const submitted = await request(port, "POST", "/HHSRS-site-form/submit", { form: { draftId } });
+      const submitted = await request(port, "POST", "/HHSRS-site-form/submit", {
+        form: { draftId },
+        cookie: siteFormCookie(),
+      });
       assert.equal(submitted.status, 200);
       assert.match(submitted.body, new RegExp(PHOTOS_NOT_STORED.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       assert.doesNotMatch(submitted.location, /thanks/);
