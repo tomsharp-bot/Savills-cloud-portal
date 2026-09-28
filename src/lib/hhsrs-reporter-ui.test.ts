@@ -60,6 +60,11 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(matchDemoProject("Onward 2026")?.extras.calls, true);
     assert.equal(matchDemoProject("A2D 2026 Phase 4")?.extras.calls, true);
     assert.equal(matchDemoProject("Vico 2026 8k")?.extras.calls, true);
+    assert.equal(matchDemoProject("Leeds Fed HA 2026")?.name, "LFHA (Leeds)");
+    assert.equal(matchDemoProject("Leeds Fed HA 2026")?.template, "LFHA");
+    assert.equal(matchDemoProject("Leeds Federation")?.name, "LFHA (Leeds)");
+    assert.equal(matchDemoProject("Leeds"), null);
+    assert.equal(matchDemoProject("Onward (Leeds)")?.template, "Onward");
   });
 
   it("exposes the public site-form URL for Admin copy", () => {

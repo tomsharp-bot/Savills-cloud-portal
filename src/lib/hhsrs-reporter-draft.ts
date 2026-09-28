@@ -143,7 +143,7 @@ const SPELLING_FIXES: Record<string, string> = {
 export function templateId(project: string): TemplateId {
   if (project.startsWith("Cornwall")) return "Cornwall";
   if (project.startsWith("BPHA")) return "BPHA";
-  if (project.startsWith("LFHA")) return "LFHA";
+  if (project.startsWith("LFHA") || project.trim().toLowerCase().startsWith("leeds fed")) return "LFHA";
   if (project.startsWith("Onward")) return "Onward";
   if (/^VICO\b/i.test(project)) return "Vico Homes";
   if (/^(?:A2D|A2Dominion)\b/i.test(project)) return "A2Dominion";

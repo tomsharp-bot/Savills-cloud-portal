@@ -94,6 +94,7 @@
       if (lower.indexOf("cornwall") === 0 && p.template === "Cornwall") return p;
       if (lower.indexOf("bpha") === 0 && p.template === "BPHA") return p;
       if (lower.indexOf("mtvh") !== -1 && p.name === "MTVH Pilot 2026") return p;
+      if ((lower.indexOf("lfha") === 0 || lower.indexOf("leeds fed") === 0 || lower.indexOf("(leeds)") !== -1) && p.name === "LFHA (Leeds)") return p;
     }
     return null;
   }

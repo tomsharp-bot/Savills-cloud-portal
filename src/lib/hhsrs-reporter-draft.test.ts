@@ -20,6 +20,10 @@ describe("HHSRS Reporter templateId", () => {
     assert.equal(templateId("A2Dominion 2026"), "A2Dominion");
     assert.equal(templateId("Bristol 2025"), "Bristol");
     assert.equal(templateId("LFHA 2026"), "LFHA");
+    assert.equal(templateId("Leeds Fed HA 2026"), "LFHA");
+    assert.equal(templateId("Leeds Federation"), "LFHA");
+    assert.equal(templateId("Leeds"), "Standard");
+    assert.equal(templateId("Onward (Leeds)"), "Onward");
     assert.equal(templateId("  "), "");
   });
 });

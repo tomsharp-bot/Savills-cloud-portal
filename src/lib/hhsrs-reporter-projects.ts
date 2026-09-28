@@ -355,6 +355,15 @@ export function progressNameForCase(caseName: string, progressNames: readonly st
   return raw;
 }
 
+/**
+ * LFHA (Leeds) roster names. Live Project Progress uses "Leeds Fed HA 2026",
+ * which does not start with LFHA and does not contain "(Leeds)".
+ */
+export function isLfhaRosterName(name: string): boolean {
+  const lower = String(name || "").trim().toLowerCase();
+  return lower.startsWith("lfha") || lower.startsWith("leeds fed") || lower.includes("(leeds)");
+}
+
 /** Match a live submission or Project Progress name to the closest roster config. */
 export function matchDemoProject(projectName: string): ReporterProjectDemo | null {
   const raw = (projectName || "").trim();
@@ -376,7 +385,7 @@ export function matchDemoProject(projectName: string): ReporterProjectDemo | nul
   if (lower.startsWith("bristol")) return findRoster("Bristol Council 2026 Ph2");
   if (lower.startsWith("a2d")) return findRoster("A2D 2026 Phase 4");
   if (lower.startsWith("saxon")) return findRoster("Saxon Weald 2026 Phase 4");
-  if (lower.startsWith("lfha") || lower.includes("(leeds)")) return findRoster("LFHA (Leeds)");
+  if (isLfhaRosterName(raw)) return findRoster("LFHA (Leeds)");
   return null;
 }
 

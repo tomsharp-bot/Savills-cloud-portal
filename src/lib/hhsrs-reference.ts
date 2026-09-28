@@ -10,6 +10,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import { isLfhaRosterName } from "./hhsrs-reporter-projects.js";
 
 const NAMED_CODES: Array<{ test: RegExp; code: string }> = [
   { test: /saxon/, code: "SAXW" },
@@ -28,8 +29,8 @@ export function hhsrsCodeFromProjectName(name: string): string {
   for (const rule of NAMED_CODES) {
     if (rule.test.test(folded)) return rule.code;
   }
-  // Same match as the Reporter roster entry "LFHA (Leeds)" / Project Progress alias "LFHA 2026".
-  if (folded.startsWith("lfha") || folded.includes("(leeds)")) return "LFHA";
+  // Same match as the Reporter roster entry "LFHA (Leeds)", including "Leeds Fed HA 2026".
+  if (isLfhaRosterName(name)) return "LFHA";
   const letters = String(name || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")

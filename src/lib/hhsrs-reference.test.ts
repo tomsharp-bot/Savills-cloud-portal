@@ -42,7 +42,15 @@ describe("HHSRS project codes", () => {
     assert.equal(hhsrsCodeFromProjectName("lfha phase 1"), "LFHA");
     assert.equal(hhsrsCodeFromProjectName("LFHA (Leeds)"), "LFHA");
     assert.equal(hhsrsCodeFromProjectName("Leeds Federation (Leeds)"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("Leeds Fed HA 2026"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("Leeds Federation"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("Leeds"), "LEED");
     assert.equal(hhsrsCodeFromProjectName("Onward (Leeds)"), "ONW");
+    assert.equal(hhsrsCodeFromProjectName("Vico 2026"), "VICO");
+    assert.equal(hhsrsCodeFromProjectName("MTVH 2026"), "MTVH");
+    assert.equal(hhsrsCodeFromProjectName("BPHA ACQ 2026"), "BPHA");
+    assert.equal(hhsrsCodeFromProjectName("A2Dominion 2026 - Ph4"), "A2D");
+    assert.equal(hhsrsCodeFromProjectName("Cornwall CC 2026"), "CORN");
     assert.equal(hhsrsCodeFromProjectName("North LHFA stock"), "NORT");
     assert.equal(hhsrsCodeFromProjectName("Test Housing"), "TEST");
     assert.equal(hhsrsCodeFromProjectName("Test 1"), "TEST");
@@ -56,6 +64,7 @@ describe("HHSRS project codes", () => {
   it("keeps a typed code, and follows the name when the box still has the old one", () => {
     assert.equal(hhsrsCodeForSave({ name: "LFHA 2026", submitted: "" }), "LFHA");
     assert.equal(hhsrsCodeForSave({ name: "Leeds Federation (Leeds)", submitted: "" }), "LFHA");
+    assert.equal(hhsrsCodeForSave({ name: "Leeds Fed HA 2026", submitted: "" }), "LFHA");
     assert.equal(hhsrsCodeForSave({ name: "LFHA 2026", submitted: "custom" }), "CUSTOM");
     assert.equal(
       hhsrsCodeForSave({
