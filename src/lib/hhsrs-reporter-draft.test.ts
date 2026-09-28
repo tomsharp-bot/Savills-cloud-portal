@@ -217,6 +217,68 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.doesNotMatch(saxon.body, /Call reference/);
   });
 
+  it("uses the site-form call labels for projects that need a call reference", () => {
+    const shared = {
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      category: "Damp & Mould Growth",
+      rating: "High",
+      comment: "Visible mould in bathroom.",
+      photoCount: 0,
+    };
+    const withRef = draftFromSubmission({
+      ...shared,
+      projectName: "Vico 2026",
+      clientCallReference: "CR-9",
+      callOutcome: "",
+      callNotes: "",
+    });
+    assert.match(withRef.body, /• Client call reference: CR-9/);
+    assert.doesNotMatch(withRef.body, /Why the call reference is blank/);
+
+    const noAnswer = draftFromSubmission({
+      ...shared,
+      projectName: "Vico 2026",
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "No answer",
+    });
+    assert.match(noAnswer.body, /• Why the call reference is blank: No answer/);
+    assert.doesNotMatch(noAnswer.body, /Client call reference/);
+    assert.doesNotMatch(noAnswer.body, /• Call:/);
+
+    const busy = draftFromSubmission({
+      ...shared,
+      projectName: "Vico 2026",
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "Engaged/busy — Line stayed busy",
+    });
+    assert.match(busy.body, /• Why the call reference is blank: Engaged\/busy — Line stayed busy/);
+
+    const other = draftFromSubmission({
+      ...shared,
+      projectName: "Vico 2026",
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "Other — Voicemail full.",
+    });
+    assert.match(other.body, /• Why the call reference is blank: Other — Voicemail full\./);
+
+    const mtvh = draftFromSubmission({
+      ...shared,
+      projectName: "MTVH Pilot 2026",
+      clientCallReference: "CR-9",
+      callOutcome: "Attempted",
+      callNotes: "No answer",
+    });
+    assert.doesNotMatch(mtvh.body, /Client call reference/);
+    assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
+    assert.doesNotMatch(mtvh.body, /• Call:/);
+  });
+
   it("uses an office-edited client description verbatim when supplied", () => {
     const draft = draftFromSubmission({
       projectName: "Demo Housing",

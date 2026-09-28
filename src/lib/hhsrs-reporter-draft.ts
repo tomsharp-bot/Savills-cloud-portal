@@ -3,6 +3,9 @@
  * (templates.py + the engine helpers it calls). Wording rules stay deterministic.
  */
 
+import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { composeCallNotes, splitCallNotes } from "./hhsrs-site-form.js";
+
 export class DraftError extends Error {
   constructor(message: string) {
     super(message);
@@ -821,9 +824,10 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
   lines.push(bullet("Rating", data.rating || ""));
   lines.push(bullet("Site notes", data.description));
 
+  const needsCall = Boolean(matchDemoProject(data.project)?.extras.calls);
   const reference = (data.callRef || "").trim();
-  if (reference) {
-    const label = templateId(data.project) === "Onward" ? "Onward call reference" : "Call reference";
+  if (needsCall && reference) {
+    const label = templateId(data.project) === "Onward" ? "Onward call reference" : "Client call reference";
     lines.push(bullet(label, reference));
   }
   const survey = (data.surveyDate || "").trim();
@@ -838,14 +842,19 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
   if ((data.escalation || "").trim()) lines.push(bullet("Escalation", data.escalation!.trim()));
   if ((data.workOrder || "").trim()) lines.push(bullet("Work order", data.workOrder!.trim()));
 
-  const onward = templateId(data.project) === "Onward";
-  const outcome = data.callStatus || "";
-  if (outcome === "Completed" && !reference) {
-    const centre = onward ? "the Onward Call Centre" : "the contact centre";
-    lines.push(bullet(onward ? "Onward call" : "Call", `Called ${centre}. No reference supplied.`));
-  } else if (outcome === "Attempted" || outcome === "Not yet called") {
-    const prose = callUpdate(data).replace(/\s*(?:Onward Call Reference|Call reference):.*$/, "").trim();
-    if (prose) lines.push(bullet(onward ? "Onward call" : "Call", prose.replace(/\.$/, "")));
+  if (needsCall && !reference) {
+    const onward = templateId(data.project) === "Onward";
+    const outcome = data.callStatus || "";
+    const blank = splitCallNotes(data.callNotes || "");
+    if (blank.reason) {
+      lines.push(bullet("Why the call reference is blank", composeCallNotes(blank.reason, blank.note)));
+    } else if (outcome === "Completed") {
+      const centre = onward ? "the Onward Call Centre" : "the contact centre";
+      lines.push(bullet(onward ? "Onward call" : "Call", `Called ${centre}. No reference supplied.`));
+    } else if (outcome === "Attempted" || outcome === "Not yet called") {
+      const prose = callUpdate(data).replace(/\s*(?:Onward Call Reference|Call reference):.*$/, "").trim();
+      if (prose) lines.push(bullet(onward ? "Onward call" : "Call", prose.replace(/\.$/, "")));
+    }
   }
   return lines;
 }

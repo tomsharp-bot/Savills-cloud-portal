@@ -655,8 +655,35 @@ body.hhsrs-form-page {
 .hhsrs-form-page #stock-address-hint[hidden],
 .hhsrs-form-page #manual-address-hint[hidden],
 .hhsrs-form-page #btn-lookup-uprn[hidden],
-.hhsrs-form-page #find-status[hidden] {
+.hhsrs-form-page #find-status[hidden],
+.hhsrs-form-page #btn-type-address[hidden],
+.hhsrs-form-page #btn-back-uprn[hidden] {
   display: none !important;
+}
+.hhsrs-form-page .hhsrs-btn-type-address {
+  width: 100%;
+  min-height: 52px;
+  margin: 8px 0 0;
+  padding: 14px 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  background: var(--yellow);
+  color: var(--navy);
+  border-radius: 12px;
+}
+.hhsrs-form-page .type-address-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 0 8px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: underline;
 }
 .hhsrs-form-page .find-row.is-manual {
   grid-template-columns: minmax(0, 1fr);
