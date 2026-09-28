@@ -2670,32 +2670,42 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-page .ml-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.86rem;
+  font-size: 13px;
   table-layout: fixed;
+  hyphens: none;
 }
 .ml-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-.ml-page .ml-table col.c-sent { width: 96px; }
-.ml-page .ml-table col.c-ref { width: 84px; }
-.ml-page .ml-table col.c-proj { width: 84px; }
-.ml-page .ml-table col.c-uprn { width: 96px; }
-.ml-page .ml-table col.c-addr { width: 54px; }
-.ml-page .ml-table col.c-haz { width: 48px; }
-.ml-page .ml-table col.c-rate { width: 90px; }
-.ml-page .ml-table col.c-by { width: 76px; }
-.ml-page .ml-table col.c-to { width: 100px; }
-.ml-page .ml-table col.c-ph { width: 64px; }
-.ml-page .ml-table col.c-type { width: 156px; }
+.ml-page .ml-table col.c-sent { width: 80px; }
+.ml-page .ml-table col.c-ref { width: 64px; }
+.ml-page .ml-table col.c-proj { width: 72px; }
+.ml-page .ml-table col.c-uprn { width: 88px; }
+.ml-page .ml-table col.c-addr { width: 150px; }
+.ml-page .ml-table col.c-haz { width: 120px; }
+.ml-page .ml-table col.c-rate { width: 82px; }
+.ml-page .ml-table col.c-by { width: 64px; }
+.ml-page .ml-table col.c-to { width: 98px; }
+.ml-page .ml-table col.c-ph { width: 56px; }
+.ml-page .ml-table col.c-type { width: 88px; }
 .ml-table thead th {
   text-align: left; padding: 0.55rem 0.45rem; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--border); background: #fafbfc;
   white-space: normal; line-height: 1.15; overflow-wrap: anywhere;
 }
 .ml-page .ml-table thead th,
-.ml-page .ml-table tbody td { padding: 0.45rem 0.28rem; }
+.ml-page .ml-table tbody td {
+  padding: 0.32rem 0.2rem;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+.ml-page .ml-table thead th {
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
 .ml-page .ml-table thead th.ml-ph {
   white-space: nowrap;
   overflow-wrap: normal;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 .ml-table thead th.ml-ph, .ml-table td.ml-photos { text-align: center; }
 .ml-table tbody td { padding: 0.6rem 0.45rem; border-bottom: 1px solid #eef1f4; vertical-align: top; overflow: hidden; }
@@ -2706,6 +2716,7 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-when span { color: var(--muted); font-size: 0.8rem; }
 .ml-page .ml-table .ref-chip {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top;
+  font-size: 10.5px; padding: 1px 3px; letter-spacing: -0.03em;
 }
 .ml-table .ref-chip { background: #e8eef4; color: var(--navy); border: 1px solid #d3dde8; }
 .ml-page .ml-table td.ml-ref,
@@ -2720,21 +2731,37 @@ tr.is-new-log td { background: #f5f3ff; }
   line-clamp: 2;
   overflow: hidden;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
   line-height: 1.25;
   max-height: 2.6em;
+}
+.ml-to .ml-clamp {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  max-height: 3.9em;
 }
 .ml-uprn { font-family: Consolas, ui-monospace, monospace; font-size: 0.68rem; letter-spacing: -0.02em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ml-addr {
   font-weight: 600; color: var(--navy);
-  white-space: normal; overflow-wrap: break-word; overflow: hidden;
+  white-space: normal; overflow-wrap: normal; word-break: normal; overflow: hidden;
 }
 .ml-page .ml-table td.ml-addr { min-width: 0; }
-.ml-hazard { white-space: normal; overflow-wrap: break-word; overflow: hidden; }
+.ml-hazard { white-space: normal; overflow-wrap: normal; word-break: normal; overflow: hidden; }
 .ml-rate { white-space: normal; overflow-wrap: normal; word-break: normal; }
 .ml-by { color: var(--navy); }
 .ml-to { color: #44546a; font-size: 0.8rem; }
-.ml-page .ml-table tbody td.ml-type { overflow: visible; white-space: normal; }
+.ml-page .ml-table tbody td.ml-type { overflow: hidden; white-space: normal; }
+.ml-page .ml-table .ml-tag {
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.2;
+  padding: 2px 5px;
+}
+.ml-page .ml-table .ml-corr-note { white-space: normal; overflow-wrap: normal; word-break: normal; }
 .ml-photos { white-space: nowrap; color: #44546a; font-weight: 600; }
 .ml-photos svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 3px; stroke: #7a8896; fill: none; stroke-width: 2; }
 .ml-tag { display: inline-block; border-radius: 6px; padding: 2px 9px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }

@@ -578,19 +578,31 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(legacy.callNotes, "Voicemail full");
   });
 
-  it("wraps Main Log project, sender, and recipient onto two lines", () => {
+  it("wraps Main Log names on word boundaries and keeps address and hazard readable", () => {
     const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
     const view = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
-    const clamp = css.slice(css.indexOf(".ml-clamp {"), css.indexOf(".ml-clamp {") + 320);
+    const clamp = css.slice(css.indexOf(".ml-clamp {"), css.indexOf(".ml-clamp {") + 420);
     assert.match(clamp, /-webkit-line-clamp:\s*2/);
     assert.match(clamp, /line-clamp:\s*2/);
-    assert.match(clamp, /overflow-wrap:\s*anywhere/);
+    assert.match(clamp, /overflow-wrap:\s*normal/);
+    assert.doesNotMatch(clamp, /overflow-wrap:\s*anywhere/);
+    assert.doesNotMatch(clamp, /word-break:\s*break-all/);
+    const addr = css.slice(css.indexOf(".ml-addr {"), css.indexOf(".ml-addr {") + 220);
+    const hazard = css.slice(css.indexOf(".ml-hazard {"), css.indexOf(".ml-hazard {") + 180);
+    assert.match(addr, /overflow-wrap:\s*normal/);
+    assert.match(hazard, /overflow-wrap:\s*normal/);
+    assert.doesNotMatch(addr, /overflow-wrap:\s*anywhere|word-break:\s*break-all/);
+    assert.doesNotMatch(hazard, /overflow-wrap:\s*anywhere|word-break:\s*break-all/);
+    assert.match(css, /\.ml-to \.ml-clamp \{[^}]*line-clamp:\s*3/);
+    assert.match(css, /\.ml-page \.ml-table col\.c-addr \{ width: 150px; \}/);
+    assert.match(css, /\.ml-page \.ml-table col\.c-haz \{ width: 120px; \}/);
+    assert.match(css, /\.ml-page \.ml-table \{[^}]*font-size:\s*13px/);
+    assert.match(css, /\.ml-page \.ml-table thead th \{[^}]*white-space:\s*nowrap/);
+    assert.match(view, /@<wbr>/);
+    assert.match(view, /\.<wbr>/);
     assert.doesNotMatch(css, /\.ml-proj\s*\{[^}]*white-space:\s*nowrap/);
     assert.doesNotMatch(css, /\.ml-by\s*\{[^}]*white-space:\s*nowrap/);
     assert.doesNotMatch(css, /\.ml-to\s*\{[^}]*white-space:\s*nowrap/);
-    assert.match(css, /\.ml-page \.ml-table col\.c-type \{ width: 156px; \}/);
-    assert.match(css, /\.ml-page \.ml-table col\.c-rate \{ width: 90px; \}/);
-    assert.match(css, /\.ml-page \.ml-table col\.c-uprn \{ width: 96px; \}/);
     assert.match(css, /\.ml-page \.ml-table thead th\.ml-ph \{[^}]*white-space:\s*nowrap/);
     assert.match(view, /class="ml-rate <%= row\.ratingClass %>"/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
