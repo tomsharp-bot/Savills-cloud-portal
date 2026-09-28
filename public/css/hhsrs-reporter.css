@@ -1153,6 +1153,12 @@ a.linkish.active, .linkish.active {
   font-size: 0.75rem;
   color: var(--muted);
 }
+.address-typed-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5c6b7a;
+}
 .project-extra[hidden], .project-extra[hidden] { display: none !important; }
 .cornwall-form-note {
   margin: 0.75rem 0 0;

@@ -104,9 +104,56 @@
     }
   }
 
+  function selectedOption() {
+    var project = $("projectId");
+    return project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
+  }
+
+  function manualSelected() {
+    var opt = selectedOption();
+    return !!(opt && opt.getAttribute("data-manual-address") === "1");
+  }
+
+  function setBoxEnabled(box, enabled) {
+    if (!box) return;
+    var inputs = box.querySelectorAll("input, select, textarea");
+    for (var i = 0; i < inputs.length; i++) inputs[i].disabled = !enabled;
+  }
+
   function addressLocked() {
     var card = $("addr-card");
     return !!(card && !card.hidden);
+  }
+
+  function syncAddressMode() {
+    var manual = manualSelected();
+    var stockHint = $("stock-address-hint");
+    var manualHint = $("manual-address-hint");
+    var manualBox = $("property-manual");
+    var card = $("addr-card");
+    var status = $("find-status");
+    var row = $("uprn-row");
+    if (stockHint) stockHint.hidden = manual;
+    if (manualHint) manualHint.hidden = !manual;
+    if (manualBox) {
+      manualBox.hidden = !manual;
+      setBoxEnabled(manualBox, manual);
+    }
+    if (card) setBoxEnabled(card, !manual);
+    if (manual && card) card.hidden = true;
+    if (status) status.hidden = manual;
+    if (row) row.classList.toggle("is-manual", manual);
+    if (findBtn) {
+      findBtn.hidden = manual;
+      if (!manual && !addressLocked()) findBtn.disabled = false;
+    }
+  }
+
+  function clearManualFields() {
+    ["addressLine1", "addressLine2", "addressTown", "addressPostcode"].forEach(function (id) {
+      var el = $(id);
+      if (el) el.value = "";
+    });
   }
 
   function clearAddressMatch(keepUprn) {
@@ -157,7 +204,7 @@
   }
 
   function lookupUprn() {
-    if (!findBtn || lookupBusy || addressLocked()) return;
+    if (!findBtn || lookupBusy || addressLocked() || manualSelected()) return;
     var project = val("projectId");
     var uprnEl = $("uprn");
     var uprn = normUprn(uprnEl ? uprnEl.value : "");
@@ -214,7 +261,7 @@
   var uprnInput = $("uprn");
   if (uprnInput) {
     uprnInput.addEventListener("keydown", function (e) {
-      if (e.key !== "Enter" || addressLocked()) return;
+      if (e.key !== "Enter" || addressLocked() || manualSelected()) return;
       e.preventDefault();
       lookupUprn();
     });
@@ -235,6 +282,22 @@
     });
   }
 
+  ["addressLine1", "addressLine2", "addressTown", "addressPostcode"].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener("input", function () {
+      if (id === "addressPostcode") {
+        var upper = el.value.toUpperCase();
+        if (el.value !== upper) {
+          var pos = el.selectionStart;
+          el.value = upper;
+          if (el.setSelectionRange && pos != null) el.setSelectionRange(pos, pos);
+        }
+      }
+      updateFlow({ announce: false });
+    });
+  });
+
   ["fullAddress", "postcode"].forEach(function (id) {
     var el = $(id);
     if (!el) return;
@@ -250,6 +313,9 @@
   }
 
   function propertyDone() {
+    if (manualSelected()) {
+      return Boolean(val("uprn") && val("addressLine1") && val("addressPostcode"));
+    }
     var confirm = $("addressConfirmed");
     return Boolean(addressLocked() && val("uprn") && val("fullAddress") && val("postcode") && confirm && confirm.checked);
   }
@@ -259,8 +325,7 @@
   }
 
   function callsRequired() {
-    var project = $("projectId");
-    var opt = project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
+    var opt = selectedOption();
     return !!(opt && opt.getAttribute("data-calls") === "1");
   }
 
@@ -280,7 +345,7 @@
 
   function syncProjectExtras() {
     var project = $("projectId");
-    var opt = project && project.selectedIndex >= 0 ? project.options[project.selectedIndex] : null;
+    var opt = selectedOption();
     var label = $("extra-project-label");
     if (label) {
       var name = opt && project && val("projectId") ? String(opt.textContent || "").trim() : "";
@@ -336,9 +401,13 @@
     var announce = !!opts.announce;
     var project = val("projectId");
     if (project !== lastProject) {
-      if (lastProject) clearAddressMatch(false);
+      if (lastProject) {
+        clearAddressMatch(false);
+        clearManualFields();
+      }
       lastProject = project;
     }
+    syncAddressMode();
     syncProjectExtras();
 
     var details = $("issue-details");
@@ -687,6 +756,10 @@
     "fullAddress",
     "uprn",
     "postcode",
+    "addressLine1",
+    "addressLine2",
+    "addressTown",
+    "addressPostcode",
     "surveyorName",
     "category",
     "rating",
@@ -719,6 +792,7 @@
     if (existing) existing.innerHTML = "";
     setPhotoStatus("");
     clearAddressMatch(false);
+    clearManualFields();
     lastProject = "";
     lastFocusedStep = "";
     var callUnreached = $("callUnreached");

@@ -650,8 +650,22 @@ body.hhsrs-form-page {
 .hhsrs-form-page .flow-step[hidden],
 .hhsrs-form-page .addr-card[hidden],
 .hhsrs-form-page #form-actions[hidden],
-.hhsrs-form-page #call-ref-why[hidden] {
+.hhsrs-form-page #call-ref-why[hidden],
+.hhsrs-form-page #property-manual[hidden],
+.hhsrs-form-page #stock-address-hint[hidden],
+.hhsrs-form-page #manual-address-hint[hidden],
+.hhsrs-form-page #btn-lookup-uprn[hidden],
+.hhsrs-form-page #find-status[hidden] {
   display: none !important;
+}
+.hhsrs-form-page .find-row.is-manual {
+  grid-template-columns: minmax(0, 1fr);
+}
+.hhsrs-form-page #property-manual input[type=text] {
+  width: 100%;
+  max-width: 100%;
+  font-size: 16px;
+  min-height: 48px;
 }
 .hhsrs-form-page .form-rest.is-opening .info-box {
   animation: hhsrs-drop-in 0.28s ease-out;

@@ -62,6 +62,49 @@ export function normalizeUprn(value: string): string {
   return String(value || "").replace(/\s+/g, "").trim();
 }
 
+/** Stored on the submission when the surveyor typed the address. Blank means a stock lookup. */
+export const ADDRESS_SOURCE_MANUAL = "manual";
+
+/** Basic UK postcode (A9 9AA through AA9A 9AA). Stored uppercase with one space. */
+export function normalizeUkPostcode(value: string): string {
+  const compact = String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  if (compact.length <= 3) return compact;
+  return `${compact.slice(0, -3)} ${compact.slice(-3)}`.trim();
+}
+
+export function isBasicUkPostcode(value: string): boolean {
+  const compact = normalizeUkPostcode(value).replace(/\s+/g, "");
+  if (!/^\d[A-Z]{2}$/.test(compact.slice(-3))) return false;
+  const outward = compact.slice(0, -3);
+  return /^(?:[A-Z]{2}\d[A-Z]|[A-Z]\d[A-Z]|[A-Z]{2}\d{1,2}|[A-Z]\d{1,2})$/.test(outward);
+}
+
+export function composeManualFullAddress(line1: string, line2: string, town: string): string {
+  return [line1, line2, town]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** Copy a typed address into the same fields a stock lookup fills. */
+export function applyManualAddress(values: HhsrsFormValues): HhsrsFormValues {
+  const addressLine1 = String(values.addressLine1 || "").trim();
+  const addressLine2 = String(values.addressLine2 || "").trim();
+  const town = String(values.town || "").trim();
+  return {
+    ...values,
+    addressSource: ADDRESS_SOURCE_MANUAL,
+    addressLine1,
+    addressLine2,
+    town,
+    fullAddress: composeManualFullAddress(addressLine1, addressLine2, town),
+    postcode: normalizeUkPostcode(values.postcode),
+    addressConfirmed: true,
+  };
+}
+
 export type StockLookupRow = {
   uprn: string;
   kind: string;
@@ -152,6 +195,11 @@ export type HhsrsFormValues = {
   postcode: string;
   /** Surveyor ticked the stock address after lookup (and again after any edit). */
   addressConfirmed: boolean;
+  /** "manual" when this project had no stock and the surveyor typed the address. */
+  addressSource: string;
+  addressLine1: string;
+  addressLine2: string;
+  town: string;
   surveyorName: string;
   category: string;
   rating: string;
@@ -252,6 +300,10 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     fullAddress: "",
     postcode: "",
     addressConfirmed: false,
+    addressSource: "",
+    addressLine1: "",
+    addressLine2: "",
+    town: "",
     surveyorName: "",
     category: "",
     rating: "",
@@ -280,6 +332,10 @@ export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues 
     fullAddress: field("fullAddress"),
     postcode: field("postcode"),
     addressConfirmed: readFlag(body, "addressConfirmed"),
+    addressSource: field("addressSource") === ADDRESS_SOURCE_MANUAL ? ADDRESS_SOURCE_MANUAL : "",
+    addressLine1: field("addressLine1"),
+    addressLine2: field("addressLine2"),
+    town: field("town"),
     surveyorName: field("surveyorName"),
     category: field("category"),
     rating: field("rating"),
@@ -331,13 +387,16 @@ export function siteFormSectionState(
   projectName: string
 ): { visit: boolean; property: boolean; hazard: boolean; extras: boolean } {
   const visit = Boolean(values.projectId && values.surveyDate && String(values.surveyorName || "").trim());
+  const manual = values.addressSource === ADDRESS_SOURCE_MANUAL;
   const property =
     visit &&
     Boolean(
       String(values.uprn || "").trim() &&
-        String(values.fullAddress || "").trim() &&
-        String(values.postcode || "").trim() &&
-        values.addressConfirmed
+        (manual
+          ? String(values.addressLine1 || "").trim() && isBasicUkPostcode(values.postcode)
+          : String(values.fullAddress || "").trim() &&
+            String(values.postcode || "").trim() &&
+            values.addressConfirmed)
     );
   const hazard =
     property &&
@@ -376,9 +435,15 @@ export function validateHhsrsForm(
     }
   }
   if (!values.uprn) errors.uprn = "Enter the UPRN.";
-  if (!values.fullAddress) errors.fullAddress = "Enter the full address.";
-  if (!values.postcode) errors.postcode = "Enter the postcode.";
-  if (!values.addressConfirmed) errors.addressConfirmed = "Confirm the address is correct.";
+  if (values.addressSource === ADDRESS_SOURCE_MANUAL) {
+    if (!values.addressLine1) errors.addressLine1 = "Enter address line 1.";
+    if (!values.postcode) errors.postcode = "Enter the postcode.";
+    else if (!isBasicUkPostcode(values.postcode)) errors.postcode = "Enter a valid UK postcode.";
+  } else {
+    if (!values.fullAddress) errors.fullAddress = "Enter the full address.";
+    if (!values.postcode) errors.postcode = "Enter the postcode.";
+    if (!values.addressConfirmed) errors.addressConfirmed = "Confirm the address is correct.";
+  }
   if (!values.surveyorName) errors.surveyorName = "Select a surveyor.";
   else if (options.surveyorNames && !options.surveyorNames.includes(values.surveyorName)) {
     errors.surveyorName = "Select a surveyor from Personnel.";
@@ -412,6 +477,11 @@ export function validateHhsrsForm(
     data: {
       ...values,
       uprn: normalizeUprn(values.uprn),
+      postcode: values.addressSource === ADDRESS_SOURCE_MANUAL ? normalizeUkPostcode(values.postcode) : values.postcode,
+      fullAddress:
+        values.addressSource === ADDRESS_SOURCE_MANUAL
+          ? composeManualFullAddress(values.addressLine1, values.addressLine2, values.town)
+          : values.fullAddress,
       clientCallReference: skippedCall ? "" : String(values.clientCallReference || "").trim(),
       otherDetails: String(values.otherDetails || "").trim(),
       callUnreached: skippedCall,
@@ -492,7 +562,16 @@ export async function readDraft(draftId: string): Promise<HhsrsDraft | null> {
     const raw = await fs.readFile(path.join(draftDir(draftId), "meta.json"), "utf8");
     const parsed = JSON.parse(raw) as HhsrsDraft;
     if (!parsed || parsed.id !== draftId) return null;
-    return parsed;
+    const base = emptyHhsrsValues();
+    return {
+      ...base,
+      ...parsed,
+      addressSource: parsed.addressSource === ADDRESS_SOURCE_MANUAL ? ADDRESS_SOURCE_MANUAL : "",
+      addressLine1: parsed.addressLine1 || "",
+      addressLine2: parsed.addressLine2 || "",
+      town: parsed.town || "",
+      photos: Array.isArray(parsed.photos) ? parsed.photos : [],
+    };
   } catch {
     return null;
   }

@@ -23,7 +23,9 @@ import {
   siteFormCookieMatches,
 } from "../lib/hhsrs-site-access.js";
 import {
+  ADDRESS_SOURCE_MANUAL,
   CALL_REF_BLANK_REASONS,
+  applyManualAddress,
   deleteDraft,
   draftPhotoPath,
   emptyHhsrsValues,
@@ -112,17 +114,64 @@ function withDevDemo(projects: { id: string; name: string }[]): { id: string; na
   return [DEV_DEMO_PROJECT];
 }
 
-async function loadActiveProjects(): Promise<{ id: string; name: string }[]> {
+async function loadActiveProjects(): Promise<{ id: string; name: string; manualAddress: boolean }[]> {
+  let projects: { id: string; name: string }[];
   try {
     const rows = await prisma.project.findMany({
       where: { stage: "current" },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     });
-    return withDevDemo(rows);
+    projects = withDevDemo(rows);
   } catch {
-    return withDevDemo([]);
+    projects = withDevDemo([]);
   }
+  return flagProjectsWithoutStock(projects);
+}
+
+/** No asset rows means the surveyor types the address. Any stock row returns the project to lookup. */
+async function flagProjectsWithoutStock(
+  projects: { id: string; name: string }[]
+): Promise<{ id: string; name: string; manualAddress: boolean }[]> {
+  const ids = projects.map((project) => project.id).filter((id) => !isDemoProject(id));
+  const withoutStock = new Set<string>();
+  if (ids.length) {
+    try {
+      const grouped = await prisma.asset.groupBy({
+        by: ["projectId"],
+        where: { projectId: { in: ids } },
+        _count: { _all: true },
+      });
+      const withStock = new Set(grouped.filter((row) => row._count._all > 0).map((row) => row.projectId));
+      for (const id of ids) {
+        if (!withStock.has(id)) withoutStock.add(id);
+      }
+    } catch {
+      // If stock cannot be counted, keep lookup so a stock project is never opened for free typing.
+    }
+  }
+  return projects.map((project) => ({
+    ...project,
+    manualAddress: withoutStock.has(project.id),
+  }));
+}
+
+async function projectAllowsManualAddress(projectId: string): Promise<boolean> {
+  if (!projectId || isDemoProject(projectId)) return false;
+  try {
+    const count = await prisma.asset.count({ where: { projectId } });
+    return count === 0;
+  } catch {
+    return false;
+  }
+}
+
+async function valuesForAddressMode(values: HhsrsFormValues, projectId: string): Promise<HhsrsFormValues> {
+  const manual = values.addressSource === ADDRESS_SOURCE_MANUAL && (await projectAllowsManualAddress(projectId));
+  if (!manual) {
+    return { ...values, addressSource: "", addressLine1: "", addressLine2: "", town: "" };
+  }
+  return applyManualAddress(values);
 }
 
 async function findActiveProject(projectId: string): Promise<{ id: string; name: string } | null> {
@@ -348,17 +397,22 @@ async function checkSubmission(
   surveyors: SurveyorOption[]
 ): Promise<{
   active: { id: string; name: string } | null;
+  values: HhsrsFormValues;
   checked: ReturnType<typeof validateHhsrsForm>;
 }> {
   const active = await findActiveProject(values.projectId);
-  const checked = validateHhsrsForm(values, active, {
+  const resolved = await valuesForAddressMode(values, active?.id || "");
+  const checked = validateHhsrsForm(resolved, active, {
     surveyorNames: surveyorNamesFor(values.projectId, surveyors),
   });
-  if (!values.uprn || !active) return { active, checked };
-  const stockErr = await stockUprnError(active.id, values.uprn);
-  if (!stockErr) return { active, checked };
+  if (!resolved.uprn || !active || resolved.addressSource === ADDRESS_SOURCE_MANUAL) {
+    return { active, values: resolved, checked };
+  }
+  const stockErr = await stockUprnError(active.id, resolved.uprn);
+  if (!stockErr) return { active, values: resolved, checked };
   return {
     active,
+    values: resolved,
     checked: {
       ok: false,
       errors: checked.ok ? { uprn: stockErr } : { ...checked.errors, uprn: stockErr },
@@ -442,18 +496,18 @@ hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Resp
   const keep = existing ? keepRequestedPhotos(existing, listKeepPhotoNames(req.body || {})) : [];
   const incoming = filesOf(req);
   const photoError = uploadErrorOf(req) || validatePhotos(incoming, keep.length);
-  const { active, checked } = await checkSubmission(values, surveyors);
+  const { active, checked, values: resolved } = await checkSubmission(values, surveyors);
   if (!checked.ok || photoError) {
     if (existing) await pruneRemovedPhotos(existing, keep);
     const draft: HhsrsDraft = {
       id: draftId,
-      ...(checked.ok ? checked.data : { ...values, projectName: active?.name || "" }),
+      ...(checked.ok ? checked.data : { ...resolved, projectName: active?.name || "" }),
       photos: keep,
       createdAt: existing?.createdAt || new Date().toISOString(),
     };
     await writeDraft(draft);
     renderForm(res, {
-      values,
+      values: resolved,
       errors: checked.ok ? (photoError ? { photos: photoError } : {}) : { ...checked.errors, ...(photoError ? { photos: photoError } : {}) },
       draft,
       projects,
@@ -477,7 +531,7 @@ hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Resp
     };
     await writeDraft(draft);
     renderForm(res, {
-      values,
+      values: checked.data,
       errors: { photos: message },
       draft,
       projects,
@@ -565,6 +619,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
         uprn: checked.data.uprn,
         fullAddress: checked.data.fullAddress,
         postcode: checked.data.postcode,
+        addressSource: checked.data.addressSource === ADDRESS_SOURCE_MANUAL ? ADDRESS_SOURCE_MANUAL : "",
         surveyorName: checked.data.surveyorName,
         category: checked.data.category,
         rating: checked.data.rating,

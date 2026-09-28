@@ -32,7 +32,8 @@
           <% const visitReady = steps.visit; %>
           <% const selectedProject = projects.find((p) => p.id === values.projectId); %>
           <% const flags = selectedProject ? selectedProject.flags : { calls: false, onward: false, saxon: false, online: false }; %>
-          <% const addrOpen = !!(String(values.uprn || "").trim() && (String(values.fullAddress || "").trim() || values.addressConfirmed)); %>
+          <% const manualOpen = !!(selectedProject && selectedProject.manualAddress); %>
+          <% const addrOpen = !manualOpen && !!(String(values.uprn || "").trim() && (String(values.fullAddress || "").trim() || values.addressConfirmed)); %>
           <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-min-photos="<%= minPhotos %>" data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>" data-stock-lookup="<%= hhsrsUrl('/stock-lookup') %>" data-jump="<%= jump || '' %>">
             <% if (draft) { %><input type="hidden" name="draftId" value="<%= draft.id %>" /><% } %>
 
@@ -42,7 +43,7 @@
               <select id="projectId" name="projectId" required class="<%= errors.projectId ? 'is-invalid' : '' %>">
                 <option value=""><%= projects.length ? "Select an active project" : "No active projects found" %></option>
                 <% projects.forEach((p) => { %>
-                  <option value="<%= p.id %>"<%= values.projectId === p.id ? " selected" : "" %><% if (p.flags.calls) { %> data-calls="1"<% } %><% if (p.flags.saxon) { %> data-saxon="1"<% } %><% if (p.flags.online) { %> data-online="1"<% } %>><%= p.name %></option>
+                  <option value="<%= p.id %>"<%= values.projectId === p.id ? " selected" : "" %><% if (p.flags.calls) { %> data-calls="1"<% } %><% if (p.flags.saxon) { %> data-saxon="1"<% } %><% if (p.flags.online) { %> data-online="1"<% } %><% if (p.manualAddress) { %> data-manual-address="1"<% } %>><%= p.name %></option>
                 <% }) %>
               </select>
               <% if (errors.projectId) { %><p class="field-error"><%= errors.projectId %></p><% } %>
@@ -74,35 +75,50 @@
             <div id="issue-details" <%= visitReady ? "" : "hidden" %> class="form-rest">
               <div class="info-box flow-step" id="step-property" data-flow="property">
                 <p class="box-title">Property</p>
-                <p class="hhsrs-hint" style="margin-top:0">Enter the UPRN from this project’s stock list, then confirm the address. Edit it if it is wrong.</p>
-                <div class="find-row">
+                <p class="hhsrs-hint" id="stock-address-hint" style="margin-top:0" <%= manualOpen ? "hidden" : "" %>>Enter the UPRN from this project’s stock list, then confirm the address. Edit it if it is wrong.</p>
+                <p class="hhsrs-hint" id="manual-address-hint" style="margin-top:0" <%= manualOpen ? "" : "hidden" %>>No address list for this project yet. Type the address.</p>
+                <div class="find-row<%= manualOpen ? " is-manual" : "" %>" id="uprn-row">
                   <div>
                     <label for="uprn" style="margin-top:0">UPRN *</label>
                     <input id="uprn" name="uprn" type="text" required autocomplete="off" inputmode="numeric" placeholder="e.g. 100040123456" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" <%= addrOpen ? "readonly" : "" %> />
                   </div>
-                  <button type="button" class="hhsrs-btn-find" id="btn-lookup-uprn" <%= addrOpen ? "disabled" : "" %>>Lookup</button>
+                  <button type="button" class="hhsrs-btn-find" id="btn-lookup-uprn" <%= addrOpen ? "disabled" : "" %> <%= manualOpen ? "hidden" : "" %>>Lookup</button>
                 </div>
                 <% if (errors.uprn) { %><p class="field-error"><%= errors.uprn %></p><% } %>
-                <p class="find-status" id="find-status" aria-live="polite"></p>
+                <p class="find-status" id="find-status" aria-live="polite" <%= manualOpen ? "hidden" : "" %>></p>
 
                 <div class="addr-card" id="addr-card" <%= addrOpen ? "" : "hidden" %>>
                   <label for="fullAddress" style="margin-top:0">Full address *</label>
-                  <input id="fullAddress" name="fullAddress" type="text" required autocomplete="street-address" value="<%= values.fullAddress %>" class="<%= errors.fullAddress ? 'is-invalid' : '' %>" />
-                  <% if (errors.fullAddress) { %><p class="field-error"><%= errors.fullAddress %></p><% } %>
+                  <input id="fullAddress" name="fullAddress" type="text" required autocomplete="street-address" value="<%= manualOpen ? "" : values.fullAddress %>" class="<%= errors.fullAddress ? 'is-invalid' : '' %>" <%= manualOpen ? "disabled" : "" %> />
+                  <% if (!manualOpen && errors.fullAddress) { %><p class="field-error"><%= errors.fullAddress %></p><% } %>
                   <div class="field-row">
                     <div>
                       <label for="postcode">Postcode *</label>
-                      <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" value="<%= values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" />
-                      <% if (errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
+                      <input id="postcode" name="postcode" type="text" required autocomplete="postal-code" value="<%= manualOpen ? "" : values.postcode %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" <%= manualOpen ? "disabled" : "" %> />
+                      <% if (!manualOpen && errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
                     </div>
                   </div>
                   <p class="hhsrs-hint" id="addr-edit-hint">Wrong address? Edit it here, then tick confirm.</p>
                   <label class="confirm-row" id="confirm-row" for="addressConfirmed">
-                    <input type="checkbox" id="addressConfirmed" name="addressConfirmed" value="true" <%= values.addressConfirmed ? "checked" : "" %> />
+                    <input type="checkbox" id="addressConfirmed" name="addressConfirmed" value="true" <%= !manualOpen && values.addressConfirmed ? "checked" : "" %> <%= manualOpen ? "disabled" : "" %> />
                     <span>Address is correct — I confirm this is the property</span>
                   </label>
-                  <% if (errors.addressConfirmed) { %><p class="field-error"><%= errors.addressConfirmed %></p><% } %>
+                  <% if (!manualOpen && errors.addressConfirmed) { %><p class="field-error"><%= errors.addressConfirmed %></p><% } %>
                   <button type="button" class="hhsrs-btn hhsrs-btn-change" id="btn-change-uprn">Change UPRN</button>
+                </div>
+
+                <div id="property-manual" <%= manualOpen ? "" : "hidden" %>>
+                  <input type="hidden" name="addressSource" id="address-source" value="manual" <%= manualOpen ? "" : "disabled" %> />
+                  <label for="addressLine1">Address line 1 *</label>
+                  <input id="addressLine1" name="addressLine1" type="text" required autocomplete="address-line1" value="<%= values.addressLine1 || "" %>" class="<%= errors.addressLine1 ? 'is-invalid' : '' %>" <%= manualOpen ? "" : "disabled" %> />
+                  <% if (errors.addressLine1) { %><p class="field-error"><%= errors.addressLine1 %></p><% } %>
+                  <label for="addressLine2">Address line 2</label>
+                  <input id="addressLine2" name="addressLine2" type="text" autocomplete="address-line2" value="<%= values.addressLine2 || "" %>" <%= manualOpen ? "" : "disabled" %> />
+                  <label for="addressTown">Town</label>
+                  <input id="addressTown" name="town" type="text" autocomplete="address-level2" value="<%= values.town || "" %>" <%= manualOpen ? "" : "disabled" %> />
+                  <label for="addressPostcode">Postcode *</label>
+                  <input id="addressPostcode" name="postcode" type="text" required autocomplete="postal-code" autocapitalize="characters" spellcheck="false" value="<%= values.postcode || "" %>" class="<%= errors.postcode ? 'is-invalid' : '' %>" <%= manualOpen ? "" : "disabled" %> />
+                  <% if (manualOpen && errors.postcode) { %><p class="field-error"><%= errors.postcode %></p><% } %>
                 </div>
               </div>
 
