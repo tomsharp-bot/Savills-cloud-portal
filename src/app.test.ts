@@ -18,6 +18,7 @@ type Hit = {
 };
 
 let createApp: CreateApp;
+let hhsrsGateCookie = "";
 
 function request(
   app: Express,
@@ -34,18 +35,19 @@ function request(
           ? payload.length
           : Buffer.byteLength(payload)
         : 0;
+      const headers: Record<string, string | number> = {};
+      if (hhsrsGateCookie && url.startsWith("/HHSRS-site-form")) headers.cookie = hhsrsGateCookie;
+      if (payload) {
+        headers["content-type"] = opts.contentType || "application/x-www-form-urlencoded";
+        headers["content-length"] = contentLength;
+      }
       const req = http.request(
         {
           host: "127.0.0.1",
           port,
           path: url,
           method,
-          headers: payload
-            ? {
-                "content-type": opts.contentType || "application/x-www-form-urlencoded",
-                "content-length": contentLength,
-              }
-            : undefined,
+          headers: Object.keys(headers).length ? headers : undefined,
         },
         (res) => {
           const chunks: Buffer[] = [];
@@ -126,6 +128,9 @@ function fakeJpeg(bytes: number): Buffer {
 
 before(async () => {
   ({ createApp } = await import("./app.js"));
+  const access = await import("./lib/hhsrs-site-access.js");
+  access.useMemorySiteFormAccess({ code: "135790" });
+  hhsrsGateCookie = access.siteFormAccessCookieHeader();
 });
 
 describe("createApp without BASE_PATH (local default)", () => {
