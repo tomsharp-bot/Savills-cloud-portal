@@ -1,4 +1,5 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
+import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { formatDocDate } from "../lib/dates.js";
@@ -8,7 +9,7 @@ import {
   HHSRS_SITE_FORM_RATINGS,
   isHhsrsRating,
 } from "../lib/hhsrs-categories.js";
-import { safeId, safeStoredName } from "../lib/hhsrs-site-form.js";
+import { HHSRS_MAX_PHOTOS, hhsrsMulterLimits, hhsrsPhotoSizeError, safeId, safeStoredName } from "../lib/hhsrs-site-form.js";
 import { copyLoggedHhsrsPhotos } from "../lib/hhsrs-completed-photos.js";
 import { ONWARD_TOPICS } from "../lib/hhsrs-reporter-draft.js";
 import {
@@ -98,6 +99,13 @@ import {
   showingLabel,
   type MainLogFilters,
 } from "../lib/hhsrs-main-log.js";
+import {
+  NOT_NEEDED_REASONS,
+  loadDuplicates,
+  moveCaseToNotNeeded,
+  restoreCaseToPending,
+} from "../lib/hhsrs-not-needed.js";
+import { createOfficeCaseAndSend } from "../lib/hhsrs-office-case.js";
 import {
   loadSiteFormPhoto,
   privateInlineHeaders,
@@ -232,7 +240,7 @@ function takeFlash(req: Request): { ok: string; err: string; po: string } {
 async function loadSummary(): Promise<ReporterSummary> {
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const [waiting, inReview, actionedMonth, mainLog] = await Promise.all([
+  const [waiting, inReview, actionedMonth, mainLog, duplicates] = await Promise.all([
     prisma.hhsrsSiteSubmission.count({ where: { status: { in: [...HHSRS_WAITING_STATUSES] } } }),
     prisma.hhsrsSiteSubmission.count({ where: { status: "in_review" } }),
     prisma.hhsrsSiteSubmission.count({
@@ -245,8 +253,9 @@ async function loadSummary(): Promise<ReporterSummary> {
       },
     }),
     prisma.hhsrsSiteSubmission.count({ where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } } }),
+    prisma.hhsrsSiteSubmission.count({ where: { status: "not_needed" } }),
   ]);
-  return { waiting, inReview, actionedMonth, mainLog };
+  return { waiting, inReview, actionedMonth, mainLog, duplicates };
 }
 
 async function loadCase(id: string) {
@@ -294,7 +303,7 @@ async function claimIfOpen(
 }
 
 function shellLocals(opts: {
-  activeNav: "pending" | "review" | "find" | "main-log" | "admin" | "project-overview";
+  activeNav: "pending" | "review" | "find" | "main-log" | "duplicates" | "admin" | "project-overview";
   summary: ReporterSummary;
   title?: string;
   flashOk?: string;
@@ -499,6 +508,7 @@ async function renderReview(
     sentEmail,
     sentBanner: sentEmail ? sentBannerText(sentEmail.sentBy, sentEmail.sentAt) : "",
     ...signature,
+    notNeededReasons: NOT_NEEDED_REASONS,
   });
 }
 
@@ -1002,6 +1012,10 @@ hhsrsReporterRouter.post("/admin/client-emails", async (req: Request, res: Respo
 });
 
 /* ---------- Case save and send (canonical under /review/:id) ---------- */
+hhsrsReporterRouter.post("/review/office-send", uploadOfficePhotos, async (req: Request, res: Response) => {
+  await handleOfficeSend(req, res);
+});
+
 hhsrsReporterRouter.post("/review/:id", async (req: Request, res: Response) => {
   await handleSave(req, res, req.params.id);
 });
@@ -1014,6 +1028,18 @@ hhsrsReporterRouter.post("/review/:id/send", async (req: Request, res: Response)
   await handleSend(req, res, req.params.id);
 });
 
+hhsrsReporterRouter.post("/review/:id/not-needed", async (req: Request, res: Response) => {
+  await handleNotNeeded(req, res, req.params.id);
+});
+
+hhsrsReporterRouter.get("/duplicates", async (req: Request, res: Response) => {
+  await handleDuplicates(req, res);
+});
+
+hhsrsReporterRouter.post("/duplicates/:id/restore", async (req: Request, res: Response) => {
+  await handleRestore(req, res, req.params.id);
+});
+
 hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Response) => {
   await handleAbandon(req, res, req.params.id);
 });
@@ -1021,7 +1047,7 @@ hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Respon
 /* Back-compat paths from PR #20 */
 hhsrsReporterRouter.get("/:id", async (req: Request, res: Response) => {
   const id = req.params.id;
-  if (["review", "find", "main-log", "admin", "project-overview"].includes(id)) {
+  if (["review", "find", "main-log", "duplicates", "admin", "project-overview"].includes(id)) {
     res.status(404).send("Not found.");
     return;
   }
@@ -1134,25 +1160,52 @@ function flashErr(req: Request, message: string): void {
   req.session.flashErr = message;
 }
 
+/** Tests replace the portal send. Production uses sendCaseEmail. */
+export const HHSRS_CASE_SEND = "hhsrsCaseSend";
+
+async function deliverCaseEmail(
+  req: Request,
+  row: NonNullable<Awaited<ReturnType<typeof loadCase>>>,
+  body: Record<string, unknown>
+): Promise<{ ok: true; warning?: string } | { ok: false; error: string }> {
+  const custom = req.app.get(HHSRS_CASE_SEND);
+  const signature = await senderSignatureFor(req.user);
+  const sentBy = signature.fullName || req.user?.username || "";
+  const stored = await clientRecipientsForProject(String(body.projectName || row.projectName || ""));
+  const sendBody = sendBodyWithClientRecipients(body, stored);
+  if (typeof custom === "function") {
+    return (custom as (args: {
+      row: typeof row;
+      body: Record<string, unknown>;
+      sentBy: string;
+    }) => Promise<{ ok: true; warning?: string } | { ok: false; error: string }>)({
+      row,
+      body: sendBody,
+      sentBy,
+    });
+  }
+  return sendCaseEmail({
+    row,
+    sentBy,
+    senderFirstName: signature.firstName,
+    senderFullName: signature.fullName,
+    hasReporterAccess: Boolean(req.user && isAdmin(req.user)),
+    body: sendBody,
+    storage: sitePhotoStorageFromApp(req.app),
+  });
+}
+
 async function handleSend(req: Request, res: Response, id: string): Promise<void> {
   const row = await loadCase(id);
   if (!row) {
     res.status(404).send("Case not found.");
     return;
   }
-  const user = req.user;
-  const signature = await senderSignatureFor(user);
-  const rawBody = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const stored = await clientRecipientsForProject(String(rawBody.projectName || row.projectName || ""));
-  const result = await sendCaseEmail({
+  const result = await deliverCaseEmail(
+    req,
     row,
-    sentBy: signature.fullName || user?.username || "",
-    senderFirstName: signature.firstName,
-    senderFullName: signature.fullName,
-    hasReporterAccess: Boolean(user && isAdmin(user)),
-    body: sendBodyWithClientRecipients(rawBody, stored),
-    storage: sitePhotoStorageFromApp(req.app),
-  });
+    (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>
+  );
   if (!result.ok) {
     flashErr(req, result.error);
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
@@ -1163,6 +1216,149 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
   // Spaces upload must not hold the redirect open.
   await archiveLoggedPhotos(req, row.id);
   res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+}
+
+const officeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: hhsrsMulterLimits,
+});
+
+function uploadOfficePhotos(req: Request, res: Response, next: NextFunction): void {
+  officeUpload.array("photos", HHSRS_MAX_PHOTOS)(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    const code = typeof err === "object" && err && "code" in err ? String((err as { code: string }).code) : "";
+    flashErr(req, code === "LIMIT_FILE_SIZE" ? hhsrsPhotoSizeError() : "Could not upload photos.");
+    res.redirect(`${HHSRS_REPORTER_PATH}/review`);
+  });
+}
+
+async function handleOfficeSend(req: Request, res: Response): Promise<void> {
+  const uploaded = Array.isArray(req.files) ? req.files : [];
+  const names = senderNamesFromLogin(req.user);
+  const result = await createOfficeCaseAndSend({
+    body: (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>,
+    files: uploaded.map((file) => ({
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      buffer: file.buffer,
+    })),
+    createdBy: names.sentBy || "someone",
+    hasReporterAccess: Boolean(req.user && isAdmin(req.user)),
+    storage: sitePhotoStorageFromApp(req.app),
+    send: (row, sendBody) => deliverCaseEmail(req, row, sendBody),
+  });
+  if (result.ok) {
+    flashOk(req, "Sent and logged.");
+    await archiveLoggedPhotos(req, result.id);
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${result.id}`);
+    return;
+  }
+  if (result.pending && result.id) {
+    flashErr(req, "Not sent. The case is in Pending so you can try again.");
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${result.id}`);
+    return;
+  }
+  flashErr(req, result.error);
+  res.redirect(`${HHSRS_REPORTER_PATH}/review`);
+}
+
+async function handleNotNeeded(req: Request, res: Response, id: string): Promise<void> {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const result = await moveCaseToNotNeeded({
+    id,
+    reason: String(body.reason || ""),
+    duplicateOf: String(body.duplicateOf || ""),
+    note: String(body.note || ""),
+    by: senderNamesFromLogin(req.user).sentBy || "someone",
+  });
+  if (!result.ok) {
+    if (result.error === "Case not found.") {
+      res.status(404).send("Case not found.");
+      return;
+    }
+    flashErr(req, result.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${id}`);
+    return;
+  }
+  flashOk(req, "Moved to Duplicates & errors.");
+  res.redirect(HHSRS_REPORTER_PATH);
+}
+
+function duplicatesHref(filters: { q?: string; project?: string; reason?: string }, openId = ""): string {
+  const params = new URLSearchParams();
+  if (filters.q) params.set("q", filters.q);
+  if (filters.project) params.set("project", filters.project);
+  if (filters.reason) params.set("reason", filters.reason);
+  if (openId) params.set("open", openId);
+  const query = params.toString();
+  return `${HHSRS_REPORTER_PATH}/duplicates${query ? `?${query}` : ""}`;
+}
+
+async function handleDuplicates(req: Request, res: Response): Promise<void> {
+  const filters = {
+    q: String(req.query.q || ""),
+    project: String(req.query.project || ""),
+    reason: String(req.query.reason || ""),
+  };
+  const openId = String(req.query.open || "");
+  const [summary, cases, progress] = await Promise.all([
+    loadSummary(),
+    loadDuplicates(filters, HHSRS_REPORTER_PATH),
+    loadProgressProjects(),
+  ]);
+  const names = new Set<string>();
+  for (const project of progress) {
+    if (project.stage === "current" && project.name) names.add(project.name);
+  }
+  for (const item of cases) {
+    if (item.projectName) names.add(item.projectName);
+  }
+  if (filters.project) names.add(filters.project);
+  const flash = takeFlash(req);
+  const jsUrl =
+    typeof res.locals.baseUrl === "function"
+      ? res.locals.baseUrl("/js/hhsrs-duplicates.js")
+      : "/js/hhsrs-duplicates.js";
+  res.render("hhsrs-reporter/duplicates", {
+    ...shellLocals({
+      activeNav: "duplicates",
+      summary,
+      title: "Duplicates & errors — HHSRS Reporter",
+      flashOk: flash.ok,
+      flashErr: flash.err,
+    }),
+    user: req.user,
+    cases,
+    filters,
+    reasons: NOT_NEEDED_REASONS,
+    projectNames: [...names].sort((a, b) => a.localeCompare(b, "en-GB")),
+    openId,
+    closeHref: duplicatesHref(filters),
+    duplicatesJsUrl: jsUrl,
+  });
+}
+
+async function handleRestore(req: Request, res: Response, id: string): Promise<void> {
+  const result = await restoreCaseToPending({
+    id,
+    by: senderNamesFromLogin(req.user).sentBy || "someone",
+  });
+  if (!result.ok) {
+    if (result.error === "Case not found.") {
+      res.status(404).send("Case not found.");
+      return;
+    }
+    flashErr(req, result.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
+    return;
+  }
+  const label = result.reference ? `${result.reference} moved back to Pending.` : "Moved back to Pending.";
+  flashOk(req, label);
+  res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
 }
 
 /** Tests replace this with a stub. Production copies into Spaces. */

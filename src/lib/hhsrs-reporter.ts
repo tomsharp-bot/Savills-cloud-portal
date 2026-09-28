@@ -12,6 +12,7 @@ export const HHSRS_CASE_STATUSES = [
   "email_sent",
   "corrected",
   "closed",
+  "not_needed",
 ] as const;
 
 export type HhsrsCaseStatus = (typeof HHSRS_CASE_STATUSES)[number];
@@ -36,7 +37,14 @@ const REVIEW_SAVE_STATUSES = ["in_review", "email_ready"] as const;
  * send path (or a correction) already set. A new case becomes in review.
  */
 export function statusForReviewSave(current: string, submitted: string): string {
-  if (current === "email_sent" || current === "corrected" || current === "closed") return current;
+  if (
+    current === "email_sent" ||
+    current === "corrected" ||
+    current === "closed" ||
+    current === "not_needed"
+  ) {
+    return current;
+  }
   if ((REVIEW_SAVE_STATUSES as readonly string[]).includes(submitted)) return submitted;
   if (current === "email_ready") return "email_ready";
   return "in_review";
@@ -56,6 +64,8 @@ export function statusLabel(status: string): string {
       return "Corrected";
     case "closed":
       return "Closed";
+    case "not_needed":
+      return "Not needed";
     default:
       return status || "New";
   }
@@ -401,6 +411,7 @@ export type ReporterSummary = {
   inReview: number;
   actionedMonth: number;
   mainLog: number;
+  duplicates: number;
 };
 
 export function readReporterUpdate(body: Record<string, unknown>): {

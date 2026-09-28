@@ -124,6 +124,7 @@ describe("HHSRS correction checks", () => {
     assert.equal(findStatusLabel("email_sent"), "Sent");
     assert.equal(findStatusLabel("closed"), "Sent");
     assert.equal(findStatusLabel("corrected"), "Corrected");
+    assert.equal(findStatusLabel("not_needed"), "Not needed");
 
     const originalAt = new Date("2026-09-24T13:32:00.000Z");
     const rows = mainLogCardRows([

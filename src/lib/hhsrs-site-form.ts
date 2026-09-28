@@ -757,6 +757,43 @@ export async function persistSubmissionPhotos(
   }
 }
 
+/**
+ * Store office-created photos the same way as site-form photos:
+ * local cache plus the private Spaces object `hhsrs-site-form/<id>/<file>`.
+ * A failed upload removes anything already stored for this attempt and throws.
+ */
+export async function persistBufferPhotos(
+  submissionId: string,
+  files: { originalname: string; mimetype: string; buffer: Buffer }[],
+  storage?: SitePhotoStorage,
+  options?: SitePhotoPutOptions
+): Promise<string[]> {
+  if (!files.length) return [];
+  const destDir = submissionDir(submissionId);
+  await fs.mkdir(destDir, { recursive: true });
+  const paths: string[] = [];
+  const store = storage ?? defaultSitePhotoStorage();
+  try {
+    for (const file of files) {
+      const ready = await prepareSitePhoto({
+        originalName: file.originalname,
+        mime: file.mimetype,
+        buffer: file.buffer,
+      });
+      const storedName = `${randomUUID()}.${ready.ext}`;
+      await fs.writeFile(path.join(destDir, storedName), ready.buffer);
+      const key = siteFormPhotoKey(submissionId, storedName);
+      await putSitePhotoWithRetry(store, key, ready.buffer, ready.mime, options);
+      paths.push(key);
+    }
+    return paths;
+  } catch (err) {
+    await Promise.all(paths.map((key) => store.remove(key).catch(() => false)));
+    await fs.rm(destDir, { recursive: true, force: true }).catch(() => undefined);
+    throw err;
+  }
+}
+
 export async function sweepOldDrafts(now = Date.now()): Promise<void> {
   const root = path.join(hhsrsUploadRoot(), "drafts");
   let entries: string[] = [];

@@ -8,6 +8,9 @@
   const casePhotos = Array.isArray(photos) ? photos : [];
   const claimState = typeof claim !== "undefined" && claim ? claim : null;
   const showAbandon = !!(claimState && (claimState.status === "claimed" || claimState.status === "stale"));
+  const caseWaiting = isFilled && (row.status === "new" || row.status === "in_review" || row.status === "email_ready");
+  const showNotNeeded = caseWaiting && !sentEmail;
+  const caseNotNeeded = isFilled && row.status === "not_needed";
 %>
 
 <div class="page-header">
@@ -24,6 +27,12 @@
 
 <section class="actions-row">
   <a class="btn btn-ghost" href="<%= reporterBase %>">← Back to Pending Issues</a>
+  <% if (isFilled) { %>
+    <%- include("partials/claim-chip", { claimRow: claimState }) %>
+    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form">
+      <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
+    </form>
+  <% } %>
   <a class="btn btn-create-email" id="btn-create-plain-email" href="<%= reporterBase %>/review?compose=1">Create new email</a>
 </section>
 
@@ -372,16 +381,18 @@
 
   <section class="finish-bar" id="rv-finish-bar" aria-label="Finish this case">
     <div class="finish-bar-left">
-      <% if (isFilled) { %>
-        <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form">
-          <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
-        </form>
+      <% if (showNotNeeded) { %>
+        <button type="button" class="btn btn-not-needed" id="btn-not-needed">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="7" width="12" height="13" rx="1.4"/><path d="M6 16.5V5.5h10"/><path d="m11.2 11.2 5.2 5.2M16.4 11.2l-5.2 5.2"/></svg>
+          Not needed
+        </button>
+        <p class="finish-hint">Duplicate, error or test</p>
       <% } %>
     </div>
     <div class="finish-bar-right">
       <div class="send-block" id="rv-send-block">
-        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send and log" %></button>
-        <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
+        <p class="finish-hint send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (caseNotNeeded) { %>Move it back to Pending before sending.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Sends the email and adds it to the Main Log.<% } %></p>
+        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" <%= (sentEmail || caseNotNeeded) ? "disabled" : "" %> data-not-needed="<%= caseNotNeeded ? "1" : "" %>" aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send and log" %></button>
       </div>
     </div>
   </section>
@@ -389,10 +400,10 @@
 
 <p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
 
-<% if (isFilled && !sentEmail) { %>
+<% if (!sentEmail && !caseNotNeeded) { %>
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
-    <form id="rv-send-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/send">
+    <form id="rv-send-form" method="post" action="<%= isFilled ? reporterBase + '/review/' + row.id + '/send' : reporterBase + '/review/office-send' %>">
       <div class="ck-head"><h2 id="ck-title">Check before sending</h2></div>
       <div class="ck-body" id="ck-body">
         <% if (sendConfig.testMode) { %>
@@ -415,6 +426,44 @@
       <div class="ck-foot">
         <button type="button" class="btn btn-back" id="ck-back">Go back</button>
         <button type="submit" class="btn btn-primary" id="ck-send" disabled>Send and log</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<% if (showNotNeeded) { %>
+<div class="nn-overlay" id="nn-overlay" hidden>
+  <div class="nn-dialog" role="dialog" aria-modal="true" aria-labelledby="nn-title">
+    <form id="nn-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/not-needed" data-ref="<%= row.reference || '' %>">
+      <h2 id="nn-title">Move to Duplicates &amp; errors?</h2>
+      <p class="nn-case">
+        <% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } %>
+        <%= row.fullAddress %><% if (row.postcode) { %>, <%= row.postcode %><% } %> · <%= row.category %>
+      </p>
+      <fieldset class="nn-reasons-set">
+        <legend>Reason <abbr title="required">*</abbr></legend>
+        <div class="nn-reasons">
+          <% (typeof notNeededReasons !== "undefined" ? notNeededReasons : []).forEach((item) => { %>
+            <label class="nn-reason">
+              <input type="radio" name="reason" value="<%= item.id %>" />
+              <span class="nn-reason-copy"><strong><%= item.label %></strong><span><%= item.hint %></span></span>
+            </label>
+          <% }) %>
+        </div>
+      </fieldset>
+      <label class="nn-field" id="nn-dup-field" hidden>
+        Duplicate of (reference) <abbr title="required">*</abbr>
+        <input name="duplicateOf" id="nn-duplicate-of" class="nn-ref" placeholder="e.g. MTVH-012" autocomplete="off" />
+      </label>
+      <label class="nn-field" id="nn-note-field" hidden>
+        Note <span id="nn-note-req" hidden><abbr title="required">*</abbr></span>
+        <textarea name="note" id="nn-note" rows="3" placeholder="Optional"></textarea>
+      </label>
+      <p class="nn-safe">✓ Nothing is deleted. You can move it back.</p>
+      <div class="nn-foot">
+        <button type="button" class="btn btn-back" id="nn-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="nn-move" disabled>Move</button>
       </div>
     </form>
   </div>

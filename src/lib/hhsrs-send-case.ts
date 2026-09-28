@@ -177,6 +177,12 @@ export async function sendCaseEmail(args: {
   transport?: CaseEmailTransport;
 }): Promise<{ ok: true; warning: string } | { ok: false; error: string }> {
   const correction = args.correction;
+  if (!correction && args.row.status === "not_needed") {
+    return {
+      ok: false,
+      error: "This case is in Duplicates & errors. Move it back to Pending before sending.",
+    };
+  }
   const to = String(args.body.to ?? "");
   if (correction) {
     const checked = validateCorrection({ reason: correction.reason, note: correction.note, to });
@@ -226,10 +232,15 @@ export async function sendCaseEmail(args: {
         try {
           return await prisma.$transaction(
             async (tx) => {
-              const locked = await tx.$queryRaw<Array<{ emailSentAt: Date | null }>>`
-                SELECT "emailSentAt" FROM "HhsrsSiteSubmission" WHERE "id" = ${submissionId} FOR UPDATE
+              const locked = await tx.$queryRaw<Array<{ emailSentAt: Date | null; status: string }>>`
+                SELECT "emailSentAt", "status" FROM "HhsrsSiteSubmission" WHERE "id" = ${submissionId} FOR UPDATE
               `;
               if (!locked.length) throw new PortalSendError("Case not found.");
+              if (!correction && locked[0].status === "not_needed") {
+                throw new PortalSendError(
+                  "This case is in Duplicates & errors. Move it back to Pending before sending."
+                );
+              }
               if (correction) {
                 if (!locked[0].emailSentAt) throw new PortalSendError("Not sent yet.");
                 const original = await tx.hhsrsSentEmail.findFirst({

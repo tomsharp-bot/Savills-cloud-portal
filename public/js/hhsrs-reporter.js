@@ -789,11 +789,24 @@
   var amendBtn = $("btn-amend-case");
   if (amendBtn) amendBtn.addEventListener("click", amendCaseDetails);
 
+  function blankDraftHasContent() {
+    if (casePhotos.length) return true;
+    if (reviewDraftHasContent(collectReviewDraft())) return true;
+    return reviewDraftHasContent(readReviewDrafts().blank);
+  }
+
   var createBtn = $("btn-create-plain-email");
   if (createBtn) {
     createBtn.addEventListener("click", function (e) {
-      if (cfg.mode !== "filled" && $("rv-project")) {
+      var onBlank = cfg.mode !== "filled" && $("rv-project");
+      var dirty = onBlank ? blankDraftHasContent() : reviewDraftHasContent(readReviewDrafts().blank);
+      if (dirty && !window.confirm("Start a new email? Your unsent draft will be cleared.")) {
         e.preventDefault();
+        return;
+      }
+      if (onBlank) {
+        e.preventDefault();
+        clearReviewDraft("blank");
         clearBlankReview();
         pingCaseDetailsToTop();
         return;
@@ -1375,13 +1388,6 @@
         clearResumeKey();
       });
     }
-    var createBtn = $("btn-create-plain-email");
-    if (createBtn) {
-      createBtn.addEventListener("click", function () {
-        clearResumeKey();
-        if (!cfg.caseId) clearReviewDraft("blank");
-      });
-    }
   }
 
   /* Camera icon → Review-style rounded photo thumbs. */
@@ -1557,6 +1563,12 @@
     var line = $("rv-send-line");
     if (!btn || !line) return;
     if (!cfg.findResend && cfg.send && cfg.send.sent) return;
+    if (!cfg.findResend && btn.getAttribute("data-not-needed") === "1") {
+      btn.disabled = true;
+      line.hidden = false;
+      line.textContent = "Move it back to Pending before sending.";
+      return;
+    }
     if (cfg.findResend) {
       if (!cfg.send || !cfg.send.configured) {
         btn.disabled = true;
@@ -1609,12 +1621,19 @@
       return;
     }
     if (!cfg.caseId) {
-      btn.disabled = true;
-      line.textContent = "Open a case before sending.";
-      return;
+      var project = ($("rv-project") && String($("rv-project").value || "").trim()) || "";
+      var address = ($("rv-address") && String($("rv-address").value || "").trim()) || "";
+      var uprn = ($("rv-uprn") && String($("rv-uprn").value || "").trim()) || "";
+      var hazard = ($("rv-hazard") && String($("rv-hazard").value || "").trim()) || "";
+      var rating = ($("rv-rating") && String($("rv-rating").value || "").trim()) || "";
+      if (!project || !address || !uprn || !hazard || !rating) {
+        btn.disabled = true;
+        line.textContent = "Add the project, address, UPRN, hazard and rating first.";
+        return;
+      }
     }
     btn.disabled = false;
-    line.textContent = "You check it before it goes.";
+    line.textContent = "Sends the email and adds it to the Main Log.";
   }
 
   function attachmentBytes() {
@@ -1642,10 +1661,11 @@
     var btn = $("btn-send-email");
     var list = $("rv-attach-list");
     if (list) list.addEventListener("change", function () { updateAttachCount(); syncSendButton(); });
-    ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+    ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body", "rv-project", "rv-address", "rv-uprn", "rv-hazard", "rv-rating"].forEach(function (id) {
       var el = $(id);
       if (!el) return;
       el.addEventListener("input", syncSendButton);
+      el.addEventListener("change", syncSendButton);
     });
     syncSendButton();
     var ck = $("ck-overlay");
@@ -1755,6 +1775,44 @@
       sending = true;
       ckSend.disabled = true;
       ckSend.textContent = "Sending…";
+      if (!cfg.caseId) {
+        e.preventDefault();
+        var fd = new FormData();
+        fd.append("checked", ckTick.checked ? "1" : "");
+        fd.append("project", val("rv-project"));
+        fd.append("address", val("rv-address"));
+        fd.append("uprn", val("rv-uprn"));
+        fd.append("hazard", val("rv-hazard"));
+        fd.append("rating", val("rv-rating"));
+        fd.append("surveyor", val("rv-surveyor"));
+        fd.append("surveyDate", val("rv-survey-date"));
+        fd.append("notes", val("rv-notes"));
+        fd.append("to", val("rv-email-to"));
+        fd.append("cc", val("rv-email-cc"));
+        fd.append("bcc", val("rv-email-bcc"));
+        fd.append("subject", val("rv-email-subject"));
+        var draftBody = $("rv-email-body");
+        fd.append("body", draftBody ? String(draftBody.value || "").replace(/\s+$/, "") : "");
+        casePhotos.forEach(function (photo) {
+          if (photo && photo.blob) fd.append("photos", photo.blob, photo.name || "photo.jpg");
+        });
+        fetch((cfg.base || "/HHSRSreporter") + "/review/office-send", {
+          method: "POST",
+          body: fd,
+          credentials: "same-origin",
+          redirect: "follow"
+        }).then(function (res) {
+          var next = res.url || ((cfg.base || "/HHSRSreporter") + "/review");
+          if (/\/review\/[^/?#]+/.test(next)) clearReviewDraft("blank");
+          window.location.assign(next);
+        }).catch(function () {
+          sending = false;
+          ckSend.disabled = false;
+          ckSend.textContent = "Send and log";
+          window.alert("Could not send. Try again.");
+        });
+        return;
+      }
       $("rv-send-to").value = val("rv-email-to");
       $("rv-send-cc").value = val("rv-email-cc");
       $("rv-send-bcc").value = val("rv-email-bcc");
@@ -1893,4 +1951,64 @@
       clientEmailRemember(next);
     });
   }
+
+  function wireNotNeeded() {
+    var openBtn = $("btn-not-needed");
+    var overlay = $("nn-overlay");
+    var form = $("nn-form");
+    if (!openBtn || !overlay || !form) return;
+    var moveBtn = $("nn-move");
+    var cancelBtn = $("nn-cancel");
+    var dupField = $("nn-dup-field");
+    var noteField = $("nn-note-field");
+    var noteReq = $("nn-note-req");
+    var note = $("nn-note");
+    var dupOf = $("nn-duplicate-of");
+    var ownRef = String(form.getAttribute("data-ref") || "").trim().toUpperCase();
+
+    function selectedReason() {
+      var picked = form.querySelector("input[name='reason']:checked");
+      return picked ? picked.value : "";
+    }
+    function syncMove() {
+      var reason = selectedReason();
+      if (dupField) dupField.hidden = reason !== "duplicate";
+      if (noteField) noteField.hidden = !reason;
+      if (noteReq) noteReq.hidden = reason !== "other";
+      if (note) note.placeholder = reason === "other" ? "Say why" : "Optional";
+      var noteText = note ? String(note.value || "").trim() : "";
+      var ref = dupOf ? String(dupOf.value || "").trim().toUpperCase() : "";
+      var refOk = /^[A-Z0-9]{2,8}-\d{1,4}$/.test(ref) && ref !== ownRef;
+      var ok = false;
+      if (reason === "duplicate") ok = refOk;
+      else if (reason === "other") ok = !!noteText;
+      else if (reason) ok = true;
+      if (moveBtn) moveBtn.disabled = !ok;
+    }
+    openBtn.addEventListener("click", function () {
+      overlay.hidden = false;
+      document.body.style.overflow = "hidden";
+      var first = form.querySelector("input[name='reason']");
+      if (first) first.focus();
+    });
+    function closeNotNeeded() {
+      overlay.hidden = true;
+      document.body.style.overflow = "";
+      openBtn.focus();
+    }
+    if (cancelBtn) cancelBtn.addEventListener("click", closeNotNeeded);
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) closeNotNeeded(); });
+    form.addEventListener("change", syncMove);
+    form.addEventListener("input", syncMove);
+    form.addEventListener("submit", function (e) {
+      syncMove();
+      if (moveBtn && moveBtn.disabled) e.preventDefault();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (overlay.hidden || e.key !== "Escape") return;
+      closeNotNeeded();
+    });
+    syncMove();
+  }
+  wireNotNeeded();
 })();

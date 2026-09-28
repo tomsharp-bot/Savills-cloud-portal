@@ -336,7 +336,7 @@ model HhsrsSiteSubmission {
   clientCallReference  String    @default("")
   otherDetails         String    @default("")
   photoPaths           Json
-  /// Office workflow: new | in_review | email_ready | email_sent | corrected | closed
+  /// Office workflow: new | in_review | email_ready | email_sent | corrected | closed | not_needed
   status               String    @default("new")
   /// Concise client-facing hazard wording (office-edited). Empty → derive from comment.
   clientDescription    String    @default("")
@@ -358,6 +358,18 @@ model HhsrsSiteSubmission {
   emailBody            String    @default("")
   emailSentAt          DateTime?
   emailSentBy          String    @default("")
+  /// site = surveyor form. office = created from Review and create.
+  source               String    @default("site")
+  /// Login name when an office user created the case. Empty for site-form rows.
+  createdBy            String    @default("")
+  /// duplicate | surveyor_error | test | other. Empty unless the case is in Duplicates & errors.
+  notNeededReason      String    @default("")
+  notNeededDuplicateOf String    @default("")
+  notNeededNote        String    @default("")
+  notNeededBy          String    @default("")
+  notNeededAt          DateTime?
+  /// Moves and restores. Current fields are cleared on restore; this trail stays.
+  notNeededLog         Json      @default("[]")
   /// Office claim. Empty claimedBy means the case is open. Stale is derived from claimedAt — never auto-stolen.
   claimedBy            String    @default("")
   claimedAt            DateTime?

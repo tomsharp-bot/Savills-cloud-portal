@@ -14,7 +14,7 @@ export const CORRECTION_REASONS = [
 
 export type CorrectionReason = (typeof CORRECTION_REASONS)[number];
 
-export const FIND_STATUS_LABELS = ["Waiting", "In review", "Sent", "Corrected"] as const;
+export const FIND_STATUS_LABELS = ["Waiting", "In review", "Sent", "Corrected", "Not needed"] as const;
 export type FindStatusLabel = (typeof FIND_STATUS_LABELS)[number];
 
 export const MISSING_EMAIL_BODY = "Full text not stored for this email";
@@ -36,6 +36,8 @@ export function findStatusLabel(status: string): FindStatusLabel {
     case "email_sent":
     case "closed":
       return "Sent";
+    case "not_needed":
+      return "Not needed";
     default:
       return "Waiting";
   }

@@ -29,7 +29,7 @@
       <%- include("./sidebar") %>
       <div class="work-panel">
         <div class="content-pane">
-          <% if (activeNav !== 'main-log') { %>
+          <% if (activeNav !== 'main-log' && activeNav !== 'duplicates') { %>
           <%- include("./tool-header") %>
           <%- include("./step-tabs") %>
           <% } %>
