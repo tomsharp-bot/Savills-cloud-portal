@@ -302,4 +302,26 @@ describe("HHSRS portal send and Main Log record", () => {
     if (!result.ok) assert.equal(result.error, "Sending not set up yet.");
     assert.equal(box.sent.length, 0);
   });
+
+  it("appends the signature without counting the logo as a case photo", async () => {
+    const box = harness();
+    const result = await box.deliver({ senderFirstName: "Tom", senderFullName: "Tom Sharp" });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.record.sentBy, "Tom Sharp");
+    assert.equal(result.record.body, "Hi all,\n\n• Address: 1 jenkins house, B14 6ES");
+    assert.deepEqual(result.record.photoNames, ["sample-photo-1.jpg", "sample-photo-2.jpg"]);
+    assert.equal(box.sent.length, 1);
+    const mail = box.sent[0];
+    assert.deepEqual(
+      mail.attachments.map((file) => file.filename),
+      ["sample-photo-1.jpg", "sample-photo-2.jpg"]
+    );
+    assert.match(mail.text, /Hi all,\n\n• Address: 1 jenkins house, B14 6ES\n\nRegards\n\nTom\n\nTom Sharp\nHHSRS Reporting Team/);
+    assert.match(mail.html, /cid:savills-logo@savillshousing\.co\.uk/);
+    assert.match(mail.html, />Tom Sharp</);
+    assert.doesNotMatch(mail.html, /dbeafe/);
+    assert.equal(mail.html.includes("savills-logo.png"), false);
+    assert.equal(result.record.photoNames.includes("savills-logo.png"), false);
+  });
 });

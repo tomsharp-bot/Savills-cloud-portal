@@ -1693,6 +1693,14 @@
       var bodyEl = $("rv-email-body");
       var body = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
       h += "<div class=\"ck-text\" tabindex=\"0\" aria-label=\"Email text\">" + esc(body || "(empty)") + "</div>";
+      var sig = $("rv-signature-preview");
+      if (sig) {
+        h += "<p class=\"ck-photos-label\">Signature</p>";
+        if (cfg.signature && cfg.signature.missing && cfg.signature.warning) {
+          h += "<p class=\"ck-name-warn\">" + esc(cfg.signature.warning) + "</p>";
+        }
+        h += "<div class=\"ck-signature\" aria-readonly=\"true\">" + sig.innerHTML + "</div>";
+      }
       h += "<p class=\"ck-photos-label\">Attached: " + photos.length + (photos.length === 1 ? " photo" : " photos") + "</p>";
       if (photos.length) {
         h += "<div class=\"ck-photos\">" + photos.map(function (p) {
