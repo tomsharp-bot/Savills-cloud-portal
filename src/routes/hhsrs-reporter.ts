@@ -1235,6 +1235,18 @@ function uploadOfficePhotos(req: Request, res: Response, next: NextFunction): vo
   });
 }
 
+function officeSendWantsJson(req: Request): boolean {
+  return String(req.get("accept") || "").includes("application/json");
+}
+
+function finishOfficeSend(req: Request, res: Response, redirectTo: string): void {
+  if (officeSendWantsJson(req)) {
+    res.json({ ok: true, redirect: redirectTo });
+    return;
+  }
+  res.redirect(redirectTo);
+}
+
 async function handleOfficeSend(req: Request, res: Response): Promise<void> {
   const uploaded = Array.isArray(req.files) ? req.files : [];
   const names = senderNamesFromLogin(req.user);
@@ -1254,16 +1266,16 @@ async function handleOfficeSend(req: Request, res: Response): Promise<void> {
   if (result.ok) {
     flashOk(req, "Sent and logged.");
     await archiveLoggedPhotos(req, result.id);
-    res.redirect(`${HHSRS_REPORTER_PATH}/review/${result.id}`);
+    finishOfficeSend(req, res, `${HHSRS_REPORTER_PATH}/review/${result.id}`);
     return;
   }
   if (result.pending && result.id) {
     flashErr(req, "Not sent. The case is in Pending so you can try again.");
-    res.redirect(`${HHSRS_REPORTER_PATH}/review/${result.id}`);
+    finishOfficeSend(req, res, `${HHSRS_REPORTER_PATH}/review/${result.id}`);
     return;
   }
   flashErr(req, result.error);
-  res.redirect(`${HHSRS_REPORTER_PATH}/review`);
+  finishOfficeSend(req, res, `${HHSRS_REPORTER_PATH}/review`);
 }
 
 async function handleNotNeeded(req: Request, res: Response, id: string): Promise<void> {

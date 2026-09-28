@@ -1800,11 +1800,14 @@
           method: "POST",
           body: fd,
           credentials: "same-origin",
-          redirect: "follow"
+          headers: { Accept: "application/json" },
+          redirect: "manual"
         }).then(function (res) {
-          var next = res.url || ((cfg.base || "/HHSRSreporter") + "/review");
-          if (/\/review\/[^/?#]+/.test(next)) clearReviewDraft("blank");
-          window.location.assign(next);
+          return res.json().then(function (data) {
+            var next = (data && data.redirect) || ((cfg.base || "/HHSRSreporter") + "/review");
+            if (/\/review\/[^/?#]+/.test(next)) clearReviewDraft("blank");
+            window.location.assign(next);
+          });
         }).catch(function () {
           sending = false;
           ckSend.disabled = false;
