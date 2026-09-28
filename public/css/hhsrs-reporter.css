@@ -2634,16 +2634,16 @@ tr.is-new-log td { background: #f5f3ff; }
   table-layout: fixed;
 }
 .ml-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-.ml-page .ml-table col.c-sent { width: 84px; }
-.ml-page .ml-table col.c-ref { width: 94px; }
-.ml-page .ml-table col.c-proj { width: 76px; }
-.ml-page .ml-table col.c-uprn { width: 90px; }
-.ml-page .ml-table col.c-addr { width: 120px; }
-.ml-page .ml-table col.c-haz { width: 86px; }
-.ml-page .ml-table col.c-rate { width: 76px; }
-.ml-page .ml-table col.c-by { width: 76px; }
-.ml-page .ml-table col.c-to { width: 44px; }
-.ml-page .ml-table col.c-ph { width: 60px; }
+.ml-page .ml-table col.c-sent { width: 72px; }
+.ml-page .ml-table col.c-ref { width: 86px; }
+.ml-page .ml-table col.c-proj { width: 100px; }
+.ml-page .ml-table col.c-uprn { width: 76px; }
+.ml-page .ml-table col.c-addr { width: 90px; }
+.ml-page .ml-table col.c-haz { width: 70px; }
+.ml-page .ml-table col.c-rate { width: 58px; }
+.ml-page .ml-table col.c-by { width: 92px; }
+.ml-page .ml-table col.c-to { width: 116px; }
+.ml-page .ml-table col.c-ph { width: 40px; }
 .ml-page .ml-table col.c-type { width: 156px; }
 .ml-table thead th {
   text-align: left; padding: 0.55rem 0.45rem; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
@@ -2667,15 +2667,27 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-page .ml-table td.ml-proj,
 .ml-page .ml-table td.ml-by,
 .ml-page .ml-table td.ml-to { max-width: 0; }
-.ml-proj { white-space: nowrap; font-weight: 600; color: #2c3e50; overflow: hidden; text-overflow: ellipsis; }
+.ml-proj { font-weight: 600; color: #2c3e50; }
+.ml-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+  max-height: 2.6em;
+}
 .ml-uprn { font-family: Consolas, ui-monospace, monospace; font-size: 0.68rem; letter-spacing: -0.02em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ml-addr {
-  min-width: 7.5rem; font-weight: 600; color: var(--navy);
+  font-weight: 600; color: var(--navy);
   white-space: normal; overflow-wrap: break-word; overflow: hidden;
 }
+.ml-page .ml-table td.ml-addr { min-width: 0; }
 .ml-hazard { white-space: normal; overflow-wrap: break-word; overflow: hidden; }
-.ml-by { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ml-to { color: #44546a; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-by { color: var(--navy); }
+.ml-to { color: #44546a; font-size: 0.8rem; }
 .ml-page .ml-table tbody td.ml-type { overflow: visible; white-space: normal; }
 .ml-photos { white-space: nowrap; color: #44546a; font-weight: 600; }
 .ml-photos svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 3px; stroke: #7a8896; fill: none; stroke-width: 2; }

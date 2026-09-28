@@ -578,6 +578,25 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(legacy.callNotes, "Voicemail full");
   });
 
+  it("wraps Main Log project, sender, and recipient onto two lines", () => {
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const view = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const clamp = css.slice(css.indexOf(".ml-clamp {"), css.indexOf(".ml-clamp {") + 320);
+    assert.match(clamp, /-webkit-line-clamp:\s*2/);
+    assert.match(clamp, /line-clamp:\s*2/);
+    assert.match(clamp, /overflow-wrap:\s*anywhere/);
+    assert.doesNotMatch(css, /\.ml-proj\s*\{[^}]*white-space:\s*nowrap/);
+    assert.doesNotMatch(css, /\.ml-by\s*\{[^}]*white-space:\s*nowrap/);
+    assert.doesNotMatch(css, /\.ml-to\s*\{[^}]*white-space:\s*nowrap/);
+    assert.match(css, /\.ml-page \.ml-table col\.c-type \{ width: 156px; \}/);
+    for (const cls of ["ml-proj", "ml-by", "ml-to"]) {
+      const cell = view.match(new RegExp(`<td class="${cls}"[^>]*>[\\s\\S]*?</td>`));
+      assert.ok(cell, cls);
+      assert.match(cell[0], /title="/);
+      assert.match(cell[0], /class="ml-clamp"/);
+    }
+  });
+
   it("declares review draft storage keys before restore runs", () => {
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const draftsAt = js.indexOf('var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1"');
