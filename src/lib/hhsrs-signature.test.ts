@@ -20,11 +20,12 @@ const personnel = [
 ];
 
 describe("HHSRS email signature", () => {
-  it("uses the Personnel name, first name then full name", () => {
+  it("uses the login first name and surname, not Personnel", () => {
     const names = resolveSenderSignature({
-      email: "TSharp@savillshousing.co.uk",
-      displayName: "T Sharp",
-      personnel,
+      firstName: "Tom",
+      surname: "Sharp",
+      email: "tsharp@savillshousing.co.uk",
+      personnel: [{ name: "Thomas Surveyor", email: "tsharp@savillshousing.co.uk" }],
     });
     assert.equal(names.missing, false);
     assert.equal(names.firstName, "Tom");
@@ -48,26 +49,28 @@ describe("HHSRS email signature", () => {
     }
   });
 
-  it("falls back to the account display name when Personnel has no email match", () => {
+  it("falls back to a Personnel email match only when the login has no name", () => {
     const names = resolveSenderSignature({
-      email: "alex.s@savillshousing.co.uk",
-      displayName: "Alex Surveyor",
+      firstName: "",
+      surname: " ",
+      email: "Phil.M@savills.com",
       personnel,
     });
-    assert.deepEqual(names, { firstName: "Alex", fullName: "Alex Surveyor", missing: false });
+    assert.deepEqual(names, { firstName: "Phil", fullName: "Phil Moon", missing: false });
     const text = composeEmailText("Dear Sir/Madam,", names);
-    assert.match(text, /^Dear Sir\/Madam,\n\nRegards\n\nAlex\n\nAlex Surveyor\nHHSRS Reporting Team/);
+    assert.match(text, /^Dear Sir\/Madam,\n\nRegards\n\nPhil\n\nPhil Moon\nHHSRS Reporting Team/);
 
     const blankPersonnelName = resolveSenderSignature({
+      firstName: "",
+      surname: "",
       email: "tsharp@savillshousing.co.uk",
-      displayName: "Tom Sharp",
       personnel: [{ name: "   ", email: "tsharp@savillshousing.co.uk" }],
     });
-    assert.equal(blankPersonnelName.fullName, "Tom Sharp");
+    assert.equal(blankPersonnelName.missing, true);
   });
 
   it("does not invent a name when none is on file", () => {
-    const names = resolveSenderSignature({ email: "", displayName: "  ", personnel });
+    const names = resolveSenderSignature({ firstName: "", surname: "", email: "", personnel });
     assert.deepEqual(names, { firstName: "", fullName: "", missing: true });
     assert.equal(MISSING_SENDER_NAME_WARNING, "No name found for the signature.");
     const text = renderSignatureText(names);
@@ -145,5 +148,15 @@ describe("HHSRS email signature", () => {
     const sigInCheck = openCheck.indexOf("ck-signature");
     const photosInCheck = openCheck.indexOf('ck-photos-label\\">Attached');
     assert.ok(bodyInCheck >= 0 && sigInCheck > bodyInCheck && photosInCheck > sigInCheck);
+
+    const personnel = readFileSync("views/personnel.ejs", "utf8");
+    const admins = personnel.slice(personnel.indexOf("C. Admins"));
+    assert.match(admins, /name="firstName"/);
+    assert.match(admins, /name="surname"/);
+    assert.match(admins, /data-part="surname"/);
+    const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    const lookup = route.slice(route.indexOf("async function senderSignatureFor"), route.indexOf("function signatureLocals"));
+    assert.match(lookup, /role: "surveyor"/);
+    assert.doesNotMatch(lookup, /displayName|user\?\.name/);
   });
 });

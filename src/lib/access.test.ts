@@ -18,6 +18,8 @@ function user(role: AuthedUser["role"], patch: Partial<AuthedUser> = {}): Authed
     id: role,
     username: role,
     name: role,
+    firstName: "",
+    surname: "",
     email: null,
     initials: null,
     agency: null,

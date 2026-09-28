@@ -496,6 +496,18 @@
       postJson(appUrl("/personnel/" + inp.dataset.agency + "/agency"), { agency: inp.value });
     });
   });
+  document.querySelectorAll("input[data-signature]").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const row = inp.closest("tr");
+      if (!row) return;
+      const first = row.querySelector("[data-part='first']");
+      const surname = row.querySelector("[data-part='surname']");
+      postJson(appUrl("/personnel/" + inp.dataset.signature + "/signature-name"), {
+        firstName: first ? first.value : "",
+        surname: surname ? surname.value : "",
+      });
+    });
+  });
 
   const clearModal = document.getElementById("modal-clear-stock");
   const clearStep1 = document.getElementById("clear-step-1");

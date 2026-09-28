@@ -28,6 +28,8 @@ export async function loadUser(req: Request, _res: Response, next: NextFunction)
       username: true,
       role: true,
       name: true,
+      firstName: true,
+      surname: true,
       email: true,
       initials: true,
       agency: true,

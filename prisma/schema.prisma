@@ -35,7 +35,11 @@ model User {
   username          String   @unique
   passwordHash      String
   role              Role
+  /// Display name used around the portal. Not the HHSRS signature name.
   name              String
+  /// HHSRS signature. Set by an admin on the login. Empty until then.
+  firstName         String   @default("")
+  surname           String   @default("")
   email             String?
   initials          String?
   agency            String?

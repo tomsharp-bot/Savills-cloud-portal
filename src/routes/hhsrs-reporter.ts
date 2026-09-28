@@ -80,22 +80,21 @@ function signatureLogoUrl(res: Response): string {
   return "/img/savills-hhsrs-signature.png";
 }
 
-/** Match Personnel by email, then the account display name. */
+/** Login first name and surname. Personnel (surveyors) only if the login has neither. */
 async function senderSignatureFor(user: AuthedUser | null | undefined): Promise<SenderSignature> {
+  const firstName = user?.firstName;
+  const surname = user?.surname;
   const email = String(user?.email || "").trim();
+  const loginNamed = Boolean(String(firstName || "").trim() || String(surname || "").trim());
   const personnel: { name: string; email: string | null }[] = [];
-  if (email) {
+  if (!loginNamed && email) {
     const hit = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: "insensitive" } },
+      where: { role: "surveyor", email: { equals: email, mode: "insensitive" } },
       select: { name: true, email: true },
     });
     if (hit) personnel.push(hit);
   }
-  return resolveSenderSignature({
-    email,
-    displayName: user?.name,
-    personnel,
-  });
+  return resolveSenderSignature({ firstName, surname, email, personnel });
 }
 
 function signatureLocals(res: Response, names: SenderSignature) {

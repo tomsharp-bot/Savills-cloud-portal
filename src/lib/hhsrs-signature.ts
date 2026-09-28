@@ -59,27 +59,37 @@ function tidyName(value: string | null | undefined): string {
 }
 
 /**
- * Personnel is the portal user list. Match the signed-in person by email
- * (the same case-insensitive email match used at sign-in). If that row has
- * no name, or there is no email match, use the account display name.
+ * The signature name comes from the signed-in login (first name and surname).
+ * Personnel is the surveyor list, used only when that login has neither name.
+ * Match a surveyor by email, the same case-insensitive way sign-in matches email.
  */
 export function resolveSenderSignature(input: {
+  firstName?: string | null;
+  surname?: string | null;
   email?: string | null;
-  displayName?: string | null;
   personnel?: readonly PersonnelName[];
 }): SenderSignature {
-  const email = tidyName(input.email).toLowerCase();
-  let fromPersonnel = "";
-  if (email) {
-    const hit = (input.personnel || []).find(
-      (person) => tidyName(person.email).toLowerCase() === email
-    );
-    fromPersonnel = tidyName(hit?.name);
+  const first = tidyName(input.firstName);
+  const surname = tidyName(input.surname);
+  if (first || surname) {
+    const fullName = [first, surname].filter(Boolean).join(" ");
+    return {
+      firstName: first || fullName.split(" ")[0] || "",
+      fullName,
+      missing: false,
+    };
   }
-  const fullName = fromPersonnel || tidyName(input.displayName);
-  if (!fullName) return { firstName: "", fullName: "", missing: true };
-  const firstName = fullName.split(" ")[0] || "";
-  return { firstName, fullName, missing: false };
+  const email = tidyName(input.email).toLowerCase();
+  const hit = email
+    ? (input.personnel || []).find((person) => tidyName(person.email).toLowerCase() === email)
+    : undefined;
+  const fromPersonnel = tidyName(hit?.name);
+  if (!fromPersonnel) return { firstName: "", fullName: "", missing: true };
+  return {
+    firstName: fromPersonnel.split(" ")[0] || "",
+    fullName: fromPersonnel,
+    missing: false,
+  };
 }
 
 /** Rebuild the on-screen signature from the name already stored on the send. */
