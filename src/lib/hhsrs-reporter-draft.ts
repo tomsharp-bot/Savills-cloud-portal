@@ -4,7 +4,7 @@
  */
 
 import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
-import { composeCallNotes, splitCallNotes } from "./hhsrs-site-form.js";
+import { composeCallNotes, formatHhsrsSurveyDate, splitCallNotes } from "./hhsrs-site-form.js";
 
 export class DraftError extends Error {
   constructor(message: string) {
@@ -823,6 +823,16 @@ function bullet(label: string, value: string): string {
   return `• ${label}: ${value.replace(/\s+/g, " ").trim()}`;
 }
 
+/**
+ * Calendar day as written, then the shared UK formatter.
+ * A leading YYYY-MM-DD (including a full ISO timestamp) is sliced as text so
+ * Europe/London never moves the day across midnight UTC.
+ */
+function surveyDateForEmail(value: string): string {
+  const isoDay = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  return formatHhsrsSurveyDate(isoDay ? isoDay[1] : value);
+}
+
 /** Short client body. Subject, To, and Cc stay on the project templates. */
 function bulletBodyLines(data: DraftCase & { description: string; address: string }): string[] {
   const lines: string[] = [
@@ -841,7 +851,7 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
     lines.push(bullet(label, reference));
   }
   const survey = (data.surveyDate || "").trim();
-  if (survey) lines.push(bullet("Survey date", /^\d{4}-\d{2}-\d{2}/.test(survey) ? survey.slice(0, 10) : survey));
+  if (survey) lines.push(bullet("Survey date", surveyDateForEmail(survey)));
   if (data.suspectedCause && data.includeCause !== false) {
     const cause = causeSentence(data.suspectedCause).replace(/^Suspected cause:\s*/i, "").replace(/\.$/, "");
     if (cause) lines.push(bullet("Cause", cause));

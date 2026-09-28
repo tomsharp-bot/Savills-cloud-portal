@@ -128,6 +128,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
     assert.match(draft.body, /• Hazard: Electrical Hazards/);
+    assert.match(draft.body, /• Survey date: 20\/09\/2026/);
+    assert.doesNotMatch(draft.body, /2026-09-20/);
     assert.doesNotMatch(draft.body, /Attached are photos/);
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);

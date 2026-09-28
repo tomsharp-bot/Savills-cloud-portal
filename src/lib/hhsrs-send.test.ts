@@ -20,6 +20,7 @@ import {
   type SentEmailRecord,
 } from "./hhsrs-send.js";
 import { imapSentFolder } from "./hhsrs-send-transport.js";
+import { projectDraft } from "./hhsrs-reporter-draft.js";
 
 const base = {
   hasReporterAccess: true,
@@ -323,5 +324,61 @@ describe("HHSRS portal send and Main Log record", () => {
     assert.doesNotMatch(mail.html, /dbeafe/);
     assert.equal(mail.html.includes("savills-logo.png"), false);
     assert.equal(result.record.photoNames.includes("savills-logo.png"), false);
+  });
+
+  it("sends, resends, and logs the survey date as DD/MM/YYYY", async () => {
+    const draft = projectDraft(
+      {
+        project: "Demo Housing",
+        address: "1 high street, ex1 1aa",
+        hazard: "Electrical Hazards",
+        rating: "High",
+        description: "damaged light fitting in lounge",
+        uprn: "100123",
+        surveyDate: "2026-09-28",
+      },
+      []
+    );
+    const box = harness();
+    const sent = await box.deliver({
+      subject: draft.subject,
+      body: draft.body,
+      attachments: [],
+      photoNames: [],
+      totalBytes: 0,
+    });
+    assert.equal(sent.ok, true);
+    if (!sent.ok) return;
+    assert.equal(sent.record.from, "Savills HHSRS <hhsrs@savillshousing.co.uk>");
+    assert.match(sent.record.body, /• Survey date: 28\/09\/2026/);
+    assert.doesNotMatch(sent.record.body, /2026-09-28/);
+    assert.match(box.sent[0].text, /• Survey date: 28\/09\/2026/);
+    assert.doesNotMatch(box.sent[0].text, /2026-09-28/);
+    assert.match(box.sent[0].html, /Survey date: 28\/09\/2026/);
+
+    const log = buildMainLogEntry({
+      uprn: "100123",
+      address: "1 high street, EX1 1AA",
+      projectName: "Demo Housing",
+      sent: sent.record,
+      markedBy: sent.record.sentBy,
+      markedAt: sent.record.sentAt,
+    });
+    assert.equal(log.body, sent.record.body);
+    assert.match(log.body, /• Survey date: 28\/09\/2026/);
+
+    const correction = harness();
+    const resent = await correction.deliver({
+      subject: "CORRECTION: " + draft.subject,
+      body: sent.record.body,
+      attachments: [],
+      photoNames: [],
+      totalBytes: 0,
+    });
+    assert.equal(resent.ok, true);
+    if (!resent.ok) return;
+    assert.match(resent.record.body, /• Survey date: 28\/09\/2026/);
+    assert.match(correction.sent[0].text, /• Survey date: 28\/09\/2026/);
+    assert.doesNotMatch(correction.sent[0].text, /2026-09-28/);
   });
 });

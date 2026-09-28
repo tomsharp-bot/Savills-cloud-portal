@@ -375,7 +375,7 @@ export function buildThanksSummary(
   };
 }
 
-/** Review display only. Stored and submitted survey dates stay YYYY-MM-DD. */
+/** UK display (DD/MM/YYYY). Stored and submitted survey dates stay YYYY-MM-DD. */
 export function formatHhsrsSurveyDate(value: string): string {
   const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return String(value || "");

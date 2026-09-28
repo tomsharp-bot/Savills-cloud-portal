@@ -91,7 +91,7 @@ describe("HHSRS Reporter projectDraft", () => {
         "• Hazard: Electrical Hazards",
         "• Rating: High",
         "• Site notes: Damaged light fitting in lounge.",
-        "• Survey date: 2026-09-20",
+        "• Survey date: 20/09/2026",
       ].join("\n")
     );
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
@@ -127,7 +127,8 @@ describe("HHSRS Reporter projectDraft", () => {
     );
     assert.match(draft.body, /• Onward call reference: CR-99/);
     assert.doesNotMatch(draft.body, /• Onward call:/);
-    assert.match(draft.body, /• Survey date: 2026-09-20/);
+    assert.match(draft.body, /• Survey date: 20\/09\/2026/);
+    assert.doesNotMatch(draft.body, /2026-09-20/);
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
   });
@@ -157,11 +158,25 @@ describe("HHSRS Reporter projectDraft", () => {
     assert.match(draft.body, /• Address: Campion House/);
     assert.doesNotMatch(notes || "", /Campion House|photo|surveyor|HHSRS|arrange/i);
   });
+
+  it("shows the survey date as DD/MM/YYYY without moving the calendar day", () => {
+    const uk = projectDraft({ ...base, surveyDate: "2026-09-28" }, []);
+    assert.match(uk.body, /• Survey date: 28\/09\/2026/);
+    assert.doesNotMatch(uk.body, /2026-09-28/);
+
+    const midnightUtc = projectDraft({ ...base, surveyDate: "2026-09-28T00:00:00.000Z" }, []);
+    assert.match(midnightUtc.body, /• Survey date: 28\/09\/2026/);
+    assert.doesNotMatch(midnightUtc.body, /27\/09\/2026/);
+
+    const alreadyUk = projectDraft({ ...base, surveyDate: "28/09/2026" }, []);
+    assert.match(alreadyUk.body, /• Survey date: 28\/09\/2026/);
+    assert.equal((alreadyUk.body.match(/• Survey date:/g) || []).length, 1);
+  });
 });
 
 describe("HHSRS Reporter draftFromSubmission", () => {
   it("maps site-form fields into a Standard draft", () => {
-    const draft = draftFromSubmission({
+    const input = {
       projectName: "Demo Housing",
       fullAddress: "1 High Street",
       postcode: "EX1 1AA",
@@ -171,10 +186,14 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       rating: "High",
       comment: "damaged light fitting in lounge",
       photoCount: 0,
-    });
+    };
+    const draft = draftFromSubmission(input);
     assert.equal(draft.subject, "Demo Housing - HHSRS – 1 High Street, EX1 1AA");
     assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
+    assert.match(draft.body, /• Survey date: 20\/09\/2026/);
+    assert.doesNotMatch(draft.body, /2026-09-20/);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
+    assert.equal(input.surveyDate, "2026-09-20");
   });
 
   it("puts a couldn't-get-through note on the existing Attempted call bullet", () => {
