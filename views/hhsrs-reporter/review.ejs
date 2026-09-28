@@ -358,10 +358,6 @@
             </div>
           </div>
         <% } %>
-        <div class="send-block" id="rv-send-block">
-          <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
-          <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
-        </div>
         <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
         <div id="rv-email-photos" class="email-photo-tools" hidden>
           <div class="photo-thumbs email-photo-thumbs" id="rv-email-photo-thumbs" aria-label="Drag case photos into your email draft"></div>
@@ -383,15 +379,10 @@
       <% } %>
     </div>
     <div class="finish-bar-right">
-      <p class="finish-hint <%= sentEmail ? 'is-sent' : '' %>" id="rv-finish-hint"><%= sentEmail ? "Sent. Mark as actioned when done." : "Finished? Mark it as actioned." %></p>
-      <% if (isFilled) { %>
-        <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" id="mark-actioned-form">
-          <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
-          <button type="submit" class="btn btn-primary" id="btn-mark-actioned">Mark as actioned → Main Log</button>
-        </form>
-      <% } else { %>
-        <button type="button" class="btn btn-primary" id="btn-mark-actioned" disabled title="Open a waiting case from Pending Issues first">Mark as actioned → Main Log</button>
-      <% } %>
+      <div class="send-block" id="rv-send-block">
+        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send and log" %></button>
+        <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
+      </div>
     </div>
   </section>
 </div>
@@ -413,7 +404,7 @@
           <input type="checkbox" id="ck-tick" name="checked" value="1" />
           I've checked the details
         </label>
-        <p class="ck-safe">Nothing is sent until you press Send now.</p>
+        <p class="ck-safe">Nothing is sent until you press Send and log.</p>
       </div>
       <input type="hidden" name="to" id="rv-send-to" value="" />
       <input type="hidden" name="cc" id="rv-send-cc" value="" />
@@ -423,7 +414,7 @@
       <div id="rv-send-photo-fields"></div>
       <div class="ck-foot">
         <button type="button" class="btn btn-back" id="ck-back">Go back</button>
-        <button type="submit" class="btn btn-primary" id="ck-send" disabled>Send now</button>
+        <button type="submit" class="btn btn-primary" id="ck-send" disabled>Send and log</button>
       </div>
     </form>
   </div>

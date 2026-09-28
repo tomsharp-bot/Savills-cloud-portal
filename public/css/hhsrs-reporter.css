@@ -2071,6 +2071,14 @@ body.hhsrs-reporter {
   flex-wrap: wrap;
 }
 .hhsrs-reporter .finish-bar-right { margin-left: auto; justify-content: flex-end; }
+.hhsrs-reporter .finish-bar .send-block {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  min-width: 220px;
+}
+.hhsrs-reporter .finish-bar .btn-send { width: auto; min-width: 11rem; }
 .hhsrs-reporter .finish-bar .btn { min-height: var(--tap); padding: 11px 16px; }
 .hhsrs-reporter .finish-hint {
   margin: 0;

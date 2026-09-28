@@ -1366,18 +1366,6 @@
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "hidden") saveReviewDraftNow();
     });
-    var markForm = $("mark-actioned-form");
-    if (markForm) {
-      markForm.addEventListener("submit", function (ev) {
-        if (!window.confirm("Mark this case as actioned?")) {
-          ev.preventDefault();
-          return;
-        }
-        skipDraftSave = true;
-        clearReviewDraft(cfg.caseId || "blank");
-        clearResumeKey();
-      });
-    }
     var abandonForm = $("abandon-claim-form");
     if (abandonForm) {
       abandonForm.addEventListener("submit", function () {

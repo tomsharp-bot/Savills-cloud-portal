@@ -137,7 +137,8 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.equal(blank.status, 200);
     assert.match(blank.body, /Review and create/);
     assert.match(blank.body, /Select a project/);
-    assert.match(blank.body, /Mark as actioned/);
+    assert.match(blank.body, /Send and log/);
+    assert.doesNotMatch(blank.body, /Mark as actioned/);
     assert.match(blank.body, /Create new email/);
     assert.match(blank.body, /id="btn-generate-email"/);
     assert.match(blank.body, /id="btn-amend-case"/);
@@ -291,7 +292,9 @@ describe("HHSRS Reporter auth and queue", () => {
       assert.match(page.body, /• Site notes: Damaged light fitting in lounge/);
       assert.doesNotMatch(page.body, /The light fitting in the lounge is damaged/);
       assert.match(page.body, /Demo Housing - HHSRS/);
-      assert.match(page.body, /Mark as actioned/);
+      assert.match(page.body, /Send and log/);
+      assert.match(page.body, /I've checked the details/);
+      assert.doesNotMatch(page.body, /Mark as actioned/);
       assert.match(page.body, /btn-copy/);
       assert.match(page.body, /<textarea id="rv-email-body"[^>]*>\s*<\/textarea>/);
       assert.match(page.body, /case-photo-thumb/);
@@ -439,6 +442,70 @@ describe("HHSRS Reporter auth and queue", () => {
     } finally {
       await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: waiting.id } });
       if (createdOnward) await prisma.project.delete({ where: { id: createdOnward.id } }).catch(() => undefined);
+    }
+  });
+
+  it("does not let Save review mark a case sent or closed, and the old mark routes are gone", async (t) => {
+    if (!dbReady) {
+      t.skip("Postgres with seeded users is not available");
+      return;
+    }
+    const { prisma } = await import("./lib/prisma.js");
+    const row = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        projectName: "Demo Housing",
+        surveyDate: "2026-09-20",
+        uprn: "save-status-" + Date.now(),
+        fullAddress: "4 Save Lane",
+        postcode: "EX1 1AA",
+        surveyorName: "Alex Surveyor",
+        category: "Electrical Hazards",
+        rating: "High",
+        comment: "save whitelist",
+        photoPaths: [],
+        status: "in_review",
+      },
+    });
+    try {
+      const app = createApp({ basePath: "" });
+      const cookie = await login(app, "phil.m", "PhilMoon2468");
+      const forged = new URLSearchParams({
+        expectedUpdatedAt: row.updatedAt.toISOString(),
+        status: "email_sent",
+        rating: "High",
+        emailSentAt: "2026-09-28T10:00:00.000Z",
+        emailSentBy: "Not the portal",
+      }).toString();
+      const saved = await request(app, "POST", `/HHSRSreporter/review/${row.id}`, { cookie, body: forged });
+      assert.equal(saved.status, 302);
+      const afterSave = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
+      assert.equal(afterSave.status, "in_review");
+      assert.equal(afterSave.emailSentAt, null);
+      assert.notEqual(afterSave.emailSentBy, "Not the portal");
+
+      const closed = new URLSearchParams({
+        expectedUpdatedAt: afterSave.updatedAt.toISOString(),
+        status: "closed",
+        rating: "High",
+      }).toString();
+      const savedClosed = await request(app, "POST", `/HHSRSreporter/review/${row.id}`, { cookie, body: closed });
+      assert.equal(savedClosed.status, 302);
+      const afterClosed = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
+      assert.equal(afterClosed.status, "in_review");
+
+      for (const path of [
+        `/HHSRSreporter/review/${row.id}/mark-actioned`,
+        `/HHSRSreporter/${row.id}/mark-sent`,
+        `/HHSRSreporter/${row.id}/mark-actioned`,
+      ]) {
+        const gone = await request(app, "POST", path, { cookie, body: "expectedUpdatedAt=x" });
+        assert.equal(gone.status, 410, path);
+      }
+      const still = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
+      assert.equal(still.status, "in_review");
+      assert.equal(still.emailSentAt, null);
+    } finally {
+      await prisma.hhsrsSiteSubmission.delete({ where: { id: row.id } }).catch(() => undefined);
     }
   });
 });

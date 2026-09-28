@@ -28,6 +28,20 @@ export function isHhsrsCaseStatus(value: string): value is HhsrsCaseStatus {
   return (HHSRS_CASE_STATUSES as readonly string[]).includes(value);
 }
 
+/** Statuses Save review is allowed to write. Sent and closed belong to the send path. */
+const REVIEW_SAVE_STATUSES = ["in_review", "email_ready"] as const;
+
+/**
+ * Save review cannot mark a case sent or closed, and cannot clear a status the
+ * send path (or a correction) already set. A new case becomes in review.
+ */
+export function statusForReviewSave(current: string, submitted: string): string {
+  if (current === "email_sent" || current === "corrected" || current === "closed") return current;
+  if ((REVIEW_SAVE_STATUSES as readonly string[]).includes(submitted)) return submitted;
+  if (current === "email_ready") return "email_ready";
+  return "in_review";
+}
+
 export function statusLabel(status: string): string {
   switch (status) {
     case "new":

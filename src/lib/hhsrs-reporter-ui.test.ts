@@ -5,6 +5,7 @@ import {
   formatTimeAgo,
   ratingDisplayClass,
   actionedStatusLabel,
+  statusForReviewSave,
   photoAttachmentCount,
   reporterCasePhotos,
   mergeReviewDraftFields,
@@ -323,22 +324,45 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(actions, /id="btn-mark-actioned"/);
     assert.doesNotMatch(actions, /id="btn-abandon-claim"/);
     assert.ok(gridAt >= 0 && finishAt > gridAt, "finish bar follows the review grid inside the workspace");
-    assert.match(workspace, /id="mark-actioned-form"/);
+    const finish = workspace.slice(finishAt);
+    assert.match(finish, /id="btn-send-email"/);
+    assert.match(finish, /Send and log/);
+    assert.doesNotMatch(workspace, /id="mark-actioned-form"/);
+    assert.doesNotMatch(workspace, /id="btn-mark-actioned"/);
+    assert.doesNotMatch(workspace, /Mark as actioned/);
+    assert.doesNotMatch(workspace, /Finished\? Mark it as actioned/);
     assert.match(workspace, /name="expectedUpdatedAt"/);
     assert.match(workspace, /id="abandon-claim-form"/);
     assert.match(workspace, /id="btn-abandon-claim"/);
     assert.match(workspace, /showAbandon \? "" : "hidden"/);
     assert.match(workspace, /Abandon claim — return to pending/);
-    assert.match(workspace, /Finished\? Mark it as actioned\./);
-    assert.match(workspace, /Mark as actioned → Main Log/);
-    assert.match(workspace, /Open a waiting case from Pending Issues first/);
-    assert.match(workspace, /disabled title="Open a waiting case from Pending Issues first"/);
-    assert.match(review, /id="btn-send-email"/);
+    assert.match(workspace, /btn-copy/);
+    assert.match(workspace, /Download photos/);
     assert.match(review, /Check before sending/);
     assert.match(review, /I've checked the details/);
+    assert.match(review, /id="ck-send"[^>]*>Send and log</);
+    assert.match(review, /Nothing is sent until you press Send and log\./);
+    assert.doesNotMatch(review, /Send now/);
     assert.match(review, /id="rv-email-from"/);
     assert.doesNotMatch(review, /Copy into Outlook/);
     assert.doesNotMatch(review, /Use <strong>Mark as actioned → Main Log<\/strong> when done/);
+    assert.doesNotMatch(review, /Attach photos in Outlook/);
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    assert.match(pending, /Cases move to Main Log when you press Send and log\./);
+    assert.doesNotMatch(pending, /Mark as actioned/);
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    assert.doesNotMatch(js, /mark-actioned-form/);
+    assert.doesNotMatch(js, /Mark this case as actioned/);
+    assert.equal(statusForReviewSave("in_review", "email_sent"), "in_review");
+    assert.equal(statusForReviewSave("in_review", "closed"), "in_review");
+    assert.equal(statusForReviewSave("in_review", "corrected"), "in_review");
+    assert.equal(statusForReviewSave("new", "email_sent"), "in_review");
+    assert.equal(statusForReviewSave("new", "in_review"), "in_review");
+    assert.equal(statusForReviewSave("in_review", "email_ready"), "email_ready");
+    assert.equal(statusForReviewSave("email_ready", "closed"), "email_ready");
+    assert.equal(statusForReviewSave("email_sent", "in_review"), "email_sent");
+    assert.equal(statusForReviewSave("corrected", "closed"), "corrected");
+    assert.equal(statusForReviewSave("closed", "in_review"), "closed");
     assert.match(css, /#review-workspace\s*\{[^}]*padding-bottom:\s*85vh/);
     assert.match(css, /\.finish-bar\s*\{[^}]*background:\s*var\(--surface\)/);
     assert.match(css, /\.finish-bar\s*\{[^}]*border-radius:\s*var\(--radius\)/);

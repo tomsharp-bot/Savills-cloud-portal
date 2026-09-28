@@ -15,12 +15,12 @@ import {
   HHSRS_ACTIONED_STATUSES,
   HHSRS_CALL_OUTCOMES,
   HHSRS_CASE_STATUSES,
+  statusForReviewSave,
   HHSRS_REPORTER_PATH,
   HHSRS_WAITING_STATUSES,
   actionedStatusLabel,
   formatTimeAgo,
   formatWorkspaceDate,
-  isHhsrsCaseStatus,
   isWaitingStatus,
   draftEmailFromReviewFields,
   mergeReviewDraftFields,
@@ -58,7 +58,7 @@ import {
   senderNamesFromLogin,
   sentBannerText,
 } from "../lib/hhsrs-send.js";
-import { latestSentEmail, listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import { listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
 import {
   CORRECTION_REASONS,
   MISSING_EMAIL_BODY,
@@ -1001,13 +1001,13 @@ hhsrsReporterRouter.post("/admin/client-emails", async (req: Request, res: Respo
   res.redirect(`${HHSRS_REPORTER_PATH}/admin#client-email-card`);
 });
 
-/* ---------- Case save / mark actioned (canonical under /review/:id) ---------- */
+/* ---------- Case save and send (canonical under /review/:id) ---------- */
 hhsrsReporterRouter.post("/review/:id", async (req: Request, res: Response) => {
   await handleSave(req, res, req.params.id);
 });
 
-hhsrsReporterRouter.post("/review/:id/mark-actioned", async (req: Request, res: Response) => {
-  await handleMarkActioned(req, res, req.params.id);
+hhsrsReporterRouter.post("/review/:id/mark-actioned", (_req: Request, res: Response) => {
+  res.status(410).type("text/plain").send("Gone.");
 });
 
 hhsrsReporterRouter.post("/review/:id/send", async (req: Request, res: Response) => {
@@ -1032,12 +1032,12 @@ hhsrsReporterRouter.post("/:id", async (req: Request, res: Response) => {
   await handleSave(req, res, req.params.id);
 });
 
-hhsrsReporterRouter.post("/:id/mark-sent", async (req: Request, res: Response) => {
-  await handleMarkActioned(req, res, req.params.id);
+hhsrsReporterRouter.post("/:id/mark-sent", (_req: Request, res: Response) => {
+  res.status(410).type("text/plain").send("Gone.");
 });
 
-hhsrsReporterRouter.post("/:id/mark-actioned", async (req: Request, res: Response) => {
-  await handleMarkActioned(req, res, req.params.id);
+hhsrsReporterRouter.post("/:id/mark-actioned", (_req: Request, res: Response) => {
+  res.status(410).type("text/plain").send("Gone.");
 });
 
 async function handleSave(req: Request, res: Response, id: string): Promise<void> {
@@ -1054,10 +1054,6 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
       ...ctx,
       flashErr: "Select a valid rating for this case.",
     });
-    return;
-  }
-  if (!isHhsrsCaseStatus(update.status)) {
-    await renderReview(req, res, row, { ...ctx, flashErr: "Select a valid case status." });
     return;
   }
   if (
@@ -1100,7 +1096,7 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
     onwardTopic: update.onwardTopic,
     cat1Confirmed: update.cat1Confirmed,
     internalNotes: update.internalNotes,
-    status: update.status === "new" ? "in_review" : update.status,
+    status: statusForReviewSave(row.status, update.status),
     lastEditedBy: editor,
   };
 
@@ -1133,79 +1129,6 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
 }
 
-async function handleMarkActioned(req: Request, res: Response, id: string): Promise<void> {
-  const row = await loadCase(id);
-  if (!row) {
-    res.status(404).send("Case not found.");
-    return;
-  }
-  const expectedRaw = String(req.body?.expectedUpdatedAt || "").trim();
-  const expected = expectedRaw ? new Date(expectedRaw) : null;
-  if (!expected || Number.isNaN(expected.getTime())) {
-    await renderReview(req, res, row, {
-      ...(await reviewContext(row.id)),
-      flashErr: "Missing concurrency token. Reload the case and try again.",
-    });
-    return;
-  }
-  if (row.updatedAt.getTime() !== expected.getTime()) {
-    await renderReview(req, res, row, {
-      ...(await reviewContext(row.id)),
-      flashErr:
-        "This case was updated by someone else since you opened it. Reload to see their changes, then mark actioned again.",
-    });
-    return;
-  }
-
-  const draft = tryDraftFromRow(row);
-  const editor = req.user?.name || req.user?.username || "";
-  const alreadySent = Boolean(row.emailSentAt);
-  const result = await prisma.hhsrsSiteSubmission.updateMany({
-    where: { id: row.id, updatedAt: expected },
-    data: alreadySent
-      ? {
-          status: row.status === "closed" ? "closed" : row.status === "corrected" ? "corrected" : "email_sent",
-          lastEditedBy: editor,
-          claimedBy: "",
-          claimedAt: null,
-        }
-      : {
-          status: "email_sent",
-          emailSentAt: new Date(),
-          emailSentBy: editor,
-          lastEditedBy: editor,
-          emailSubject: draft.subject || row.emailSubject,
-          emailBody: draft.body || row.emailBody,
-          claimedBy: "",
-          claimedAt: null,
-        },
-  });
-  if (result.count !== 1) {
-    const fresh = await loadCase(row.id);
-    if (!fresh) {
-      res.status(404).send("Case not found.");
-      return;
-    }
-    await renderReview(req, res, fresh, {
-      ...(await reviewContext(fresh.id)),
-      flashErr:
-        "This case was updated by someone else since you opened it. Reload to see their changes, then mark actioned again.",
-    });
-    return;
-  }
-  // The case is already on the Main Log. Copy must not undo that, and a slow or
-  // failed Spaces upload must not hold the redirect open.
-  await archiveLoggedPhotos(req, row.id);
-  const sent = await latestSentEmail(row.id);
-  flashOk(
-    req,
-    sent
-      ? "Marked as actioned. Case moved to Main Log."
-      : "Marked as actioned. Case moved to Main Log. Attach photos in Outlook before you send."
-  );
-  res.redirect(sent ? `${HHSRS_REPORTER_PATH}/main-log/${row.id}` : `${HHSRS_REPORTER_PATH}/main-log`);
-}
-
 function flashErr(req: Request, message: string): void {
   req.session = req.session || {};
   req.session.flashErr = message;
@@ -1230,7 +1153,15 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
     body: sendBodyWithClientRecipients(rawBody, stored),
     storage: sitePhotoStorageFromApp(req.app),
   });
-  if (!result.ok) flashErr(req, result.error);
+  if (!result.ok) {
+    flashErr(req, result.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+    return;
+  }
+  flashOk(req, "Sent and logged.");
+  // The email is already sent. Copy must not undo that, and a slow or failed
+  // Spaces upload must not hold the redirect open.
+  await archiveLoggedPhotos(req, row.id);
   res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
 }
 
