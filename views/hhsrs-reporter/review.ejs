@@ -299,7 +299,7 @@
       </div>
       <p class="review-draft-status" id="rv-draft-status" hidden></p>
       <% if (draftError) { %><p class="flash flash-err"><%= draftError %></p><% } %>
-      <form class="email-form <%= sentEmail ? 'is-sent' : '' %>" id="rv-email-form" onsubmit="return false;">
+      <form class="email-form <%= sentEmail ? 'is-sent' : '' %>" id="rv-email-form" autocomplete="off" onsubmit="return false;">
         <% if (sentEmail) { %>
           <p class="sent-banner" id="rv-sent-banner" role="status" aria-live="polite"><%= sentBanner %></p>
           <% if (!sentEmail.sentCopySaved) { %><p class="send-warn" id="rv-sent-copy-warn">Sent. Mailbox Sent folder copy failed.</p><% } %>
@@ -311,29 +311,29 @@
           <div class="locked-field" id="rv-email-from" aria-labelledby="rv-email-from-label" aria-readonly="true"><span class="lock" aria-hidden="true">🔒</span><%= sendConfig.fromLine %><span class="locked-tag">Locked</span></div>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-to">To</label>
-          <input id="rv-email-to" type="text" placeholder="Select a project for recipients…" value="<%= sentEmail ? sentEmail.to : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-to">Copy</button>
+          <label for="hhsrs-to">To</label>
+          <input id="hhsrs-to" name="hhsrs-to" type="text" inputmode="email" autocomplete="off" placeholder="Select a project for recipients…" value="<%= sentEmail ? sentEmail.to : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-to">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-cc">Cc</label>
-          <input id="rv-email-cc" type="text" placeholder="optional" value="<%= sentEmail ? sentEmail.cc : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-cc">Copy</button>
+          <label for="hhsrs-cc">Cc</label>
+          <input id="hhsrs-cc" name="hhsrs-cc" type="text" inputmode="email" autocomplete="off" placeholder="optional" value="<%= sentEmail ? sentEmail.cc : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-cc">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-bcc">Bcc</label>
-          <input id="rv-email-bcc" type="text" placeholder="optional" value="<%= sentEmail ? sentEmail.bcc : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-bcc">Copy</button>
+          <label for="hhsrs-bcc">Bcc</label>
+          <input id="hhsrs-bcc" name="hhsrs-bcc" type="text" inputmode="email" autocomplete="off" placeholder="optional" value="<%= sentEmail ? sentEmail.bcc : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-bcc">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-subject">Subject</label>
-          <input id="rv-email-subject" type="text" placeholder="Subject" value="<%= sentEmail ? sentEmail.subject : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-subject">Copy</button>
+          <label for="hhsrs-subject">Subject</label>
+          <input id="hhsrs-subject" name="hhsrs-subject" type="text" autocomplete="off" placeholder="Subject" value="<%= sentEmail ? sentEmail.subject : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-subject">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-body">Body</label>
-          <textarea id="rv-email-body" placeholder="Draft email…" <%= sentEmail ? "readonly" : "" %>><%= sentEmail ? sentEmail.body : "" %></textarea>
-          <button type="button" class="btn-copy" data-copy="rv-email-body">Copy</button>
+          <label for="hhsrs-body">Body</label>
+          <textarea id="hhsrs-body" name="hhsrs-body" autocomplete="off" placeholder="Draft email…" <%= sentEmail ? "readonly" : "" %>><%= sentEmail ? sentEmail.body : "" %></textarea>
+          <button type="button" class="btn-copy" data-copy="hhsrs-body">Copy</button>
         </div>
         <div class="email-signature-block" id="rv-email-signature">
           <div class="signature-label" id="rv-signature-label">Signature</div>
@@ -403,7 +403,7 @@
 <% if (!sentEmail && !caseNotNeeded) { %>
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
-    <form id="rv-send-form" method="post" action="<%= isFilled ? reporterBase + '/review/' + row.id + '/send' : reporterBase + '/review/office-send' %>">
+    <form id="rv-send-form" autocomplete="off" method="post" action="<%= isFilled ? reporterBase + '/review/' + row.id + '/send' : reporterBase + '/review/office-send' %>">
       <div class="ck-head"><h2 id="ck-title">Check before sending</h2></div>
       <div class="ck-body" id="ck-body">
         <% if (sendConfig.testMode) { %>
@@ -417,11 +417,11 @@
         </label>
         <p class="ck-safe">Nothing is sent until you press Send and log.</p>
       </div>
-      <input type="hidden" name="to" id="rv-send-to" value="" />
-      <input type="hidden" name="cc" id="rv-send-cc" value="" />
-      <input type="hidden" name="bcc" id="rv-send-bcc" value="" />
-      <input type="hidden" name="subject" id="rv-send-subject" value="" />
-      <input type="hidden" name="body" id="rv-send-body" value="" />
+      <input type="hidden" name="to" id="rv-send-to" value="" autocomplete="off" />
+      <input type="hidden" name="cc" id="rv-send-cc" value="" autocomplete="off" />
+      <input type="hidden" name="bcc" id="rv-send-bcc" value="" autocomplete="off" />
+      <input type="hidden" name="subject" id="rv-send-subject" value="" autocomplete="off" />
+      <input type="hidden" name="body" id="rv-send-body" value="" autocomplete="off" />
       <div id="rv-send-photo-fields"></div>
       <div class="ck-foot">
         <button type="button" class="btn btn-back" id="ck-back">Go back</button>

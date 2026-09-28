@@ -47,7 +47,7 @@ export function clientEmailInputId(projectName: string, field: "to" | "cc" | "bc
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `client-email-${slug}-${field}`;
+  return `hhsrs-addr-${slug}-${field}`;
 }
 
 export function clientEmailChangedLine(changedAt: Date, changedByName: string): string {

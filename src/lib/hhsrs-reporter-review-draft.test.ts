@@ -104,11 +104,11 @@ function bootReview(opts: {
     return node;
   }
 
-  el("input", "rv-email-to");
-  el("input", "rv-email-cc");
-  el("input", "rv-email-bcc");
-  el("input", "rv-email-subject");
-  el("textarea", "rv-email-body");
+  el("input", "hhsrs-to");
+  el("input", "hhsrs-cc");
+  el("input", "hhsrs-bcc");
+  el("input", "hhsrs-subject");
+  el("textarea", "hhsrs-body");
   el("textarea", "rv-notes");
   el("select", "rv-project", { value: "Gateway 2026" });
   (ids["rv-project"].options as Array<{ value: string }>).push({ value: "Gateway 2026" });
@@ -241,19 +241,19 @@ describe("HHSRS review email draft restore", () => {
           project: "Gateway 2026",
           fields: { "rv-notes": "Typed site notes" },
           email: {
-            "rv-email-to": "kept-to@example.com",
-            "rv-email-cc": "kept-cc@example.com",
-            "rv-email-bcc": "kept-bcc@example.com",
-            "rv-email-subject": "Kept subject",
-            "rv-email-body": "Kept draft body",
+            "hhsrs-to": "kept-to@example.com",
+            "hhsrs-cc": "kept-cc@example.com",
+            "hhsrs-bcc": "kept-bcc@example.com",
+            "hhsrs-subject": "Kept subject",
+            "hhsrs-body": "Kept draft body",
           },
           caseDetailsLocked: false,
         },
       }),
     });
     const { ids, listeners } = bootReview({ storage, fetchImpl: pendingFetch });
-    assert.equal(ids["rv-email-body"].value, "Kept draft body");
-    assert.equal(ids["rv-email-bcc"].value, "kept-bcc@example.com");
+    assert.equal(ids["hhsrs-body"].value, "Kept draft body");
+    assert.equal(ids["hhsrs-bcc"].value, "kept-bcc@example.com");
     assert.equal(ids["rv-notes"].value, "Typed site notes");
     assert.equal(storage.getItem("undefined"), null);
     assert.equal(storage.getItem("hhsrs-review-last-key-v1"), "case-kept");
@@ -263,8 +263,8 @@ describe("HHSRS review email draft restore", () => {
     pagehide.forEach((listener) => listener.fn());
 
     const saved = JSON.parse(storage.getItem("hhsrs-review-drafts-v1") || "{}");
-    assert.equal(saved["case-kept"].email["rv-email-body"], "Kept draft body");
-    assert.equal(saved["case-kept"].email["rv-email-bcc"], "kept-bcc@example.com");
+    assert.equal(saved["case-kept"].email["hhsrs-body"], "Kept draft body");
+    assert.equal(saved["case-kept"].email["hhsrs-bcc"], "kept-bcc@example.com");
     assert.equal(saved["case-kept"].fields["rv-notes"], "Typed site notes");
     assert.equal(storage.getItem("undefined"), null);
   });
@@ -292,15 +292,15 @@ describe("HHSRS review email draft restore", () => {
     assert.ok(click);
     click.fn();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.equal(ids["rv-email-to"].value, "to@example.com");
-    assert.equal(ids["rv-email-cc"].value, "cc@example.com");
-    assert.equal(ids["rv-email-bcc"].value, "archive@example.com");
-    assert.equal(ids["rv-email-body"].value, "Generated body");
+    assert.equal(ids["hhsrs-to"].value, "to@example.com");
+    assert.equal(ids["hhsrs-cc"].value, "cc@example.com");
+    assert.equal(ids["hhsrs-bcc"].value, "archive@example.com");
+    assert.equal(ids["hhsrs-body"].value, "Generated body");
 
     draft = { ...draft, to: "next@example.com", cc: "", bcc: "", subject: "Next", body: "Next body" };
     click.fn();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.equal(ids["rv-email-to"].value, "next@example.com");
-    assert.equal(ids["rv-email-bcc"].value, "");
+    assert.equal(ids["hhsrs-to"].value, "next@example.com");
+    assert.equal(ids["hhsrs-bcc"].value, "");
   });
 });

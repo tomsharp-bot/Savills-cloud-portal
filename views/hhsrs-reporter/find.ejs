@@ -28,32 +28,34 @@
     <span class="find-status st-<%= selected.statusClass %>"><%= selected.statusLabel %></span>
   </div>
   <div class="panel-body find-body">
+    <form class="find-compose" autocomplete="off" onsubmit="return false;">
     <div class="find-split">
       <div>
         <div class="find-pair">
-          <label class="find-label" for="rv-email-to">To</label>
-          <input id="rv-email-to" type="text" value="<%= amend.to %>" autocomplete="off" />
+          <label class="find-label" for="hhsrs-to">To</label>
+          <input id="hhsrs-to" name="hhsrs-to" type="text" inputmode="email" autocomplete="off" value="<%= amend.to %>" />
         </div>
         <div class="find-pair">
-          <label class="find-label" for="rv-email-cc">Cc</label>
-          <input id="rv-email-cc" type="text" value="<%= amend.cc %>" autocomplete="off" />
+          <label class="find-label" for="hhsrs-cc">Cc</label>
+          <input id="hhsrs-cc" name="hhsrs-cc" type="text" inputmode="email" autocomplete="off" value="<%= amend.cc %>" />
         </div>
       </div>
       <div>
         <div class="find-pair">
-          <label class="find-label" for="rv-email-bcc">Bcc</label>
-          <input id="rv-email-bcc" type="text" value="<%= amend.bcc %>" autocomplete="off" />
+          <label class="find-label" for="hhsrs-bcc">Bcc</label>
+          <input id="hhsrs-bcc" name="hhsrs-bcc" type="text" inputmode="email" autocomplete="off" value="<%= amend.bcc %>" />
         </div>
         <div class="find-pair">
-          <label class="find-label" for="rv-email-subject">Subject</label>
-          <input id="rv-email-subject" type="text" value="<%= amend.subject %>" />
+          <label class="find-label" for="hhsrs-subject">Subject</label>
+          <input id="hhsrs-subject" name="hhsrs-subject" type="text" autocomplete="off" value="<%= amend.subject %>" />
         </div>
       </div>
     </div>
     <div class="find-pair">
-      <label class="find-label" for="rv-email-body">Body</label>
-      <textarea id="rv-email-body" rows="11"><%= amend.body %></textarea>
+      <label class="find-label" for="hhsrs-body">Body</label>
+      <textarea id="hhsrs-body" name="hhsrs-body" rows="11" autocomplete="off"><%= amend.body %></textarea>
     </div>
+    </form>
     <div class="email-signature-block" id="rv-email-signature">
       <div class="signature-label" id="rv-signature-label">Signature</div>
       <% if (typeof emailSignature !== "undefined" && emailSignature && emailSignature.missing) { %>
@@ -106,7 +108,7 @@
 
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
-    <form id="rv-send-form" method="post" action="<%= amend.action %>">
+    <form id="rv-send-form" autocomplete="off" method="post" action="<%= amend.action %>">
       <div class="ck-head"><h2 id="ck-title">Check before sending</h2></div>
       <div class="ck-body" id="ck-body">
         <% if (sendConfig.testMode) { %>
@@ -120,11 +122,11 @@
         </label>
         <p class="ck-safe">Nothing is sent until you press Send now.</p>
       </div>
-      <input type="hidden" name="to" id="rv-send-to" value="" />
-      <input type="hidden" name="cc" id="rv-send-cc" value="" />
-      <input type="hidden" name="bcc" id="rv-send-bcc" value="" />
-      <input type="hidden" name="subject" id="rv-send-subject" value="" />
-      <input type="hidden" name="body" id="rv-send-body" value="" />
+      <input type="hidden" name="to" id="rv-send-to" value="" autocomplete="off" />
+      <input type="hidden" name="cc" id="rv-send-cc" value="" autocomplete="off" />
+      <input type="hidden" name="bcc" id="rv-send-bcc" value="" autocomplete="off" />
+      <input type="hidden" name="subject" id="rv-send-subject" value="" autocomplete="off" />
+      <input type="hidden" name="body" id="rv-send-body" value="" autocomplete="off" />
       <input type="hidden" name="correctionReason" id="fr-send-reason" value="" />
       <input type="hidden" name="correctionNote" id="fr-send-note" value="" />
       <input type="hidden" name="q" value="<%= filters.q %>" />

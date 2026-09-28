@@ -296,7 +296,7 @@ describe("HHSRS Reporter auth and queue", () => {
       assert.match(page.body, /I've checked the details/);
       assert.doesNotMatch(page.body, /Mark as actioned/);
       assert.match(page.body, /btn-copy/);
-      assert.match(page.body, /<textarea id="rv-email-body"[^>]*>\s*<\/textarea>/);
+      assert.match(page.body, /<textarea id="hhsrs-body"[^>]*>\s*<\/textarea>/);
       assert.match(page.body, /case-photo-thumb/);
       assert.match(page.body, /photos\/lounge\.jpg/);
       assert.match(page.body, /id="rv-email-photos"[^>]*hidden/);
@@ -425,7 +425,7 @@ describe("HHSRS Reporter auth and queue", () => {
       const review = await request(app, "GET", `/HHSRSreporter/review/${waiting.id}`, { cookie: blockedCookie });
       assert.equal(review.status, 200);
       assert.match(review.body, /Abandon claim — return to pending/);
-      assert.match(review.body, /id="rv-email-bcc"/);
+      assert.match(review.body, /id="hhsrs-bcc"/);
       const pending = await request(app, "GET", "/HHSRSreporter", { cookie: blockedCookie });
       assert.match(pending.body, /Claimed — Phil Moon/);
       assert.match(pending.body, /data-photos=/);

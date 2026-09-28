@@ -17,7 +17,7 @@
   var reason = "";
   var error = $("fr-error");
   var note = $("fr-note");
-  var subject = $("rv-email-subject");
+  var subject = $("hhsrs-subject");
 
   function showError(message) {
     if (!error) return;
@@ -102,7 +102,7 @@
   var sendBtn = $("btn-send-email");
   if (sendBtn) {
     sendBtn.addEventListener("click", function (event) {
-      var to = $("rv-email-to");
+      var to = $("hhsrs-to");
       var toValue = to ? String(to.value || "").trim() : "";
       var noteValue = note ? String(note.value || "").trim() : "";
       var message = "";

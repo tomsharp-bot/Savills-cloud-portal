@@ -277,7 +277,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /value=""/);
     assert.match(pending, /photo-att-col/);
     assert.match(pending, /Review Case/);
-    assert.match(review, /id="rv-email-bcc"/);
+    assert.match(review, /id="hhsrs-bcc"/);
     assert.match(review, /id="btn-abandon-claim"/);
     assert.match(review, /id="rv-draft-status"/);
     assert.match(js, /skipDraft \|\| opts\.keepEmail/);
@@ -300,10 +300,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /function showPhotoPreview/);
     assert.match(js, /rv-photo-preview/);
     assert.match(css, /btn-photo-fallback/);
-    assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*300px/);
-    assert.match(css, /#rv-email-body\s*\{[^}]*resize:\s*vertical/);
-    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*align-self:\s*start/);
-    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*height:\s*42px/);
+    assert.match(css, /#hhsrs-body\s*\{[^}]*min-height:\s*300px/);
+    assert.match(css, /#hhsrs-body\s*\{[^}]*resize:\s*vertical/);
+    assert.match(css, /\[data-copy="hhsrs-body"\]\s*\{[^}]*align-self:\s*start/);
+    assert.match(css, /\[data-copy="hhsrs-body"\]\s*\{[^}]*height:\s*42px/);
   });
 
   it("paints the tool header as a full-width bar and leaves the navy top bar", () => {
@@ -455,6 +455,48 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
     assert.equal(testHousing.cc, "");
     assert.equal(testHousing.bcc, "");
+  });
+
+  it("turns browser autofill off on email compose fields", () => {
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const card = readFileSync("views/hhsrs-reporter/partials/client-email-card.ejs", "utf8");
+    function tagWithId(html: string, id: string): string {
+      const match = html.match(new RegExp(`<(?:input|textarea)\\b[^>]*\\bid="${id}"[^>]*>`));
+      assert.ok(match, `missing ${id}`);
+      return match[0];
+    }
+    for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"]) {
+      for (const html of [review, find]) {
+        const tag = tagWithId(html, id);
+        assert.match(tag, /autocomplete="off"/, id);
+        assert.match(tag, new RegExp(`name="${id}"`), id);
+        assert.doesNotMatch(tag, /type="email"/, id);
+      }
+    }
+    for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {
+      for (const html of [review, find]) {
+        const tag = tagWithId(html, id);
+        assert.match(tag, /type="text"/, id);
+        assert.match(tag, /inputmode="email"/, id);
+      }
+    }
+    assert.match(review, /id="rv-email-form"[^>]*autocomplete="off"/);
+    assert.match(review, /id="rv-send-form"[^>]*autocomplete="off"/);
+    assert.match(find, /class="find-compose"[^>]*autocomplete="off"/);
+    assert.match(find, /id="rv-send-form"[^>]*autocomplete="off"/);
+    for (const id of ["rv-send-to", "rv-send-cc", "rv-send-bcc", "rv-send-subject", "rv-send-body"]) {
+      assert.match(tagWithId(review, id), /autocomplete="off"/, id);
+      assert.match(tagWithId(find, id), /autocomplete="off"/, id);
+    }
+    assert.match(card, /class="client-email-row"[^>]*autocomplete="off"/);
+    for (const name of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {
+      const tag = card.match(new RegExp(`<textarea\\b[^>]*\\bname="${name}"[^>]*>`));
+      assert.ok(tag, name);
+      assert.match(tag[0], /autocomplete="off"/, name);
+      assert.match(tag[0], /inputmode="email"/, name);
+    }
+    assert.doesNotMatch(card, /name="to"|name="cc"|name="bcc"/);
   });
 
   it("declares review draft storage keys before restore runs", () => {

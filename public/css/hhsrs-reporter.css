@@ -1287,11 +1287,11 @@ a.linkish.active, .linkish.active {
   color: var(--success, #1b7a3d);
 }
 .email-form .field-with-copy textarea { min-height: 160px; }
-.hhsrs-reporter #rv-email-body {
+.hhsrs-reporter #hhsrs-body {
   min-height: 300px;
   resize: vertical;
 }
-.hhsrs-reporter .btn-copy[data-copy="rv-email-body"] {
+.hhsrs-reporter .btn-copy[data-copy="hhsrs-body"] {
   align-self: start;
   height: 42px;
 }
@@ -2524,6 +2524,7 @@ body.hhsrs-reporter {
 }
 .find-pick.is-on { background: #fde047; border-color: #eab308; }
 .find-pair { margin-bottom: 12px; }
+.find-compose { margin: 0; }
 .find-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .find-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
 .find-err { color: #b91c1c; font-weight: 700; font-size: 14px; margin: 0; }

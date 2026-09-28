@@ -993,11 +993,17 @@ hhsrsReporterRouter.post("/admin/site-form-access", async (req: Request, res: Re
   res.redirect(`${HHSRS_REPORTER_PATH}/admin`);
 });
 
+function postedAddressBox(body: unknown, key: string, legacy: string): string {
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (Object.prototype.hasOwnProperty.call(record, key)) return String(record[key] ?? "");
+  return String(record[legacy] ?? "");
+}
+
 hhsrsReporterRouter.post("/admin/client-emails", async (req: Request, res: Response) => {
   const projectName = String(req.body?.projectName ?? "");
-  const toText = String(req.body?.to ?? "");
-  const ccText = String(req.body?.cc ?? "");
-  const bccText = String(req.body?.bcc ?? "");
+  const toText = postedAddressBox(req.body, "hhsrs-to", "to");
+  const ccText = postedAddressBox(req.body, "hhsrs-cc", "cc");
+  const bccText = postedAddressBox(req.body, "hhsrs-bcc", "bcc");
   const name = String(req.user?.name || req.user?.username || "").trim();
   const result = await saveClientEmail({
     projectName,

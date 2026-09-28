@@ -274,14 +274,14 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
     let caseId = "";
     try {
       const outsider = await request(app, "POST", "/HHSRSreporter/admin/client-emails", {
-        body: formBody({ projectName: "Gateway 2026", to: "desk@client.test", cc: "", bcc: "" }),
+        body: formBody({ projectName: "Gateway 2026", "hhsrs-to": "desk@client.test", "hhsrs-cc": "", "hhsrs-bcc": "" }),
       });
       assert.equal(outsider.status, 302);
       assert.equal(outsider.location, "/login");
 
       const surveyor = await request(app, "POST", "/HHSRSreporter/admin/client-emails", {
         cookie: surveyorCookie,
-        body: formBody({ projectName: "Gateway 2026", to: "desk@client.test", cc: "", bcc: "" }),
+        body: formBody({ projectName: "Gateway 2026", "hhsrs-to": "desk@client.test", "hhsrs-cc": "", "hhsrs-bcc": "" }),
       });
       assert.equal(surveyor.status, 403);
       assert.match(surveyor.body, /Admin only/);
@@ -292,8 +292,9 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
       assert.match(page.body, /Client email addresses/);
       assert.match(page.body, /Choose a project/);
       assert.match(page.body, /One address per line, or commas/);
-      assert.match(page.body, /id="client-email-test-housing-to"[^>]*>cfarrell@savillshousing\.co\.uk<\/textarea>/);
-      assert.match(page.body, /id="client-email-gateway-2026-to"[^>]*>\s*<\/textarea>/);
+      assert.match(page.body, /autocomplete="off"[^>]*id="hhsrs-addr-test-housing-to"[^>]*>cfarrell@savillshousing\.co\.uk<\/textarea>/);
+      assert.match(page.body, /name="hhsrs-to"/);
+      assert.match(page.body, /id="hhsrs-addr-gateway-2026-to"[^>]*>\s*<\/textarea>/);
       assert.doesNotMatch(page.body, /Flagship 2026/);
       const closed = [...page.body.matchAll(/<form class="client-email-row"[^>]*>/g)].map((match) => match[0]);
       assert.ok(closed.length > 1);
@@ -304,14 +305,14 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
 
       const bad = await request(app, "POST", "/HHSRSreporter/admin/client-emails", {
         cookie,
-        body: formBody({ projectName: "Gateway 2026", to: "not-an-email", cc: "other@client.test", bcc: "" }),
+        body: formBody({ projectName: "Gateway 2026", "hhsrs-to": "not-an-email", "hhsrs-cc": "other@client.test", "hhsrs-bcc": "" }),
       });
       assert.equal(bad.status, 302);
       const badPage = await request(app, "GET", "/HHSRSreporter/admin", {
         cookie: bad.setCookie.length ? cookieHeader(bad.setCookie) : cookie,
       });
       assert.match(badPage.body, /Not a valid address: not-an-email\./);
-      assert.match(badPage.body, /id="client-email-gateway-2026-to"[^>]*>not-an-email<\/textarea>/);
+      assert.match(badPage.body, /id="hhsrs-addr-gateway-2026-to"[^>]*>not-an-email<\/textarea>/);
       assert.match(badPage.body, /<option value="Gateway 2026" selected>/);
       const badForms = [...badPage.body.matchAll(/<form class="client-email-row"[^>]*>/g)].map((match) => match[0]);
       const badOpen = badForms.filter((tag) => !/\shidden/.test(tag));
@@ -321,7 +322,7 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
 
       const unknown = await request(app, "POST", "/HHSRSreporter/admin/client-emails", {
         cookie,
-        body: formBody({ projectName: "Nope Housing", to: "desk@client.test", cc: "", bcc: "" }),
+        body: formBody({ projectName: "Nope Housing", "hhsrs-to": "desk@client.test", "hhsrs-cc": "", "hhsrs-bcc": "" }),
       });
       const unknownPage = await request(app, "GET", "/HHSRSreporter/admin", {
         cookie: unknown.setCookie.length ? cookieHeader(unknown.setCookie) : cookie,
@@ -332,9 +333,9 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
         cookie,
         body: formBody({
           projectName: "Gateway 2026",
-          to: "desk@client.test",
-          cc: "other@client.test, third@client.test",
-          bcc: "bcc@client.test",
+          "hhsrs-to": "desk@client.test",
+          "hhsrs-cc": "other@client.test, third@client.test",
+          "hhsrs-bcc": "bcc@client.test",
         }),
       });
       assert.equal(saved.status, 302);

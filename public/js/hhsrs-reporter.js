@@ -160,7 +160,7 @@
   var DRAG_HINT = "Drag a photo into your email draft. If that doesn’t work, download the photo.";
 
   function clearEmailDraft() {
-    ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+    ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"].forEach(function (id) {
       var el = $(id);
       if (!el) return;
       el.value = "";
@@ -610,11 +610,11 @@
   }
 
   function fillDraftFields(draft) {
-    var toEl = $("rv-email-to");
-    var ccEl = $("rv-email-cc");
-    var bccEl = $("rv-email-bcc");
-    var subEl = $("rv-email-subject");
-    var bodyEl = $("rv-email-body");
+    var toEl = $("hhsrs-to");
+    var ccEl = $("hhsrs-cc");
+    var bccEl = $("hhsrs-bcc");
+    var subEl = $("hhsrs-subject");
+    var bodyEl = $("hhsrs-body");
     if (toEl) toEl.value = draft.to || "";
     if (ccEl) ccEl.value = draft.cc || "";
     if (bccEl) bccEl.value = draft.bcc || "";
@@ -658,7 +658,7 @@
           if (note) note.textContent = (data && data.error) || "Could not prepare the client email.";
           return;
         }
-        ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+        ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"].forEach(function (id) {
           var el = $(id);
           if (el) delete el.dataset.userEdited;
         });
@@ -734,12 +734,12 @@
   var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
   var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
   var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-status", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
-  var REVIEW_EMAIL_FIELD_IDS = ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"];
+  var REVIEW_EMAIL_FIELD_IDS = ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"];
   var reviewDraftSaveTimer = null;
   var resumeCleared = false;
   var skipDraftSave = false;
 
-  ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+  ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"].forEach(function (id) {
     var el = $(id);
     if (!el) return;
     el.addEventListener("input", function () {
@@ -754,7 +754,7 @@
   var projectSel = $("rv-project");
   if (projectSel && !reviewLeavingForResume) {
     projectSel.addEventListener("change", function () {
-      ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
+      ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"].forEach(function (id) {
         var el = $(id);
         if (el) delete el.dataset.userEdited;
       });
@@ -782,7 +782,7 @@
     caseLocked = false;
     syncCaseLock();
   }
-  if (!reviewLeavingForResume && $("rv-email-body")) restoreReviewDraft(reviewDraftKey());
+  if (!reviewLeavingForResume && $("hhsrs-body")) restoreReviewDraft(reviewDraftKey());
 
   var generateBtn = $("btn-generate-email");
   if (generateBtn) generateBtn.addEventListener("click", generateEmail);
@@ -1256,7 +1256,7 @@
 
   function saveReviewDraftNow() {
     reviewDraftSaveTimer = null;
-    if (skipDraftSave || !$("rv-email-body") || (cfg.send && cfg.send.sent)) return;
+    if (skipDraftSave || !$("hhsrs-body") || (cfg.send && cfg.send.sent)) return;
     var key = reviewDraftKey();
     if (!resumeCleared) setReviewLastKey(key);
     var draft = collectReviewDraft();
@@ -1272,7 +1272,7 @@
   }
 
   function scheduleReviewDraftSave() {
-    if (!$("rv-email-body") || resumeCleared) return;
+    if (!$("hhsrs-body") || resumeCleared) return;
     if (reviewDraftSaveTimer) clearTimeout(reviewDraftSaveTimer);
     reviewDraftSaveTimer = setTimeout(saveReviewDraftNow, 180);
   }
@@ -1308,7 +1308,7 @@
       return false;
     }
     var draft = readReviewDrafts()[key];
-    if (!draft || !$("rv-email-body")) {
+    if (!draft || !$("hhsrs-body")) {
       setReviewDraftStatus(false);
       return false;
     }
@@ -1345,7 +1345,7 @@
   }
 
   function initReviewResume() {
-    if (!$("rv-email-body")) return false;
+    if (!$("hhsrs-body")) return false;
     var compose = /(?:\?|&)compose=1(?:&|$)/.test(window.location.search);
     if (compose) {
       clearResumeKey();
@@ -1369,7 +1369,7 @@
   }
 
   function wireReviewDraftPersistence() {
-    if (!$("rv-email-body")) return;
+    if (!$("hhsrs-body")) return;
     REVIEW_CASE_FIELD_IDS.forEach(function (id) {
       var el = $(id);
       if (!el) return;
@@ -1595,9 +1595,9 @@
     }
     var badge = $("rv-email-badge");
     var generated = emailGenerated || (badge && /generated/i.test(badge.textContent || ""));
-    var to = ($("rv-email-to") && String($("rv-email-to").value || "").trim()) || "";
-    var subject = ($("rv-email-subject") && String($("rv-email-subject").value || "").trim()) || "";
-    var body = ($("rv-email-body") && String($("rv-email-body").value || "")) || "";
+    var to = ($("hhsrs-to") && String($("hhsrs-to").value || "").trim()) || "";
+    var subject = ($("hhsrs-subject") && String($("hhsrs-subject").value || "").trim()) || "";
+    var body = ($("hhsrs-body") && String($("hhsrs-body").value || "")) || "";
     var over = attachmentBytes() > (cfg.send.maxBytes || 20 * 1024 * 1024);
     line.hidden = false;
     if (over) {
@@ -1661,7 +1661,7 @@
     var btn = $("btn-send-email");
     var list = $("rv-attach-list");
     if (list) list.addEventListener("change", function () { updateAttachCount(); syncSendButton(); });
-    ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body", "rv-project", "rv-address", "rv-uprn", "rv-hazard", "rv-rating"].forEach(function (id) {
+    ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body", "rv-project", "rv-address", "rv-uprn", "rv-hazard", "rv-rating"].forEach(function (id) {
       var el = $(id);
       if (!el) return;
       el.addEventListener("input", syncSendButton);
@@ -1712,12 +1712,12 @@
       if (test) h += test.outerHTML;
       h += "<dl class=\"ck-list\">";
       h += "<dt>From</dt><dd class=\"ck-from\">" + esc(cfg.send && cfg.send.fromLine) + "</dd>";
-      h += "<dt>To</dt><dd>" + esc(val("rv-email-to")) + "</dd>";
-      if (val("rv-email-cc")) h += "<dt>Cc</dt><dd>" + esc(val("rv-email-cc")) + "</dd>";
-      if (val("rv-email-bcc")) h += "<dt>Bcc</dt><dd>" + esc(val("rv-email-bcc")) + "</dd>";
-      h += "<dt>Subject</dt><dd>" + (val("rv-email-subject") ? esc(val("rv-email-subject")) : "(no subject)") + "</dd>";
+      h += "<dt>To</dt><dd>" + esc(val("hhsrs-to")) + "</dd>";
+      if (val("hhsrs-cc")) h += "<dt>Cc</dt><dd>" + esc(val("hhsrs-cc")) + "</dd>";
+      if (val("hhsrs-bcc")) h += "<dt>Bcc</dt><dd>" + esc(val("hhsrs-bcc")) + "</dd>";
+      h += "<dt>Subject</dt><dd>" + (val("hhsrs-subject") ? esc(val("hhsrs-subject")) : "(no subject)") + "</dd>";
       h += "</dl>";
-      var bodyEl = $("rv-email-body");
+      var bodyEl = $("hhsrs-body");
       var body = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
       h += "<div class=\"ck-text\" tabindex=\"0\" aria-label=\"Email text\">" + esc(body || "(empty)") + "</div>";
       var sig = $("rv-signature-preview");
@@ -1787,11 +1787,11 @@
         fd.append("surveyor", val("rv-surveyor"));
         fd.append("surveyDate", val("rv-survey-date"));
         fd.append("notes", val("rv-notes"));
-        fd.append("to", val("rv-email-to"));
-        fd.append("cc", val("rv-email-cc"));
-        fd.append("bcc", val("rv-email-bcc"));
-        fd.append("subject", val("rv-email-subject"));
-        var draftBody = $("rv-email-body");
+        fd.append("to", val("hhsrs-to"));
+        fd.append("cc", val("hhsrs-cc"));
+        fd.append("bcc", val("hhsrs-bcc"));
+        fd.append("subject", val("hhsrs-subject"));
+        var draftBody = $("hhsrs-body");
         fd.append("body", draftBody ? String(draftBody.value || "").replace(/\s+$/, "") : "");
         casePhotos.forEach(function (photo) {
           if (photo && photo.blob) fd.append("photos", photo.blob, photo.name || "photo.jpg");
@@ -1816,11 +1816,11 @@
         });
         return;
       }
-      $("rv-send-to").value = val("rv-email-to");
-      $("rv-send-cc").value = val("rv-email-cc");
-      $("rv-send-bcc").value = val("rv-email-bcc");
-      $("rv-send-subject").value = val("rv-email-subject");
-      var bodyEl = $("rv-email-body");
+      $("rv-send-to").value = val("hhsrs-to");
+      $("rv-send-cc").value = val("hhsrs-cc");
+      $("rv-send-bcc").value = val("hhsrs-bcc");
+      $("rv-send-subject").value = val("hhsrs-subject");
+      var bodyEl = $("hhsrs-body");
       $("rv-send-body").value = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
       var holder = $("rv-send-photo-fields");
       holder.innerHTML = "";

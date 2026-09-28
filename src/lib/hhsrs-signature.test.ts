@@ -133,7 +133,7 @@ describe("HHSRS email signature", () => {
   it("shows the signature under the body on the review page and the check screen", () => {
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
-    const bodyAt = review.indexOf('id="rv-email-body"');
+    const bodyAt = review.indexOf('id="hhsrs-body"');
     const sigAt = review.indexOf('id="rv-signature-preview"');
     const attachAt = review.indexOf('id="rv-attach-block"');
     assert.ok(bodyAt > 0 && sigAt > bodyAt, "signature follows the body");
