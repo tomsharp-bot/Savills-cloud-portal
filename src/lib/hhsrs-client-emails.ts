@@ -1,12 +1,30 @@
 /**
  * Office-edited To / Cc / Bcc for HHSRS Reporter projects.
  * A saved row wins, including a saved empty To. No row falls back to the roster lists in code.
+ *
+ * The row key is the live Project.name a submission stores. Roster labels such as
+ * "LFHA (Leeds)" are not keys. Leeds Fed HA 2026 still uses the LFHA roster for
+ * the email template; the address row is "Leeds Fed HA 2026".
  */
 import { prisma } from "./prisma.js";
-import { REPORTER_DEMO_PROJECTS, matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { resolveHhsrsProject, type ReporterProjectDemo } from "./hhsrs-reporter-projects.js";
+import { loadPortalProjectNames } from "./hhsrs-portal-projects.js";
 import { emailRecipientsFromProject } from "./hhsrs-reporter.js";
 import { isValidEmailAddress } from "./hhsrs-send.js";
 import { formatAccessDay } from "./hhsrs-site-access.js";
+
+export type ResolvedClientEmailProject = {
+  /** HhsrsClientEmail.projectName. The portal Project.name submissions use. */
+  key: string;
+  /** Roster email settings (template lists). Null when the name matches no roster. */
+  roster: ReporterProjectDemo | null;
+};
+
+/** Address-row key for a submission. Same resolver as templates, calls, and reference codes. */
+export function resolveClientEmailProject(projectName: string): ResolvedClientEmailProject {
+  const resolved = resolveHhsrsProject(projectName);
+  return { key: resolved.name, roster: resolved.roster };
+}
 
 export type ClientEmailDraft = { to: string; cc: string; bcc: string };
 
@@ -47,7 +65,7 @@ export function clientEmailInputId(projectName: string, field: "to" | "cc" | "bc
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `client-email-${slug}-${field}`;
+  return `hhsrs-addr-${slug}-${field}`;
 }
 
 export function clientEmailChangedLine(changedAt: Date, changedByName: string): string {
@@ -85,13 +103,13 @@ function boxFromList(values: readonly string[] | null | undefined): string {
   return (values || []).map((value) => value.trim()).filter(Boolean).join("\n");
 }
 
-/** Saved row wins. No row uses the roster lists. */
+/** Saved row wins. No row uses the roster lists for that same resolved project. */
 export function recipientsFromStoredOrCode(
   projectName: string,
   row: { toAddresses: string; ccAddresses: string; bccAddresses: string } | null | undefined
 ): ClientEmailDraft {
-  const matched = matchDemoProject(projectName);
-  if (!row) return emailRecipientsFromProject(matched);
+  const { roster } = resolveClientEmailProject(projectName);
+  if (!row) return emailRecipientsFromProject(roster);
   return emailRecipientsFromProject({
     to: storedLines(row.toAddresses),
     cc: storedLines(row.ccAddresses),
@@ -150,17 +168,27 @@ export async function loadClientEmailRows(): Promise<ClientEmailRow[]> {
   return prisma.hhsrsClientEmail.findMany({ orderBy: { projectName: "asc" } });
 }
 
+/** Current portal projects, the same names the site form dropdown uses. */
+export async function loadClientEmailProjects(): Promise<
+  { name: string; to: readonly string[]; cc: readonly string[]; bcc?: readonly string[] }[]
+> {
+  const names = await loadPortalProjectNames();
+  return names.map((name) => {
+    const { roster } = resolveClientEmailProject(name);
+    return { name, to: roster?.to ?? [], cc: roster?.cc ?? [], bcc: roster?.bcc };
+  });
+}
+
 export async function loadClientEmailCards(flash: ClientEmailFlash | null): Promise<ClientEmailCard[]> {
-  const rows = await loadClientEmailRows();
-  return buildClientEmailCards(REPORTER_DEMO_PROJECTS, rows, flash);
+  const [projects, rows] = await Promise.all([loadClientEmailProjects(), loadClientEmailRows()]);
+  return buildClientEmailCards(projects, rows, flash);
 }
 
 export async function clientRecipientsForProject(projectName: string): Promise<ClientEmailDraft> {
-  const matched = matchDemoProject(projectName);
-  const key = matched?.name || projectName.trim();
+  const { key } = resolveClientEmailProject(projectName);
   if (!key) return { to: "", cc: "", bcc: "" };
   const row = await prisma.hhsrsClientEmail.findUnique({ where: { projectName: key } });
-  return recipientsFromStoredOrCode(key, row);
+  return recipientsFromStoredOrCode(projectName, row);
 }
 
 export async function saveClientEmail(input: {
@@ -169,10 +197,12 @@ export async function saveClientEmail(input: {
   ccRaw: string;
   bccRaw: string;
   changedByName: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
-  const projectName = input.projectName.trim();
-  const project = REPORTER_DEMO_PROJECTS.find((item) => item.name === projectName);
+}): Promise<{ ok: true; projectName: string } | { ok: false; error: string }> {
+  const posted = String(input.projectName || "").trim();
+  const projects = await loadClientEmailProjects();
+  const project = projects.find((item) => item.name.toLowerCase() === posted.toLowerCase());
   if (!project) return { ok: false, error: "Unknown project." };
+  const projectName = project.name;
 
   const to = parseAddressBox(input.toRaw);
   if (!to.ok) return to;
@@ -193,5 +223,5 @@ export async function saveClientEmail(input: {
     create: { projectName, ...data },
     update: data,
   });
-  return { ok: true };
+  return { ok: true, projectName };
 }

@@ -1,10 +1,15 @@
 /**
  * Loads a case's site-form photos and sends one email inside a row lock.
  * Person-initiated only. Called from the Review send route.
+ *
+ * The sent-email row and the case update are one SQL statement. Postgres
+ * cannot keep the email without moving the case out of Pending.
  */
-import type { HhsrsSiteSubmission } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { Prisma, type HhsrsSiteSubmission, type Prisma as PrismaTypes } from "@prisma/client";
+import { closeOpenSubmissionFromEarliestEmail } from "./hhsrs-close-sent.js";
 import { prisma } from "./prisma.js";
-import { photoNames } from "./hhsrs-reporter.js";
+import { isActionedStatus, photoNames } from "./hhsrs-reporter.js";
 import {
   readSiteFormPhotoBytes,
   siteFormPhotoKey,
@@ -18,10 +23,12 @@ import {
   isTickChecked,
   smtpPasswordSet,
   type OutboundAttachment,
+  type OutboundEmail,
   type SendCommit,
   type SentEmailRecord,
 } from "./hhsrs-send.js";
 import { appendToSentFolder, sendMailboxMessage } from "./hhsrs-send-transport.js";
+import { correctionSubject, validateCorrection } from "./hhsrs-find.js";
 
 export function contentTypeFor(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
@@ -106,6 +113,10 @@ function toRecord(row: {
   messageId: string;
   sentCopySaved: boolean;
   sentCopyError: string;
+  kind?: string;
+  correctionReason?: string;
+  correctionNote?: string;
+  correctsEmailId?: string | null;
 }): SentEmailRecord {
   const photoNames = Array.isArray(row.photoNames) ? row.photoNames.map(String) : [];
   return {
@@ -123,7 +134,19 @@ function toRecord(row: {
     messageId: row.messageId,
     sentCopySaved: row.sentCopySaved,
     sentCopyError: row.sentCopyError,
+    kind: row.kind || "original",
+    correctionReason: row.correctionReason || "",
+    correctionNote: row.correctionNote || "",
+    correctsEmailId: row.correctsEmailId || null,
   };
+}
+
+export async function listSentEmails(submissionId: string): Promise<SentEmailRecord[]> {
+  const rows = await prisma.hhsrsSentEmail.findMany({
+    where: { submissionId },
+    orderBy: { sentAt: "asc" },
+  });
+  return rows.map(toRecord);
 }
 
 export async function latestSentEmail(submissionId: string): Promise<SentEmailRecord | null> {
@@ -134,15 +157,172 @@ export async function latestSentEmail(submissionId: string): Promise<SentEmailRe
   return row ? toRecord(row) : null;
 }
 
+/** The first portal send. A correction does not replace this row. */
+export async function originalSentEmail(submissionId: string): Promise<SentEmailRecord | null> {
+  const rows = await listSentEmails(submissionId);
+  return rows.find((row) => row.kind !== "correction") || rows[0] || null;
+}
+
+export type CaseEmailTransport = {
+  sendMail: (mail: OutboundEmail) => Promise<{ messageId: string; raw: Buffer }>;
+  appendToSent: (raw: Buffer) => Promise<void>;
+};
+
+type Tx = PrismaTypes.TransactionClient;
+
+const SENT_EMAIL_RETURNING = Prisma.sql`
+  RETURNING
+    "id", "submissionId", "sentAt", "sentBy", "from", "to", "cc", "bcc",
+    "subject", "body", "photoNames", "messageId", "sentCopySaved", "sentCopyError",
+    "kind", "correctionReason", "correctionNote", "correctsEmailId"
+`;
+
+async function earliestSentEmail(tx: Tx, submissionId: string) {
+  return tx.hhsrsSentEmail.findFirst({
+    where: { submissionId },
+    orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+  });
+}
+
+/**
+ * Insert the original send only when the case update matches.
+ * One statement, so a saved email cannot leave the case in Pending.
+ */
+async function insertOriginalAndClose(tx: Tx, submissionId: string, commit: SendCommit): Promise<SentEmailRecord> {
+  const id = randomUUID();
+  const rows = await tx.$queryRaw<Array<Parameters<typeof toRecord>[0]>>`
+    WITH updated AS (
+      UPDATE "HhsrsSiteSubmission"
+      SET
+        "status" = 'email_sent',
+        "emailSentAt" = ${commit.sentAt},
+        "emailSentBy" = ${commit.sentBy},
+        "emailSubject" = ${commit.subject},
+        "emailBody" = ${commit.body},
+        "lastEditedBy" = ${commit.sentBy},
+        "claimedBy" = '',
+        "claimedAt" = NULL,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${submissionId}
+        AND "emailSentAt" IS NULL
+        AND "status" IS DISTINCT FROM 'not_needed'
+      RETURNING "id"
+    )
+    INSERT INTO "HhsrsSentEmail" (
+      "id", "submissionId", "sentAt", "sentBy", "from", "to", "cc", "bcc",
+      "subject", "body", "photoNames", "messageId", "sentCopySaved", "sentCopyError",
+      "kind", "correctionReason", "correctionNote", "correctsEmailId"
+    )
+    SELECT
+      ${id},
+      ${submissionId},
+      ${commit.sentAt},
+      ${commit.sentBy},
+      ${commit.from},
+      ${commit.to},
+      ${commit.cc},
+      ${commit.bcc},
+      ${commit.subject},
+      ${commit.body},
+      CAST(${JSON.stringify(commit.photoNames)} AS jsonb),
+      ${commit.messageId},
+      ${commit.sentCopySaved},
+      ${commit.sentCopyError},
+      'original',
+      '',
+      '',
+      NULL
+    FROM updated
+    ${SENT_EMAIL_RETURNING}
+  `;
+  const created = rows[0];
+  if (!created) throw new PortalSendError("Already sent. Can't be sent again.");
+  return toRecord(created);
+}
+
+/** Insert a correction and mark the case corrected in the same statement. */
+async function insertCorrectionAndClose(
+  tx: Tx,
+  submissionId: string,
+  commit: SendCommit,
+  anchor: { id: string; sentAt: Date; sentBy: string; subject: string; body: string },
+  correction: { reason: string; note: string }
+): Promise<SentEmailRecord> {
+  const id = randomUUID();
+  const rows = await tx.$queryRaw<Array<Parameters<typeof toRecord>[0]>>`
+    WITH updated AS (
+      UPDATE "HhsrsSiteSubmission"
+      SET
+        "status" = 'corrected',
+        "emailSentAt" = COALESCE("emailSentAt", ${anchor.sentAt}),
+        "emailSentBy" = CASE WHEN btrim("emailSentBy") <> '' THEN "emailSentBy" ELSE ${anchor.sentBy} END,
+        "emailSubject" = CASE WHEN btrim("emailSubject") <> '' THEN "emailSubject" ELSE ${anchor.subject} END,
+        "emailBody" = CASE WHEN btrim("emailBody") <> '' THEN "emailBody" ELSE ${anchor.body} END,
+        "lastEditedBy" = ${commit.sentBy},
+        "claimedBy" = '',
+        "claimedAt" = NULL,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${submissionId}
+      RETURNING "id"
+    )
+    INSERT INTO "HhsrsSentEmail" (
+      "id", "submissionId", "sentAt", "sentBy", "from", "to", "cc", "bcc",
+      "subject", "body", "photoNames", "messageId", "sentCopySaved", "sentCopyError",
+      "kind", "correctionReason", "correctionNote", "correctsEmailId"
+    )
+    SELECT
+      ${id},
+      ${submissionId},
+      ${commit.sentAt},
+      ${commit.sentBy},
+      ${commit.from},
+      ${commit.to},
+      ${commit.cc},
+      ${commit.bcc},
+      ${commit.subject},
+      ${commit.body},
+      CAST(${JSON.stringify(commit.photoNames)} AS jsonb),
+      ${commit.messageId},
+      ${commit.sentCopySaved},
+      ${commit.sentCopyError},
+      'correction',
+      ${correction.reason.trim()},
+      ${correction.note.trim()},
+      ${anchor.id}
+    FROM updated
+    ${SENT_EMAIL_RETURNING}
+  `;
+  const created = rows[0];
+  if (!created) throw new PortalSendError("Case not found.");
+  return toRecord(created);
+}
+
 export async function sendCaseEmail(args: {
   row: HhsrsSiteSubmission;
   sentBy: string;
   hasReporterAccess: boolean;
+  /** Signature name. The portal send appends it. Empty when no name is on file. */
   senderFirstName?: string;
   senderFullName?: string;
   body: Record<string, unknown>;
   storage?: SitePhotoStorage;
+  /** Set for Amend & resend. Uses the same portal send; does not rewrite the original. */
+  correction?: { reason: string; note: string };
+  transport?: CaseEmailTransport;
 }): Promise<{ ok: true; warning: string } | { ok: false; error: string }> {
+  const correction = args.correction;
+  if (!correction && args.row.status === "not_needed") {
+    return {
+      ok: false,
+      error: "This case is in Duplicates & errors. Move it back to Pending before sending.",
+    };
+  }
+  const to = String(args.body.to ?? "");
+  if (correction) {
+    const checked = validateCorrection({ reason: correction.reason, note: correction.note, to });
+    if (!checked.ok) return checked;
+  }
+
   const known = casePhotoFileNames(args.row.photoPaths);
   const requested = postedValues(args.body.photo);
   const sizes = new Map<string, number | null>();
@@ -157,18 +337,20 @@ export async function sendCaseEmail(args: {
   const attachments = built.attachments;
 
   const submissionId = args.row.id;
+  const subject = correction ? correctionSubject(String(args.body.subject ?? "")) : String(args.body.subject ?? "");
+  const transport = args.transport || { sendMail: sendMailboxMessage, appendToSent: appendToSentFolder };
   return deliverPortalEmail(
     {
       submissionId,
       sentBy: args.sentBy,
       hasReporterAccess: args.hasReporterAccess,
       passwordSet: smtpPasswordSet(),
-      alreadySent: Boolean(args.row.emailSentAt),
+      alreadySent: correction ? false : Boolean(args.row.emailSentAt),
       checked: isTickChecked(args.body.checked),
-      to: String(args.body.to ?? ""),
+      to,
       cc: String(args.body.cc ?? ""),
       bcc: String(args.body.bcc ?? ""),
-      subject: String(args.body.subject ?? ""),
+      subject,
       body: String(args.body.body ?? ""),
       senderFirstName: args.senderFirstName,
       senderFullName: args.senderFullName,
@@ -178,57 +360,45 @@ export async function sendCaseEmail(args: {
       totalBytes: picked.totalBytes,
     },
     {
-      sendMail: sendMailboxMessage,
-      appendToSent: appendToSentFolder,
+      sendMail: transport.sendMail,
+      appendToSent: transport.appendToSent,
       exclusive: async (run) => {
-        try {
-          return await prisma.$transaction(
-            async (tx) => {
-              const locked = await tx.$queryRaw<Array<{ emailSentAt: Date | null }>>`
-                SELECT "emailSentAt" FROM "HhsrsSiteSubmission" WHERE "id" = ${submissionId} FOR UPDATE
-              `;
-              if (!locked.length) throw new PortalSendError("Case not found.");
-              if (locked[0].emailSentAt) throw new PortalSendError("Already sent. Can't be sent again.");
+        const record = await prisma.$transaction(
+          async (tx) => {
+            const locked = await tx.$queryRaw<Array<{ emailSentAt: Date | null; status: string }>>`
+              SELECT "emailSentAt", "status" FROM "HhsrsSiteSubmission" WHERE "id" = ${submissionId} FOR UPDATE
+            `;
+            if (!locked.length) throw new PortalSendError("Case not found.");
+            if (!correction && locked[0].status === "not_needed") {
+              throw new PortalSendError(
+                "This case is in Duplicates & errors. Move it back to Pending before sending."
+              );
+            }
+            if (correction) {
+              const anchor = await earliestSentEmail(tx, submissionId);
+              if (!anchor) throw new PortalSendError("Not sent yet.");
               const commit: SendCommit = await run();
-              const updated = await tx.hhsrsSiteSubmission.updateMany({
-                where: { id: submissionId, emailSentAt: null },
-                data: {
-                  status: "email_sent",
-                  emailSentAt: commit.sentAt,
-                  emailSentBy: commit.sentBy,
-                  emailSubject: commit.subject,
-                  emailBody: commit.body,
-                  lastEditedBy: commit.sentBy,
-                  claimedBy: "",
-                  claimedAt: null,
-                },
-              });
-              if (updated.count !== 1) throw new PortalSendError("Already sent. Can't be sent again.");
-              const created = await tx.hhsrsSentEmail.create({
-                data: {
-                  submissionId,
-                  sentAt: commit.sentAt,
-                  sentBy: commit.sentBy,
-                  from: commit.from,
-                  to: commit.to,
-                  cc: commit.cc,
-                  bcc: commit.bcc,
-                  subject: commit.subject,
-                  body: commit.body,
-                  photoNames: commit.photoNames,
-                  messageId: commit.messageId,
-                  sentCopySaved: commit.sentCopySaved,
-                  sentCopyError: commit.sentCopyError,
-                },
-              });
-              return toRecord(created);
-            },
-            { maxWait: 15_000, timeout: 60_000 }
-          );
-        } catch (err) {
-          if (err instanceof PortalSendError) throw err;
-          throw err;
+              return insertCorrectionAndClose(tx, submissionId, commit, anchor, correction);
+            }
+            if (locked[0].emailSentAt) throw new PortalSendError("Already sent. Can't be sent again.");
+            const existing = await earliestSentEmail(tx, submissionId);
+            if (existing) {
+              await closeOpenSubmissionFromEarliestEmail(tx, submissionId);
+              return toRecord(existing);
+            }
+            const commit: SendCommit = await run();
+            return insertOriginalAndClose(tx, submissionId, commit);
+          },
+          { maxWait: 15_000, timeout: 60_000 }
+        );
+        const fresh = await prisma.hhsrsSiteSubmission.findUnique({
+          where: { id: submissionId },
+          select: { status: true, emailSentAt: true },
+        });
+        if (fresh && (!fresh.emailSentAt || !isActionedStatus(fresh.status))) {
+          await closeOpenSubmissionFromEarliestEmail(prisma, submissionId);
         }
+        return record;
       },
     }
   );

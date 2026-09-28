@@ -1,0 +1,147 @@
+<%- include("partials/layout-open") %>
+<%
+  const rows = Array.isArray(cases) ? cases : [];
+  const openCase = rows.find((item) => item.id === openId) || null;
+  const dash = "–";
+%>
+
+<div class="dup-page">
+  <div class="ml-headbar">
+    <div>
+      <h1>Duplicates &amp; errors</h1>
+      <p class="dup-lead">Cases here were not sent. They are not in the Main Log.</p>
+    </div>
+  </div>
+
+  <div class="ml-card">
+    <form class="ml-filters" method="get" action="<%= reporterBase %>/duplicates">
+      <div class="ml-f ml-search">
+        <label for="dup-q">Search</label>
+        <input id="dup-q" name="q" type="search" value="<%= filters.q %>" placeholder="Reference, UPRN or address" autocomplete="off" />
+      </div>
+      <div class="ml-f">
+        <label for="dup-project">Project</label>
+        <select id="dup-project" name="project">
+          <option value="">All projects</option>
+          <% projectNames.forEach((name) => { %>
+            <option value="<%= name %>" <%= filters.project === name ? "selected" : "" %>><%= name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="ml-f">
+        <label for="dup-reason">Reason</label>
+        <select id="dup-reason" name="reason">
+          <option value="">All reasons</option>
+          <% reasons.forEach((item) => { %>
+            <option value="<%= item.id %>" <%= filters.reason === item.id ? "selected" : "" %>><%= item.label %></option>
+          <% }) %>
+        </select>
+      </div>
+      <button type="submit" class="ml-submit">Search</button>
+    </form>
+    <div class="ml-bar">
+      <div class="ml-count">Showing <%= rows.length %> <%= rows.length === 1 ? "case" : "cases" %></div>
+    </div>
+    <div class="ml-table-wrap">
+      <table class="ml-table dup-table">
+        <thead>
+          <tr>
+            <th>Moved</th>
+            <th>Ref</th>
+            <th>Project</th>
+            <th>UPRN</th>
+            <th>Address</th>
+            <th>Hazard</th>
+            <th>Reason</th>
+            <th>Duplicate of</th>
+            <th>Note</th>
+            <th>Moved by</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!rows.length) { %>
+            <tr><td class="ml-empty" colspan="10">No cases.</td></tr>
+          <% } %>
+          <% rows.forEach((item) => { %>
+            <tr class="dup-row <%= openCase && openCase.id === item.id ? "is-open" : "" %>" data-dup-id="<%= item.id %>" tabindex="0">
+              <td class="dup-when"><%= item.movedDate || dash %><% if (item.movedTime) { %><span><%= item.movedTime %></span><% } %></td>
+              <td><% if (item.reference) { %><span class="ref-chip"><%= item.reference %></span><% } else { %><%= dash %><% } %></td>
+              <td><%= item.projectName %></td>
+              <td><%= item.uprn || dash %></td>
+              <td><%= item.addressLine || dash %></td>
+              <td><%= item.hazard || dash %></td>
+              <td><% if (item.reasonLabel) { %><span class="dup-tag dup-tag-<%= item.reason %>"><%= item.reasonLabel %></span><% } else { %><%= dash %><% } %></td>
+              <td>
+                <% if (item.duplicateOf && item.duplicateOfId) { %>
+                  <a class="ref-chip" href="<%= reporterBase %>/review/<%= item.duplicateOfId %>"><%= item.duplicateOf %></a>
+                <% } else if (item.duplicateOf) { %>
+                  <span class="ref-chip"><%= item.duplicateOf %></span>
+                <% } else { %><%= dash %><% } %>
+              </td>
+              <td class="dup-note"><%= item.note || dash %></td>
+              <td><%= item.movedBy || dash %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<% if (openCase) { %>
+<div class="dup-scrim" id="dup-scrim"></div>
+<aside class="dup-drawer" id="dup-panel" role="dialog" aria-modal="true" aria-labelledby="dup-panel-title">
+  <div class="dup-d-head">
+    <% if (openCase.reference) { %><span class="ref-chip"><%= openCase.reference %></span><% } %>
+    <% if (openCase.reasonLabel) { %><span class="dup-tag dup-tag-<%= openCase.reason %>"><%= openCase.reasonLabel %></span><% } %>
+    <span class="dup-d-project" id="dup-panel-title"><%= openCase.projectName %></span>
+    <a class="ml-x" href="<%= closeHref %>" aria-label="Close">×</a>
+  </div>
+  <div class="dup-d-body">
+    <p class="ml-d-case"><%= openCase.addressFull || dash %></p>
+    <p class="ml-d-sub">UPRN <%= openCase.uprn || dash %> · <%= openCase.hazard || dash %> · <span class="<%= ratingDisplayClass(openCase.rating) %>"><%= openCase.rating || dash %></span></p>
+    <div class="dup-moved">
+      Moved <%= openCase.movedDate %><% if (openCase.movedTime) { %> <%= openCase.movedTime %><% } %> by <%= openCase.movedBy || dash %>
+      <div>Reason: <%= openCase.reasonLabel || dash %><% if (openCase.duplicateOf) { %> · Duplicate of <% if (openCase.duplicateOfId) { %><a class="ref-chip" href="<%= reporterBase %>/review/<%= openCase.duplicateOfId %>"><%= openCase.duplicateOf %></a><% } else { %><span class="ref-chip"><%= openCase.duplicateOf %></span><% } %><% } %></div>
+      <div>Note: <%= openCase.note || dash %></div>
+    </div>
+    <div class="ml-sec">Original submission</div>
+    <dl class="ml-meta">
+      <dt>Received</dt><dd><%= openCase.received || dash %></dd>
+      <dt>Survey date</dt><dd><%= openCase.surveyDate || dash %></dd>
+      <dt>Surveyor</dt><dd><%= openCase.surveyorName || dash %></dd>
+      <dt>Hazard</dt><dd><%= openCase.hazard || dash %></dd>
+      <dt>Rating</dt><dd class="<%= ratingDisplayClass(openCase.rating) %>"><%= openCase.rating || dash %></dd>
+      <dt>Other details</dt><dd class="<%= openCase.otherDetails ? "" : "none" %>"><%= openCase.otherDetails || dash %></dd>
+    </dl>
+    <div class="ml-sec">Comment</div>
+    <pre class="ml-body"><%= openCase.comment || "" %></pre>
+    <div class="ml-sec">Photos (<%= openCase.photos.length %>)</div>
+    <% if (openCase.photos.length) { %>
+      <div class="ml-thumbs">
+        <% openCase.photos.forEach((photo) => { %>
+          <figure>
+            <img src="<%= photo.url %>" alt="<%= photo.caption || photo.name %>" />
+            <figcaption><%= photo.name %></figcaption>
+          </figure>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <p class="ml-none">No photos.</p>
+    <% } %>
+  </div>
+  <div class="dup-d-foot" id="dup-foot-main">
+    <button type="button" class="btn" id="dup-restore-ask">Move back to Pending</button>
+    <a class="btn btn-primary" href="<%= reporterBase %>/review/<%= openCase.id %>">Open case</a>
+    <a class="btn ml-pack ml-close-link" href="<%= closeHref %>">Close</a>
+  </div>
+  <form class="dup-d-foot dup-confirm" id="dup-foot-confirm" method="post" action="<%= reporterBase %>/duplicates/<%= openCase.id %>/restore" hidden>
+    <p>Move <%= openCase.reference || "this case" %> back to Pending?</p>
+    <button type="submit" class="btn btn-primary">Yes, move back</button>
+    <button type="button" class="btn" id="dup-restore-no">No</button>
+  </form>
+</aside>
+<% } %>
+
+<script src="<%= duplicatesJsUrl %>"></script>
+<%- include("partials/layout-close") %>

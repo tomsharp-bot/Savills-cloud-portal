@@ -3,16 +3,19 @@
   const isFilled = mode === "filled" && row;
   const projectValue = typeof reviewProjectValue === "string"
     ? reviewProjectValue
-    : (isFilled ? ((matchedProject && matchedProject.name) || row.projectName) : "");
+    : (isFilled ? row.projectName : "");
   const projectNames = Array.isArray(reviewProjectNames) ? reviewProjectNames : [];
   const casePhotos = Array.isArray(photos) ? photos : [];
   const claimState = typeof claim !== "undefined" && claim ? claim : null;
   const showAbandon = !!(claimState && (claimState.status === "claimed" || claimState.status === "stale"));
+  const caseWaiting = isFilled && (row.status === "new" || row.status === "in_review" || row.status === "email_ready");
+  const showNotNeeded = caseWaiting && !sentEmail;
+  const caseNotNeeded = isFilled && row.status === "not_needed";
 %>
 
 <div class="page-header">
   <div>
-    <h2 class="page-section-title">Review and create</h2>
+    <h2 class="page-section-title">Review and create<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
     <% if (isFilled) { %>
       <p class="subtitle" id="review-subtitle">Review the site submission for <%= row.projectName %>, then send the client email.</p>
     <% } else { %>
@@ -24,6 +27,12 @@
 
 <section class="actions-row">
   <a class="btn btn-ghost" href="<%= reporterBase %>">← Back to Pending Issues</a>
+  <% if (isFilled) { %>
+    <%- include("partials/claim-chip", { claimRow: claimState }) %>
+    <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form">
+      <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
+    </form>
+  <% } %>
   <a class="btn btn-create-email" id="btn-create-plain-email" href="<%= reporterBase %>/review?compose=1">Create new email</a>
 </section>
 
@@ -40,43 +49,7 @@
       <% if (!alsoWaiting.length) { %>
         <p class="waiting-empty-msg" id="rv-also-empty">No other pending issues — you’re up to date.</p>
       <% } else { %>
-        <div class="table-wrap" id="rv-also-table-wrap">
-          <table class="landing-table" id="rv-also-table">
-            <thead>
-              <tr>
-                <th>Project</th>
-                <th>Address</th>
-                <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
-                <th>Category</th>
-                <th>Rating</th>
-                <th>Received</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <% alsoWaiting.forEach((r) => {
-                const ago = formatTimeAgo(r.createdAt);
-                const claim = claimView(r);
-              %>
-                <tr class="<%= claimRowClass(r) %>" data-claim-status="<%= claim.status %>">
-                  <td><span class="project-pill"><%= r.projectName %></span></td>
-                  <td class="addr-cell">
-                    <strong><%= r.fullAddress %></strong>
-                    <%- include("partials/claim-chip", { claimRow: claim }) %>
-                  </td>
-                  <%- include("partials/photo-att-cell", { count: photoAttachmentCount(r.photoPaths), photoThumbs: reporterCasePhotos(r, reporterBase) }) %>
-                  <td><%= r.category %></td>
-                  <td class="<%= ratingDisplayClass(r.rating) %>"><%= r.rating %></td>
-                  <td>
-                    <span class="<%= ago.urgent ? 'time-ago-urgent' : '' %>"><%= ago.relative %></span>
-                    <span class="time-ago-abs"><%= ago.absolute %></span>
-                  </td>
-                  <td><a class="btn-review-create" href="<%= reporterBase %>/review/<%= r.id %>">Review Case</a></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
+        <%- include("partials/pending-issues-table", { pendingRows: alsoWaiting, pendingTableId: "rv-also-table", pendingWrapId: "rv-also-table-wrap" }) %>
       <% } %>
     </details>
   </section>
@@ -105,7 +78,7 @@
         <input type="hidden" name="status" value="<%= row.status === 'new' ? 'in_review' : row.status %>" />
       <% } %>
       <div class="panel-head review-head">
-        <h2 id="rv-case-heading">Case details</h2>
+        <h2 id="rv-case-heading">Case details<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
         <span class="count count-review" id="rv-case-badge"><%= isFilled ? "Case" : "Blank" %></span>
       </div>
       <div class="blank-case-form" id="rv-case-form">
@@ -288,7 +261,7 @@
       </div>
       <p class="review-draft-status" id="rv-draft-status" hidden></p>
       <% if (draftError) { %><p class="flash flash-err"><%= draftError %></p><% } %>
-      <form class="email-form <%= sentEmail ? 'is-sent' : '' %>" id="rv-email-form" onsubmit="return false;">
+      <form class="email-form <%= sentEmail ? 'is-sent' : '' %>" id="rv-email-form" autocomplete="off" onsubmit="return false;">
         <% if (sentEmail) { %>
           <p class="sent-banner" id="rv-sent-banner" role="status" aria-live="polite"><%= sentBanner %></p>
           <% if (!sentEmail.sentCopySaved) { %><p class="send-warn" id="rv-sent-copy-warn">Sent. Mailbox Sent folder copy failed.</p><% } %>
@@ -300,29 +273,29 @@
           <div class="locked-field" id="rv-email-from" aria-labelledby="rv-email-from-label" aria-readonly="true"><span class="lock" aria-hidden="true">🔒</span><%= sendConfig.fromLine %><span class="locked-tag">Locked</span></div>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-to">To</label>
-          <input id="rv-email-to" type="text" placeholder="Select a project for recipients…" value="<%= sentEmail ? sentEmail.to : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-to">Copy</button>
+          <label for="hhsrs-to">To</label>
+          <input id="hhsrs-to" name="hhsrs-to" type="text" inputmode="email" autocomplete="off" placeholder="Select a project for recipients…" value="<%= sentEmail ? sentEmail.to : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-to">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-cc">Cc</label>
-          <input id="rv-email-cc" type="text" placeholder="optional" value="<%= sentEmail ? sentEmail.cc : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-cc">Copy</button>
+          <label for="hhsrs-cc">Cc</label>
+          <input id="hhsrs-cc" name="hhsrs-cc" type="text" inputmode="email" autocomplete="off" placeholder="optional" value="<%= sentEmail ? sentEmail.cc : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-cc">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-bcc">Bcc</label>
-          <input id="rv-email-bcc" type="text" placeholder="optional" value="<%= sentEmail ? sentEmail.bcc : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-bcc">Copy</button>
+          <label for="hhsrs-bcc">Bcc</label>
+          <input id="hhsrs-bcc" name="hhsrs-bcc" type="text" inputmode="email" autocomplete="off" placeholder="optional" value="<%= sentEmail ? sentEmail.bcc : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-bcc">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-subject">Subject</label>
-          <input id="rv-email-subject" type="text" placeholder="Subject" value="<%= sentEmail ? sentEmail.subject : '' %>" <%= sentEmail ? "readonly" : "" %> />
-          <button type="button" class="btn-copy" data-copy="rv-email-subject">Copy</button>
+          <label for="hhsrs-subject">Subject</label>
+          <input id="hhsrs-subject" name="hhsrs-subject" type="text" autocomplete="off" placeholder="Subject" value="<%= sentEmail ? sentEmail.subject : '' %>" <%= sentEmail ? "readonly" : "" %> />
+          <button type="button" class="btn-copy" data-copy="hhsrs-subject">Copy</button>
         </div>
         <div class="field-with-copy">
-          <label for="rv-email-body">Body</label>
-          <textarea id="rv-email-body" placeholder="Draft email…" <%= sentEmail ? "readonly" : "" %>><%= sentEmail ? sentEmail.body : "" %></textarea>
-          <button type="button" class="btn-copy" data-copy="rv-email-body">Copy</button>
+          <label for="hhsrs-body">Body</label>
+          <textarea id="hhsrs-body" name="hhsrs-body" autocomplete="off" placeholder="Draft email…" <%= sentEmail ? "readonly" : "" %>><%= sentEmail ? sentEmail.body : "" %></textarea>
+          <button type="button" class="btn-copy" data-copy="hhsrs-body">Copy</button>
         </div>
         <% if (isFilled) { %>
           <div class="attach-block" id="rv-attach-block">
@@ -357,10 +330,6 @@
           </div>
         </div>
         <p class="signature-added-note" id="rv-signature-note">Signature added when sent</p>
-        <div class="send-block" id="rv-send-block">
-          <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
-          <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
-        </div>
         <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
       </form>
     </section>
@@ -368,32 +337,29 @@
 
   <section class="finish-bar" id="rv-finish-bar" aria-label="Finish this case">
     <div class="finish-bar-left">
-      <% if (isFilled) { %>
-        <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form">
-          <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
-        </form>
+      <% if (showNotNeeded) { %>
+        <button type="button" class="btn btn-not-needed" id="btn-not-needed">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="7" width="12" height="13" rx="1.4"/><path d="M6 16.5V5.5h10"/><path d="m11.2 11.2 5.2 5.2M16.4 11.2l-5.2 5.2"/></svg>
+          Not needed
+        </button>
+        <p class="finish-hint">Duplicate, error or test</p>
       <% } %>
     </div>
     <div class="finish-bar-right">
-      <p class="finish-hint <%= sentEmail ? 'is-sent' : '' %>" id="rv-finish-hint"><%= sentEmail ? "Sent. Mark as actioned when done." : "Finished? Mark it as actioned." %></p>
-      <% if (isFilled) { %>
-        <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/mark-actioned" id="mark-actioned-form">
-          <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
-          <button type="submit" class="btn btn-primary" id="btn-mark-actioned">Mark as actioned → Main Log</button>
-        </form>
-      <% } else { %>
-        <button type="button" class="btn btn-primary" id="btn-mark-actioned" disabled title="Open a waiting case from Pending Issues first">Mark as actioned → Main Log</button>
-      <% } %>
+      <div class="send-block" id="rv-send-block">
+        <p class="finish-hint send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (caseNotNeeded) { %>Move it back to Pending before sending.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Sends the email and adds it to the Main Log.<% } %></p>
+        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" <%= (sentEmail || caseNotNeeded) ? "disabled" : "" %> data-not-needed="<%= caseNotNeeded ? "1" : "" %>" aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send and log" %></button>
+      </div>
     </div>
   </section>
 </div>
 
 <p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
 
-<% if (isFilled && !sentEmail) { %>
+<% if (!sentEmail && !caseNotNeeded) { %>
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
-    <form id="rv-send-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/send">
+    <form id="rv-send-form" autocomplete="off" method="post" action="<%= isFilled ? reporterBase + '/review/' + row.id + '/send' : reporterBase + '/review/office-send' %>">
       <div class="ck-head"><h2 id="ck-title" tabindex="-1">Check before sending</h2></div>
       <div class="ck-body" id="ck-body">
         <% if (sendConfig.testMode) { %>
@@ -405,17 +371,55 @@
           <input type="checkbox" id="ck-tick" name="checked" value="1" />
           I've checked the details
         </label>
-        <p class="ck-safe">Nothing is sent until you press Send now.</p>
+        <p class="ck-safe">Nothing is sent until you press Send and log.</p>
       </div>
-      <input type="hidden" name="to" id="rv-send-to" value="" />
-      <input type="hidden" name="cc" id="rv-send-cc" value="" />
-      <input type="hidden" name="bcc" id="rv-send-bcc" value="" />
-      <input type="hidden" name="subject" id="rv-send-subject" value="" />
-      <input type="hidden" name="body" id="rv-send-body" value="" />
+      <input type="hidden" name="to" id="rv-send-to" value="" autocomplete="off" />
+      <input type="hidden" name="cc" id="rv-send-cc" value="" autocomplete="off" />
+      <input type="hidden" name="bcc" id="rv-send-bcc" value="" autocomplete="off" />
+      <input type="hidden" name="subject" id="rv-send-subject" value="" autocomplete="off" />
+      <input type="hidden" name="body" id="rv-send-body" value="" autocomplete="off" />
       <div id="rv-send-photo-fields"></div>
       <div class="ck-foot">
         <button type="button" class="btn btn-back" id="ck-back">Go back</button>
-        <button type="submit" class="btn btn-primary" id="ck-send" disabled>Send now</button>
+        <button type="submit" class="btn btn-primary" id="ck-send" disabled>Send and log</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<% if (showNotNeeded) { %>
+<div class="nn-overlay" id="nn-overlay" hidden>
+  <div class="nn-dialog" role="dialog" aria-modal="true" aria-labelledby="nn-title">
+    <form id="nn-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/not-needed" data-ref="<%= row.reference || '' %>">
+      <h2 id="nn-title">Move to Duplicates &amp; errors?</h2>
+      <p class="nn-case">
+        <% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } %>
+        <%= row.fullAddress %><% if (row.postcode) { %>, <%= row.postcode %><% } %> · <%= row.category %>
+      </p>
+      <fieldset class="nn-reasons-set">
+        <legend>Reason <abbr title="required">*</abbr></legend>
+        <div class="nn-reasons">
+          <% (typeof notNeededReasons !== "undefined" ? notNeededReasons : []).forEach((item) => { %>
+            <label class="nn-reason">
+              <input type="radio" name="reason" value="<%= item.id %>" />
+              <span class="nn-reason-copy"><strong><%= item.label %></strong><span><%= item.hint %></span></span>
+            </label>
+          <% }) %>
+        </div>
+      </fieldset>
+      <label class="nn-field" id="nn-dup-field" hidden>
+        Duplicate of (reference) <abbr title="required">*</abbr>
+        <input name="duplicateOf" id="nn-duplicate-of" class="nn-ref" placeholder="e.g. MTVH-012" autocomplete="off" />
+      </label>
+      <label class="nn-field" id="nn-note-field" hidden>
+        Note <span id="nn-note-req" hidden><abbr title="required">*</abbr></span>
+        <textarea name="note" id="nn-note" rows="3" placeholder="Optional"></textarea>
+      </label>
+      <p class="nn-safe">✓ Nothing is deleted. You can move it back.</p>
+      <div class="nn-foot">
+        <button type="button" class="btn btn-back" id="nn-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="nn-move" disabled>Move</button>
       </div>
     </form>
   </div>

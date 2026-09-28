@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
-import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import {
   defaultSitePhotoStorage,
   prepareSitePhoto,
@@ -240,12 +240,12 @@ export type SiteFormProjectFlags = {
 };
 
 export function siteFormProjectFlags(projectName: string): SiteFormProjectFlags {
-  const matched = matchDemoProject(projectName);
+  const roster = resolveHhsrsProject(projectName).roster;
   return {
-    calls: Boolean(matched?.extras.calls),
-    onward: Boolean(matched?.extras.onward),
-    saxon: Boolean(matched && /^saxon\b/i.test(matched.name)),
-    online: Boolean(matched?.extras.online_form),
+    calls: Boolean(roster?.extras.calls),
+    onward: Boolean(roster?.extras.onward),
+    saxon: Boolean(roster && /^saxon\b/i.test(roster.name)),
+    online: Boolean(roster?.extras.online_form),
   };
 }
 
@@ -295,6 +295,84 @@ export function hhsrsUrl(href = ""): string {
 
 export function todayLondonDate(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+}
+
+export type ThanksField = { label: string; value: string };
+export type ThanksPhoto = { label: string; name: string; url: string };
+export type ThanksSummary = {
+  reference: string;
+  rows: ThanksField[];
+  details: string;
+  notes: ThanksField[];
+  photos: ThanksPhoto[];
+};
+
+/** What the surveyor just submitted. Only this issue — never a list of others. */
+export function buildThanksSummary(
+  row: {
+    reference?: string | null;
+    projectName: string;
+    fullAddress: string;
+    postcode: string;
+    uprn: string;
+    surveyorName: string;
+    surveyDate: string;
+    category: string;
+    rating: string;
+    comment: string;
+    otherDetails?: string | null;
+    clientCallReference?: string | null;
+    callOutcome?: string | null;
+    callNotes?: string | null;
+    photoPaths: unknown;
+  },
+  photoUrl: (fileName: string) => string
+): ThanksSummary {
+  const address = [row.fullAddress, row.postcode]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .filter((part, index, all) => all.findIndex((item) => item.toLowerCase() === part.toLowerCase()) === index)
+    .join(", ");
+  const postcode = String(row.postcode || "").trim();
+  const addressLine =
+    postcode && !address.toLowerCase().includes(postcode.toLowerCase()) ? `${address}, ${postcode}` : address;
+  const rows: ThanksField[] = [
+    { label: "Project", value: row.projectName },
+    { label: "Address", value: addressLine },
+    { label: "UPRN", value: row.uprn },
+    { label: "Surveyor", value: row.surveyorName },
+    { label: "Survey date", value: formatHhsrsSurveyDate(row.surveyDate) },
+    { label: "Hazard", value: row.category },
+    { label: "Rating", value: row.rating },
+  ];
+  const notes: ThanksField[] = [];
+  const other = String(row.otherDetails || "").trim();
+  if (other) notes.push({ label: "Other details", value: other });
+  const flags = siteFormProjectFlags(row.projectName);
+  const callReference = String(row.clientCallReference || "").trim();
+  const callOutcome = String(row.callOutcome || "").trim();
+  const callNotes = String(row.callNotes || "").trim();
+  if (flags.calls || callReference || callOutcome || callNotes) {
+    if (callReference) notes.push({ label: "Call reference", value: callReference });
+    if (callOutcome) notes.push({ label: "Call outcome", value: callOutcome });
+    if (callNotes) notes.push({ label: "Call notes", value: callNotes });
+  }
+  const paths = Array.isArray(row.photoPaths) ? row.photoPaths.map((item) => String(item || "")) : [];
+  const photos: ThanksPhoto[] = paths
+    .map((stored) => stored.split("/").filter(Boolean).pop() || "")
+    .filter(Boolean)
+    .map((name, index) => ({
+      label: `Photo ${index + 1}`,
+      name,
+      url: photoUrl(name),
+    }));
+  return {
+    reference: String(row.reference || "").trim(),
+    rows,
+    details: String(row.comment || "").trim(),
+    notes,
+    photos,
+  };
 }
 
 /** Review display only. Stored and submitted survey dates stay YYYY-MM-DD. */
@@ -678,6 +756,43 @@ export async function persistSubmissionPhotos(
         buffer: raw,
       });
       const storedName = storedNameForPrepared(photo.storedName, ready.ext);
+      await fs.writeFile(path.join(destDir, storedName), ready.buffer);
+      const key = siteFormPhotoKey(submissionId, storedName);
+      await putSitePhotoWithRetry(store, key, ready.buffer, ready.mime, options);
+      paths.push(key);
+    }
+    return paths;
+  } catch (err) {
+    await Promise.all(paths.map((key) => store.remove(key).catch(() => false)));
+    await fs.rm(destDir, { recursive: true, force: true }).catch(() => undefined);
+    throw err;
+  }
+}
+
+/**
+ * Store office-created photos the same way as site-form photos:
+ * local cache plus the private Spaces object `hhsrs-site-form/<id>/<file>`.
+ * A failed upload removes anything already stored for this attempt and throws.
+ */
+export async function persistBufferPhotos(
+  submissionId: string,
+  files: { originalname: string; mimetype: string; buffer: Buffer }[],
+  storage?: SitePhotoStorage,
+  options?: SitePhotoPutOptions
+): Promise<string[]> {
+  if (!files.length) return [];
+  const destDir = submissionDir(submissionId);
+  await fs.mkdir(destDir, { recursive: true });
+  const paths: string[] = [];
+  const store = storage ?? defaultSitePhotoStorage();
+  try {
+    for (const file of files) {
+      const ready = await prepareSitePhoto({
+        originalName: file.originalname,
+        mime: file.mimetype,
+        buffer: file.buffer,
+      });
+      const storedName = `${randomUUID()}.${ready.ext}`;
       await fs.writeFile(path.join(destDir, storedName), ready.buffer);
       const key = siteFormPhotoKey(submissionId, storedName);
       await putSitePhotoWithRetry(store, key, ready.buffer, ready.mime, options);

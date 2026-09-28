@@ -1,6 +1,6 @@
 import type { HhsrsSiteSubmission } from "@prisma/client";
 import { draftFromSubmission, type SubmissionDraftInput } from "./hhsrs-reporter-draft.js";
-import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { matchDemoProject, resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import { composeCallNotes, isCallRefBlankReason } from "./hhsrs-site-form.js";
 
 export const HHSRS_REPORTER_PATH = "/HHSRSreporter";
@@ -11,7 +11,9 @@ export const HHSRS_CASE_STATUSES = [
   "in_review",
   "email_ready",
   "email_sent",
+  "corrected",
   "closed",
+  "not_needed",
 ] as const;
 
 export type HhsrsCaseStatus = (typeof HHSRS_CASE_STATUSES)[number];
@@ -28,6 +30,27 @@ export function isHhsrsCaseStatus(value: string): value is HhsrsCaseStatus {
   return (HHSRS_CASE_STATUSES as readonly string[]).includes(value);
 }
 
+/** Statuses Save review is allowed to write. Sent and closed belong to the send path. */
+const REVIEW_SAVE_STATUSES = ["in_review", "email_ready"] as const;
+
+/**
+ * Save review cannot mark a case sent or closed, and cannot clear a status the
+ * send path (or a correction) already set. A new case becomes in review.
+ */
+export function statusForReviewSave(current: string, submitted: string): string {
+  if (
+    current === "email_sent" ||
+    current === "corrected" ||
+    current === "closed" ||
+    current === "not_needed"
+  ) {
+    return current;
+  }
+  if ((REVIEW_SAVE_STATUSES as readonly string[]).includes(submitted)) return submitted;
+  if (current === "email_ready") return "email_ready";
+  return "in_review";
+}
+
 export function statusLabel(status: string): string {
   switch (status) {
     case "new":
@@ -38,8 +61,12 @@ export function statusLabel(status: string): string {
       return "Email ready";
     case "email_sent":
       return "Email sent";
+    case "corrected":
+      return "Corrected";
     case "closed":
       return "Closed";
+    case "not_needed":
+      return "Not needed";
     default:
       return status || "New";
   }
@@ -222,7 +249,7 @@ export function draftEmailFromReviewFields(
   subject: string;
   body: string;
 } {
-  const matched = matchDemoProject(fields.projectName);
+  const matched = resolveHhsrsProject(fields.projectName).roster;
   const draft = draftFromSubmission(fields);
   const resolved = recipients ?? emailRecipientsFromProject(matched);
   return {
@@ -303,7 +330,7 @@ export function tryDraftFromRow(row: Parameters<typeof submissionDraftInput>[0])
 /** Waiting queue = not yet actioned into the Main Log. */
 export const HHSRS_WAITING_STATUSES = ["new", "in_review", "email_ready"] as const;
 
-export const HHSRS_ACTIONED_STATUSES = ["email_sent", "closed"] as const;
+export const HHSRS_ACTIONED_STATUSES = ["email_sent", "corrected", "closed"] as const;
 
 export function isWaitingStatus(status: string): boolean {
   return (HHSRS_WAITING_STATUSES as readonly string[]).includes(status);
@@ -374,6 +401,7 @@ export function ratingDisplayClass(rating: string): string {
 
 export function actionedStatusLabel(status: string): string {
   if (status === "email_sent") return "Pack sent";
+  if (status === "corrected") return "Corrected";
   if (status === "closed") return "Notice filed";
   if (status === "email_ready") return "Email ready";
   return statusLabel(status);
@@ -384,6 +412,7 @@ export type ReporterSummary = {
   inReview: number;
   actionedMonth: number;
   mainLog: number;
+  duplicates: number;
 };
 
 export function readReporterUpdate(body: Record<string, unknown>): {

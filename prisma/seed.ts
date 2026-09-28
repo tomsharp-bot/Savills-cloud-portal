@@ -1,5 +1,6 @@
 import { PrismaClient, type AssetKind, type ProjectStage } from "@prisma/client";
 import { hashPassword } from "../src/lib/passwords.js";
+import { hhsrsCodeFromProjectName } from "../src/lib/hhsrs-reference.js";
 
 const prisma = new PrismaClient();
 
@@ -124,7 +125,14 @@ async function main() {
   for (const p of projects) {
     created.push(
       await prisma.project.create({
-        data: { ...defs, ...p.extra, name: p.name, projectManager: p.projectManager, stage: p.stage },
+        data: {
+          ...defs,
+          ...p.extra,
+          name: p.name,
+          projectManager: p.projectManager,
+          stage: p.stage,
+          hhsrsCode: hhsrsCodeFromProjectName(p.name),
+        },
       })
     );
   }

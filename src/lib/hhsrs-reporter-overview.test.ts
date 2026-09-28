@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { buildProjectOverview, PROJECT_PROGRESS_CHANGE_TOAST } from "./hhsrs-reporter-overview.js";
-import { HHSRS_PROJECT_ROSTER, REPORTER_DEMO_PROJECTS, hhsrsKey, matchDemoProject, progressNameForCase } from "./hhsrs-reporter-projects.js";
+import {
+  HHSRS_PROJECT_ROSTER,
+  REPORTER_DEMO_PROJECTS,
+  hhsrsKey,
+  hhsrsProjectSettings,
+  matchDemoProject,
+  portalProjectMatchNames,
+  progressNameForCase,
+  resolveHhsrsProject,
+} from "./hhsrs-reporter-projects.js";
 
 const root = process.cwd();
 
@@ -40,7 +49,26 @@ describe("HHSRS project overview from Project Progress", () => {
     assert.equal(hhsrsKey("Vico 2026"), "Vico 2026 8k");
     assert.equal(hhsrsKey("Bristol Ph2"), "Bristol Council 2025");
     assert.equal(progressNameForCase("Onward 2026", ["Onward", "Vico 2026"]), "Onward");
+    assert.equal(progressNameForCase("LFHA (Leeds)", ["Leeds Fed HA 2026"]), "Leeds Fed HA 2026");
+    assert.equal(progressNameForCase("MTVH Pilot 2026", ["MTVH 2026"]), "MTVH 2026");
     assert.equal(progressNameForCase("Somewhere else", ["Onward"]), "Somewhere else");
+    const leeds = resolveHhsrsProject("Leeds Fed HA 2026");
+    assert.equal(leeds.name, "Leeds Fed HA 2026");
+    assert.equal(leeds.code, "LFHA");
+    assert.equal(leeds.roster?.template, "LFHA");
+    assert.equal(hhsrsProjectSettings("MTVH 2026").name, "MTVH 2026");
+    assert.equal(hhsrsProjectSettings("MTVH 2026").template, "Standard");
+    assert.equal(hhsrsProjectSettings("Vico 2026").name, "Vico 2026");
+    assert.equal(hhsrsProjectSettings("Vico 2026").extras.vulnerabilities, true);
+    assert.equal(resolveHhsrsProject("Onward 2026").code, "ONW");
+    assert.equal(resolveHhsrsProject("Test Housing").code, "TEST");
+    assert.deepEqual(portalProjectMatchNames("Leeds Fed HA 2026", ["LFHA (Leeds)", "Devon HA"]), [
+      "Leeds Fed HA 2026",
+      "LFHA (Leeds)",
+    ]);
+    assert.deepEqual(portalProjectMatchNames("MTVH 2026", ["MTVH Pilot 2026"]), ["MTVH 2026", "MTVH Pilot 2026"]);
+    assert.deepEqual(portalProjectMatchNames("Vico 2026", ["Vico 2026 8k"]), ["Vico 2026", "Vico 2026 8k"]);
+    assert.deepEqual(portalProjectMatchNames("Onward (Leeds)", ["Leeds Fed HA 2026"]), ["Onward (Leeds)"]);
     assert.equal(matchDemoProject("Onward")?.template, "Onward");
     assert.equal(matchDemoProject("Vico 2026")?.extras.vulnerabilities, true);
     assert.equal(matchDemoProject("Bristol Ph2")?.name, "Bristol Council 2025");
@@ -74,8 +102,10 @@ describe("HHSRS project overview from Project Progress", () => {
     assert.doesNotMatch(sidebar, /tab-ico"[^>]*>0[123]</);
     assert.match(sidebar, /<svg/);
 
-    assert.match(mainLog, /panel-head review-head/);
+    assert.match(mainLog, /Main Log/);
+    assert.match(mainLog, /Export to Excel/);
     assert.doesNotMatch(mainLog, /dealt-head/);
+    assert.doesNotMatch(mainLog, /Export CSV/);
 
     assert.match(css, /\.po-table\s*\{[\s\S]*?table-layout:\s*fixed/);
     assert.match(css, /#po-project-select\s*\{[\s\S]*?width:\s*18rem/);

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
+import { prisma } from "./lib/prisma.js";
 
 process.env.DATABASE_URL ||=
   "postgresql://portal:portal@127.0.0.1:5432/savills_cloud_portal?schema=public";
@@ -70,6 +71,17 @@ function request(
       req.end(payload);
     });
   });
+}
+
+async function assertProjectChoices(body: string): Promise<void> {
+  let current = 0;
+  try {
+    current = await prisma.project.count({ where: { stage: "current" } });
+  } catch {
+    current = 0;
+  }
+  if (current === 0) assert.match(body, /Demo current project \(local\)/);
+  else assert.doesNotMatch(body, /Demo current project \(local\)/);
 }
 
 function hhsrsReviewFields(): Record<string, string> {
@@ -272,7 +284,7 @@ describe("HHSRS site form at domain-root paths", () => {
     const form = await request(app, "GET", "/HHSRS-site-form/new");
     assert.equal(form.status, 200);
     assert.match(form.body, /name="projectId"/);
-    assert.match(form.body, /Demo current project \(local\)/);
+    await assertProjectChoices(form.body);
     assert.match(form.body, /name="surveyDate"/);
     assert.match(form.body, /HHSRS category/);
     assert.match(form.body, /Client call reference \*/);
@@ -456,7 +468,7 @@ describe("HHSRS site form at domain-root paths", () => {
   it("shows a local demo project and can open the review page", async () => {
     const app = createApp({ basePath: "/projectprogress" });
     const form = await request(app, "GET", "/HHSRS-site-form/new");
-    assert.match(form.body, /Demo current project \(local\)/);
+    await assertProjectChoices(form.body);
 
     const missingPhoto = multipartForm(hhsrsReviewFields());
     const blocked = await request(app, "POST", "/HHSRS-site-form/review", missingPhoto);
@@ -544,11 +556,13 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.equal(thanks.status, 200);
     assert.match(thanks.body, /Issue submitted/);
     assert.match(thanks.body, /Thanks, the office has it\./);
-    assert.match(thanks.body, /The issue has been submitted \(ref cmexample1\)\./);
     assert.match(thanks.body, /Report another issue/);
     assert.match(thanks.body, /href="\/HHSRS-site-form\/new"/);
-    assert.match(thanks.body, /href="\/HHSRS-site-form">Back to start/);
-    assert.match(thanks.body, /class="hhsrs-body hhsrs-form-page"/);
+    assert.match(thanks.body, /class="hhsrs-body hhsrs-form-page hhsrs-thanks-page"/);
+    assert.doesNotMatch(thanks.body, /Your reference/);
+    assert.doesNotMatch(thanks.body, /cmexample1/);
+    assert.doesNotMatch(thanks.body, /What you sent/);
+    assert.doesNotMatch(thanks.body, /Back to start/);
     assert.doesNotMatch(thanks.body, /OFFLINE MOCK/);
   });
 

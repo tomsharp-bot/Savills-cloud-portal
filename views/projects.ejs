@@ -68,6 +68,7 @@
                       <span class="stage-tag stage-<%= p.stage %>"><%= p.stage === 'current' ? 'Current' : p.stage === 'upcoming' ? 'Upcoming' : 'Archive' %></span>
                       <h3><%= p.name %></h3>
                       <p class="pm">Project Manager: <%= p.projectManager %></p>
+                      <% if (isAdmin && p.hhsrsCode) { %><p class="pm">Reference code: <%= p.hhsrsCode %></p><% } %>
                       <% if (isAdmin && p.stage === "current" && tileStats && tileStats[p.id]) { %>
                         <% const s = tileStats[p.id]; %>
                         <ul class="tile-stats" aria-label="Project stats">
@@ -88,7 +89,8 @@
                           typeConditionOnly: p.typeConditionOnly, typeConditionEpc: p.typeConditionEpc,
                           typeBlocks: p.typeBlocks, typeGarages: p.typeGarages, typeCommercial: p.typeCommercial,
                           typeOther: p.typeOther, typeValidations: p.typeValidations,
-                          projectTargetValue: p.projectTargetValue, projectTargetUnit: p.projectTargetUnit
+                          projectTargetValue: p.projectTargetValue, projectTargetUnit: p.projectTargetUnit,
+                          hhsrsCode: p.hhsrsCode || ""
                         }) %>'>Edit Project</button>
                       <% } %>
                       <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/projects?selected=' + p.id) %>">Select</a>
@@ -129,7 +131,10 @@
     <h3>Create New Project</h3>
     <form method="post" action="<%= baseUrl('/projects') %>">
       <label for="create-name">Project name</label>
-      <input id="create-name" name="name" type="text" placeholder="e.g. Cornwall CC Ph3" />
+      <input id="create-name" name="name" type="text" placeholder="e.g. LFHA 2026" />
+      <label for="create-code">Reference code</label>
+      <input id="create-code" name="hhsrsCode" type="text" maxlength="8" placeholder="From the name" autocomplete="off" />
+      <p class="page-sub">Issue numbers use this, for example LFHA-001. Leave it blank to take it from the name. LFHA (Leeds), Vico, Onward and MTVH are recognised.</p>
       <label for="create-pm">Project Manager</label>
       <input id="create-pm" name="projectManager" type="text" value="Greg K" />
       <label for="create-stage">Start in</label>
@@ -156,6 +161,9 @@
     <form method="post" id="edit-form" action="<%= baseUrl('/projects/x/edit') %>">
       <label for="edit-name">Project name</label>
       <input id="edit-name" name="name" type="text" />
+      <label for="edit-code">Reference code</label>
+      <input id="edit-code" name="hhsrsCode" type="text" maxlength="8" autocomplete="off" />
+      <p class="page-sub">Leave the suggested code to follow the name. Type a different code to keep your own.</p>
       <label for="edit-pm">Project Manager</label>
       <input id="edit-pm" name="projectManager" type="text" />
       <label for="edit-stage">Stage</label>

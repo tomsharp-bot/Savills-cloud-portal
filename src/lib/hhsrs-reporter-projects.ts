@@ -1,7 +1,8 @@
 /**
  * Colin handover Category Lists roster for HHSRS Reporter.
- * Used by Review and create (rules / hints) and Project overview (names + demo counts)
- * until live project settings are wired.
+ * Call rules, templates, extras, and reference codes live here.
+ * The names shown and stored are portal Project.name values; resolveHhsrsProject
+ * maps these roster settings onto that name.
  */
 
 export type RatingScheme = "NEW" | "OLD";
@@ -295,7 +296,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   },
 ];
 
-/** Active programmes for the Review and create project dropdown. */
+/** Roster entries that are not archived. Settings only; the office dropdown uses portal Project.name. */
 export const REPORTER_DEMO_PROJECTS: ReporterProjectDemo[] = HHSRS_PROJECT_ROSTER.filter(
   (project) => !project.seedArchived
 ).map(({ demoCompleted: _completed, demoWaiting: _waiting, seedArchived: _archived, ...project }) => project);
@@ -350,9 +351,21 @@ export function progressNameForCase(caseName: string, progressNames: readonly st
   if (!raw) return "";
   const exact = progressNames.find((name) => name.toLowerCase() === raw.toLowerCase());
   if (exact) return exact;
+  const resolved = resolveHhsrsProject(raw).name;
+  const viaResolver = progressNames.find((name) => name.toLowerCase() === resolved.toLowerCase());
+  if (viaResolver) return viaResolver;
   const aliased = progressNames.find((name) => hhsrsKey(name).toLowerCase() === raw.toLowerCase());
   if (aliased) return aliased;
   return raw;
+}
+
+/**
+ * LFHA (Leeds) roster names. Live Project Progress uses "Leeds Fed HA 2026",
+ * which does not start with LFHA and does not contain "(Leeds)".
+ */
+export function isLfhaRosterName(name: string): boolean {
+  const lower = String(name || "").trim().toLowerCase();
+  return lower.startsWith("lfha") || lower.startsWith("leeds fed") || lower.includes("(leeds)");
 }
 
 /** Match a live submission or Project Progress name to the closest roster config. */
@@ -371,13 +384,126 @@ export function matchDemoProject(projectName: string): ReporterProjectDemo | nul
   if (/^vico\b/i.test(raw)) return findRoster("Vico 2026 8k");
   if (lower.startsWith("cornwall")) return findRoster("Cornwall 2026 Ph2");
   if (lower.startsWith("bpha")) return findRoster("BPHA 2026 ACQ");
-  if (lower.startsWith("mtvh") || lower.includes("mtvh")) return findRoster("MTVH Pilot 2026");
+  if (lower.startsWith("mtvh") || lower.includes("mtvh") || lower.includes("metropolitan")) {
+    return findRoster("MTVH Pilot 2026");
+  }
   if (lower.startsWith("gateway")) return findRoster("Gateway 2026");
   if (lower.startsWith("bristol")) return findRoster("Bristol Council 2026 Ph2");
-  if (lower.startsWith("a2d")) return findRoster("A2D 2026 Phase 4");
+  if (lower.startsWith("a2d") || /^a2\s*dominion\b/.test(lower)) return findRoster("A2D 2026 Phase 4");
   if (lower.startsWith("saxon")) return findRoster("Saxon Weald 2026 Phase 4");
-  if (lower.startsWith("lfha") || lower.includes("(leeds)")) return findRoster("LFHA (Leeds)");
+  if (isLfhaRosterName(raw)) return findRoster("LFHA (Leeds)");
   return null;
 }
 
 export const SITE_FORM_PUBLIC_URL = "https://savillscloudportal.co.uk/HHSRS-site-form";
+
+/**
+ * Roster labels that are not a portal Project.name.
+ * The office list and stored keys use the portal name. These labels still
+ * resolve onto that project so an older submission is not left behind.
+ */
+export const HHSRS_PORTAL_NAME_ALIASES: Record<string, string> = {
+  lfha: "Leeds Fed HA 2026",
+  "lfha 2026": "Leeds Fed HA 2026",
+  "lfha (leeds)": "Leeds Fed HA 2026",
+  "leeds federation": "Leeds Fed HA 2026",
+  "leeds federation (leeds)": "Leeds Fed HA 2026",
+  "mtvh pilot 2026": "MTVH 2026",
+  "mtvh phase 1 2026": "MTVH 2026",
+  "vico 2026 8k": "Vico 2026",
+};
+
+/** Live names whose casing should survive a differently cased submission. */
+const PORTAL_NAME_CANONICAL = ["Leeds Fed HA 2026", "MTVH 2026", "Vico 2026", "Onward 2026", "Test Housing"];
+
+/** Reference prefix carried by a roster entry. Letter fallback covers the rest. */
+const ROSTER_REFERENCE_CODE: Record<string, string> = {
+  "Test Housing": "TEST",
+  "Onward 2026": "ONW",
+  "Vico 2026 8k": "VICO",
+  "A2D 2026 Phase 4": "A2D",
+  "Cornwall 2026 Ph2": "CORN",
+  "BPHA 2026 ACQ": "BPHA",
+  "Saxon Weald 2026 Phase 4": "SAXW",
+  "Saxon Weald 2025 Phase 3": "SAXW",
+  "MTVH Pilot 2026": "MTVH",
+  "MTVH Phase 1 2026": "MTVH",
+  "LFHA (Leeds)": "LFHA",
+};
+
+export type ResolvedHhsrsProject = {
+  /** Portal Project.name to show and store. Empty when the input is blank. */
+  name: string;
+  /** Call rules, template, extras, and hint. Null when the name matches no roster entry. */
+  roster: ReporterProjectDemo | null;
+  /** Issue reference prefix, such as MTVH or LFHA. */
+  code: string;
+};
+
+function lettersCode(name: string): string {
+  const letters = String(name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 4);
+  return letters || "HHSR";
+}
+
+/**
+ * One resolver for every HHSRS surface.
+ * The name is the portal Project.name. Roster settings (calls, template, extras,
+ * reference code) are mapped onto that name and are not shown as the project.
+ */
+export function resolveHhsrsProject(projectName: string): ResolvedHhsrsProject {
+  const raw = String(projectName || "").trim();
+  if (!raw) return { name: "", roster: null, code: "HHSR" };
+  const lower = raw.toLowerCase();
+  const aliased = HHSRS_PORTAL_NAME_ALIASES[lower];
+  const canonical = PORTAL_NAME_CANONICAL.find((name) => name.toLowerCase() === lower);
+  const name = aliased || canonical || raw;
+  const roster = matchDemoProject(raw) || matchDemoProject(name);
+  const code = (roster && ROSTER_REFERENCE_CODE[roster.name]) || lettersCode(raw);
+  return { name, roster, code };
+}
+
+/** Settings for one portal project, keyed by that project's own name. */
+export function hhsrsProjectSettings(portalName: string): ReporterProjectDemo {
+  const roster = resolveHhsrsProject(portalName).roster;
+  return {
+    name: portalName,
+    template: roster?.template || "Standard",
+    ratingScheme: roster?.ratingScheme || "NEW",
+    extras: roster ? { ...roster.extras } : { ...NONE },
+    to: roster ? [...roster.to] : [],
+    cc: roster ? [...roster.cc] : [],
+    bcc: roster?.bcc ? [...roster.bcc] : undefined,
+    hint: roster?.hint || "",
+  };
+}
+
+/**
+ * Portal name to select when a case may still carry a roster label.
+ * Exact portal names win. Otherwise the shared resolver, then the older alias.
+ */
+export function portalNameInList(stored: string, portalNames: readonly string[]): string {
+  const raw = String(stored || "").trim();
+  if (!raw) return "";
+  const exact = portalNames.find((name) => name.toLowerCase() === raw.toLowerCase());
+  if (exact) return exact;
+  const resolved = resolveHhsrsProject(raw).name;
+  const via = portalNames.find((name) => name.toLowerCase() === resolved.toLowerCase());
+  if (via) return via;
+  return progressNameForCase(raw, portalNames);
+}
+
+/** Stored submission names that belong to the portal project the office picked. */
+export function portalProjectMatchNames(selected: string, storedNames: readonly string[]): string[] {
+  const key = resolveHhsrsProject(selected).name;
+  if (!key) return [];
+  const names = new Set<string>([key]);
+  for (const stored of storedNames) {
+    const raw = String(stored || "").trim();
+    if (!raw) continue;
+    if (raw === key || resolveHhsrsProject(raw).name === key) names.add(raw);
+  }
+  return [...names];
+}

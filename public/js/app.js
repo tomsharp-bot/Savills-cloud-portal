@@ -23,6 +23,8 @@
       const p = JSON.parse(btn.getAttribute("data-edit"));
       editForm.action = appUrl("/projects/" + p.id + "/edit");
       document.getElementById("edit-name").value = p.name;
+      var editCode = document.getElementById("edit-code");
+      if (editCode) editCode.value = p.hhsrsCode || "";
       document.getElementById("edit-pm").value = p.projectManager || "";
       document.getElementById("edit-stage").value = p.stage;
       const targetValue = document.getElementById("edit-target-value");

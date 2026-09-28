@@ -9,9 +9,18 @@
     <span class="tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 4.5h7a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 19V6a1.5 1.5 0 0 1 1.5-1.5Z"/><path d="M9.5 4.5V3.8a1.3 1.3 0 0 1 1.3-1.3h2.4a1.3 1.3 0 0 1 1.3 1.3v.7"/><path d="m9.2 12.2 2 2 3.8-4"/></svg></span>
     <span class="tab-label">Review and create</span>
   </a>
+  <a href="<%= reporterBase %>/find" class="tab-link <%= activeNav === 'find' ? 'active' : '' %>" title="Find and resend">
+    <span class="tab-ico find-emoji" aria-hidden="true">🔍</span>
+    <span class="tab-label">Find &amp; resend</span>
+  </a>
   <a href="<%= reporterBase %>/main-log" class="tab-link <%= activeNav === 'main-log' ? 'active' : '' %>" title="Main Log">
     <span class="tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6.5h12.5"/><path d="M8 12h12.5"/><path d="M8 17.5h9"/><rect x="3.2" y="5.2" width="2.6" height="2.6" rx="0.5"/><rect x="3.2" y="10.7" width="2.6" height="2.6" rx="0.5"/><rect x="3.2" y="16.2" width="2.6" height="2.6" rx="0.5"/></svg></span>
     <span class="tab-label">Main Log</span>
+  </a>
+  <a href="<%= reporterBase %>/duplicates" class="tab-link <%= activeNav === 'duplicates' ? 'active' : '' %>" title="Duplicates and errors">
+    <span class="tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7.2" y="7.2" width="12" height="12" rx="1.4"/><path d="M4.8 15.2V4.8h10.4"/><path d="m10.2 11.3 5.4 5.4M15.6 11.3l-5.4 5.4"/></svg></span>
+    <span class="tab-label">Duplicates &amp; errors</span>
+    <% if (summary.duplicates > 0) { %><span class="tab-badge"><%= summary.duplicates %></span><% } %>
   </a>
   <div class="side-divider" aria-hidden="true"></div>
   <a href="<%= reporterBase %>/project-overview" class="tab-link <%= activeNav === 'project-overview' ? 'active' : '' %>" title="Project overview">
@@ -28,6 +37,7 @@
     <div class="side-summary-row"><span>In review</span><strong><%= summary.inReview %></strong></div>
     <div class="side-summary-row"><span>Actioned (mo)</span><strong><%= summary.actionedMonth %></strong></div>
     <div class="side-summary-row"><span>Main Log</span><strong><%= summary.mainLog %></strong></div>
+    <div class="side-summary-row"><span>Duplicates &amp; errors</span><strong><%= summary.duplicates %></strong></div>
   </div>
   <div class="side-footnote">Yellow = active · Live submissions</div>
 </nav>

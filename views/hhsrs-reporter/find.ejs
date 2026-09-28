@@ -1,0 +1,322 @@
+<%- include("partials/layout-open") %>
+<%
+  const selected = typeof found !== "undefined" ? found : null;
+  const amending = view === "amend" && selected && amend;
+  const showingSent = view !== "amend" && selected && selected.notice;
+%>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-section-title">Find &amp; resend</h2>
+    <p class="subtitle">Search a case, read the email that went, and send a correction if something was wrong.</p>
+  </div>
+</div>
+
+<% if (amending) { %>
+<section class="panel find-mini">
+  <div class="panel-head">
+    <h2>Find a case <span class="find-dot">·</span> <span class="ref-chip"><%= selected.reference || "—" %></span>
+      <span class="find-mini-meta"><%= selected.address %> · <%= selected.hazard %></span>
+    </h2>
+    <a class="btn btn-ghost btn-sm" href="<%= selected.backUrl %>">← Back to results</a>
+  </div>
+</section>
+
+<section class="panel" id="fr-amend">
+  <div class="panel-head">
+    <h2>Amend &amp; resend <span class="ref-chip ref-chip-lg"><%= selected.reference || "—" %></span></h2>
+    <span class="find-status st-<%= selected.statusClass %>"><%= selected.statusLabel %></span>
+  </div>
+  <div class="panel-body find-body">
+    <form class="find-compose" autocomplete="off" onsubmit="return false;">
+    <div class="find-split">
+      <div>
+        <div class="find-pair">
+          <label class="find-label" for="hhsrs-to">To</label>
+          <input id="hhsrs-to" name="hhsrs-to" type="text" inputmode="email" autocomplete="off" value="<%= amend.to %>" />
+        </div>
+        <div class="find-pair">
+          <label class="find-label" for="hhsrs-cc">Cc</label>
+          <input id="hhsrs-cc" name="hhsrs-cc" type="text" inputmode="email" autocomplete="off" value="<%= amend.cc %>" />
+        </div>
+      </div>
+      <div>
+        <div class="find-pair">
+          <label class="find-label" for="hhsrs-bcc">Bcc</label>
+          <input id="hhsrs-bcc" name="hhsrs-bcc" type="text" inputmode="email" autocomplete="off" value="<%= amend.bcc %>" />
+        </div>
+        <div class="find-pair">
+          <label class="find-label" for="hhsrs-subject">Subject</label>
+          <input id="hhsrs-subject" name="hhsrs-subject" type="text" autocomplete="off" value="<%= amend.subject %>" />
+        </div>
+      </div>
+    </div>
+    <div class="find-pair">
+      <label class="find-label" for="hhsrs-body">Body</label>
+      <textarea id="hhsrs-body" name="hhsrs-body" rows="11" autocomplete="off"><%= amend.body %></textarea>
+    </div>
+    </form>
+    <div class="email-signature-block" id="rv-email-signature">
+      <div class="signature-label" id="rv-signature-label">Signature</div>
+      <% if (typeof emailSignature !== "undefined" && emailSignature && emailSignature.missing) { %>
+        <p class="sig-name-warn" id="rv-signature-warn"><%= emailSignature.warning %></p>
+      <% } %>
+      <div class="email-signature" id="rv-signature-preview" role="group" aria-labelledby="rv-signature-label" aria-readonly="true"><%- typeof signatureHtml !== "undefined" ? signatureHtml : "" %></div>
+    </div>
+    <div class="find-edit-grid">
+      <div>
+        <div class="find-label" id="fr-photo-count">Photos (<%= amend.includedCount %>)</div>
+        <div class="find-thumbs" id="fr-thumbs">
+          <% amend.photos.forEach((photo) => { %>
+            <figure class="find-thumb <%= photo.included ? "" : "is-off" %>" data-photo="<%= photo.name %>">
+              <img src="<%= photo.url %>" alt="<%= photo.caption %>" />
+              <figcaption><%= photo.caption %></figcaption>
+              <button type="button" class="find-x" data-remove-photo="<%= photo.name %>" aria-label="Remove <%= photo.caption %>">×</button>
+            </figure>
+          <% }) %>
+          <button type="button" class="find-thumb find-add" id="fr-add-photo">+ Add photo</button>
+        </div>
+        <div class="find-picker" id="fr-picker" hidden>
+          <% amend.photos.forEach((photo) => { %>
+            <button type="button" class="btn btn-ghost btn-sm <%= photo.included ? "is-off" : "" %>" data-add-photo="<%= photo.name %>"><%= photo.caption %></button>
+          <% }) %>
+        </div>
+        <div id="rv-attach-list">
+          <% amend.photos.forEach((photo) => { %>
+            <input type="checkbox" <%= photo.included ? "checked" : "" %> data-attach-name="<%= photo.name %>" data-bytes="<%= photo.bytes %>" />
+          <% }) %>
+        </div>
+      </div>
+      <div class="find-reason">
+        <div class="find-label">Reason for correction <span class="find-req">* required</span></div>
+        <div class="find-picks" id="fr-reasons">
+          <% amend.reasons.forEach((reason) => { %>
+            <button type="button" class="find-pick" data-reason="<%= reason %>"><%= reason %></button>
+          <% }) %>
+        </div>
+        <input id="fr-note" type="text" placeholder="What changed? (short note)" value="<%= amend.note %>" />
+      </div>
+    </div>
+    <div class="find-actions">
+      <a class="btn btn-ghost" href="<%= selected.backUrl %>">Cancel</a>
+      <button type="button" class="btn btn-primary" id="btn-send-email">Check and send</button>
+      <p class="send-line" id="rv-send-line"></p>
+      <p class="find-err" id="fr-error" role="alert" hidden></p>
+    </div>
+  </div>
+</section>
+
+<div class="ck-overlay" id="ck-overlay" hidden>
+  <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
+    <form id="rv-send-form" autocomplete="off" method="post" action="<%= amend.action %>">
+      <div class="ck-head"><h2 id="ck-title">Check before sending</h2></div>
+      <div class="ck-body" id="ck-body">
+        <% if (sendConfig.testMode) { %>
+          <p class="ck-test" id="ck-test"><%= sendConfig.testBanner %></p>
+        <% } %>
+      </div>
+      <div class="ck-body" style="padding-top:0">
+        <label class="ck-tick" id="ck-tick-label" for="ck-tick">
+          <input type="checkbox" id="ck-tick" name="checked" value="1" />
+          I've checked the details
+        </label>
+        <p class="ck-safe">Nothing is sent until you press Send now.</p>
+      </div>
+      <input type="hidden" name="to" id="rv-send-to" value="" autocomplete="off" />
+      <input type="hidden" name="cc" id="rv-send-cc" value="" autocomplete="off" />
+      <input type="hidden" name="bcc" id="rv-send-bcc" value="" autocomplete="off" />
+      <input type="hidden" name="subject" id="rv-send-subject" value="" autocomplete="off" />
+      <input type="hidden" name="body" id="rv-send-body" value="" autocomplete="off" />
+      <input type="hidden" name="correctionReason" id="fr-send-reason" value="" />
+      <input type="hidden" name="correctionNote" id="fr-send-note" value="" />
+      <input type="hidden" name="q" value="<%= filters.q %>" />
+      <input type="hidden" name="date" value="<%= filters.date %>" />
+      <input type="hidden" name="project" value="<%= filters.project || "" %>" />
+      <div id="rv-send-photo-fields"></div>
+      <div class="ck-foot">
+        <button type="button" class="btn btn-back" id="ck-back">Go back</button>
+        <button type="submit" class="btn btn-primary" id="ck-send" disabled>Send now</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } else { %>
+
+<section class="panel">
+  <div class="panel-head"><h2>Find a case</h2></div>
+  <form class="panel-body find-body" method="get" action="<%= reporterBase %>/find">
+    <div class="find-search">
+      <div>
+        <label class="find-label" for="find-q">Reference, UPRN or address</label>
+        <input id="find-q" name="q" type="text" value="<%= filters.q %>" placeholder="e.g. MTVH-011, 10010120, Moor" />
+      </div>
+      <div>
+        <label class="find-label" for="find-project">Project</label>
+        <select id="find-project" name="project">
+          <option value="">All projects</option>
+          <% (Array.isArray(projectNames) ? projectNames : []).forEach((name) => { %>
+            <option value="<%= name %>" <%= filters.project === name ? "selected" : "" %>><%= name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
+        <label class="find-label" for="find-date">Date submitted</label>
+        <input id="find-date" name="date" type="date" value="<%= filters.date %>" />
+      </div>
+      <button type="submit" class="btn btn-primary">Search</button>
+      <a class="btn btn-ghost" href="<%= reporterBase %>/find">Clear</a>
+    </div>
+    <p class="find-hint">Search by reference, UPRN, or address. The project list is the same one the site form uses.</p>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Results</h2>
+    <span class="count"><%= rows.length %> found</span>
+  </div>
+  <div class="table-wrap">
+    <table class="landing-table find-table">
+      <thead>
+        <tr>
+          <th>Ref</th>
+          <th>Submitted</th>
+          <th>UPRN</th>
+          <th>Address</th>
+          <th>Hazard</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!rows.length) { %>
+          <tr><td colspan="6" class="find-empty">No cases found.</td></tr>
+        <% } %>
+        <% rows.forEach((row) => { %>
+          <tr class="find-result <%= selected && selected.id === row.id ? "is-sel" : "" %>" data-href="<%= row.href %>">
+            <td><a class="ref-chip" href="<%= row.href %>"><%= row.reference || "—" %></a></td>
+            <td><%= row.submitted %></td>
+            <td><%= row.uprn %></td>
+            <td><%= row.address %></td>
+            <td><%= row.hazard %></td>
+            <td><span class="find-status st-<%= row.statusClass %>"><%= row.statusLabel %></span></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<% if (selected) { %>
+<section class="panel" id="fr-email">
+  <div class="panel-head">
+    <h2>Email that was sent
+      <% if (selected.reference) { %><span class="ref-chip ref-chip-lg"><%= selected.reference %></span><% } %>
+    </h2>
+    <span class="find-head-actions">
+      <span class="find-status st-<%= selected.statusClass %>"><%= selected.statusLabel %></span>
+      <% if (selected.sent && !showingSent) { %>
+        <a class="btn btn-primary btn-sm" href="<%= selected.amendUrl %>">Amend &amp; resend</a>
+      <% } %>
+    </span>
+  </div>
+  <div class="panel-body find-body">
+    <% if (showingSent) { %>
+      <div class="find-ok">
+        <b>✓ Correction sent</b>
+        <p><%= selected.notice %></p>
+      </div>
+      <div class="find-actions">
+        <a class="btn btn-ghost" href="<%= selected.viewUrl %>">View sent email</a>
+      </div>
+    <% } else if (!selected.sent) { %>
+      <div class="find-info">
+        <b>Not sent yet – open it in Review and create</b>
+        <p><%= selected.address %> · <%= selected.hazard %></p>
+      </div>
+      <div class="find-actions">
+        <a class="btn btn-primary" href="<%= selected.reviewUrl %>">Open in Review and create</a>
+      </div>
+    <% } else { %>
+      <dl class="find-meta">
+        <dt>Sent</dt><dd><%= selected.sent.when %></dd>
+        <dt>Sent by</dt><dd><%= selected.sent.by || "—" %></dd>
+        <dt>From</dt><dd><%= selected.sent.from %></dd>
+        <dt>To</dt><dd><%= selected.sent.to || "—" %></dd>
+        <dt>Cc</dt><dd><%= selected.sent.cc || "—" %></dd>
+        <% if (selected.sent.bcc) { %><dt>Bcc</dt><dd><%= selected.sent.bcc %></dd><% } %>
+        <dt>Subject</dt><dd><%= selected.sent.subject || "—" %></dd>
+      </dl>
+      <% if (selected.sent.bodyMissing) { %>
+        <p class="find-missing"><%= selected.sent.missingText %></p>
+        <% if (selected.sent.body) { %><pre class="find-body-text"><%= selected.sent.body %></pre><% } %>
+      <% } else { %>
+        <pre class="find-body-text"><%= selected.sent.body %></pre>
+      <% } %>
+      <div class="find-label">Photos (<%= selected.sent.photos.length %>)</div>
+      <% if (selected.sent.photos.length) { %>
+        <div class="find-thumbs">
+          <% selected.sent.photos.forEach((photo) => { %>
+            <figure class="find-thumb">
+              <img src="<%= photo.url %>" alt="<%= photo.caption %>" />
+              <figcaption><%= photo.caption %></figcaption>
+            </figure>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <p class="find-empty">No photos attached.</p>
+      <% } %>
+      <div class="find-actions">
+        <a class="btn btn-primary" href="<%= selected.amendUrl %>">Amend &amp; resend</a>
+      </div>
+    <% } %>
+  </div>
+</section>
+<% } %>
+<% } %>
+
+<% if (selected) { %>
+<section class="panel" id="fr-log">
+  <div class="panel-head">
+    <h2>Main Log <% if (selected.reference) { %><span class="ref-chip"><%= selected.reference %></span><% } %></h2>
+  </div>
+  <% if (!selected.log.length) { %>
+    <p class="find-empty" style="padding:1rem 1.1rem;">No sends logged yet.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="landing-table find-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Sent by</th>
+            <th>To</th>
+            <th>Subject</th>
+            <th>Reason</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% selected.log.forEach((entry) => { %>
+            <tr id="log-<%= entry.id %>" class="<%= entry.fresh ? "is-new-log" : "" %>">
+              <td><%= entry.when %></td>
+              <td><span class="find-tag <%= entry.type === "Correction" ? "is-correction" : "is-original" %>"><%= entry.type %></span></td>
+              <td><%= entry.sentBy %></td>
+              <td><%= entry.to %></td>
+              <td><%= entry.subject %></td>
+              <td><%= entry.reason || "—" %></td>
+              <td>
+                <% if (entry.note) { %>
+                  <a href="#log-<%= entry.originalId %>"><%= entry.note %></a>
+                <% } else { %>—<% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+<% } %>
+
+<script src="<%= baseUrl('/js/hhsrs-find.js') %>"></script>
+<%- include("partials/layout-close") %>

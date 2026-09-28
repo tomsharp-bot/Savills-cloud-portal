@@ -995,6 +995,87 @@ body.hhsrs-flow-room .play-layout { margin-bottom: 75vh; }
 }
 .hhsrs-done-start { display: inline-block; margin-top: 14px; padding: 10px; color: var(--blue); font-weight: 600; }
 
+/* Issue submitted — the summary scrolls; Report another issue stays at the bottom. */
+.hhsrs-thanks-page { height: 100dvh; overflow: hidden; }
+.hhsrs-thanks-page .stage {
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+.hhsrs-thanks-page .play-layout {
+  display: flex; width: min(440px, 100%); max-height: 100%; min-height: 0;
+}
+.hhsrs-thanks-page .thanks-panel {
+  display: flex; flex-direction: column; width: 100%; height: 100%; max-height: 100%;
+  min-height: 0; background: #fff; overflow: hidden;
+}
+.hhsrs-thanks-page .thanks-scroll {
+  flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
+  padding: 22px 16px 12px;
+}
+.hhsrs-thanks-page .hhsrs-done {
+  background: transparent; border: 0; box-shadow: none; border-radius: 0;
+  padding: 8px 0 4px; margin: 0; text-align: center;
+}
+.hhsrs-thanks-page .hhsrs-done-tick {
+  width: 74px; height: 74px; margin: 4px auto 14px; background: #dcfce7; color: #15803d;
+  box-shadow: none;
+}
+.hhsrs-thanks-page .hhsrs-done h1 { font-size: clamp(1.35rem, 6vw, 1.7rem); margin: 0 0 6px; }
+.hhsrs-thanks-page .hhsrs-done-thanks { margin: 0 0 14px; color: #475569; font-size: 1rem; font-weight: 500; }
+.hhsrs-refbox {
+  border: 2px dashed #eab308; background: #fffbea; border-radius: 14px;
+  padding: 12px 14px; margin: 0 0 14px; text-align: center;
+}
+.hhsrs-refbox small { display: block; color: #6b5500; font-size: 0.85rem; font-weight: 700; }
+.hhsrs-refbox b {
+  display: block; margin-top: 2px; font-size: clamp(1.45rem, 8vw, 1.9rem);
+  letter-spacing: 0.04em; color: #0f172a; overflow-wrap: anywhere;
+}
+.hhsrs-sent {
+  text-align: left; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; background: #fff;
+}
+.hhsrs-sent h2 {
+  margin: 0; background: #eaf2fb; padding: 10px 14px; font-size: 0.95rem; color: #0f172a; border-bottom: 1px solid #e2e8f0;
+}
+.hhsrs-sent-row, .hhsrs-sent-note {
+  display: flex; justify-content: space-between; gap: 10px; align-items: flex-start;
+  padding: 9px 14px; border-top: 1px solid #f1f5f9; font-size: 0.95rem;
+}
+.hhsrs-sent-row { flex-wrap: wrap; }
+.hhsrs-sent-row span, .hhsrs-sent-note span { color: #64748b; flex: 0 1 auto; }
+.hhsrs-sent-row b { text-align: right; font-weight: 600; color: #0f172a; overflow-wrap: anywhere; min-width: 0; flex: 1 1 8rem; }
+.hhsrs-sent-note { flex-direction: column; gap: 3px; }
+.hhsrs-sent-note p { margin: 0; color: #0f172a; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hhsrs-sent-photos-label { padding-bottom: 0; border-bottom: 0; }
+.hhsrs-sent-photos {
+  display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 14px 14px; border-top: 1px solid #f1f5f9;
+}
+.hhsrs-sent-photos figure { margin: 0; width: 72px; max-width: 30%; }
+.hhsrs-sent-photos img {
+  display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: #e2e8f0;
+}
+.hhsrs-sent-photos figcaption {
+  margin-top: 3px; font-size: 0.7rem; color: #64748b; text-align: center;
+}
+.hhsrs-sent-tip {
+  margin: 14px 0 4px; color: #475569; font-size: 0.92rem; line-height: 1.4; text-align: center;
+}
+.hhsrs-thanks-page .thanks-foot {
+  flex: 0 0 auto; background: #fff; border-top: 1px solid #e2e8f0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+}
+.hhsrs-thanks-page .thanks-foot .hhsrs-done-again {
+  max-width: none; min-height: 56px; border-radius: 14px; font-size: 1.05rem;
+}
+@media (max-width: 360px) {
+  .hhsrs-thanks-page .thanks-scroll { padding: 16px 12px 8px; }
+  .hhsrs-sent-row { flex-wrap: wrap; }
+  .hhsrs-sent-row b { text-align: left; flex: 1 1 100%; }
+}
+
 
 /* =====================================================================================================
    Faded house photo inside the centre

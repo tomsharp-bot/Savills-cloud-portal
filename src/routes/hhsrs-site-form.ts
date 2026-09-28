@@ -62,10 +62,16 @@ import {
   siteSubmissionCallFields,
   validatePhotos,
   writeDraft,
+  buildThanksSummary,
+  safeId,
+  safeStoredName,
 } from "../lib/hhsrs-site-form.js";
+import { createSubmissionWithReference } from "../lib/hhsrs-reference.js";
 import {
   PHOTOS_NOT_STORED,
   SitePhotoError,
+  loadSiteFormPhoto,
+  privateInlineHeaders,
   sitePhotoStorageFromApp,
 } from "../lib/hhsrs-site-photos.js";
 
@@ -602,28 +608,34 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
   const storage = sitePhotoStorageFromApp(req.app);
   let createdId = "";
   let storedKeys: string[] = [];
+  const projectId = isDemoProject(checked.data.projectId) ? null : checked.data.projectId;
   try {
-    const created = await prisma.hhsrsSiteSubmission.create({
-      data: {
-        projectId: isDemoProject(checked.data.projectId) ? null : checked.data.projectId,
-        projectName: checked.data.projectName,
-        surveyDate: checked.data.surveyDate,
-        uprn: checked.data.uprn,
-        fullAddress: checked.data.fullAddress,
-        postcode: checked.data.postcode,
-        addressSource: checked.data.addressSource === ADDRESS_SOURCE_MANUAL ? ADDRESS_SOURCE_MANUAL : "",
-        surveyorName: checked.data.surveyorName,
-        category: checked.data.category,
-        rating: checked.data.rating,
-        comment: checked.data.comment,
-        clientCallReference: call.clientCallReference,
-        callOutcome: call.callOutcome,
-        callNotes: call.callNotes,
-        otherDetails: checked.data.otherDetails,
-        cat1Confirmed: checked.data.cat1Confirmed,
-        photoPaths: [],
-      },
-    });
+    const created = await createSubmissionWithReference(
+      { projectId, projectName: checked.data.projectName },
+      (tx, reference) =>
+        tx.hhsrsSiteSubmission.create({
+          data: {
+            projectId,
+            projectName: checked.data.projectName,
+            surveyDate: checked.data.surveyDate,
+            uprn: checked.data.uprn,
+            fullAddress: checked.data.fullAddress,
+            postcode: checked.data.postcode,
+            addressSource: checked.data.addressSource === ADDRESS_SOURCE_MANUAL ? ADDRESS_SOURCE_MANUAL : "",
+            surveyorName: checked.data.surveyorName,
+            category: checked.data.category,
+            rating: checked.data.rating,
+            comment: checked.data.comment,
+            clientCallReference: call.clientCallReference,
+            callOutcome: call.callOutcome,
+            callNotes: call.callNotes,
+            otherDetails: checked.data.otherDetails,
+            cat1Confirmed: checked.data.cat1Confirmed,
+            photoPaths: [],
+            reference,
+          },
+        })
+    );
     createdId = created.id;
     storedKeys = await persistSubmissionPhotos(created.id, draft, storage);
     if (storedKeys.length !== draft.photos.length) {
@@ -659,9 +671,54 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
   }
 });
 
-hhsrsSiteFormRouter.get("/thanks", (req: Request, res: Response) => {
+hhsrsSiteFormRouter.get("/thanks", async (req: Request, res: Response) => {
+  const submissionId = String(req.query.id || "").trim();
+  let summary = null;
+  if (submissionId) {
+    try {
+      safeId(submissionId);
+      const row = await prisma.hhsrsSiteSubmission.findUnique({ where: { id: submissionId } });
+      if (row) {
+        summary = buildThanksSummary(row, (name) =>
+          hhsrsUrl(`/thanks/${encodeURIComponent(row.id)}/photo/${encodeURIComponent(name)}`)
+        );
+      }
+    } catch {
+      summary = null;
+    }
+  }
   res.render("hhsrs-site-form/thanks", {
     title: "Issue submitted — Savills HHSRS Site Reporting",
-    submissionId: String(req.query.id || ""),
+    summary,
   });
+});
+
+hhsrsSiteFormRouter.get("/thanks/:id/photo/:name", async (req: Request, res: Response) => {
+  let id = "";
+  let storedName = "";
+  try {
+    id = safeId(req.params.id);
+    storedName = safeStoredName(req.params.name);
+  } catch {
+    res.status(404).send("Photo not found.");
+    return;
+  }
+  const row = await prisma.hhsrsSiteSubmission.findUnique({
+    where: { id },
+    select: { id: true, photoPaths: true },
+  });
+  const photos = Array.isArray(row?.photoPaths) ? row.photoPaths.map(String) : [];
+  const expected = `hhsrs-site-form/${id}/${storedName}`;
+  if (!row || !photos.includes(expected)) {
+    res.status(404).send("Photo not found.");
+    return;
+  }
+  const loaded = await loadSiteFormPhoto(expected, sitePhotoStorageFromApp(req.app));
+  if (!loaded) {
+    res.status(404).send("Photo not found.");
+    return;
+  }
+  const headers = privateInlineHeaders(loaded.fileName, loaded.body.length, loaded.contentType);
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+  res.status(200).send(loaded.body);
 });

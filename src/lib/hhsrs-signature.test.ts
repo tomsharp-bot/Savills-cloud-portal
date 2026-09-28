@@ -133,7 +133,7 @@ describe("HHSRS email signature", () => {
   it("keeps a short signature note on the review panel and the full signature on the check screen", () => {
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
-    const bodyAt = review.indexOf('id="rv-email-body"');
+    const bodyAt = review.indexOf('id="hhsrs-body"');
     const noteAt = review.indexOf("Signature added when sent");
     const attachAt = review.indexOf('id="rv-attach-block"');
     const emailPhotosAt = review.indexOf('id="rv-email-photos"');

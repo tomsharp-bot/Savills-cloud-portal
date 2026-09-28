@@ -298,10 +298,17 @@ describe("HHSRS completed photo pages", () => {
     const property = readFileSync(path.join(root, "views/photos-hhsrs-property.ejs"), "utf8");
     assert.match(property, /data-photo-open/);
     const reporter = readFileSync(path.join(root, "src/routes/hhsrs-reporter.ts"), "utf8");
-    const loggedAt = reporter.indexOf('status: "email_sent"');
-    const copyAt = reporter.indexOf("archiveLoggedPhotos");
-    assert.ok(loggedAt > 0 && copyAt > loggedAt);
-    assert.match(reporter, /Marked as actioned\. Case moved to Main Log\. Attach photos in Outlook before you send\./);
+    const sendAt = reporter.indexOf("async function handleSend");
+    const copyAt = reporter.indexOf("archiveLoggedPhotos", sendAt);
+    assert.ok(sendAt > 0 && copyAt > sendAt);
+    assert.match(reporter, /Sent and logged\./);
+    assert.doesNotMatch(reporter, /Attach photos in Outlook before you send/);
+    assert.doesNotMatch(reporter, /handleMarkActioned/);
+    assert.match(reporter, /status\(410\)/);
+    const sendCase = readFileSync(path.join(root, "src/lib/hhsrs-send-case.ts"), "utf8");
+    assert.match(sendCase, /'email_sent'/);
+    assert.match(sendCase, /'corrected'/);
+    assert.match(sendCase, /INSERT INTO "HhsrsSentEmail"/);
     const script = readFileSync(path.join(root, "scripts/backfill-hhsrs-completed-photos.ts"), "utf8");
     assert.match(script, /--backfill/);
     assert.match(script, /Nothing was copied/);
@@ -345,6 +352,29 @@ async function request(
     location: res.headers.get("location") || "",
     setCookie,
   };
+}
+
+async function postPortalSend(port: number, cookie: string, id: string) {
+  const prevMock = process.env.HHSRS_SEND_MOCK;
+  const prevPass = process.env.HHSRS_SMTP_PASSWORD;
+  process.env.HHSRS_SEND_MOCK = "1";
+  process.env.HHSRS_SMTP_PASSWORD = prevPass || "test-not-sent";
+  try {
+    return await request(port, "POST", `/HHSRSreporter/review/${id}/send`, {
+      cookie,
+      form: {
+        checked: "1",
+        to: "housing.team@savillshousing.co.uk",
+        subject: "HHSRS hazard",
+        body: "Logged from the portal.",
+      },
+    });
+  } finally {
+    if (prevMock === undefined) delete process.env.HHSRS_SEND_MOCK;
+    else process.env.HHSRS_SEND_MOCK = prevMock;
+    if (prevPass === undefined) delete process.env.HHSRS_SMTP_PASSWORD;
+    else process.env.HHSRS_SMTP_PASSWORD = prevPass;
+  }
 }
 
 describe("HHSRS completed photos with the database", () => {
@@ -414,20 +444,15 @@ describe("HHSRS completed photos with the database", () => {
         where: { id: row.id },
         data: { photoPaths: [sourcePath] },
       });
-      const fresh = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
-
       const login = await request(port, "POST", "/login", {
         form: { username: "phil.m", password: "PhilMoon2468" },
       });
       assert.equal(login.status, 302);
       const cookie = cookieHeader(login.setCookie);
 
-      const logged = await request(port, "POST", `/HHSRSreporter/review/${row.id}/mark-actioned`, {
-        cookie,
-        form: { expectedUpdatedAt: fresh.updatedAt.toISOString() },
-      });
+      const logged = await postPortalSend(port, cookie, row.id);
       assert.equal(logged.status, 302);
-      assert.match(logged.location, /\/HHSRSreporter\/main-log$/);
+      assert.match(logged.location, new RegExp(`/HHSRSreporter/review/${row.id}$`));
       const after = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
       assert.equal(after.status, "email_sent");
       assert.equal(readFileSync(diskPath).toString(), "jpeg-bytes");
@@ -540,12 +565,9 @@ describe("HHSRS completed photos with the database", () => {
         form: { username: "phil.m", password: "PhilMoon2468" },
       });
       const cookie = cookieHeader(login.setCookie);
-      const logged = await request(port, "POST", `/HHSRSreporter/review/${row.id}/mark-actioned`, {
-        cookie,
-        form: { expectedUpdatedAt: row.updatedAt.toISOString() },
-      });
+      const logged = await postPortalSend(port, cookie, row.id);
       assert.equal(logged.status, 302);
-      assert.match(logged.location, /\/HHSRSreporter\/main-log$/);
+      assert.match(logged.location, new RegExp(`/HHSRSreporter/review/${row.id}$`));
       assert.equal(calls, 1);
       const after = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
       assert.equal(after.status, "email_sent");

@@ -3,7 +3,7 @@
  * (templates.py + the engine helpers it calls). Wording rules stay deterministic.
  */
 
-import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import { composeCallNotes, splitCallNotes } from "./hhsrs-site-form.js";
 
 export class DraftError extends Error {
@@ -143,15 +143,24 @@ const SPELLING_FIXES: Record<string, string> = {
   moratr: "mortar",
 };
 
+const NAMED_TEMPLATES: readonly TemplateId[] = [
+  "Cornwall",
+  "BPHA",
+  "LFHA",
+  "Onward",
+  "Vico Homes",
+  "A2Dominion",
+  "Bristol",
+  "Standard",
+];
+
+/** Email template for a portal project name. Roster templates are mapped by the shared resolver. */
 export function templateId(project: string): TemplateId {
-  if (project.startsWith("Cornwall")) return "Cornwall";
-  if (project.startsWith("BPHA")) return "BPHA";
-  if (project.startsWith("LFHA")) return "LFHA";
-  if (project.startsWith("Onward")) return "Onward";
-  if (/^VICO\b/i.test(project)) return "Vico Homes";
-  if (/^(?:A2D|A2Dominion)\b/i.test(project)) return "A2Dominion";
-  if (project.startsWith("Bristol")) return "Bristol";
-  return project.trim() ? "Standard" : "";
+  const raw = String(project || "").trim();
+  if (!raw) return "";
+  const template = resolveHhsrsProject(raw).roster?.template || "";
+  if ((NAMED_TEMPLATES as readonly string[]).includes(template)) return template as TemplateId;
+  return "Standard";
 }
 
 export function correctReportSpelling(text: string): string {
@@ -199,7 +208,8 @@ export function formatAddress(value: string): string {
 }
 
 export function includeVulnerabilities(data: Pick<DraftCase, "project" | "includeVulnerabilities">): boolean {
-  return /^VICO(?:\b|_)/i.test(data.project || "") || data.includeVulnerabilities === true;
+  const fromRoster = Boolean(resolveHhsrsProject(data.project).roster?.extras.vulnerabilities);
+  return fromRoster || /^VICO(?:\b|_)/i.test(data.project || "") || data.includeVulnerabilities === true;
 }
 
 export function splitVulnerabilities(description: string): [string, string, boolean] {
@@ -824,7 +834,7 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
   lines.push(bullet("Rating", data.rating || ""));
   lines.push(bullet("Site notes", data.description));
 
-  const needsCall = Boolean(matchDemoProject(data.project)?.extras.calls);
+  const needsCall = Boolean(resolveHhsrsProject(data.project).roster?.extras.calls);
   const reference = (data.callRef || "").trim();
   if (needsCall && reference) {
     const label = templateId(data.project) === "Onward" ? "Onward call reference" : "Client call reference";

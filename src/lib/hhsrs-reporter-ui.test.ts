@@ -5,6 +5,7 @@ import {
   formatTimeAgo,
   ratingDisplayClass,
   actionedStatusLabel,
+  statusForReviewSave,
   photoAttachmentCount,
   reporterCasePhotos,
   mergeReviewDraftFields,
@@ -60,6 +61,11 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(matchDemoProject("Onward 2026")?.extras.calls, true);
     assert.equal(matchDemoProject("A2D 2026 Phase 4")?.extras.calls, true);
     assert.equal(matchDemoProject("Vico 2026 8k")?.extras.calls, true);
+    assert.equal(matchDemoProject("Leeds Fed HA 2026")?.name, "LFHA (Leeds)");
+    assert.equal(matchDemoProject("Leeds Fed HA 2026")?.template, "LFHA");
+    assert.equal(matchDemoProject("Leeds Federation")?.name, "LFHA (Leeds)");
+    assert.equal(matchDemoProject("Leeds"), null);
+    assert.equal(matchDemoProject("Onward (Leeds)")?.template, "Onward");
   });
 
   it("exposes the public site-form URL for Admin copy", () => {
@@ -271,8 +277,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /Create new email/);
     assert.match(review, /value=""/);
     assert.match(pending, /photo-att-col/);
-    assert.match(pending, /Review Case/);
-    assert.match(review, /id="rv-email-bcc"/);
+    assert.match(readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8"), /Review Case/);
+    assert.match(review, /id="hhsrs-bcc"/);
     assert.match(review, /id="btn-abandon-claim"/);
     assert.match(review, /id="rv-draft-status"/);
     assert.match(js, /skipDraft \|\| opts\.keepEmail/);
@@ -318,10 +324,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /function showPhotoPreview/);
     assert.match(js, /rv-photo-preview/);
     assert.match(css, /btn-photo-fallback/);
-    assert.match(css, /#rv-email-body\s*\{[^}]*min-height:\s*300px/);
-    assert.match(css, /#rv-email-body\s*\{[^}]*resize:\s*vertical/);
-    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*align-self:\s*start/);
-    assert.match(css, /\[data-copy="rv-email-body"\]\s*\{[^}]*height:\s*42px/);
+    assert.match(css, /#hhsrs-body\s*\{[^}]*min-height:\s*300px/);
+    assert.match(css, /#hhsrs-body\s*\{[^}]*resize:\s*vertical/);
+    assert.match(css, /\[data-copy="hhsrs-body"\]\s*\{[^}]*align-self:\s*start/);
+    assert.match(css, /\[data-copy="hhsrs-body"\]\s*\{[^}]*height:\s*42px/);
   });
 
   it("paints the tool header as a full-width bar and leaves the navy top bar", () => {
@@ -345,25 +351,61 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(actions, /← Back to Pending Issues/);
     assert.match(actions, /id="btn-create-plain-email"/);
     assert.doesNotMatch(actions, /id="btn-mark-actioned"/);
-    assert.doesNotMatch(actions, /id="btn-abandon-claim"/);
+    assert.match(actions, /id="btn-abandon-claim"/);
+    assert.match(actions, /Abandon claim — return to pending/);
+    assert.match(actions, /showAbandon \? "" : "hidden"/);
     assert.ok(gridAt >= 0 && finishAt > gridAt, "finish bar follows the review grid inside the workspace");
-    assert.match(workspace, /id="mark-actioned-form"/);
+    const finish = workspace.slice(finishAt);
+    assert.match(finish, /id="btn-send-email"/);
+    assert.match(finish, /Send and log/);
+    assert.match(finish, /id="btn-not-needed"/);
+    assert.match(finish, /Not needed/);
+    assert.match(finish, /Duplicate, error or test/);
+    assert.match(finish, /Sends the email and adds it to the Main Log/);
+    assert.doesNotMatch(finish, /id="btn-abandon-claim"/);
+    assert.match(review, /Move to Duplicates &amp; errors\?/);
+    assert.match(review, /Nothing is deleted\. You can move it back\./);
+    assert.match(review, /showNotNeeded/);
+    assert.doesNotMatch(workspace, /id="mark-actioned-form"/);
+    assert.doesNotMatch(workspace, /id="btn-mark-actioned"/);
+    assert.doesNotMatch(workspace, /Mark as actioned/);
+    assert.doesNotMatch(workspace, /Finished\? Mark it as actioned/);
     assert.match(workspace, /name="expectedUpdatedAt"/);
-    assert.match(workspace, /id="abandon-claim-form"/);
-    assert.match(workspace, /id="btn-abandon-claim"/);
-    assert.match(workspace, /showAbandon \? "" : "hidden"/);
-    assert.match(workspace, /Abandon claim — return to pending/);
-    assert.match(workspace, /Finished\? Mark it as actioned\./);
-    assert.match(workspace, /Mark as actioned → Main Log/);
-    assert.match(workspace, /Open a waiting case from Pending Issues first/);
-    assert.match(workspace, /disabled title="Open a waiting case from Pending Issues first"/);
-    assert.match(review, /id="btn-send-email"/);
+    assert.doesNotMatch(workspace, /id="abandon-claim-form"/);
+    assert.match(workspace, /btn-copy/);
+    assert.match(workspace, /Download photos/);
     assert.match(review, /Check before sending/);
     assert.match(review, /I've checked the details/);
+    assert.match(review, /id="ck-send"[^>]*>Send and log</);
+    assert.match(review, /Nothing is sent until you press Send and log\./);
+    assert.doesNotMatch(review, /Send now/);
     assert.match(review, /id="rv-email-from"/);
     assert.doesNotMatch(review, /Copy into Outlook/);
     assert.doesNotMatch(review, /Use <strong>Mark as actioned → Main Log<\/strong> when done/);
+    assert.doesNotMatch(review, /Attach photos in Outlook/);
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    assert.match(pending, /Cases move to Main Log when you press Send and log\./);
+    assert.doesNotMatch(pending, /Mark as actioned/);
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    assert.match(js, /Start a new email\? Your unsent draft will be cleared\./);
+    assert.match(js, /Sends the email and adds it to the Main Log\./);
+    assert.doesNotMatch(js, /Open a case before sending/);
+    assert.doesNotMatch(js, /mark-actioned-form/);
+    assert.doesNotMatch(js, /Mark this case as actioned/);
+    assert.equal(statusForReviewSave("in_review", "email_sent"), "in_review");
+    assert.equal(statusForReviewSave("in_review", "closed"), "in_review");
+    assert.equal(statusForReviewSave("in_review", "corrected"), "in_review");
+    assert.equal(statusForReviewSave("new", "email_sent"), "in_review");
+    assert.equal(statusForReviewSave("new", "in_review"), "in_review");
+    assert.equal(statusForReviewSave("in_review", "email_ready"), "email_ready");
+    assert.equal(statusForReviewSave("email_ready", "closed"), "email_ready");
+    assert.equal(statusForReviewSave("email_sent", "in_review"), "email_sent");
+    assert.equal(statusForReviewSave("corrected", "closed"), "corrected");
+    assert.equal(statusForReviewSave("closed", "in_review"), "closed");
+    assert.equal(statusForReviewSave("not_needed", "in_review"), "not_needed");
+    assert.equal(statusForReviewSave("not_needed", "email_sent"), "not_needed");
     assert.match(css, /#review-workspace\s*\{[^}]*padding-bottom:\s*85vh/);
+    assert.match(css, /\.finish-bar\s*\{[^}]*position:\s*static/);
     assert.match(css, /\.finish-bar\s*\{[^}]*background:\s*var\(--surface\)/);
     assert.match(css, /\.finish-bar\s*\{[^}]*border-radius:\s*var\(--radius\)/);
     assert.match(css, /\.finish-bar \.btn\s*\{[^}]*min-height:\s*var\(--tap\)/);
@@ -437,6 +479,67 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
     assert.equal(testHousing.cc, "");
     assert.equal(testHousing.bcc, "");
+  });
+
+  it("shares one pending-issues table between Pending Issues and Review and create", () => {
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    const waiting = pending.slice(pending.indexOf('id="not-actioned"'), pending.indexOf('id="last-actioned"'));
+    const also = review.slice(review.indexOf('id="rv-also-waiting"'), review.indexOf('id="rv-project-block"'));
+    assert.match(waiting, /partials\/pending-issues-table/);
+    assert.match(also, /partials\/pending-issues-table/);
+    assert.doesNotMatch(waiting, /<thead>/);
+    assert.doesNotMatch(also, /<thead>/);
+    const head = table.slice(table.indexOf("<thead>"), table.indexOf("</thead>"));
+    const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
+    assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
+    assert.match(table, /row\.reference/);
+    assert.match(table, /ref-chip/);
+    assert.match(table, /row\.uprn/);
+    assert.match(table, /row\.surveyorName/);
+  });
+
+  it("turns browser autofill off on email compose fields", () => {
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const card = readFileSync("views/hhsrs-reporter/partials/client-email-card.ejs", "utf8");
+    function tagWithId(html: string, id: string): string {
+      const match = html.match(new RegExp(`<(?:input|textarea)\\b[^>]*\\bid="${id}"[^>]*>`));
+      assert.ok(match, `missing ${id}`);
+      return match[0];
+    }
+    for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"]) {
+      for (const html of [review, find]) {
+        const tag = tagWithId(html, id);
+        assert.match(tag, /autocomplete="off"/, id);
+        assert.match(tag, new RegExp(`name="${id}"`), id);
+        assert.doesNotMatch(tag, /type="email"/, id);
+      }
+    }
+    for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {
+      for (const html of [review, find]) {
+        const tag = tagWithId(html, id);
+        assert.match(tag, /type="text"/, id);
+        assert.match(tag, /inputmode="email"/, id);
+      }
+    }
+    assert.match(review, /id="rv-email-form"[^>]*autocomplete="off"/);
+    assert.match(review, /id="rv-send-form"[^>]*autocomplete="off"/);
+    assert.match(find, /class="find-compose"[^>]*autocomplete="off"/);
+    assert.match(find, /id="rv-send-form"[^>]*autocomplete="off"/);
+    for (const id of ["rv-send-to", "rv-send-cc", "rv-send-bcc", "rv-send-subject", "rv-send-body"]) {
+      assert.match(tagWithId(review, id), /autocomplete="off"/, id);
+      assert.match(tagWithId(find, id), /autocomplete="off"/, id);
+    }
+    assert.match(card, /class="client-email-row"[^>]*autocomplete="off"/);
+    for (const name of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {
+      const tag = card.match(new RegExp(`<textarea\\b[^>]*\\bname="${name}"[^>]*>`));
+      assert.ok(tag, name);
+      assert.match(tag[0], /autocomplete="off"/, name);
+      assert.match(tag[0], /inputmode="email"/, name);
+    }
+    assert.doesNotMatch(card, /name="to"|name="cc"|name="bcc"/);
   });
 
   it("saves a call reference ahead of a blank reason, and composes the reason when the ref is empty", () => {
