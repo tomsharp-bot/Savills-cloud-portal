@@ -32,7 +32,8 @@
           <% const visitReady = steps.visit; %>
           <% const selectedProject = projects.find((p) => p.id === values.projectId); %>
           <% const flags = selectedProject ? selectedProject.flags : { calls: false, onward: false, saxon: false, online: false }; %>
-          <% const manualOpen = !!(selectedProject && selectedProject.manualAddress); %>
+          <% const noStockManual = !!(selectedProject && selectedProject.manualAddress); %>
+          <% const manualOpen = noStockManual || values.addressSource === "manual"; %>
           <% const addrOpen = !manualOpen && !!(String(values.uprn || "").trim() && (String(values.fullAddress || "").trim() || values.addressConfirmed)); %>
           <form id="hhsrs-form" class="hhsrs-form" method="post" action="<%= hhsrsUrl('/review') %>" enctype="multipart/form-data" novalidate data-min-photos="<%= minPhotos %>" data-max-photos="<%= maxPhotos %>" data-max-file-bytes="<%= maxFileBytes %>" data-max-file-mb="<%= maxFileMb %>" data-stock-lookup="<%= hhsrsUrl('/stock-lookup') %>" data-jump="<%= jump || '' %>">
             <% if (draft) { %><input type="hidden" name="draftId" value="<%= draft.id %>" /><% } %>
@@ -76,7 +77,7 @@
               <div class="info-box flow-step" id="step-property" data-flow="property">
                 <p class="box-title">Property</p>
                 <p class="hhsrs-hint" id="stock-address-hint" style="margin-top:0" <%= manualOpen ? "hidden" : "" %>>Enter the UPRN from this project’s stock list, then confirm the address. Edit it if it is wrong.</p>
-                <p class="hhsrs-hint" id="manual-address-hint" style="margin-top:0" <%= manualOpen ? "" : "hidden" %>>No address list for this project yet. Type the address.</p>
+                <p class="hhsrs-hint" id="manual-address-hint" style="margin-top:0" <%= noStockManual ? "" : "hidden" %>>No address list for this project yet. Type the address.</p>
                 <div class="find-row<%= manualOpen ? " is-manual" : "" %>" id="uprn-row">
                   <div>
                     <label for="uprn" style="margin-top:0">UPRN *</label>
@@ -86,6 +87,7 @@
                 </div>
                 <% if (errors.uprn) { %><p class="field-error"><%= errors.uprn %></p><% } %>
                 <p class="find-status" id="find-status" aria-live="polite" <%= manualOpen ? "hidden" : "" %>></p>
+                <button type="button" class="hhsrs-btn hhsrs-btn-type-address" id="btn-type-address" hidden>Type the address instead</button>
 
                 <div class="addr-card" id="addr-card" <%= addrOpen ? "" : "hidden" %>>
                   <label for="fullAddress" style="margin-top:0">Full address *</label>
@@ -108,6 +110,7 @@
                 </div>
 
                 <div id="property-manual" <%= manualOpen ? "" : "hidden" %>>
+                  <button type="button" class="type-address-back" id="btn-back-uprn" <%= noStockManual || !manualOpen ? "hidden" : "" %>>Back to UPRN search</button>
                   <input type="hidden" name="addressSource" id="address-source" value="manual" <%= manualOpen ? "" : "disabled" %> />
                   <label for="addressLine1">Address line 1 *</label>
                   <input id="addressLine1" name="addressLine1" type="text" required autocomplete="address-line1" value="<%= values.addressLine1 || "" %>" class="<%= errors.addressLine1 ? 'is-invalid' : '' %>" <%= manualOpen ? "" : "disabled" %> />

@@ -172,6 +172,18 @@ export function composeCallNotes(reason: string, notes: string): string {
   return extra ? `${reason} — ${extra}` : reason;
 }
 
+/** Split a stored call note back into the form's reason and extra detail. */
+export function splitCallNotes(callNotes: string): { reason: string; note: string } {
+  const text = String(callNotes || "").trim();
+  if (!text) return { reason: "", note: "" };
+  for (const reason of CALL_REF_BLANK_REASONS) {
+    if (text === reason) return { reason, note: "" };
+    const prefix = `${reason} — `;
+    if (text.startsWith(prefix)) return { reason, note: text.slice(prefix.length) };
+  }
+  return { reason: "", note: text };
+}
+
 export function hhsrsPhotoCountError(total: number): string | undefined {
   if (total < HHSRS_MIN_PHOTOS) return `Add at least ${HHSRS_MIN_PHOTOS} photo.`;
   if (total > HHSRS_MAX_PHOTOS) return `Add ${HHSRS_MIN_PHOTOS} to ${HHSRS_MAX_PHOTOS} photos.`;

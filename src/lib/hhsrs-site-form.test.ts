@@ -6,6 +6,7 @@ import ejs from "ejs";
 import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS, isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import {
   composeCallNotes,
+  splitCallNotes,
   formatHhsrsSurveyDate,
   emptyHhsrsValues,
   formatStockAddressLine,
@@ -276,6 +277,13 @@ describe("validateHhsrsForm", () => {
     assert.equal(busyNote.ok, true);
     if (busyNote.ok) {
       assert.equal(composeCallNotes("Engaged/busy", "Line stayed busy"), "Engaged/busy — Line stayed busy");
+      assert.deepEqual(splitCallNotes("No answer"), { reason: "No answer", note: "" });
+      assert.deepEqual(splitCallNotes("Engaged/busy — Line stayed busy"), {
+        reason: "Engaged/busy",
+        note: "Line stayed busy",
+      });
+      assert.deepEqual(splitCallNotes("Other — Voicemail full."), { reason: "Other", note: "Voicemail full." });
+      assert.deepEqual(splitCallNotes("Voicemail full"), { reason: "", note: "Voicemail full" });
       assert.deepEqual(siteSubmissionCallFields(busyNote.data), {
         clientCallReference: "",
         callOutcome: "Attempted",
@@ -551,6 +559,11 @@ describe("HHSRS site form project option flags", () => {
     assert.match(html, /id="manual-address-hint"[^>]*hidden/);
     assert.match(html, /No address list for this project yet\. Type the address\./);
     assert.match(html, /id="btn-lookup-uprn"/);
+    assert.match(html, /id="btn-type-address"[^>]*hidden/);
+    assert.match(html, /Type the address instead/);
+    assert.match(html, /id="btn-back-uprn"[^>]*hidden/);
+    assert.match(html, /Back to UPRN search/);
+    assert.match(readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8"), /UPRN not found\./);
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
     assert.match(html, /data-jump=""/);
     assert.match(html, /viewport-fit=cover/);

@@ -138,6 +138,7 @@
         vulnRule.textContent = "";
       }
     }
+    syncCallRefFields();
     var note = $("rv-online-form-note");
     if (note && extras.online_form) {
       var haz = (($("rv-hazard") && $("rv-hazard").value) || "").toLowerCase();
@@ -607,7 +608,45 @@
     }
   }
 
+  function callsExtraVisible() {
+    var node = document.querySelector('#rv-case-form .project-extra[data-extra="calls"]');
+    return !!(node && !node.hidden);
+  }
+
+  function composeBlankCallNotes(reason, extra) {
+    extra = String(extra || "").replace(/^\s+|\s+$/g, "");
+    if (reason === "Other") return extra ? "Other — " + extra : "";
+    if (!reason) return extra;
+    return extra ? reason + " — " + extra : reason;
+  }
+
+  function syncCallRefFields() {
+    var refEl = $("rv-call-ref");
+    var blank = $("rv-call-blank");
+    var reasonEl = $("rv-call-reason");
+    var notesEl = $("rv-call-notes");
+    var visible = callsExtraVisible();
+    var ref = refEl ? String(refEl.value || "").replace(/^\s+|\s+$/g, "") : "";
+    if (refEl) refEl.disabled = !visible;
+    var showBlank = visible && !ref;
+    if (blank) blank.hidden = !showBlank;
+    if (reasonEl) reasonEl.disabled = !showBlank;
+    if (notesEl) notesEl.disabled = !showBlank;
+  }
+
   function collectDraftPayload() {
+    var visible = callsExtraVisible();
+    var ref = visible && $("rv-call-ref") ? String($("rv-call-ref").value || "").replace(/^\s+|\s+$/g, "") : "";
+    var reason = visible && !ref && $("rv-call-reason") ? String($("rv-call-reason").value || "").replace(/^\s+|\s+$/g, "") : "";
+    var extra = visible && !ref && $("rv-call-notes") ? String($("rv-call-notes").value || "").replace(/^\s+|\s+$/g, "") : "";
+    var callOutcome = "";
+    var callNotes = "";
+    if (visible && reason) {
+      callOutcome = "Attempted";
+      callNotes = composeBlankCallNotes(reason, extra);
+    } else if (visible && !ref && extra) {
+      callNotes = extra;
+    }
     return {
       caseId: cfg.caseId || "",
       projectName: ($("rv-project") && $("rv-project").value) || "",
@@ -617,9 +656,9 @@
       hazard: ($("rv-hazard") && $("rv-hazard").value) || "",
       rating: ($("rv-rating") && $("rv-rating").value) || "",
       notes: ($("rv-notes") && $("rv-notes").value) || "",
-      callOutcome: ($("rv-call-status") && $("rv-call-status").value) || "",
-      clientCallReference: ($("rv-call-ref") && $("rv-call-ref").value) || "",
-      callNotes: ($("rv-call-notes") && $("rv-call-notes").value) || "",
+      callOutcome: callOutcome,
+      clientCallReference: ref,
+      callNotes: callNotes,
       suspectedCause: ($("rv-cause") && $("rv-cause").value) || "",
       includeCause: !!($("rv-include-cause") && $("rv-include-cause").checked),
       vulnerabilities: ($("rv-vulnerabilities") && $("rv-vulnerabilities").value) || "",
@@ -701,7 +740,7 @@
       var el = $(id);
       if (el && !el.readOnly) el.value = "";
     });
-    if ($("rv-call-status")) $("rv-call-status").value = "";
+    if ($("rv-call-reason")) $("rv-call-reason").value = "";
     if ($("rv-onward-topic")) $("rv-onward-topic").value = "";
     if ($("rv-survey-date") && $("rv-survey-date").type !== "text") $("rv-survey-date").value = "";
     if ($("rv-cat1")) $("rv-cat1").checked = false;
@@ -755,7 +794,7 @@
      declarations, and var initialisers are not hoisted with their values. */
   var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
   var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
-  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-status", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
+  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
   var REVIEW_EMAIL_FIELD_IDS = ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"];
   var reviewDraftSaveTimer = null;
   var resumeCleared = false;
@@ -786,6 +825,12 @@
     var keep = ($("rv-rating") && $("rv-rating").value) || undefined;
     if (cfg.initialProject && !projectSel.value) ensureProjectSelectValue(cfg.initialProject);
     applyProjectChange({ keepRating: keep, skipDraft: true });
+  }
+
+  var callRefEl = $("rv-call-ref");
+  if (callRefEl) {
+    callRefEl.addEventListener("input", syncCallRefFields);
+    callRefEl.addEventListener("change", syncCallRefFields);
   }
 
   var hazardEl = $("rv-hazard");

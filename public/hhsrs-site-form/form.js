@@ -114,6 +114,17 @@
     return !!(opt && opt.getAttribute("data-manual-address") === "1");
   }
 
+  var typedInstead = false;
+  var missedUprn = false;
+  var addressSource = $("address-source");
+  if (addressSource && !addressSource.disabled && addressSource.value === "manual" && !manualSelected()) {
+    typedInstead = true;
+  }
+
+  function manualOpen() {
+    return manualSelected() || typedInstead;
+  }
+
   function setBoxEnabled(box, enabled) {
     if (!box) return;
     var inputs = box.querySelectorAll("input, select, textarea");
@@ -126,19 +137,24 @@
   }
 
   function syncAddressMode() {
-    var manual = manualSelected();
+    var noStock = manualSelected();
+    var manual = manualOpen();
     var stockHint = $("stock-address-hint");
     var manualHint = $("manual-address-hint");
     var manualBox = $("property-manual");
+    var typeBtn = $("btn-type-address");
+    var backBtn = $("btn-back-uprn");
     var card = $("addr-card");
     var status = $("find-status");
     var row = $("uprn-row");
     if (stockHint) stockHint.hidden = manual;
-    if (manualHint) manualHint.hidden = !manual;
+    if (manualHint) manualHint.hidden = !noStock;
     if (manualBox) {
       manualBox.hidden = !manual;
       setBoxEnabled(manualBox, manual);
     }
+    if (typeBtn) typeBtn.hidden = manual || !missedUprn;
+    if (backBtn) backBtn.hidden = !typedInstead;
     if (card) setBoxEnabled(card, !manual);
     if (manual && card) card.hidden = true;
     if (status) status.hidden = manual;
@@ -204,7 +220,7 @@
   }
 
   function lookupUprn() {
-    if (!findBtn || lookupBusy || addressLocked() || manualSelected()) return;
+    if (!findBtn || lookupBusy || addressLocked() || manualOpen()) return;
     var project = val("projectId");
     var uprnEl = $("uprn");
     var uprn = normUprn(uprnEl ? uprnEl.value : "");
@@ -221,7 +237,9 @@
       return;
     }
     lookupBusy = true;
+    missedUprn = false;
     findBtn.disabled = true;
+    syncAddressMode();
     setFindStatus("Looking up UPRN…", "");
     var url = lookupUrl + "?projectId=" + encodeURIComponent(project) + "&uprn=" + encodeURIComponent(uprn);
     fetch(url, { headers: { Accept: "application/json" } })
@@ -241,10 +259,17 @@
           setFindStatus(data.error || "Too many lookups. Wait a moment and try again.", "err");
           return;
         }
+        if (result.status === 404) {
+          missedUprn = true;
+          setFindStatus("UPRN not found.", "err");
+          syncAddressMode();
+          return;
+        }
         if (!result.status || result.status >= 400 || !data.match) {
           setFindStatus(data.error || "No match on this project’s stock list — check the UPRN.", "err");
           return;
         }
+        missedUprn = false;
         applyStockMatch(data.match);
       })
       .catch(function () {
@@ -260,10 +285,43 @@
 
   var uprnInput = $("uprn");
   if (uprnInput) {
+    uprnInput.addEventListener("input", function () {
+      if (typedInstead || !missedUprn) return;
+      missedUprn = false;
+      setFindStatus("");
+      syncAddressMode();
+    });
     uprnInput.addEventListener("keydown", function (e) {
-      if (e.key !== "Enter" || addressLocked() || manualSelected()) return;
+      if (e.key !== "Enter" || addressLocked() || manualOpen()) return;
       e.preventDefault();
       lookupUprn();
+    });
+  }
+
+  var typeAddress = $("btn-type-address");
+  if (typeAddress) {
+    typeAddress.addEventListener("click", function () {
+      typedInstead = true;
+      missedUprn = false;
+      setFindStatus("");
+      syncAddressMode();
+      var line = $("addressLine1");
+      if (line && line.focus) line.focus();
+      updateFlow({ announce: false });
+    });
+  }
+
+  var backUprn = $("btn-back-uprn");
+  if (backUprn) {
+    backUprn.addEventListener("click", function () {
+      typedInstead = false;
+      missedUprn = false;
+      clearManualFields();
+      setFindStatus("");
+      syncAddressMode();
+      var uprn = $("uprn");
+      if (uprn && uprn.focus) uprn.focus();
+      updateFlow({ announce: false });
     });
   }
 
@@ -313,7 +371,7 @@
   }
 
   function propertyDone() {
-    if (manualSelected()) {
+    if (manualOpen()) {
       return Boolean(val("uprn") && val("addressLine1") && val("addressPostcode"));
     }
     var confirm = $("addressConfirmed");
@@ -404,6 +462,8 @@
       if (lastProject) {
         clearAddressMatch(false);
         clearManualFields();
+        typedInstead = false;
+        missedUprn = false;
       }
       lastProject = project;
     }
@@ -793,6 +853,8 @@
     setPhotoStatus("");
     clearAddressMatch(false);
     clearManualFields();
+    typedInstead = false;
+    missedUprn = false;
     lastProject = "";
     lastFocusedStep = "";
     var callUnreached = $("callUnreached");

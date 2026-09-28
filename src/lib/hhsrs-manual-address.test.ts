@@ -89,7 +89,7 @@ function reviewForm(fields: Record<string, string>): FormData {
 }
 
 describe("HHSRS manual address when a project has no stock", () => {
-  it("types an address only for a project with zero stock rows", async (t) => {
+  it("types an address when a project has no stock, or when a stock UPRN is not found", async (t) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
     } catch {
@@ -225,7 +225,7 @@ describe("HHSRS manual address when a project has no stock", () => {
     assert.ok(alert);
     assert.equal(alert.fullAddress, "12 Moor Lane, Flat 2, Leeds");
 
-    const blocked = await request(port, "POST", "/HHSRS-site-form/review", {
+    const typedOnStock = await request(port, "POST", "/HHSRS-site-form/review", {
       cookie,
       form: reviewForm({
         ...common,
@@ -236,14 +236,31 @@ describe("HHSRS manual address when a project has no stock", () => {
         addressLine2: "",
         town: "Leeds",
         postcode: "LS1 1AA",
-        comment: `Should stay on lookup ${stamp}`,
+        comment: `Typed after a missed UPRN ${stamp}`,
       }),
     });
-    assert.equal(blocked.status, 200);
-    assert.match(blocked.body, /No match on this project/);
-    assert.doesNotMatch(blocked.body, /9 Typed Road/);
-    const stockedOptionAfter = optionTag(blocked.body, stocked.id);
-    assert.doesNotMatch(stockedOptionAfter, /data-manual-address/);
+    assert.equal(typedOnStock.status, 302, typedOnStock.body);
+    const stockTypedReview = await request(port, "GET", typedOnStock.location, { cookie });
+    assert.match(stockTypedReview.body, /9 Typed Road, Leeds/);
+    assert.match(stockTypedReview.body, /LS1 1AA/);
+    const stockTypedSubmit = await request(port, "POST", "/HHSRS-site-form/submit", {
+      cookie,
+      fields: { draftId: new URL(typedOnStock.location, "http://127.0.0.1").searchParams.get("draft") || "" },
+    });
+    assert.equal(stockTypedSubmit.status, 302, stockTypedSubmit.body);
+    const stockTypedId = new URL(stockTypedSubmit.location, "http://127.0.0.1").searchParams.get("id") || "";
+    createdIds.push(stockTypedId);
+    const stockTypedRow = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: stockTypedId } });
+    assert.equal(stockTypedRow.addressSource, "manual");
+    assert.equal(stockTypedRow.fullAddress, "9 Typed Road, Leeds");
+    assert.equal(stockTypedRow.uprn, "999000111222");
+    const stockTypedOffice = await request(port, "GET", `/HHSRSreporter/review/${stockTypedId}`, { cookie });
+    assert.equal(stockTypedOffice.status, 200);
+    assert.match(stockTypedOffice.body, /Address typed by surveyor/);
+    const stockForm = await request(port, "GET", "/HHSRS-site-form/new", { cookie });
+    assert.doesNotMatch(optionTag(stockForm.body, stocked.id), /data-manual-address/);
+    assert.match(stockForm.body, /Type the address instead/);
+    assert.match(stockForm.body, /Back to UPRN search/);
 
     const lookedUp = await request(port, "POST", "/HHSRS-site-form/review", {
       cookie,
@@ -293,8 +310,10 @@ describe("HHSRS manual address when a project has no stock", () => {
         comment: `Stock loaded ${stamp}`,
       }),
     });
-    assert.equal(backToLookup.status, 200);
-    assert.match(backToLookup.body, /No match on this project/);
+    assert.equal(backToLookup.status, 302, backToLookup.body);
+    const loadedReview = await request(port, "GET", backToLookup.location, { cookie });
+    assert.match(loadedReview.body, /12 Moor Lane/);
+    assert.match(loadedReview.body, /LS1 4DY/);
     assert.equal(asset.uprn, "200040123456");
   });
 });
