@@ -8,7 +8,13 @@ import {
   HHSRS_SITE_FORM_RATINGS,
   isHhsrsRating,
 } from "../lib/hhsrs-categories.js";
-import { safeId, safeStoredName } from "../lib/hhsrs-site-form.js";
+import {
+  CALL_REF_BLANK_REASONS,
+  isCallRefBlankReason,
+  safeId,
+  safeStoredName,
+  splitCallNotes,
+} from "../lib/hhsrs-site-form.js";
 import { copyLoggedHhsrsPhotos } from "../lib/hhsrs-completed-photos.js";
 import { ONWARD_TOPICS } from "../lib/hhsrs-reporter-draft.js";
 import {
@@ -395,6 +401,8 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     ratings: HHSRS_RATINGS,
     statuses: HHSRS_CASE_STATUSES,
     callOutcomes: HHSRS_CALL_OUTCOMES,
+    callBlankReasons: CALL_REF_BLANK_REASONS,
+    callBlank: { reason: "", note: "" },
     onwardTopics: ONWARD_TOPICS,
     matchedProject: null,
     mode: "blank",
@@ -473,6 +481,8 @@ async function renderReview(
     ratings: HHSRS_RATINGS,
     statuses: HHSRS_CASE_STATUSES,
     callOutcomes: HHSRS_CALL_OUTCOMES,
+    callBlankReasons: CALL_REF_BLANK_REASONS,
+    callBlank: splitCallNotes(row.callNotes || ""),
     onwardTopics: ONWARD_TOPICS,
     matchedProject: matched,
     mode: "filled",
@@ -867,6 +877,16 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   if (!isHhsrsCaseStatus(update.status)) {
     await renderReview(req, res, row, { ...ctx, flashErr: "Select a valid case status." });
     return;
+  }
+  const posted = (req.body || {}) as Record<string, unknown>;
+  const postedRef = String(posted.clientCallReference ?? "").trim();
+  const postedReason = String(posted.callRefBlankReason ?? "").trim();
+  if (Object.prototype.hasOwnProperty.call(posted, "callRefBlankReason") && !postedRef) {
+    const otherWithoutNote = postedReason === "Other" && !String(posted.callNotes ?? "").trim();
+    if ((postedReason && !isCallRefBlankReason(postedReason)) || otherWithoutNote) {
+      await renderReview(req, res, row, { ...ctx, flashErr: "Say why the call reference is blank." });
+      return;
+    }
   }
   if (
     update.callOutcome &&

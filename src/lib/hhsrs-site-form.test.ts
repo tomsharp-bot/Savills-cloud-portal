@@ -6,6 +6,7 @@ import ejs from "ejs";
 import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS, isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import {
   composeCallNotes,
+  splitCallNotes,
   formatHhsrsSurveyDate,
   emptyHhsrsValues,
   formatStockAddressLine,
@@ -276,6 +277,13 @@ describe("validateHhsrsForm", () => {
     assert.equal(busyNote.ok, true);
     if (busyNote.ok) {
       assert.equal(composeCallNotes("Engaged/busy", "Line stayed busy"), "Engaged/busy — Line stayed busy");
+      assert.deepEqual(splitCallNotes("No answer"), { reason: "No answer", note: "" });
+      assert.deepEqual(splitCallNotes("Engaged/busy — Line stayed busy"), {
+        reason: "Engaged/busy",
+        note: "Line stayed busy",
+      });
+      assert.deepEqual(splitCallNotes("Other — Voicemail full."), { reason: "Other", note: "Voicemail full." });
+      assert.deepEqual(splitCallNotes("Voicemail full"), { reason: "", note: "Voicemail full" });
       assert.deepEqual(siteSubmissionCallFields(busyNote.data), {
         clientCallReference: "",
         callOutcome: "Attempted",

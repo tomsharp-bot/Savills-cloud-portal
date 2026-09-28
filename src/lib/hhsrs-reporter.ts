@@ -1,6 +1,7 @@
 import type { HhsrsSiteSubmission } from "@prisma/client";
 import { draftFromSubmission, type SubmissionDraftInput } from "./hhsrs-reporter-draft.js";
 import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { composeCallNotes, isCallRefBlankReason } from "./hhsrs-site-form.js";
 
 export const HHSRS_REPORTER_PATH = "/HHSRSreporter";
 export const HHSRS_REPORTER_ALIAS = "/HHSRSreporting";
@@ -403,12 +404,32 @@ export function readReporterUpdate(body: Record<string, unknown>): {
   expectedUpdatedAt: string;
 } {
   const field = (name: string) => String(body[name] ?? "").trim();
+  const ref = field("clientCallReference");
+  let callOutcome = field("callOutcome");
+  let callNotes = field("callNotes");
+  let clientCallReference = ref;
+  if (Object.prototype.hasOwnProperty.call(body, "callRefBlankReason")) {
+    const reason = field("callRefBlankReason");
+    if (ref) {
+      clientCallReference = ref;
+      callOutcome = "";
+      callNotes = "";
+    } else if (reason && isCallRefBlankReason(reason)) {
+      clientCallReference = "";
+      callOutcome = "Attempted";
+      callNotes = composeCallNotes(reason, field("callNotes"));
+    } else {
+      clientCallReference = "";
+      callOutcome = "";
+      callNotes = field("callNotes");
+    }
+  }
   return {
     rating: field("rating"),
     clientDescription: field("clientDescription"),
-    clientCallReference: field("clientCallReference"),
-    callOutcome: field("callOutcome"),
-    callNotes: field("callNotes"),
+    clientCallReference,
+    callOutcome,
+    callNotes,
     workOrder: field("workOrder"),
     suspectedCause: field("suspectedCause"),
     includeCause: (() => {

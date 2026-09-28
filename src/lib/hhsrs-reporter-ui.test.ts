@@ -10,6 +10,7 @@ import {
   mergeReviewDraftFields,
   draftEmailFromReviewFields,
   emailRecipientsFromProject,
+  readReporterUpdate,
 } from "./hhsrs-reporter.js";
 import { HHSRS_PROJECT_ROSTER, hhsrsKey, matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
 
@@ -279,8 +280,19 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /hhsrs-review-last-key-v1/);
     assert.doesNotMatch(sidebar, /side-brand/);
     assert.match(review, /id="rv-call-notes" name="callNotes"/);
-    assert.match(review, /row\.callNotes/);
+    assert.match(review, /callBlank\.note/);
+    const callRefAt = review.indexOf("Client call reference");
+    const callWhyAt = review.indexOf("Why the call reference is blank");
+    assert.ok(callRefAt >= 0 && callWhyAt > callRefAt);
+    assert.doesNotMatch(review, /for="rv-call-status"/);
+    assert.match(review, /id="rv-call-reason" name="callRefBlankReason"/);
+    assert.match(review, /callBlankReasons/);
+    assert.match(review, /Extra detail/);
     assert.match(js, /callNotes:/);
+    assert.match(js, /function syncCallRefFields/);
+    assert.match(js, /function composeBlankCallNotes/);
+    assert.doesNotMatch(js, /rv-call-status/);
+    assert.match(css, /#rv-call-blank\[hidden\]/);
     assert.match(js, /function amendCaseDetails/);
     assert.match(js, /caseLocked = true/);
     assert.match(js, /DownloadURL/);
@@ -413,6 +425,42 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
     assert.equal(testHousing.cc, "");
     assert.equal(testHousing.bcc, "");
+  });
+
+  it("saves a call reference ahead of a blank reason, and composes the reason when the ref is empty", () => {
+    const withRef = readReporterUpdate({
+      clientCallReference: " CR-9 ",
+      callRefBlankReason: "No answer",
+      callNotes: "ignored",
+    });
+    assert.equal(withRef.clientCallReference, "CR-9");
+    assert.equal(withRef.callOutcome, "");
+    assert.equal(withRef.callNotes, "");
+
+    const blank = readReporterUpdate({
+      clientCallReference: "  ",
+      callRefBlankReason: "Engaged/busy",
+      callNotes: "Line stayed busy",
+    });
+    assert.equal(blank.clientCallReference, "");
+    assert.equal(blank.callOutcome, "Attempted");
+    assert.equal(blank.callNotes, "Engaged/busy — Line stayed busy");
+
+    const other = readReporterUpdate({
+      clientCallReference: "",
+      callRefBlankReason: "Other",
+      callNotes: "Voicemail full.",
+    });
+    assert.equal(other.callOutcome, "Attempted");
+    assert.equal(other.callNotes, "Other — Voicemail full.");
+
+    const legacy = readReporterUpdate({
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "Voicemail full",
+    });
+    assert.equal(legacy.callOutcome, "Attempted");
+    assert.equal(legacy.callNotes, "Voicemail full");
   });
 
   it("declares review draft storage keys before restore runs", () => {

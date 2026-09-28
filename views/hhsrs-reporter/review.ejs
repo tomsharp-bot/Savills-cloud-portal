@@ -163,23 +163,21 @@
           </div>
 
           <div class="project-extra" data-extra="calls" hidden>
-            <div class="field-row">
-              <div>
-                <label for="rv-call-status">Call outcome</label>
-                <select id="rv-call-status" name="callOutcome">
-                  <% callOutcomes.forEach((o) => { %>
-                    <option value="<%= o %>" <%= isFilled && row.callOutcome === o ? "selected" : "" %>><%= o || "Select…" %></option>
-                  <% }) %>
-                </select>
-              </div>
-              <div>
-                <label for="rv-call-ref">Call reference</label>
-                <input id="rv-call-ref" name="clientCallReference" type="text" value="<%= isFilled ? row.clientCallReference : '' %>" placeholder="Call reference number" autocomplete="off" />
-              </div>
-            </div>
+            <% const storedCallRef = isFilled ? String(row.clientCallReference || "").trim() : ""; %>
             <div>
-              <label for="rv-call-notes">Call notes (optional)</label>
-              <input id="rv-call-notes" name="callNotes" type="text" value="<%= isFilled ? (row.callNotes || '') : '' %>" placeholder="e.g. unable to get through" autocomplete="off" />
+              <label for="rv-call-ref">Client call reference</label>
+              <input id="rv-call-ref" name="clientCallReference" type="text" value="<%= storedCallRef %>" placeholder="Call reference number" autocomplete="off" />
+            </div>
+            <div id="rv-call-blank" <%= storedCallRef ? "hidden" : "" %>>
+              <label for="rv-call-reason">Why the call reference is blank</label>
+              <select id="rv-call-reason" name="callRefBlankReason">
+                <option value="">Select a reason</option>
+                <% (callBlankReasons || []).forEach((reason) => { %>
+                  <option value="<%= reason %>" <%= isFilled && callBlank.reason === reason ? "selected" : "" %>><%= reason %></option>
+                <% }) %>
+              </select>
+              <label for="rv-call-notes">Extra detail <span class="optional">(optional, unless Other)</span></label>
+              <input id="rv-call-notes" name="callNotes" type="text" value="<%= isFilled ? (callBlank.note || '') : '' %>" placeholder="Add a short note if needed…" autocomplete="off" />
             </div>
           </div>
 
