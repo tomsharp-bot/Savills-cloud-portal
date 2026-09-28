@@ -12,7 +12,6 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
 const NAMED_CODES: Array<{ test: RegExp; code: string }> = [
-  { test: /lhfa/, code: "LHFA" },
   { test: /saxon/, code: "SAXW" },
   { test: /test\s*housing/, code: "TEST" },
   { test: /cornwall/, code: "CORN" },
@@ -29,6 +28,8 @@ export function hhsrsCodeFromProjectName(name: string): string {
   for (const rule of NAMED_CODES) {
     if (rule.test.test(folded)) return rule.code;
   }
+  // Same match as the Reporter roster entry "LFHA (Leeds)" / Project Progress alias "LFHA 2026".
+  if (folded.startsWith("lfha") || folded.includes("(leeds)")) return "LFHA";
   const letters = String(name || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
@@ -47,7 +48,7 @@ export function normalizeHhsrsCode(raw: string): string {
 /**
  * Code to store when a project is created or edited.
  * A blank box, or a box that still holds the code taken from the old name,
- * follows the name (so a later LHFA project becomes LHFA). A code someone typed stays.
+ * follows the name (so a later LFHA project becomes LFHA). A code someone typed stays.
  */
 export function hhsrsCodeForSave(input: {
   name: string;

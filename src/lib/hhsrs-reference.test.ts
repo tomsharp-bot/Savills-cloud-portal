@@ -37,34 +37,38 @@ describe("HHSRS project codes", () => {
     assert.equal(hhsrsCodeFromProjectName("Vico 2026 8k"), "VICO");
     assert.equal(hhsrsCodeFromProjectName("BPHA 2026 ACQ"), "BPHA");
     assert.equal(hhsrsCodeFromProjectName("Saxon Weald 2026 Phase 4"), "SAXW");
-    assert.equal(hhsrsCodeFromProjectName("LHFA"), "LHFA");
-    assert.equal(hhsrsCodeFromProjectName("LHFA 2026"), "LHFA");
-    assert.equal(hhsrsCodeFromProjectName("lhfa phase 1"), "LHFA");
-    assert.equal(hhsrsCodeFromProjectName("North LHFA stock"), "LHFA");
+    assert.equal(hhsrsCodeFromProjectName("LFHA"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("LFHA 2026"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("lfha phase 1"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("LFHA (Leeds)"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("Leeds Federation (Leeds)"), "LFHA");
+    assert.equal(hhsrsCodeFromProjectName("Onward (Leeds)"), "ONW");
+    assert.equal(hhsrsCodeFromProjectName("North LHFA stock"), "NORT");
     assert.equal(hhsrsCodeFromProjectName("Test Housing"), "TEST");
     assert.equal(hhsrsCodeFromProjectName("Test 1"), "TEST");
     assert.equal(hhsrsCodeFromProjectName("Gateway 2026"), "GATE");
     assert.equal(hhsrsCodeFromProjectName("   "), "HHSR");
     assert.equal(formatHhsrsReference("MTVH", 14), "MTVH-014");
     assert.equal(formatHhsrsReference("bpha", 1), "BPHA-001");
-    assert.equal(formatHhsrsReference("lhfa", 1), "LHFA-001");
+    assert.equal(formatHhsrsReference("lfha", 1), "LFHA-001");
   });
 
   it("keeps a typed code, and follows the name when the box still has the old one", () => {
-    assert.equal(hhsrsCodeForSave({ name: "LHFA 2026", submitted: "" }), "LHFA");
-    assert.equal(hhsrsCodeForSave({ name: "LHFA 2026", submitted: "custom" }), "CUSTOM");
+    assert.equal(hhsrsCodeForSave({ name: "LFHA 2026", submitted: "" }), "LFHA");
+    assert.equal(hhsrsCodeForSave({ name: "Leeds Federation (Leeds)", submitted: "" }), "LFHA");
+    assert.equal(hhsrsCodeForSave({ name: "LFHA 2026", submitted: "custom" }), "CUSTOM");
     assert.equal(
       hhsrsCodeForSave({
-        name: "LHFA 2026",
+        name: "LFHA 2026",
         submitted: "DEVO",
         previousName: "Devon HA",
         previousCode: "DEVO",
       }),
-      "LHFA"
+      "LFHA"
     );
     assert.equal(
       hhsrsCodeForSave({
-        name: "LHFA 2026",
+        name: "LFHA 2026",
         submitted: "MINE",
         previousName: "Devon HA",
         previousCode: "MINE",
