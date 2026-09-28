@@ -358,13 +358,7 @@
             <button type="button" class="btn btn-sm btn-photo-fallback" id="btn-download-photos" disabled>Download photos</button>
           </div>
         </div>
-        <div class="email-signature-block" id="rv-email-signature">
-          <div class="signature-label" id="rv-signature-label">Signature</div>
-          <% if (emailSignature && emailSignature.missing) { %>
-            <p class="sig-name-warn" id="rv-signature-warn"><%= emailSignature.warning %></p>
-          <% } %>
-          <div class="email-signature" id="rv-signature-preview" role="group" aria-labelledby="rv-signature-label" aria-readonly="true"><%- signatureHtml %></div>
-        </div>
+        <p class="signature-added-note" id="rv-signature-note">Signature added when sent</p>
         <div class="send-block" id="rv-send-block">
           <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
           <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>

@@ -1704,13 +1704,13 @@
       } else {
         h += "<p class=\"ck-none\">No photos.</p>";
       }
-      var sig = $("rv-signature-preview");
-      if (sig) {
+      var sigHtml = cfg.signature && cfg.signature.html;
+      if (sigHtml) {
         h += "<p class=\"ck-photos-label\">Signature</p>";
-        if (cfg.signature && cfg.signature.missing && cfg.signature.warning) {
+        if (cfg.signature.missing && cfg.signature.warning) {
           h += "<p class=\"ck-name-warn\">" + esc(cfg.signature.warning) + "</p>";
         }
-        h += "<div class=\"ck-signature\" aria-readonly=\"true\">" + sig.innerHTML + "</div>";
+        h += "<div class=\"ck-signature\" aria-readonly=\"true\">" + sigHtml + "</div>";
       }
       ckBody.innerHTML = h;
       ckTick.checked = false;

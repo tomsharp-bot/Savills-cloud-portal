@@ -130,18 +130,18 @@ describe("HHSRS email signature", () => {
     }
   });
 
-  it("shows the signature under the body on the review page and the check screen", () => {
+  it("keeps a short signature note on the review panel and the full signature on the check screen", () => {
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const bodyAt = review.indexOf('id="rv-email-body"');
-    const sigAt = review.indexOf('id="rv-signature-preview"');
+    const noteAt = review.indexOf("Signature added when sent");
     const attachAt = review.indexOf('id="rv-attach-block"');
     const emailPhotosAt = review.indexOf('id="rv-email-photos"');
-    assert.ok(bodyAt > 0 && sigAt > bodyAt, "signature follows the body");
-    assert.ok(attachAt > bodyAt && sigAt > attachAt, "filled-mode photos sit under the body and above the signature");
-    assert.ok(emailPhotosAt > bodyAt && sigAt > emailPhotosAt, "blank-mode photo strip sits under the body and above the signature");
+    const sendAt = review.indexOf('id="rv-send-block"');
+    assert.ok(bodyAt > 0 && attachAt > bodyAt && emailPhotosAt > bodyAt, "email photos follow the body");
+    assert.ok(noteAt > attachAt && noteAt > emailPhotosAt && sendAt > noteAt, "grey signature line sits under the photos");
+    assert.doesNotMatch(review, /rv-signature-preview|email-signature-block|signatureHtml|sig-name-warn|No name found/);
     assert.match(review, /aria-readonly="true"/);
-    assert.doesNotMatch(review.slice(bodyAt, sigAt), /signatureHtml/);
     const openCheck = js.slice(js.indexOf("function openCheck"), js.indexOf("function closeCheck"));
     assert.match(review, /id="ck-title" tabindex="-1"/);
     assert.match(openCheck, /ck-title/);
@@ -150,7 +150,8 @@ describe("HHSRS email signature", () => {
     assert.match(openCheck, /pane\.scrollTop = 0/);
     assert.match(openCheck, /\.ck-text/);
     assert.doesNotMatch(openCheck, /ckTick\.focus|ckSend\.focus/);
-    assert.match(openCheck, /rv-signature-preview/);
+    assert.match(openCheck, /cfg\.signature\.html/);
+    assert.doesNotMatch(openCheck, /rv-signature-preview/);
     assert.match(openCheck, /ck-signature/);
     assert.match(openCheck, /cfg\.signature\.warning/);
     const bodyInCheck = openCheck.indexOf('aria-label=\\"Email text\\"');

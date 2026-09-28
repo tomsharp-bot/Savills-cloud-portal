@@ -1295,21 +1295,12 @@ a.linkish.active, .linkish.active {
   align-self: start;
   height: 42px;
 }
-.hhsrs-reporter .email-signature-block { margin-top: 0.85rem; }
-.hhsrs-reporter .signature-label {
-  display: block;
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.hhsrs-reporter .signature-added-note {
+  margin: 0.85rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
   color: var(--muted);
-  font-weight: 700;
-  margin: 0 0 0.3rem;
-}
-.hhsrs-reporter .email-signature {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  padding: 0.85rem 1rem 1rem;
 }
 .hhsrs-reporter .sig-name-warn,
 .hhsrs-reporter .ck-name-warn {
