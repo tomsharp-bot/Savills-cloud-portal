@@ -31,7 +31,7 @@
           <% }) %>
         </select>
       </div>
-      <div class="ml-f">
+      <div class="ml-f ml-f-type">
         <label>Type</label>
         <div class="ml-seg">
           <% const types = [
@@ -75,9 +75,9 @@
     <div class="ml-table-wrap">
       <table class="ml-table">
         <colgroup>
-          <col style="width:88px" /><col style="width:92px" /><col style="width:110px" /><col style="width:108px" />
-          <col /><col style="width:130px" /><col style="width:124px" /><col style="width:110px" />
-          <col style="width:120px" /><col style="width:64px" /><col style="width:118px" />
+          <col class="c-sent" /><col class="c-ref" /><col class="c-proj" /><col class="c-uprn" />
+          <col class="c-addr" /><col class="c-haz" /><col class="c-rate" /><col class="c-by" />
+          <col class="c-to" /><col class="c-ph" /><col class="c-type" />
         </colgroup>
         <thead>
           <tr>
@@ -93,16 +93,16 @@
           <% rows.forEach((row) => { %>
             <tr class="ml-row <%= row.kind === "correction" ? "is-corr" : "" %> <%= row.hasCorrBelow ? "has-corr" : "" %> <%= row.selected ? "sel" : "" %>" data-href="<%= row.href %>">
               <td class="ml-when"><b><%= row.whenDate %></b><span><%= row.whenTime %></span></td>
-              <td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
-              <td class="ml-proj"><%= row.projectName %></td>
+              <td class="ml-ref" title="<%= row.reference %>"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
+              <td class="ml-proj" title="<%= row.projectName %>"><%= row.projectName %></td>
               <td class="ml-uprn"><%= row.uprn %></td>
               <td class="ml-addr"><%= row.lineAddress || "—" %></td>
-              <td><%= row.hazard %></td>
+              <td class="ml-hazard"><%= row.hazard %></td>
               <td class="<%= row.ratingClass %>"><%= row.rating %></td>
-              <td class="ml-by"><%= row.sentBy || "—" %></td>
+              <td class="ml-by" title="<%= row.sentBy %>"><%= row.sentBy || "—" %></td>
               <td class="ml-to" title="<%= row.to %>"><%= row.to || "—" %></td>
               <td class="ml-photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 8"/></svg><%= row.photoCount %></td>
-              <td>
+              <td class="ml-type">
                 <span class="ml-tag <%= row.kind === "correction" ? "c" : (row.kind === "not_sent" ? "n" : "o") %>"><%= row.typeLabel %></span>
                 <% if (row.correctedNote) { %><span class="ml-corr-note">Corrected ↓</span><% } %>
               </td>
