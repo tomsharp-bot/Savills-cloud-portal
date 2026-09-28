@@ -746,13 +746,15 @@ hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response)
   const q = String(body.q || "").trim();
   const date = String(body.date || "").trim();
   const signature = await senderSignatureFor(req.user);
+  const stored = await clientRecipientsForProject(row.projectName);
+  const sendBody = sendBodyWithClientRecipients(body, stored);
   const result = await sendCaseEmail({
     row,
     sentBy: signature.fullName || req.user?.username || "",
     senderFirstName: signature.firstName,
     senderFullName: signature.fullName,
     hasReporterAccess: Boolean(req.user && isAdmin(req.user)),
-    body,
+    body: sendBody,
     storage: sitePhotoStorageFromApp(req.app),
     correction: {
       reason: String(body.correctionReason || ""),
@@ -992,7 +994,10 @@ hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
     siteFormAccessError: accessFlash.err,
     siteFormAccessEditing: Boolean(accessFlash.err),
     clientEmailCards,
-    clientEmailFormError: unmatchedClientEmailError(REPORTER_DEMO_PROJECTS, clientFlash),
+    clientEmailFormError: unmatchedClientEmailError(
+      clientEmailCards.map((card) => ({ name: card.projectName })),
+      clientFlash
+    ),
   });
 });
 
@@ -1016,13 +1021,13 @@ function postedAddressBox(body: unknown, key: string, legacy: string): string {
 }
 
 hhsrsReporterRouter.post("/admin/client-emails", async (req: Request, res: Response) => {
-  const projectName = String(req.body?.projectName ?? "");
+  const postedName = String(req.body?.projectName ?? "").trim();
   const toText = postedAddressBox(req.body, "hhsrs-to", "to");
   const ccText = postedAddressBox(req.body, "hhsrs-cc", "cc");
   const bccText = postedAddressBox(req.body, "hhsrs-bcc", "bcc");
   const name = String(req.user?.name || req.user?.username || "").trim();
   const result = await saveClientEmail({
-    projectName,
+    projectName: postedName,
     toRaw: toText,
     ccRaw: ccText,
     bccRaw: bccText,
@@ -1030,8 +1035,8 @@ hhsrsReporterRouter.post("/admin/client-emails", async (req: Request, res: Respo
   });
   req.session = req.session || {};
   req.session.flashClientEmail = result.ok
-    ? { projectName: projectName.trim(), saved: true, error: "", toText: "", ccText: "", bccText: "" }
-    : { projectName: projectName.trim(), saved: false, error: result.error, toText, ccText, bccText };
+    ? { projectName: result.projectName, saved: true, error: "", toText: "", ccText: "", bccText: "" }
+    : { projectName: postedName, saved: false, error: result.error, toText, ccText, bccText };
   res.redirect(`${HHSRS_REPORTER_PATH}/admin#client-email-card`);
 });
 
