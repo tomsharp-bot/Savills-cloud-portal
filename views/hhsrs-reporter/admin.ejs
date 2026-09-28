@@ -28,6 +28,8 @@
 
 <%- include("partials/site-form-access-card") %>
 
+<%- include("partials/client-email-card") %>
+
 <section class="panel" aria-label="Desktop alerts">
   <div class="panel-head neutral">
     <h2>Desktop alerts</h2>
@@ -61,12 +63,11 @@
   </div>
   <div class="admin-placeholder">
     <p>Admin lives in the left sidebar (yellow gear, yellow-bordered control), matching the desktop Reporter.</p>
-    <p>Project setup (names, templates, recipients, extras) is deferred for a follow-up. Review and create currently uses stubbed project rules for show/hide extras.</p>
+    <p>Project setup (names, templates, extras) is deferred for a follow-up. To, Cc, and Bcc are on the card above.</p>
     <ul>
       <li>Edit / add projects</li>
       <li>Choose template &amp; subject pattern</li>
       <li>Optional extras (call details, survey date, vulnerabilities…)</li>
-      <li>Confirmed To / CC lists</li>
     </ul>
     <p style="margin-top:1rem;"><a class="btn btn-ghost btn-sm" href="<%= reporterBase %>">← Back to Pending Issues</a></p>
   </div>

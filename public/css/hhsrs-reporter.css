@@ -1091,6 +1091,75 @@ a.linkish.active, .linkish.active {
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+.client-email-panel { margin-top: 1rem; }
+.client-email-box { padding: 1rem 1.15rem 0.35rem; }
+.client-email-help {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.client-email-row {
+  margin: 0;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+}
+.client-email-row h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+.client-email-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.client-email-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+.client-email-fields textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--navy);
+  resize: vertical;
+}
+.client-email-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+}
+.client-email-meta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.client-email-ok {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--success);
+}
+.client-email-err {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--danger);
+}
+@media (max-width: 800px) {
+  .client-email-fields { grid-template-columns: 1fr; }
+}
 .bottom-grid-single { grid-template-columns: 1fr; max-width: 320px; }
 
 @media (max-width: 1100px) {

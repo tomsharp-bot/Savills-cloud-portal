@@ -23,7 +23,6 @@ import {
   isHhsrsCaseStatus,
   isWaitingStatus,
   draftEmailFromReviewFields,
-  emailRecipientsFromProject,
   mergeReviewDraftFields,
   photoAttachmentCount,
   photoNames,
@@ -67,6 +66,14 @@ import {
   changeSiteFormAccessCode,
   loadSiteFormAccess,
 } from "../lib/hhsrs-site-access.js";
+import {
+  clientRecipientsForProject,
+  loadClientEmailCards,
+  saveClientEmail,
+  sendBodyWithClientRecipients,
+  unmatchedClientEmailError,
+  type ClientEmailFlash,
+} from "../lib/hhsrs-client-emails.js";
 import {
   loadSiteFormPhoto,
   privateInlineHeaders,
@@ -431,7 +438,7 @@ async function renderReview(
   const currentNames = opts.progress.filter((project) => project.stage === "current").map((project) => project.name);
   const reviewProjectValue = progressNameForCase(row.projectName, currentNames);
   const matched = matchDemoProject(reviewProjectValue) || matchDemoProject(row.projectName);
-  const recipients = emailRecipientsFromProject(matched);
+  const recipients = await clientRecipientsForProject(reviewProjectValue || row.projectName);
   const flash = takeFlash(req);
   const signatureNames = sentEmail
     ? signatureFromLoggedSender(sentEmail.sentBy)
@@ -503,7 +510,8 @@ hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
   }
   try {
     const fields = mergeReviewDraftFields(row, body);
-    const draft = draftEmailFromReviewFields(fields);
+    const recipients = await clientRecipientsForProject(fields.projectName);
+    const draft = draftEmailFromReviewFields(fields, recipients);
     res.setHeader("Cache-Control", "no-store");
     res.json({ ok: true, ...draft });
   } catch (err) {
@@ -733,9 +741,20 @@ function takeAccessFlash(req: Request): { ok: string; err: string } {
   return { ok, err };
 }
 
+function takeClientEmailFlash(req: Request): ClientEmailFlash | null {
+  const flash = req.session?.flashClientEmail || null;
+  if (req.session) delete req.session.flashClientEmail;
+  return flash;
+}
+
 /* ---------- Admin ---------- */
 hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
-  const [summary, access] = await Promise.all([loadSummary(), loadSiteFormAccess()]);
+  const clientFlash = takeClientEmailFlash(req);
+  const [summary, access, clientEmailCards] = await Promise.all([
+    loadSummary(),
+    loadSiteFormAccess(),
+    loadClientEmailCards(clientFlash),
+  ]);
   const flash = takeFlash(req);
   const accessFlash = takeAccessFlash(req);
   res.render("hhsrs-reporter/admin", {
@@ -752,6 +771,8 @@ hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
     siteFormAccessSaved: accessFlash.ok === SITE_FORM_CODE_CHANGED,
     siteFormAccessError: accessFlash.err,
     siteFormAccessEditing: Boolean(accessFlash.err),
+    clientEmailCards,
+    clientEmailFormError: unmatchedClientEmailError(REPORTER_DEMO_PROJECTS, clientFlash),
   });
 });
 
@@ -766,6 +787,26 @@ hhsrsReporterRouter.post("/admin/site-form-access", async (req: Request, res: Re
     req.session.flashAccessCodeErr = err instanceof SiteFormAccessError ? err.message : SITE_FORM_CODE_INVALID;
   }
   res.redirect(`${HHSRS_REPORTER_PATH}/admin`);
+});
+
+hhsrsReporterRouter.post("/admin/client-emails", async (req: Request, res: Response) => {
+  const projectName = String(req.body?.projectName ?? "");
+  const toText = String(req.body?.to ?? "");
+  const ccText = String(req.body?.cc ?? "");
+  const bccText = String(req.body?.bcc ?? "");
+  const name = String(req.user?.name || req.user?.username || "").trim();
+  const result = await saveClientEmail({
+    projectName,
+    toRaw: toText,
+    ccRaw: ccText,
+    bccRaw: bccText,
+    changedByName: name,
+  });
+  req.session = req.session || {};
+  req.session.flashClientEmail = result.ok
+    ? { projectName: projectName.trim(), saved: true, error: "", toText: "", ccText: "", bccText: "" }
+    : { projectName: projectName.trim(), saved: false, error: result.error, toText, ccText, bccText };
+  res.redirect(`${HHSRS_REPORTER_PATH}/admin#client-email-card`);
 });
 
 /* ---------- Case save / mark actioned (canonical under /review/:id) ---------- */
@@ -986,13 +1027,15 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
   }
   const user = req.user;
   const signature = await senderSignatureFor(user);
+  const rawBody = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const stored = await clientRecipientsForProject(String(rawBody.projectName || row.projectName || ""));
   const result = await sendCaseEmail({
     row,
     sentBy: signature.fullName || user?.username || "",
     senderFirstName: signature.firstName,
     senderFullName: signature.fullName,
     hasReporterAccess: Boolean(user && isAdmin(user)),
-    body: (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>,
+    body: sendBodyWithClientRecipients(rawBody, stored),
     storage: sitePhotoStorageFromApp(req.app),
   });
   if (!result.ok) flashErr(req, result.error);
