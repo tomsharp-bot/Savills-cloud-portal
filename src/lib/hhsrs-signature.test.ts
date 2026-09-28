@@ -156,7 +156,7 @@ describe("HHSRS email signature", () => {
     const bodyInCheck = openCheck.indexOf('aria-label=\\"Email text\\"');
     const sigInCheck = openCheck.indexOf("ck-signature");
     const photosInCheck = openCheck.indexOf('ck-photos-label\\">Attached');
-    assert.ok(bodyInCheck >= 0 && sigInCheck > bodyInCheck && photosInCheck > sigInCheck);
+    assert.ok(bodyInCheck >= 0 && photosInCheck > bodyInCheck && sigInCheck > photosInCheck, "check-screen photos sit under the body and above the signature");
 
     const personnel = readFileSync("views/personnel.ejs", "utf8");
     const admins = personnel.slice(personnel.indexOf("C. Admins"));
