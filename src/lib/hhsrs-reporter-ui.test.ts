@@ -589,6 +589,12 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(css, /\.ml-by\s*\{[^}]*white-space:\s*nowrap/);
     assert.doesNotMatch(css, /\.ml-to\s*\{[^}]*white-space:\s*nowrap/);
     assert.match(css, /\.ml-page \.ml-table col\.c-type \{ width: 156px; \}/);
+    assert.match(css, /\.ml-page \.ml-table col\.c-rate \{ width: 90px; \}/);
+    assert.match(css, /\.ml-page \.ml-table col\.c-uprn \{ width: 96px; \}/);
+    assert.match(css, /\.ml-page \.ml-table thead th\.ml-ph \{[^}]*white-space:\s*nowrap/);
+    assert.match(view, /class="ml-rate <%= row\.ratingClass %>"/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: 12%; \}/);
     for (const cls of ["ml-proj", "ml-by", "ml-to"]) {
       const cell = view.match(new RegExp(`<td class="${cls}"[^>]*>[\\s\\S]*?</td>`));
       assert.ok(cell, cls);

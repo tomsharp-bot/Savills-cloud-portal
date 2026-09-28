@@ -3,8 +3,13 @@
   const tableId = typeof pendingTableId === "string" ? pendingTableId : "waiting-table";
   const wrapId = typeof pendingWrapId === "string" ? pendingWrapId : "";
 %>
-<div class="table-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
-  <table class="landing-table" id="<%= tableId %>">
+<div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
+  <table class="landing-table pending-issues-table" id="<%= tableId %>">
+    <colgroup>
+      <col class="c-ref" /><col class="c-proj" /><col class="c-addr" /><col class="c-ph" />
+      <col class="c-uprn" /><col class="c-surv" /><col class="c-cat" /><col class="c-rate" />
+      <col class="c-when" /><col class="c-act" />
+    </colgroup>
     <thead>
       <tr>
         <th>Reference</th>

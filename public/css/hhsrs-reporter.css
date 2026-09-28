@@ -1390,7 +1390,7 @@ body.hhsrs-reporter {
   color: #fff;
   border: 0;
   border-radius: 8px;
-  padding: 0.45rem 0.75rem;
+  padding: 0.4rem 0.55rem;
   font-size: 0.75rem;
   font-weight: 700;
   text-decoration: none;
@@ -1398,6 +1398,46 @@ body.hhsrs-reporter {
   display: inline-block;
   min-height: 36px;
   line-height: 1.2;
+  box-sizing: border-box;
+}
+.hhsrs-reporter .pending-issues-wrap {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.hhsrs-reporter .pending-issues-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
+}
+.hhsrs-reporter .pending-issues-table col.c-ref { width: 10%; }
+.hhsrs-reporter .pending-issues-table col.c-proj { width: 11%; }
+.hhsrs-reporter .pending-issues-table col.c-addr { width: 14%; }
+.hhsrs-reporter .pending-issues-table col.c-ph { width: 6.5%; }
+.hhsrs-reporter .pending-issues-table col.c-uprn { width: 11%; }
+.hhsrs-reporter .pending-issues-table col.c-surv { width: 9%; }
+.hhsrs-reporter .pending-issues-table col.c-cat { width: 10%; }
+.hhsrs-reporter .pending-issues-table col.c-rate { width: 8%; }
+.hhsrs-reporter .pending-issues-table col.c-when { width: 8.5%; }
+.hhsrs-reporter .pending-issues-table col.c-act { width: 12%; }
+.hhsrs-reporter .pending-issues-table thead th.photo-att-col { width: auto; }
+.hhsrs-reporter .pending-issues-table thead th,
+.hhsrs-reporter .pending-issues-table tbody td {
+  padding: 0.45rem 0.32rem;
+  overflow-wrap: break-word;
+}
+.hhsrs-reporter .pending-issues-table thead th {
+  letter-spacing: 0.03em;
+}
+.hhsrs-reporter .pending-issues-table .project-pill,
+.hhsrs-reporter .pending-issues-table .addr-cell,
+.hhsrs-reporter .pending-issues-table .addr-cell strong {
+  white-space: normal;
+}
+.hhsrs-reporter .pending-issues-table td:last-child,
+.hhsrs-reporter .pending-issues-table th:last-child {
+  overflow: visible;
+  white-space: nowrap;
+  text-align: right;
 }
 .hhsrs-reporter .btn-review-create:hover { filter: brightness(1.05); color: #fff; }
 .hhsrs-reporter .status-pill {
@@ -2634,16 +2674,16 @@ tr.is-new-log td { background: #f5f3ff; }
   table-layout: fixed;
 }
 .ml-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-.ml-page .ml-table col.c-sent { width: 72px; }
-.ml-page .ml-table col.c-ref { width: 86px; }
-.ml-page .ml-table col.c-proj { width: 100px; }
-.ml-page .ml-table col.c-uprn { width: 76px; }
-.ml-page .ml-table col.c-addr { width: 90px; }
-.ml-page .ml-table col.c-haz { width: 70px; }
-.ml-page .ml-table col.c-rate { width: 58px; }
-.ml-page .ml-table col.c-by { width: 92px; }
-.ml-page .ml-table col.c-to { width: 116px; }
-.ml-page .ml-table col.c-ph { width: 40px; }
+.ml-page .ml-table col.c-sent { width: 96px; }
+.ml-page .ml-table col.c-ref { width: 84px; }
+.ml-page .ml-table col.c-proj { width: 84px; }
+.ml-page .ml-table col.c-uprn { width: 96px; }
+.ml-page .ml-table col.c-addr { width: 54px; }
+.ml-page .ml-table col.c-haz { width: 48px; }
+.ml-page .ml-table col.c-rate { width: 90px; }
+.ml-page .ml-table col.c-by { width: 76px; }
+.ml-page .ml-table col.c-to { width: 100px; }
+.ml-page .ml-table col.c-ph { width: 64px; }
 .ml-page .ml-table col.c-type { width: 156px; }
 .ml-table thead th {
   text-align: left; padding: 0.55rem 0.45rem; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
@@ -2651,7 +2691,12 @@ tr.is-new-log td { background: #f5f3ff; }
   white-space: normal; line-height: 1.15; overflow-wrap: anywhere;
 }
 .ml-page .ml-table thead th,
-.ml-page .ml-table tbody td { padding: 0.5rem 0.28rem; }
+.ml-page .ml-table tbody td { padding: 0.45rem 0.28rem; }
+.ml-page .ml-table thead th.ml-ph {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  letter-spacing: 0.02em;
+}
 .ml-table thead th.ml-ph, .ml-table td.ml-photos { text-align: center; }
 .ml-table tbody td { padding: 0.6rem 0.45rem; border-bottom: 1px solid #eef1f4; vertical-align: top; overflow: hidden; }
 .ml-table tr.ml-row { cursor: pointer; }
@@ -2686,6 +2731,7 @@ tr.is-new-log td { background: #f5f3ff; }
 }
 .ml-page .ml-table td.ml-addr { min-width: 0; }
 .ml-hazard { white-space: normal; overflow-wrap: break-word; overflow: hidden; }
+.ml-rate { white-space: normal; overflow-wrap: normal; word-break: normal; }
 .ml-by { color: var(--navy); }
 .ml-to { color: #44546a; font-size: 0.8rem; }
 .ml-page .ml-table tbody td.ml-type { overflow: visible; white-space: normal; }
