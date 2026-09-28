@@ -74,8 +74,10 @@ describe("HHSRS project overview from Project Progress", () => {
     assert.doesNotMatch(sidebar, /tab-ico"[^>]*>0[123]</);
     assert.match(sidebar, /<svg/);
 
-    assert.match(mainLog, /panel-head review-head/);
+    assert.match(mainLog, /Main Log/);
+    assert.match(mainLog, /Export to Excel/);
     assert.doesNotMatch(mainLog, /dealt-head/);
+    assert.doesNotMatch(mainLog, /Export CSV/);
 
     assert.match(css, /\.po-table\s*\{[\s\S]*?table-layout:\s*fixed/);
     assert.match(css, /#po-project-select\s*\{[\s\S]*?width:\s*18rem/);

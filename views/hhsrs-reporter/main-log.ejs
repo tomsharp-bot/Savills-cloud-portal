@@ -1,140 +1,198 @@
 <%- include("partials/layout-open") %>
 
-<div class="page-header">
-  <div>
-    <h2 class="page-section-title">Main Log</h2>
-    <p class="subtitle">Archive of dealt-with HHSRS cases — packs sent, notices filed, and office action complete.</p>
+<div class="ml-page">
+  <div class="ml-headbar">
+    <h1>Main Log</h1>
+    <p>Every email sent from <%= mailbox %></p>
   </div>
-  <div class="header-meta">
-    <strong>Archive</strong>
-    <%= summary.mainLog %> all-time
-  </div>
-</div>
 
-<section class="actions-row">
-  <a class="btn btn-ghost" href="<%= reporterBase %>">← Back to Pending Issues</a>
-  <a class="btn btn-primary" href="<%= reporterBase %>/review">Go to Review and create</a>
-</section>
-
-<section class="panel" aria-label="Main Log archive">
-  <div class="panel-head review-head">
-    <h2>Main Log archive</h2>
-    <span class="count count-review"><%= rows.length %> shown · <%= summary.mainLog %> total</span>
-  </div>
-  <form class="filter-bar" method="get" action="<%= reporterBase %>/main-log">
-    <input type="search" name="q" value="<%= filters.q %>" placeholder="Search reference, address, UPRN, project…" aria-label="Search main log" />
-    <select name="project" aria-label="Filter by project">
-      <option value="">All projects</option>
-      <% projectNames.forEach((name) => { %>
-        <option value="<%= name %>" <%= filters.project === name ? "selected" : "" %>><%= name %></option>
-      <% }) %>
-    </select>
-    <select name="rating" aria-label="Filter by rating">
-      <option value="">All ratings</option>
-      <% ratings.forEach((r) => { %>
-        <option value="<%= r %>" <%= filters.rating === r ? "selected" : "" %>><%= r %></option>
-      <% }) %>
-    </select>
-    <button type="submit" class="btn btn-ghost btn-sm">Apply</button>
-  </form>
-  <% if (!rows.length) { %>
-    <p class="empty" style="padding:1rem 1.1rem;">No actioned cases yet.</p>
-  <% } else { %>
-    <div class="table-wrap">
-      <table class="landing-table">
+  <div class="ml-card">
+    <form class="ml-filters" id="ml-filters" method="get" action="<%= reporterBase %>/main-log">
+      <input type="hidden" name="type" value="<%= filters.type %>" />
+      <div class="ml-f ml-search">
+        <label for="ml-q">Search</label>
+        <input id="ml-q" name="q" type="search" value="<%= filters.q %>" placeholder="Reference, UPRN or address" autocomplete="off" />
+      </div>
+      <div class="ml-f">
+        <label for="ml-project">Project</label>
+        <select id="ml-project" name="project">
+          <option value="">All projects</option>
+          <% projectNames.forEach((name) => { %>
+            <option value="<%= name %>" <%= filters.project === name ? "selected" : "" %>><%= name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="ml-f">
+        <label for="ml-by">Sent by</label>
+        <select id="ml-by" name="by">
+          <option value="">Anyone</option>
+          <% senders.forEach((name) => { %>
+            <option value="<%= name %>" <%= filters.by === name ? "selected" : "" %>><%= name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="ml-f">
+        <label>Type</label>
+        <div class="ml-seg">
+          <% const types = [
+            { value: "", label: "All" },
+            { value: "original", label: "Original" },
+            { value: "correction", label: "Correction" },
+            { value: "not_sent", label: "Not sent from portal" }
+          ]; %>
+          <% types.forEach((item) => {
+            const params = new URLSearchParams();
+            if (filters.q) params.set("q", filters.q);
+            if (filters.project) params.set("project", filters.project);
+            if (filters.by) params.set("by", filters.by);
+            if (item.value) params.set("type", item.value);
+            if (filters.from) params.set("from", filters.from);
+            if (filters.to) params.set("to", filters.to);
+            const href = reporterBase + "/main-log" + (params.toString() ? "?" + params.toString() : "");
+            const on = filters.type === item.value;
+          %>
+            <a class="<%= on ? "on" : "" %> <%= on && item.value === "correction" ? "corr" : "" %>" href="<%= href %>"><%= item.label %></a>
+          <% }) %>
+        </div>
+      </div>
+      <div class="ml-f">
+        <label for="ml-from">From</label>
+        <input id="ml-from" name="from" type="date" value="<%= filters.from %>" />
+      </div>
+      <div class="ml-f">
+        <label for="ml-to">To</label>
+        <input id="ml-to" name="to" type="date" value="<%= filters.to %>" />
+      </div>
+      <button type="submit" class="ml-submit">Search</button>
+    </form>
+    <div class="ml-bar">
+      <div class="ml-count"><%= showing %><% if (ofTotal) { %><span>of <%= ofTotal %></span><% } %></div>
+      <div class="ml-bar-actions">
+        <a class="btn ml-clear" href="<%= clearHref %>">Clear</a>
+        <a class="btn ml-excel" href="<%= exportHref %>"><span class="ml-x" aria-hidden="true">X</span>Export to Excel</a>
+      </div>
+    </div>
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <colgroup>
+          <col style="width:88px" /><col style="width:92px" /><col style="width:110px" /><col style="width:108px" />
+          <col /><col style="width:130px" /><col style="width:124px" /><col style="width:110px" />
+          <col style="width:120px" /><col style="width:64px" /><col style="width:118px" />
+        </colgroup>
         <thead>
           <tr>
-            <th>Ref</th>
-            <th>Project</th>
-            <th>Address</th>
-            <th>UPRN</th>
-            <th>Category</th>
-            <th>Rating</th>
-            <th>Actioned</th>
-            <th>By</th>
-            <th>Status</th>
-            <th></th>
+            <th>Sent</th><th>Ref</th><th>Project</th><th>UPRN</th><th>Address</th>
+            <th>Hazard</th><th>Rating</th><th>Sent by</th><th>To</th>
+            <th class="ml-ph">Photos</th><th>Type</th>
           </tr>
         </thead>
         <tbody>
-          <% rows.forEach((row) => {
-            const when = row.emailSentAt || row.updatedAt;
-            const pillClass = row.status === "email_sent" ? "sent" : (row.status === "corrected" ? "corrected" : (row.status === "closed" ? "closed" : "ready"));
-          %>
-            <tr>
+          <% if (!rows.length) { %>
+            <tr><td colspan="11" class="ml-empty">No emails match. Try clearing the filters.</td></tr>
+          <% } %>
+          <% rows.forEach((row) => { %>
+            <tr class="ml-row <%= row.kind === "correction" ? "is-corr" : "" %> <%= row.hasCorrBelow ? "has-corr" : "" %> <%= row.selected ? "sel" : "" %>" data-href="<%= row.href %>">
+              <td class="ml-when"><b><%= row.whenDate %></b><span><%= row.whenTime %></span></td>
               <td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
-              <td><span class="project-pill"><%= row.projectName %></span></td>
-              <td><strong><%= row.fullAddress %></strong></td>
-              <td><%= row.uprn %></td>
-              <td><%= row.category %></td>
-              <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
-              <td><%= formatDocDate(when) %></td>
-              <td><%= row.emailSentBy || row.lastEditedBy || "—" %></td>
-              <td><span class="status-pill <%= pillClass %>"><%= actionedStatusLabel(row.status) %></span></td>
+              <td class="ml-proj"><%= row.projectName %></td>
+              <td class="ml-uprn"><%= row.uprn %></td>
+              <td class="ml-addr"><%= row.lineAddress || "—" %></td>
+              <td><%= row.hazard %></td>
+              <td class="<%= row.ratingClass %>"><%= row.rating %></td>
+              <td class="ml-by"><%= row.sentBy || "—" %></td>
+              <td class="ml-to" title="<%= row.to %>"><%= row.to || "—" %></td>
+              <td class="ml-photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 8"/></svg><%= row.photoCount %></td>
               <td>
-                <a class="linkish dark" href="<%= reporterBase %>/main-log/<%= row.id %>">View entry</a>
-                <a class="linkish dark" href="<%= reporterBase %>/review/<%= row.id %>">View pack →</a>
+                <span class="ml-tag <%= row.kind === "correction" ? "c" : (row.kind === "not_sent" ? "n" : "o") %>"><%= row.typeLabel %></span>
+                <% if (row.correctedNote) { %><span class="ml-corr-note">Corrected ↓</span><% } %>
               </td>
             </tr>
+            <% if (row.linkLine) { %>
+              <tr class="ml-sub <%= row.selected ? "sel" : "" %>" data-href="<%= row.href %>">
+                <td></td>
+                <td colspan="10"><div class="ml-link"><span class="ml-arr" aria-hidden="true">↳</span><%= row.linkLine %></div></td>
+              </tr>
+            <% } %>
           <% }) %>
         </tbody>
       </table>
     </div>
-  <% } %>
-  <div class="table-foot">
-    <span>Full archive · Filters apply to actioned cases</span>
-    <a class="btn btn-ghost btn-sm" href="<%= reporterBase %>/main-log/export.csv">Export CSV</a>
-  </div>
-</section>
-
-<p class="footer-note">Main Log archive · Live actioned submissions</p>
-
-<% if (typeof entry !== "undefined" && entry) { %>
-<div class="ml-overlay" id="ml-overlay">
-  <div class="ml-dialog" role="dialog" aria-modal="true" aria-labelledby="ml-title">
-    <div class="ml-head">
-      <h2 id="ml-title">Main Log entry</h2>
-      <span class="count count-dealt">Actioned</span>
-    </div>
-    <% if (entry.copyWarning) { %><p class="ml-sub"><%= entry.copyWarning %></p><% } %>
-    <div class="ml-body" id="ml-body">
-      <dl class="ml-list">
-        <dt>Reference</dt><dd><% if (typeof entryReference !== "undefined" && entryReference) { %><span class="ref-chip"><%= entryReference %></span><% } else { %>—<% } %></dd>
-        <dt>Case</dt><dd><%= entry.caseLine %></dd>
-        <dt>Email</dt><dd class="<%= entry.emailSent ? '' : 'ml-empty' %>"><% if (entry.emailSent) { %><strong><%= entry.emailLine %></strong><% } else { %><%= entry.emailLine %><% } %></dd>
-        <dt>From</dt><dd><%= entry.fromLine %></dd>
-        <dt>Marked actioned by</dt><dd><%= entry.markedByLine %></dd>
-        <div class="ml-sep"></div>
-        <dt>To</dt><dd class="<%= entry.to ? '' : 'ml-empty' %>"><%= entry.to || "—" %></dd>
-        <dt>Cc</dt><dd class="<%= entry.cc ? '' : 'ml-empty' %>"><%= entry.cc || "—" %></dd>
-        <dt>Bcc</dt><dd class="<%= entry.bcc ? '' : 'ml-empty' %>"><%= entry.bcc || "—" %></dd>
-        <dt>Subject</dt><dd class="<%= entry.subject ? '' : 'ml-empty' %>"><%= entry.subject || "—" %></dd>
-      </dl>
-      <details class="ml-text" open>
-        <summary>Email text</summary>
-        <pre><%= entry.body || "(empty)" %></pre>
-      </details>
-      <p class="ml-photos-label"><%= entry.photoLabel %></p>
-      <% if (entryPhotos && entryPhotos.length) { %>
-        <div class="ml-photos">
-          <% entryPhotos.forEach((p) => { %>
-            <figure>
-              <img src="<%= p.url %>" alt="<%= p.caption %>" />
-              <figcaption><%= p.name %></figcaption>
-            </figure>
-          <% }) %>
-        </div>
-      <% } else if (entry.photoNames.length) { %>
-        <ul class="ml-photos-names">
-          <% entry.photoNames.forEach((name) => { %><li><%= name %></li><% }) %>
-        </ul>
-      <% } else { %>
-        <p class="ml-note" style="font-style:normal;margin-top:0.3rem">No photos.</p>
-      <% } %>
-    </div>
-    <div class="ml-foot"><a class="btn btn-primary" id="ml-close" href="<%= reporterBase %>/main-log">Close</a></div>
+    <% if (pageCount > 1) { %>
+      <div class="ml-pager">
+        <% if (prevHref) { %><a href="<%= prevHref %>">Previous</a><% } %>
+        <span>Page <%= page %> of <%= pageCount %></span>
+        <% if (nextHref) { %><a href="<%= nextHref %>">Next</a><% } %>
+      </div>
+    <% } %>
   </div>
 </div>
+
+<% if (panel) { %>
+<div class="ml-scrim on" id="ml-scrim"></div>
+<aside class="ml-drawer on" id="ml-drawer" role="dialog" aria-modal="true" aria-label="Email details">
+  <div class="ml-d-head">
+    <% if (panel.reference) { %><span class="ref-chip ref-chip-lg"><%= panel.reference %></span><% } %>
+    <span class="ml-tag <%= panel.kind === "correction" ? "c" : (panel.kind === "not_sent" ? "n" : "o") %>"><%= panel.typeLabel %></span>
+    <span class="ml-d-title"><%= panel.projectName %></span>
+    <a class="ml-x" id="ml-close" href="<%= panel.closeHref %>" aria-label="Close">×</a>
+  </div>
+  <div class="ml-d-body">
+    <p class="ml-d-case"><%= panel.fullAddress || "—" %></p>
+    <p class="ml-d-sub">UPRN <%= panel.uprn || "—" %> · <%= panel.hazard || "—" %> · <span class="<%= panel.ratingClass %>"><%= panel.rating || "—" %></span></p>
+    <% if (panel.kind === "correction" && panel.originalWhen) { %>
+      <div class="ml-corrbox">
+        <b>Correction of email sent <%= panel.originalWhen %></b>
+        Reason: <%= panel.correctionReason || "—" %><% if (panel.correctionNote) { %> · Note: <%= panel.correctionNote %><% } %>
+        <% if (panel.originalHref) { %><br /><a href="<%= panel.originalHref %>">View original email →</a><% } %>
+      </div>
+    <% } %>
+    <% if (panel.kind !== "correction" && panel.corrections && panel.corrections.length) { %>
+      <div class="ml-origbox">
+        <% panel.corrections.forEach((item) => { %>
+          <div>Corrected on <%= item.when %><% if (item.reason) { %> (<%= item.reason %>)<% } %> · <a href="<%= item.href %>">View correction →</a></div>
+        <% }) %>
+      </div>
+    <% } %>
+    <% if (panel.kind === "not_sent") { %>
+      <div class="ml-origbox">Not sent from the portal. Marked actioned on <%= panel.when %>.</div>
+    <% } %>
+    <div class="ml-facts">
+      <div><span>Sent by</span><b><%= panel.sentBy || "—" %></b></div>
+      <div><span>Sent</span><b><%= panel.when %></b></div>
+      <div><span>Photos</span><b><%= panel.photoCount %></b></div>
+    </div>
+    <dl class="ml-meta">
+      <dt>From</dt><dd class="<%= panel.from ? "" : "none" %>"><%= panel.from || "—" %></dd>
+      <dt>To</dt><dd class="<%= panel.to ? "" : "none" %>"><%= panel.to || "—" %></dd>
+      <dt>Cc</dt><dd class="<%= panel.cc ? "" : "none" %>"><%= panel.cc || "—" %></dd>
+      <dt>Bcc</dt><dd class="<%= panel.bcc ? "" : "none" %>"><%= panel.bcc || "—" %></dd>
+      <dt>Subject</dt><dd class="<%= panel.subject ? "" : "none" %>"><% if (panel.subject) { %><b><%= panel.subject %></b><% } else { %>—<% } %></dd>
+    </dl>
+    <div class="ml-sec">Email text</div>
+    <% if (panel.bodyMissing) { %><p class="ml-missing">Full text not stored for this email</p><% } %>
+    <pre class="ml-body"><%= panel.bodyText || (panel.kind === "not_sent" ? "Not sent from the portal." : "") %></pre>
+    <div class="ml-sec">Photos attached (<%= panel.photos.length %>)</div>
+    <% if (panel.photos.length) { %>
+      <div class="ml-thumbs">
+        <% panel.photos.forEach((photo) => { %>
+          <figure>
+            <% if (photo.url) { %><img src="<%= photo.url %>" alt="<%= photo.name %>" /><% } else { %><div class="ml-thumb-miss">No file</div><% } %>
+            <figcaption><%= photo.name %></figcaption>
+          </figure>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <p class="ml-none">No photos.</p>
+    <% } %>
+  </div>
+  <div class="ml-d-foot">
+    <a class="btn btn-primary" href="<%= panel.caseHref %>">Open case</a>
+    <a class="btn ml-pack" href="<%= panel.caseHref %>">View pack</a>
+    <% if (panel.originalHref) { %><a class="btn ml-pack" href="<%= panel.originalHref %>">View original</a><% } %>
+    <a class="btn ml-pack ml-close-link" href="<%= panel.closeHref %>">Close</a>
+  </div>
+</aside>
 <% } %>
 
+<script src="<%= mainLogJsUrl %>"></script>
 <%- include("partials/layout-close") %>

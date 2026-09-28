@@ -53,7 +53,7 @@ import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
 import { claimRowClass, claimView, claimerLabel, type ClaimView } from "../lib/hhsrs-claims.js";
 import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
-  buildMainLogEntry,
+  fromAddressFromEnv,
   publicSendSettings,
   senderNamesFromLogin,
   sentBannerText,
@@ -87,6 +87,17 @@ import {
   unmatchedClientEmailError,
   type ClientEmailFlash,
 } from "../lib/hhsrs-client-emails.js";
+import {
+  buildMainLogWorkbook,
+  casePhotoViews,
+  correctionLinkLine,
+  filtersActive,
+  loadMainLog,
+  loadMainLogExport,
+  mainLogTypeLabel,
+  showingLabel,
+  type MainLogFilters,
+} from "../lib/hhsrs-main-log.js";
 import {
   loadSiteFormPhoto,
   privateInlineHeaders,
@@ -176,6 +187,7 @@ hhsrsReporterRouter.use(async (req: Request, res: Response, next) => {
   const skip =
     req.path.endsWith(".json") ||
     req.path.endsWith(".csv") ||
+    req.path.endsWith(".xlsx") ||
     req.path.includes("/photos/");
   if (skip) {
     next();
@@ -296,12 +308,6 @@ function shellLocals(opts: {
     flashOk: opts.flashOk || "",
     flashErr: opts.flashErr || "",
   };
-}
-
-function csvEscape(value: string): string {
-  const s = String(value ?? "");
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
 }
 
 /* ---------- Lightweight poll for new pending hazards ---------- */
@@ -729,48 +735,81 @@ hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response)
   res.redirect(findUrl({ q, date, caseId: row.id, view: result.ok ? undefined : "amend", sent: result.ok ? "1" : undefined }));
 });
 
+function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {}): string {
+  const next = { ...filters, ...patch };
+  const params = new URLSearchParams();
+  if (next.q) params.set("q", next.q);
+  if (next.project) params.set("project", next.project);
+  if (next.by) params.set("by", next.by);
+  if (next.type) params.set("type", next.type);
+  if (next.from) params.set("from", next.from);
+  if (next.to) params.set("to", next.to);
+  if (next.page > 1) params.set("page", String(next.page));
+  if (next.open) params.set("open", next.open);
+  const qs = params.toString();
+  return `${HHSRS_REPORTER_PATH}/main-log${qs ? `?${qs}` : ""}`;
+}
+
+function mainLogExportHref(filters: MainLogFilters): string {
+  const params = new URLSearchParams();
+  if (filters.q) params.set("q", filters.q);
+  if (filters.project) params.set("project", filters.project);
+  if (filters.by) params.set("by", filters.by);
+  if (filters.type) params.set("type", filters.type);
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  const qs = params.toString();
+  return `${HHSRS_REPORTER_PATH}/main-log/export.xlsx${qs ? `?${qs}` : ""}`;
+}
+
 /* ---------- Main Log ---------- */
 hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
-  const q = String(req.query.q || "").trim();
-  const project = String(req.query.project || "").trim();
-  const rating = String(req.query.rating || "").trim();
-
-  const where: {
-    status: { in: string[] };
-    AND?: object[];
-  } = { status: { in: [...HHSRS_ACTIONED_STATUSES] } };
-
-  const and: object[] = [];
-  if (q) {
-    and.push({
-      OR: [
-        { fullAddress: { contains: q, mode: "insensitive" } },
-        { uprn: { contains: q, mode: "insensitive" } },
-        { projectName: { contains: q, mode: "insensitive" } },
-        { category: { contains: q, mode: "insensitive" } },
-        { reference: { contains: q, mode: "insensitive" } },
-      ],
-    });
-  }
-  if (project) and.push({ projectName: project });
-  if (rating) and.push({ rating });
-  if (and.length) where.AND = and;
-
-  const [rows, summary, projects] = await Promise.all([
-    prisma.hhsrsSiteSubmission.findMany({
-      where,
-      orderBy: [{ emailSentAt: "desc" }, { updatedAt: "desc" }],
-      take: 300,
-    }),
+  const [loaded, summary] = await Promise.all([
+    loadMainLog(req.query as Record<string, unknown>),
     loadSummary(),
-    prisma.hhsrsSiteSubmission.findMany({
-      where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
-      distinct: ["projectName"],
-      select: { projectName: true },
-      orderBy: { projectName: "asc" },
-    }),
   ]);
+  const filters = loaded.filters;
   const flash = takeFlash(req);
+  const rows = loaded.entries.map((entry) => {
+    const flag = loaded.flags.get(entry.key);
+    return {
+      ...entry,
+      href: mainLogHref(filters, { open: entry.key }),
+      selected: filters.open === entry.key,
+      whenDate: formatLondonDateTime(entry.at).split(" ")[0],
+      whenTime: formatLondonDateTime(entry.at).split(" ")[1],
+      typeLabel: mainLogTypeLabel(entry.kind),
+      ratingClass: ratingDisplayClass(entry.rating),
+      correctedNote: Boolean(flag?.showCorrectedNote),
+      hasCorrBelow: Boolean(flag?.hasCorrBelow),
+      linkLine: correctionLinkLine(entry),
+    };
+  });
+  const panelEntry = loaded.panel;
+  const panel = panelEntry
+    ? {
+        ...panelEntry,
+        typeLabel: mainLogTypeLabel(panelEntry.kind),
+        ratingClass: ratingDisplayClass(panelEntry.rating),
+        when: formatLondonDateTime(panelEntry.at),
+        originalWhen: panelEntry.originalSentAt ? formatLondonDateTime(panelEntry.originalSentAt) : "",
+        photos: casePhotoViews(panelEntry, HHSRS_REPORTER_PATH),
+        caseHref: `${HHSRS_REPORTER_PATH}/review/${panelEntry.submissionId}`,
+        originalHref: panelEntry.correctsKey ? mainLogHref(filters, { open: panelEntry.correctsKey }) : "",
+        closeHref: mainLogHref(filters, { open: "" }),
+        corrections: panelEntry.corrections.map((item) => ({
+          ...item,
+          when: formatLondonDateTime(item.at),
+          href: mainLogHref(filters, { open: item.key }),
+        })),
+        bodyMissing: panelEntry.kind !== "not_sent" && !panelEntry.body.trim(),
+        bodyText: panelEntry.body.trim()
+          ? panelEntry.body
+          : panelEntry.kind === "not_sent"
+            ? ""
+            : MISSING_EMAIL_BODY,
+      }
+    : null;
   res.render("hhsrs-reporter/main-log", {
     ...shellLocals({
       activeNav: "main-log",
@@ -781,49 +820,37 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
     }),
     user: req.user,
     rows,
-    projectNames: projects.map((p) => p.projectName),
-    filters: { q, project, rating },
-    ratings: Array.from(new Set([...HHSRS_RATINGS, ...HHSRS_SITE_FORM_RATINGS])),
+    panel,
+    projectNames: loaded.projectNames,
+    senders: loaded.senders,
+    filters,
+    mailbox: fromAddressFromEnv(),
+    showing: showingLabel(loaded.total, loaded.from, loaded.to, loaded.unfiltered, filtersActive(filters)),
+    ofTotal: filtersActive(filters) && loaded.unfiltered > loaded.total && loaded.from <= 1 && loaded.to === loaded.total
+      ? loaded.unfiltered
+      : 0,
+    exportHref: mainLogExportHref(filters),
+    clearHref: `${HHSRS_REPORTER_PATH}/main-log`,
+    prevHref: loaded.page > 1 ? mainLogHref(filters, { page: loaded.page - 1 }) : "",
+    nextHref: loaded.page < loaded.pageCount ? mainLogHref(filters, { page: loaded.page + 1 }) : "",
+    page: loaded.page,
+    pageCount: loaded.pageCount,
+    mainLogJsUrl: typeof res.locals.baseUrl === "function" ? res.locals.baseUrl("/js/hhsrs-main-log.js") : "/js/hhsrs-main-log.js",
   });
 });
 
-hhsrsReporterRouter.get("/main-log/export.csv", async (req: Request, res: Response) => {
-  const rows = await prisma.hhsrsSiteSubmission.findMany({
-    where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
-    orderBy: [{ emailSentAt: "desc" }, { updatedAt: "desc" }],
-    take: 2000,
+hhsrsReporterRouter.get("/main-log/export.xlsx", async (req: Request, res: Response) => {
+  const loaded = await loadMainLogExport(req.query as Record<string, unknown>);
+  const names = senderNamesFromLogin(req.user);
+  const file = await buildMainLogWorkbook({
+    entries: loaded.entries,
+    filters: loaded.filters,
+    exportedBy: names.sentBy || "HHSRS",
+    exportedAt: new Date(),
   });
-  const header = [
-    "Reference",
-    "Project",
-    "Address",
-    "UPRN",
-    "Category",
-    "Rating",
-    "Actioned",
-    "By",
-    "Status",
-  ];
-  const lines = [header.join(",")];
-  for (const row of rows) {
-    const when = row.emailSentAt || row.updatedAt;
-    lines.push(
-      [
-        csvEscape(row.reference || ""),
-        csvEscape(row.projectName),
-        csvEscape(row.fullAddress),
-        csvEscape(row.uprn),
-        csvEscape(row.category),
-        csvEscape(row.rating),
-        csvEscape(formatDocDate(when)),
-        csvEscape(row.emailSentBy || row.lastEditedBy || ""),
-        csvEscape(actionedStatusLabel(row.status)),
-      ].join(",")
-    );
-  }
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", 'attachment; filename="hhsrs-main-log.csv"');
-  res.send(lines.join("\n"));
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", 'attachment; filename="hhsrs-main-log.xlsx"');
+  res.send(file);
 });
 
 hhsrsReporterRouter.get("/main-log/:id", async (req: Request, res: Response) => {
@@ -832,53 +859,16 @@ hhsrsReporterRouter.get("/main-log/:id", async (req: Request, res: Response) => 
     res.status(404).send("Case not found.");
     return;
   }
-  const [sent, summary, rows, projects] = await Promise.all([
-    originalSentEmail(row.id),
-    loadSummary(),
-    prisma.hhsrsSiteSubmission.findMany({
-      where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
-      orderBy: [{ emailSentAt: "desc" }, { updatedAt: "desc" }],
-      take: 300,
-    }),
-    prisma.hhsrsSiteSubmission.findMany({
-      where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
-      distinct: ["projectName"],
-      select: { projectName: true },
-      orderBy: { projectName: "asc" },
-    }),
-  ]);
-  const address = row.postcode ? `${row.fullAddress}, ${row.postcode}` : row.fullAddress;
-  const markedAt = sent?.sentAt || row.emailSentAt || row.updatedAt;
-  const markedBy = sent?.sentBy || row.emailSentBy || row.lastEditedBy || "";
-  const entry = buildMainLogEntry({
-    uprn: row.uprn,
-    address,
-    projectName: row.projectName,
-    sent,
-    markedBy,
-    markedAt,
-  });
-  const known = new Set(entry.photoNames);
-  const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH).filter((photo) => known.has(photo.name));
-  const flash = takeFlash(req);
-  res.render("hhsrs-reporter/main-log", {
-    ...shellLocals({
-      activeNav: "main-log",
-      summary,
-      title: "Main Log entry — HHSRS Reporter",
-      flashOk: flash.ok,
-      flashErr: flash.err,
-    }),
-    user: req.user,
-    rows,
-    projectNames: projects.map((project) => project.projectName),
-    filters: { q: "", project: "", rating: "" },
-    ratings: Array.from(new Set([...HHSRS_RATINGS, ...HHSRS_SITE_FORM_RATINGS])),
-    entry,
-    entryPhotos: photos,
-    entryId: row.id,
-    entryReference: row.reference || "",
-  });
+  const sent = await originalSentEmail(row.id);
+  if (sent) {
+    res.redirect(`${HHSRS_REPORTER_PATH}/main-log?open=email:${encodeURIComponent(sent.id)}`);
+    return;
+  }
+  if ((HHSRS_ACTIONED_STATUSES as readonly string[]).includes(row.status)) {
+    res.redirect(`${HHSRS_REPORTER_PATH}/main-log?open=case:${encodeURIComponent(row.id)}`);
+    return;
+  }
+  res.redirect(`${HHSRS_REPORTER_PATH}/main-log`);
 });
 
 async function loadLiveProjectCounts(): Promise<{

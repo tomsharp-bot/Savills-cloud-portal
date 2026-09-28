@@ -150,10 +150,11 @@ describe("HHSRS Reporter auth and queue", () => {
 
     const mainLog = await request(app, "GET", "/HHSRSreporter/main-log", { cookie });
     assert.equal(mainLog.status, 200);
-    assert.match(mainLog.body, /Main Log archive/);
-    assert.match(mainLog.body, /panel-head review-head/);
+    assert.match(mainLog.body, /Main Log/);
+    assert.match(mainLog.body, /Reference, UPRN or address/);
+    assert.match(mainLog.body, /Export to Excel/);
     assert.doesNotMatch(mainLog.body, /dealt-head/);
-    assert.match(mainLog.body, /Export CSV/);
+    assert.doesNotMatch(mainLog.body, /Export CSV/);
 
     const overview = await request(app, "GET", "/HHSRSreporter/project-overview", { cookie });
     assert.equal(overview.status, 200);
