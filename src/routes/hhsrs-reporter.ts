@@ -55,9 +55,22 @@ import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
   buildMainLogEntry,
   publicSendSettings,
+  senderNamesFromLogin,
   sentBannerText,
 } from "../lib/hhsrs-send.js";
-import { latestSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import { latestSentEmail, listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import {
+  CORRECTION_REASONS,
+  MISSING_EMAIL_BODY,
+  correctionSubject,
+  findCaseWhere,
+  findStatusLabel,
+  formatLondonDate,
+  formatLondonDateTime,
+  latestSentLog,
+  mainLogCardRows,
+  type SentLogEmail,
+} from "../lib/hhsrs-find.js";
 import {
   SITE_FORM_CODE_CHANGED,
   SITE_FORM_CODE_INVALID,
@@ -269,7 +282,7 @@ async function claimIfOpen(
 }
 
 function shellLocals(opts: {
-  activeNav: "pending" | "review" | "main-log" | "admin" | "project-overview";
+  activeNav: "pending" | "review" | "find" | "main-log" | "admin" | "project-overview";
   summary: ReporterSummary;
   title?: string;
   flashOk?: string;
@@ -433,7 +446,7 @@ async function renderReview(
   }
 ): Promise<void> {
   const storage = sitePhotoStorageFromApp(req.app);
-  const [photos, sentEmail] = await Promise.all([reviewPhotos(row, storage), latestSentEmail(row.id)]);
+  const [photos, sentEmail] = await Promise.all([reviewPhotos(row, storage), originalSentEmail(row.id)]);
   const draft = tryDraftFromRow(row);
   const currentNames = opts.progress.filter((project) => project.stage === "current").map((project) => project.name);
   const reviewProjectValue = progressNameForCase(row.projectName, currentNames);
@@ -531,6 +544,191 @@ hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
   await renderReview(req, res, row, ctx);
 });
 
+function findUrl(parts: { q?: string; date?: string; caseId?: string; view?: string; sent?: string }): string {
+  const params = new URLSearchParams();
+  if (parts.q) params.set("q", parts.q);
+  if (parts.date) params.set("date", parts.date);
+  if (parts.caseId) params.set("case", parts.caseId);
+  if (parts.view) params.set("view", parts.view);
+  if (parts.sent) params.set("sent", parts.sent);
+  const query = params.toString();
+  return `${HHSRS_REPORTER_PATH}/find${query ? `?${query}` : ""}`;
+}
+
+function toSentLog(row: Awaited<ReturnType<typeof listSentEmails>>[number]): SentLogEmail {
+  return {
+    id: row.id,
+    sentAt: row.sentAt,
+    sentBy: row.sentBy,
+    from: row.from,
+    to: row.to,
+    cc: row.cc,
+    bcc: row.bcc,
+    subject: row.subject,
+    body: row.body,
+    photoNames: row.photoNames.map(String),
+    kind: row.kind || "original",
+    correctionReason: row.correctionReason || "",
+    correctionNote: row.correctionNote || "",
+    correctsEmailId: row.correctsEmailId || null,
+  };
+}
+
+/* ---------- Find & resend ---------- */
+hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
+  const q = String(req.query.q || "").trim();
+  const date = String(req.query.date || "").trim();
+  const caseId = String(req.query.case || "").trim();
+  const view = String(req.query.view || "").trim() === "amend" ? "amend" : "list";
+  const justSent = String(req.query.sent || "") === "1";
+  const storage = sitePhotoStorageFromApp(req.app);
+
+  const [summary, matches] = await Promise.all([
+    loadSummary(),
+    prisma.hhsrsSiteSubmission.findMany({
+      where: findCaseWhere(q, date),
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    }),
+  ]);
+
+  const rows = matches.map((row) => {
+    const label = findStatusLabel(row.status);
+    return {
+      id: row.id,
+      reference: row.reference || "",
+      submitted: formatLondonDate(row.createdAt),
+      uprn: row.uprn,
+      address: row.fullAddress,
+      hazard: row.category,
+      statusLabel: label,
+      statusClass: label.replace(/\s+/g, "-"),
+      href: findUrl({ q, date, caseId: row.id }),
+    };
+  });
+
+  const picked = caseId ? matches.find((row) => row.id === caseId) || (await loadCase(caseId)) : null;
+  let found: Record<string, unknown> | null = null;
+  let amend: Record<string, unknown> | null = null;
+  let photos: ReporterCasePhoto[] = [];
+
+  if (picked) {
+    const emails = (await listSentEmails(picked.id)).map(toSentLog);
+    const latest = latestSentLog(emails);
+    const label = findStatusLabel(picked.status);
+    const casePhotos = await reviewPhotos(picked, storage);
+    const log = mainLogCardRows(emails).map((entry) => ({
+      ...entry,
+      fresh: justSent && latest ? entry.id === latest.id && entry.type === "Correction" : false,
+    }));
+    const sent = latest
+      ? {
+          when: formatLondonDateTime(latest.sentAt),
+          by: latest.sentBy,
+          from: latest.from,
+          to: latest.to,
+          cc: latest.cc,
+          bcc: latest.bcc,
+          subject: latest.subject,
+          body: latest.body,
+          bodyMissing: !String(latest.body || "").trim(),
+          missingText: MISSING_EMAIL_BODY,
+          correction: latest.kind === "correction",
+          photos: latest.photoNames.map((name, index) => {
+            const known = casePhotos.find((photo) => photo.name === name);
+            return known || { id: name, name, caption: `Photo ${index + 1}`, url: "" };
+          }),
+        }
+      : null;
+    const notice =
+      justSent && latest
+        ? `Sent to ${latest.to} at ${formatLondonDateTime(latest.sentAt)}. Status is now Corrected and the Main Log is updated below.`
+        : "";
+    found = {
+      id: picked.id,
+      reference: picked.reference || "",
+      address: picked.fullAddress,
+      hazard: picked.category,
+      statusLabel: label,
+      statusClass: label.replace(/\s+/g, "-"),
+      reviewUrl: `${HHSRS_REPORTER_PATH}/review/${picked.id}`,
+      amendUrl: findUrl({ q, date, caseId: picked.id, view: "amend" }),
+      backUrl: findUrl({ q, date, caseId: picked.id }),
+      viewUrl: findUrl({ q, date, caseId: picked.id }),
+      sent,
+      notice,
+      log,
+    };
+    if (view === "amend" && latest) {
+      const included = new Set(latest.photoNames);
+      photos = casePhotos;
+      amend = {
+        to: latest.to,
+        cc: latest.cc,
+        bcc: latest.bcc,
+        subject: correctionSubject(latest.subject),
+        body: latest.body,
+        reasons: CORRECTION_REASONS,
+        note: "",
+        includedCount: casePhotos.filter((photo) => included.has(photo.name)).length,
+        photos: casePhotos.map((photo, index) => ({
+          ...photo,
+          caption: photo.caption || `Photo ${index + 1}`,
+          included: included.has(photo.name),
+        })),
+        action: `${HHSRS_REPORTER_PATH}/find/${picked.id}/resend`,
+      };
+    }
+  }
+
+  const flash = takeFlash(req);
+  res.render("hhsrs-reporter/find", {
+    ...shellLocals({
+      activeNav: "find",
+      summary,
+      title: "Find & resend — HHSRS Reporter",
+      flashOk: flash.ok,
+      flashErr: flash.err,
+    }),
+    user: req.user,
+    filters: { q, date },
+    rows,
+    found,
+    view: amend ? "amend" : "list",
+    amend,
+    photos,
+    sendConfig: publicSendSettings(false),
+    findResend: Boolean(amend),
+  });
+});
+
+hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response) => {
+  const row = await loadCase(req.params.id);
+  if (!row) {
+    res.status(404).send("Case not found.");
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const q = String(body.q || "").trim();
+  const date = String(body.date || "").trim();
+  const signature = await senderSignatureFor(req.user);
+  const result = await sendCaseEmail({
+    row,
+    sentBy: signature.fullName || req.user?.username || "",
+    senderFirstName: signature.firstName,
+    senderFullName: signature.fullName,
+    hasReporterAccess: Boolean(req.user && isAdmin(req.user)),
+    body,
+    storage: sitePhotoStorageFromApp(req.app),
+    correction: {
+      reason: String(body.correctionReason || ""),
+      note: String(body.correctionNote || ""),
+    },
+  });
+  if (!result.ok) flashErr(req, result.error);
+  res.redirect(findUrl({ q, date, caseId: row.id, view: result.ok ? undefined : "amend", sent: result.ok ? "1" : undefined }));
+});
+
 /* ---------- Main Log ---------- */
 hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
   const q = String(req.query.q || "").trim();
@@ -550,6 +748,7 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
         { uprn: { contains: q, mode: "insensitive" } },
         { projectName: { contains: q, mode: "insensitive" } },
         { category: { contains: q, mode: "insensitive" } },
+        { reference: { contains: q, mode: "insensitive" } },
       ],
     });
   }
@@ -595,6 +794,7 @@ hhsrsReporterRouter.get("/main-log/export.csv", async (req: Request, res: Respon
     take: 2000,
   });
   const header = [
+    "Reference",
     "Project",
     "Address",
     "UPRN",
@@ -609,6 +809,7 @@ hhsrsReporterRouter.get("/main-log/export.csv", async (req: Request, res: Respon
     const when = row.emailSentAt || row.updatedAt;
     lines.push(
       [
+        csvEscape(row.reference || ""),
         csvEscape(row.projectName),
         csvEscape(row.fullAddress),
         csvEscape(row.uprn),
@@ -632,7 +833,7 @@ hhsrsReporterRouter.get("/main-log/:id", async (req: Request, res: Response) => 
     return;
   }
   const [sent, summary, rows, projects] = await Promise.all([
-    latestSentEmail(row.id),
+    originalSentEmail(row.id),
     loadSummary(),
     prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
@@ -676,6 +877,7 @@ hhsrsReporterRouter.get("/main-log/:id", async (req: Request, res: Response) => 
     entry,
     entryPhotos: photos,
     entryId: row.id,
+    entryReference: row.reference || "",
   });
 });
 
@@ -829,7 +1031,7 @@ hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Respon
 /* Back-compat paths from PR #20 */
 hhsrsReporterRouter.get("/:id", async (req: Request, res: Response) => {
   const id = req.params.id;
-  if (["review", "main-log", "admin", "project-overview"].includes(id)) {
+  if (["review", "find", "main-log", "admin", "project-overview"].includes(id)) {
     res.status(404).send("Not found.");
     return;
   }
@@ -972,7 +1174,7 @@ async function handleMarkActioned(req: Request, res: Response, id: string): Prom
     where: { id: row.id, updatedAt: expected },
     data: alreadySent
       ? {
-          status: row.status === "closed" ? "closed" : "email_sent",
+          status: row.status === "closed" ? "closed" : row.status === "corrected" ? "corrected" : "email_sent",
           lastEditedBy: editor,
           claimedBy: "",
           claimedAt: null,

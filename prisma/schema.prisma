@@ -66,6 +66,8 @@ model Project {
   typeValidations      Boolean           @default(false)
   projectTargetValue   Int               @default(75)
   projectTargetUnit    ProjectTargetUnit @default(percent)
+  /// HHSRS issue reference prefix, e.g. MTVH. Set from the project name.
+  hhsrsCode            String            @default("")
   sampleStartDate      String            @default("")
   sampleTargetEndDate  String            @default("")
   createdAt            DateTime          @default(now())
@@ -334,7 +336,7 @@ model HhsrsSiteSubmission {
   clientCallReference  String    @default("")
   otherDetails         String    @default("")
   photoPaths           Json
-  /// Office workflow: new | in_review | email_ready | email_sent | closed
+  /// Office workflow: new | in_review | email_ready | email_sent | corrected | closed
   status               String    @default("new")
   /// Concise client-facing hazard wording (office-edited). Empty → derive from comment.
   clientDescription    String    @default("")
@@ -350,6 +352,8 @@ model HhsrsSiteSubmission {
   onwardTopic          String    @default("")
   cat1Confirmed        Boolean   @default(false)
   internalNotes        String    @default("")
+  /// Office reference, e.g. MTVH-014. Unique. Not shown in the client email or desktop alerts.
+  reference            String?   @unique
   emailSubject         String    @default("")
   emailBody            String    @default("")
   emailSentAt          DateTime?
@@ -428,9 +432,28 @@ model HhsrsSentEmail {
   messageId     String              @default("")
   sentCopySaved Boolean             @default(false)
   sentCopyError String              @default("")
+  /// original | correction. The original row is never rewritten by a resend.
+  kind              String   @default("original")
+  correctionReason  String   @default("")
+  correctionNote    String   @default("")
+  /// The first sent email this correction belongs to.
+  correctsEmailId   String?
+  correctsEmail     HhsrsSentEmail?  @relation("SentEmailCorrection", fields: [correctsEmailId], references: [id], onDelete: SetNull)
+  corrections       HhsrsSentEmail[] @relation("SentEmailCorrection")
 
   @@index([submissionId])
   @@index([sentAt])
+  @@index([correctsEmailId])
+}
+
+/// Next HHSRS reference number for one project.
+/// Key is the project id, or "name:<project name>" when the submission has no project row.
+/// nextNumber stays one past the highest number already used.
+/// After the go-live wipe of submissions, set nextNumber back to 1
+/// (scripts/reset-hhsrs-reference-counters.ts) so the next issue is 001.
+model HhsrsReferenceCounter {
+  key        String @id
+  nextNumber Int    @default(1)
 }
 
 /// Office archive flag for HHSRS Reporter → Project overview.

@@ -3,10 +3,10 @@
 <head>
   <%- include("partials/head") %>
 </head>
-<body class="hhsrs-body hhsrs-form-page">
+<body class="hhsrs-body hhsrs-form-page hhsrs-thanks-page">
   <div class="stage">
     <div class="play-layout">
-      <div class="work-panel">
+      <div class="work-panel thanks-panel">
         <header class="panel-top">
           <div class="hhsrs-logo"><%- include("../partials/logo") %></div>
           <div class="brand-text">
@@ -14,15 +14,58 @@
             <strong>HHSRS Site Reporting</strong>
           </div>
         </header>
-        <div class="panel-body">
+        <div class="thanks-scroll">
           <div class="hhsrs-done">
-            <div class="hhsrs-done-tick"><svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="hhsrs-done-tick" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="42" height="42"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
             <h1>Issue submitted</h1>
             <p class="hhsrs-done-thanks">Thanks, the office has it.</p>
-            <p class="hhsrs-done-ref">The issue has been submitted<%= submissionId ? " (ref " + submissionId + ")" : "" %>.</p>
-            <a class="hhsrs-btn hhsrs-btn-primary hhsrs-done-again" href="<%= hhsrsUrl('/new') %>">Report another issue</a>
-            <a class="hhsrs-done-start" href="<%= hhsrsUrl('/') %>">Back to start</a>
+            <% if (summary && summary.reference) { %>
+              <div class="hhsrs-refbox">
+                <small>Your reference</small>
+                <b><%= summary.reference %></b>
+              </div>
+            <% } %>
+            <% if (summary) { %>
+              <section class="hhsrs-sent" aria-label="What you sent">
+                <h2>What you sent</h2>
+                <% summary.rows.forEach((row) => { %>
+                  <div class="hhsrs-sent-row">
+                    <span><%= row.label %></span>
+                    <b><%= row.value || "—" %></b>
+                  </div>
+                <% }) %>
+                <div class="hhsrs-sent-note">
+                  <span>Details</span>
+                  <p><%= summary.details || "—" %></p>
+                </div>
+                <% summary.notes.forEach((note) => { %>
+                  <div class="hhsrs-sent-note">
+                    <span><%= note.label %></span>
+                    <p><%= note.value %></p>
+                  </div>
+                <% }) %>
+                <div class="hhsrs-sent-note hhsrs-sent-photos-label">
+                  <span>Photos (<%= summary.photos.length %>)</span>
+                </div>
+                <% if (summary.photos.length) { %>
+                  <div class="hhsrs-sent-photos">
+                    <% summary.photos.forEach((photo) => { %>
+                      <figure>
+                        <img src="<%= photo.url %>" alt="<%= photo.label %>" />
+                        <figcaption><%= photo.label %></figcaption>
+                      </figure>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </section>
+              <p class="hhsrs-sent-tip">Tip: take a screenshot to keep a copy. Need to change something? Send the office your reference.</p>
+            <% } %>
           </div>
+        </div>
+        <div class="thanks-foot">
+          <a class="hhsrs-btn hhsrs-btn-primary hhsrs-done-again" href="<%= hhsrsUrl('/new') %>">Report another issue</a>
         </div>
       </div>
     </div>

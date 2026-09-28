@@ -51,6 +51,22 @@ export function fromNameFromEnv(): string {
   return value || "Savills HHSRS";
 }
 
+/** First name and surname for the signature, when the login has them. */
+export function senderNamesFromLogin(user: {
+  name?: string | null;
+  username?: string | null;
+  firstName?: string | null;
+  surname?: string | null;
+} | null | undefined): { sentBy: string; senderFirstName: string; senderFullName: string } {
+  const firstName = String(user?.firstName || "").trim();
+  const surname = String(user?.surname || "").trim();
+  return {
+    sentBy: String(user?.name || user?.username || "").trim(),
+    senderFirstName: firstName,
+    senderFullName: [firstName, surname].filter(Boolean).join(" "),
+  };
+}
+
 export function fromAddressFromEnv(): string {
   const value = (process.env.HHSRS_SMTP_USER || "").trim();
   return value || "hhsrs@savillshousing.co.uk";
@@ -218,6 +234,10 @@ export type SendCommit = {
 export type SentEmailRecord = SendCommit & {
   id: string;
   submissionId: string;
+  kind?: string;
+  correctionReason?: string;
+  correctionNote?: string;
+  correctsEmailId?: string | null;
 };
 
 export class PortalSendError extends Error {

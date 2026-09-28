@@ -21,6 +21,7 @@ function project(partial: Partial<Project> = {}): Project {
     projectTargetUnit: "percent",
     sampleStartDate: "",
     sampleTargetEndDate: "",
+    hhsrsCode: "",
     createdAt: new Date(),
     updatedAt: new Date(),
     ...partial,

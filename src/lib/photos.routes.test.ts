@@ -630,9 +630,7 @@ describe("Photo Storage routes", () => {
     });
     assert.equal(surveyorReplace.status, 403);
 
-    const anonShare = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share`, {
-      body: {},
-    });
+    const anonShare = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/photo-share`);
     assert.equal(anonShare.status, 302);
 
     const page = await request(port, "GET", `/projectprogress/photos/projects/${projectId}`, { cookie });

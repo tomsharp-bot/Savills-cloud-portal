@@ -1567,7 +1567,25 @@
     var btn = $("btn-send-email");
     var line = $("rv-send-line");
     if (!btn || !line) return;
-    if (cfg.send && cfg.send.sent) return;
+    if (!cfg.findResend && cfg.send && cfg.send.sent) return;
+    if (cfg.findResend) {
+      if (!cfg.send || !cfg.send.configured) {
+        btn.disabled = true;
+        line.hidden = false;
+        line.textContent = "Sending not set up yet.";
+        return;
+      }
+      var findOver = attachmentBytes() > (cfg.send.maxBytes || 20 * 1024 * 1024);
+      line.hidden = false;
+      if (findOver) {
+        btn.disabled = true;
+        line.textContent = "Photos are over 20 MB.";
+        return;
+      }
+      btn.disabled = false;
+      line.textContent = "You check it before it goes.";
+      return;
+    }
     if (!cfg.send || !cfg.send.configured) {
       btn.disabled = true;
       line.hidden = false;
@@ -1642,7 +1660,7 @@
     });
     syncSendButton();
     var ck = $("ck-overlay");
-    if (!btn || !ck || (cfg.send && cfg.send.sent)) return;
+    if (!btn || !ck || (!cfg.findResend && cfg.send && cfg.send.sent)) return;
     var ckBody = $("ck-body");
     var ckTick = $("ck-tick");
     var ckTickLabel = $("ck-tick-label");

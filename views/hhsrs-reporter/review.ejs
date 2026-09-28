@@ -12,7 +12,7 @@
 
 <div class="page-header">
   <div>
-    <h2 class="page-section-title">Review and create</h2>
+    <h2 class="page-section-title">Review and create<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
     <% if (isFilled) { %>
       <p class="subtitle" id="review-subtitle">Review the site submission for <%= row.projectName %>, then send the client email.</p>
     <% } else { %>
@@ -105,7 +105,7 @@
         <input type="hidden" name="status" value="<%= row.status === 'new' ? 'in_review' : row.status %>" />
       <% } %>
       <div class="panel-head review-head">
-        <h2 id="rv-case-heading">Case details</h2>
+        <h2 id="rv-case-heading">Case details<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
         <span class="count count-review" id="rv-case-badge"><%= isFilled ? "Case" : "Blank" %></span>
       </div>
       <div class="blank-case-form" id="rv-case-form">

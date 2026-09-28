@@ -22,7 +22,7 @@
     <span class="count count-review"><%= rows.length %> shown · <%= summary.mainLog %> total</span>
   </div>
   <form class="filter-bar" method="get" action="<%= reporterBase %>/main-log">
-    <input type="search" name="q" value="<%= filters.q %>" placeholder="Search address, UPRN, project…" aria-label="Search main log" />
+    <input type="search" name="q" value="<%= filters.q %>" placeholder="Search reference, address, UPRN, project…" aria-label="Search main log" />
     <select name="project" aria-label="Filter by project">
       <option value="">All projects</option>
       <% projectNames.forEach((name) => { %>
@@ -44,6 +44,7 @@
       <table class="landing-table">
         <thead>
           <tr>
+            <th>Ref</th>
             <th>Project</th>
             <th>Address</th>
             <th>UPRN</th>
@@ -58,9 +59,10 @@
         <tbody>
           <% rows.forEach((row) => {
             const when = row.emailSentAt || row.updatedAt;
-            const pillClass = row.status === "email_sent" ? "sent" : (row.status === "closed" ? "closed" : "ready");
+            const pillClass = row.status === "email_sent" ? "sent" : (row.status === "corrected" ? "corrected" : (row.status === "closed" ? "closed" : "ready"));
           %>
             <tr>
+              <td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
               <td><span class="project-pill"><%= row.projectName %></span></td>
               <td><strong><%= row.fullAddress %></strong></td>
               <td><%= row.uprn %></td>
@@ -97,6 +99,7 @@
     <% if (entry.copyWarning) { %><p class="ml-sub"><%= entry.copyWarning %></p><% } %>
     <div class="ml-body" id="ml-body">
       <dl class="ml-list">
+        <dt>Reference</dt><dd><% if (typeof entryReference !== "undefined" && entryReference) { %><span class="ref-chip"><%= entryReference %></span><% } else { %>—<% } %></dd>
         <dt>Case</dt><dd><%= entry.caseLine %></dd>
         <dt>Email</dt><dd class="<%= entry.emailSent ? '' : 'ml-empty' %>"><% if (entry.emailSent) { %><strong><%= entry.emailLine %></strong><% } else { %><%= entry.emailLine %><% } %></dd>
         <dt>From</dt><dd><%= entry.fromLine %></dd>

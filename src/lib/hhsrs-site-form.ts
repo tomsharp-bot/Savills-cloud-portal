@@ -285,6 +285,84 @@ export function todayLondonDate(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 }
 
+export type ThanksField = { label: string; value: string };
+export type ThanksPhoto = { label: string; name: string; url: string };
+export type ThanksSummary = {
+  reference: string;
+  rows: ThanksField[];
+  details: string;
+  notes: ThanksField[];
+  photos: ThanksPhoto[];
+};
+
+/** What the surveyor just submitted. Only this issue — never a list of others. */
+export function buildThanksSummary(
+  row: {
+    reference?: string | null;
+    projectName: string;
+    fullAddress: string;
+    postcode: string;
+    uprn: string;
+    surveyorName: string;
+    surveyDate: string;
+    category: string;
+    rating: string;
+    comment: string;
+    otherDetails?: string | null;
+    clientCallReference?: string | null;
+    callOutcome?: string | null;
+    callNotes?: string | null;
+    photoPaths: unknown;
+  },
+  photoUrl: (fileName: string) => string
+): ThanksSummary {
+  const address = [row.fullAddress, row.postcode]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .filter((part, index, all) => all.findIndex((item) => item.toLowerCase() === part.toLowerCase()) === index)
+    .join(", ");
+  const postcode = String(row.postcode || "").trim();
+  const addressLine =
+    postcode && !address.toLowerCase().includes(postcode.toLowerCase()) ? `${address}, ${postcode}` : address;
+  const rows: ThanksField[] = [
+    { label: "Project", value: row.projectName },
+    { label: "Address", value: addressLine },
+    { label: "UPRN", value: row.uprn },
+    { label: "Surveyor", value: row.surveyorName },
+    { label: "Survey date", value: formatHhsrsSurveyDate(row.surveyDate) },
+    { label: "Hazard", value: row.category },
+    { label: "Rating", value: row.rating },
+  ];
+  const notes: ThanksField[] = [];
+  const other = String(row.otherDetails || "").trim();
+  if (other) notes.push({ label: "Other details", value: other });
+  const flags = siteFormProjectFlags(row.projectName);
+  const callReference = String(row.clientCallReference || "").trim();
+  const callOutcome = String(row.callOutcome || "").trim();
+  const callNotes = String(row.callNotes || "").trim();
+  if (flags.calls || callReference || callOutcome || callNotes) {
+    if (callReference) notes.push({ label: "Call reference", value: callReference });
+    if (callOutcome) notes.push({ label: "Call outcome", value: callOutcome });
+    if (callNotes) notes.push({ label: "Call notes", value: callNotes });
+  }
+  const paths = Array.isArray(row.photoPaths) ? row.photoPaths.map((item) => String(item || "")) : [];
+  const photos: ThanksPhoto[] = paths
+    .map((stored) => stored.split("/").filter(Boolean).pop() || "")
+    .filter(Boolean)
+    .map((name, index) => ({
+      label: `Photo ${index + 1}`,
+      name,
+      url: photoUrl(name),
+    }));
+  return {
+    reference: String(row.reference || "").trim(),
+    rows,
+    details: String(row.comment || "").trim(),
+    notes,
+    photos,
+  };
+}
+
 /** Review display only. Stored and submitted survey dates stay YYYY-MM-DD. */
 export function formatHhsrsSurveyDate(value: string): string {
   const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);

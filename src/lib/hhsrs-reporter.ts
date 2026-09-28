@@ -10,6 +10,7 @@ export const HHSRS_CASE_STATUSES = [
   "in_review",
   "email_ready",
   "email_sent",
+  "corrected",
   "closed",
 ] as const;
 
@@ -37,6 +38,8 @@ export function statusLabel(status: string): string {
       return "Email ready";
     case "email_sent":
       return "Email sent";
+    case "corrected":
+      return "Corrected";
     case "closed":
       return "Closed";
     default:
@@ -302,7 +305,7 @@ export function tryDraftFromRow(row: Parameters<typeof submissionDraftInput>[0])
 /** Waiting queue = not yet actioned into the Main Log. */
 export const HHSRS_WAITING_STATUSES = ["new", "in_review", "email_ready"] as const;
 
-export const HHSRS_ACTIONED_STATUSES = ["email_sent", "closed"] as const;
+export const HHSRS_ACTIONED_STATUSES = ["email_sent", "corrected", "closed"] as const;
 
 export function isWaitingStatus(status: string): boolean {
   return (HHSRS_WAITING_STATUSES as readonly string[]).includes(status);
@@ -373,6 +376,7 @@ export function ratingDisplayClass(rating: string): string {
 
 export function actionedStatusLabel(status: string): string {
   if (status === "email_sent") return "Pack sent";
+  if (status === "corrected") return "Corrected";
   if (status === "closed") return "Notice filed";
   if (status === "email_ready") return "Email ready";
   return statusLabel(status);

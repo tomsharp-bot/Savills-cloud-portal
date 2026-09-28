@@ -18,6 +18,7 @@ import { formatDocDate, formatStockDate } from "../lib/dates.js";
 import { formatBytes } from "../lib/documents.js";
 import { reapplyExternalLink } from "../lib/external.js";
 import { parseProjectTarget } from "../lib/project-target.js";
+import { hhsrsCodeFromProjectName } from "../lib/hhsrs-reference.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
 import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { buildSampleAnalysis } from "../lib/sample-analysis.js";
@@ -157,7 +158,9 @@ projectsRouter.post("/", async (req: Request, res: Response) => {
     res.redirect("/projects?error=" + encodeURIComponent("Name already used"));
     return;
   }
-  await prisma.project.create({ data: { name, projectManager, stage, ...types, ...target } });
+  await prisma.project.create({
+    data: { name, projectManager, stage, ...types, ...target, hhsrsCode: hhsrsCodeFromProjectName(name) },
+  });
   res.redirect("/projects?notice=" + encodeURIComponent("Created " + name));
 });
 
@@ -216,6 +219,7 @@ projectsRouter.post("/:id/copy", async (req: Request, res: Response) => {
       typeValidations: src.typeValidations,
       projectTargetValue: src.projectTargetValue,
       projectTargetUnit: src.projectTargetUnit,
+      hhsrsCode: hhsrsCodeFromProjectName(name),
       sampleStartDate: src.sampleStartDate,
       sampleTargetEndDate: src.sampleTargetEndDate,
     },
