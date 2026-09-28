@@ -698,6 +698,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
   }
 
   const flash = takeFlash(req);
+  const signature = signatureLocals(res, await senderSignatureFor(req.user));
   res.render("hhsrs-reporter/find", {
     ...shellLocals({
       activeNav: "find",
@@ -715,6 +716,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     photos,
     sendConfig: publicSendSettings(false),
     findResend: Boolean(amend),
+    ...signature,
   });
 });
 
