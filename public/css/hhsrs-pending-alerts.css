@@ -61,3 +61,22 @@
 }
 .hhsrs-home-alert.is-fixed { bottom: 12px; }
 .hhsrs-alerts-paused.is-fixed { top: 12px; }
+.hhsrs-list-refresh {
+  margin: 0 0 0.75rem;
+  padding: 0.45rem 0.75rem;
+  background: #fff4f4;
+  border: 1px solid #f3c1c1;
+  border-radius: 8px;
+}
+.hhsrs-list-refresh[hidden] { display: none !important; }
+.hhsrs-list-refresh-btn {
+  border: 0;
+  background: transparent;
+  color: #c62828;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}

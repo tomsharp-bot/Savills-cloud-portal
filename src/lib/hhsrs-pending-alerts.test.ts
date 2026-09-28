@@ -28,6 +28,18 @@ const pendingAlertScript = nodeRequire("../../public/js/hhsrs-pending-alerts.js"
     title: string;
     body: string;
   };
+  countsDiffer: (waitingCount: number | null, shownCount: number | null) => boolean;
+  planPendingSurface: (state: {
+    waitingCount?: number | null;
+    shownCount?: number | null;
+    hasPendingList?: boolean;
+    hasReviewList?: boolean;
+    focusInsideList?: boolean;
+    typingInReview?: boolean;
+    listStale?: boolean;
+    alertFired?: boolean;
+    force?: boolean;
+  }) => { updateCounts: boolean; refreshList: boolean; showNotice: boolean };
 };
 
 describe("HHSRS pending alert summary", () => {
@@ -213,6 +225,72 @@ describe("HHSRS pending alert marker", () => {
     assert.equal(pendingAlertScript.homeNoticeText(2), "New HHSRS Hazard · 2 new cases waiting in Pending");
   });
 
+  it("refreshes the pending list when the waiting count changes and keeps a review form", () => {
+    assert.equal(pendingAlertScript.countsDiffer(4, 3), true);
+    assert.equal(pendingAlertScript.countsDiffer(3, 3), false);
+    assert.equal(pendingAlertScript.countsDiffer(null, 3), false);
+
+    const pending = pendingAlertScript.planPendingSurface({
+      waitingCount: 4,
+      shownCount: 3,
+      hasPendingList: true,
+      alertFired: true,
+    });
+    assert.deepEqual(pending, { updateCounts: true, refreshList: true, showNotice: false });
+
+    const typing = pendingAlertScript.planPendingSurface({
+      waitingCount: 4,
+      shownCount: 3,
+      hasReviewList: true,
+      typingInReview: true,
+      alertFired: true,
+    });
+    assert.deepEqual(typing, { updateCounts: true, refreshList: false, showNotice: true });
+
+    const forced = pendingAlertScript.planPendingSurface({
+      waitingCount: 4,
+      shownCount: 4,
+      hasReviewList: true,
+      typingInReview: true,
+      force: true,
+      listStale: true,
+    });
+    assert.equal(forced.refreshList, true);
+    assert.equal(forced.showNotice, false);
+
+    const focused = pendingAlertScript.planPendingSurface({
+      waitingCount: 2,
+      shownCount: 1,
+      hasPendingList: true,
+      focusInsideList: true,
+    });
+    assert.equal(focused.refreshList, false);
+    assert.equal(focused.showNotice, true);
+
+    const countsOnly = pendingAlertScript.planPendingSurface({
+      waitingCount: 5,
+      shownCount: 4,
+      alertFired: true,
+    });
+    assert.deepEqual(countsOnly, { updateCounts: true, refreshList: false, showNotice: false });
+
+    const quiet = pendingAlertScript.planPendingSurface({
+      waitingCount: 4,
+      shownCount: 4,
+      hasPendingList: true,
+    });
+    assert.deepEqual(quiet, { updateCounts: false, refreshList: false, showNotice: false });
+
+    const retry = pendingAlertScript.planPendingSurface({
+      waitingCount: 4,
+      shownCount: 4,
+      hasPendingList: true,
+      listStale: true,
+    });
+    assert.equal(retry.refreshList, true);
+    assert.equal(retry.showNotice, false);
+  });
+
   it("lets one fresh leader record block every other tab", () => {
     const now = 1_700_000_000_000;
     const leader = { id: "tab-a", at: now - 1000 };
@@ -330,6 +408,21 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(control, /Turn on desktop alerts/);
     assert.match(control, /Get a Windows notification when a new site issue lands/);
     assert.match(js, /claimStatus === "claimed"/);
+    assert.match(sharedJs, /planPendingSurface/);
+    assert.match(sharedJs, /New issue, refresh list/);
+    assert.match(sharedJs, /id === "not-actioned"/);
+    assert.match(sharedJs, /id === "rv-also-waiting"/);
+    assert.match(sharedJs, /waitingCount/);
+    assert.match(sharedJs, /#side-tabs a\.tab-link\[title="Dashboard"\]/);
+    assert.match(sharedJs, /side-summary-row/);
+    assert.doesNotMatch(sharedJs, /location\.reload/);
+    assert.doesNotMatch(sharedJs, /review-workspace\.innerHTML/);
+    assert.doesNotMatch(sharedJs, /rv-save-form/);
+    assert.match(
+      fs.readFileSync(path.join(root, "src/routes/hhsrs-reporter.ts"), "utf8"),
+      /waitingCount/
+    );
+    assert.match(noticeCss, /\.hhsrs-list-refresh/);
     assert.match(js, /is-visible/);
     assert.match(js, /playAlertChime\(\)/);
     assert.match(js, /AudioContext/);
