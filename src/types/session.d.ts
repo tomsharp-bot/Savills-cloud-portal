@@ -8,6 +8,14 @@ declare module "cookie-session" {
     flashPo?: string;
     flashAccessCode?: string;
     flashAccessCodeErr?: string;
+    flashClientEmail?: {
+      projectName: string;
+      saved: boolean;
+      error: string;
+      toText: string;
+      ccText: string;
+      bccText: string;
+    };
     flashRefresh?: {
       projectId: string;
       addedCount: number;

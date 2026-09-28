@@ -211,7 +211,10 @@ export function emailRecipientsFromProject(
   };
 }
 
-export function draftEmailFromReviewFields(fields: ReviewDraftFields): {
+export function draftEmailFromReviewFields(
+  fields: ReviewDraftFields,
+  recipients?: { to: string; cc: string; bcc: string }
+): {
   to: string;
   cc: string;
   bcc: string;
@@ -220,11 +223,11 @@ export function draftEmailFromReviewFields(fields: ReviewDraftFields): {
 } {
   const matched = matchDemoProject(fields.projectName);
   const draft = draftFromSubmission(fields);
-  const recipients = emailRecipientsFromProject(matched);
+  const resolved = recipients ?? emailRecipientsFromProject(matched);
   return {
-    to: recipients.to,
-    cc: recipients.cc,
-    bcc: recipients.bcc,
+    to: resolved.to,
+    cc: resolved.cc,
+    bcc: resolved.bcc,
     subject: draft.subject,
     body: draft.body,
   };

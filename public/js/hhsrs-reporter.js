@@ -1824,4 +1824,66 @@
       if (accessNew) accessNew.value = "";
     });
   }
+
+  var clientEmailPick = $("client-email-project");
+  var clientEmailRows = document.querySelectorAll("#client-email-card .client-email-row");
+  if (clientEmailPick && clientEmailRows.length) {
+    var clientEmailKey = "hhsrs-client-email-project";
+    function clientEmailRow(name) {
+      for (var i = 0; i < clientEmailRows.length; i++) {
+        if (clientEmailRows[i].getAttribute("data-project") === name) return clientEmailRows[i];
+      }
+      return null;
+    }
+    function clientEmailDirty(row) {
+      if (!row) return false;
+      var boxes = row.querySelectorAll("textarea");
+      for (var i = 0; i < boxes.length; i++) {
+        if (boxes[i].value !== boxes[i].defaultValue) return true;
+      }
+      return false;
+    }
+    function clientEmailReset(row) {
+      if (!row) return;
+      var boxes = row.querySelectorAll("textarea");
+      for (var i = 0; i < boxes.length; i++) boxes[i].value = boxes[i].defaultValue;
+    }
+    function clientEmailShow(name) {
+      for (var i = 0; i < clientEmailRows.length; i++) {
+        clientEmailRows[i].hidden = clientEmailRows[i].getAttribute("data-project") !== name;
+      }
+    }
+    function clientEmailRemember(name) {
+      try {
+        if (name) sessionStorage.setItem(clientEmailKey, name);
+        else sessionStorage.removeItem(clientEmailKey);
+      } catch (err) {}
+    }
+    var clientEmailCurrent = clientEmailPick.value || "";
+    if (!clientEmailCurrent) {
+      try {
+        var clientEmailSaved = sessionStorage.getItem(clientEmailKey) || "";
+        if (clientEmailSaved && clientEmailRow(clientEmailSaved)) {
+          clientEmailPick.value = clientEmailSaved;
+          clientEmailCurrent = clientEmailSaved;
+          clientEmailShow(clientEmailSaved);
+        }
+      } catch (err) {}
+    } else {
+      clientEmailRemember(clientEmailCurrent);
+    }
+    clientEmailPick.addEventListener("change", function () {
+      var next = clientEmailPick.value || "";
+      if (clientEmailCurrent !== next && clientEmailDirty(clientEmailRow(clientEmailCurrent))) {
+        if (!window.confirm("Discard unsaved changes?")) {
+          clientEmailPick.value = clientEmailCurrent;
+          return;
+        }
+        clientEmailReset(clientEmailRow(clientEmailCurrent));
+      }
+      clientEmailCurrent = next;
+      clientEmailShow(next);
+      clientEmailRemember(next);
+    });
+  }
 })();
