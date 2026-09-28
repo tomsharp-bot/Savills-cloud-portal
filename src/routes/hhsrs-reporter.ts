@@ -145,11 +145,13 @@ async function senderSignatureFor(user: AuthedUser | null | undefined): Promise<
 }
 
 function signatureLocals(res: Response, names: SenderSignature) {
+  const html = renderSignatureHtml(names, signatureLogoUrl(res));
   return {
-    signatureHtml: renderSignatureHtml(names, signatureLogoUrl(res)),
+    signatureHtml: html,
     emailSignature: {
       missing: names.missing,
       warning: names.missing ? MISSING_SENDER_NAME_WARNING : "",
+      html,
     },
   };
 }

@@ -130,24 +130,34 @@ describe("HHSRS email signature", () => {
     }
   });
 
-  it("shows the signature under the body on the review page and the check screen", () => {
+  it("keeps a short signature note on the review panel and the full signature on the check screen", () => {
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const bodyAt = review.indexOf('id="hhsrs-body"');
-    const sigAt = review.indexOf('id="rv-signature-preview"');
+    const noteAt = review.indexOf("Signature added when sent");
     const attachAt = review.indexOf('id="rv-attach-block"');
-    assert.ok(bodyAt > 0 && sigAt > bodyAt, "signature follows the body");
-    assert.ok(attachAt > sigAt, "signature stays out of the photo list");
+    const emailPhotosAt = review.indexOf('id="rv-email-photos"');
+    const sendAt = review.indexOf('id="rv-send-block"');
+    assert.ok(bodyAt > 0 && attachAt > bodyAt && emailPhotosAt > bodyAt, "email photos follow the body");
+    assert.ok(noteAt > attachAt && noteAt > emailPhotosAt && sendAt > noteAt, "grey signature line sits under the photos");
+    assert.doesNotMatch(review, /rv-signature-preview|email-signature-block|signatureHtml|sig-name-warn|No name found/);
     assert.match(review, /aria-readonly="true"/);
-    assert.doesNotMatch(review.slice(bodyAt, sigAt), /signatureHtml/);
     const openCheck = js.slice(js.indexOf("function openCheck"), js.indexOf("function closeCheck"));
-    assert.match(openCheck, /rv-signature-preview/);
+    assert.match(review, /id="ck-title" tabindex="-1"/);
+    assert.match(openCheck, /ck-title/);
+    assert.match(openCheck, /preventScroll:\s*true/);
+    assert.match(openCheck, /ck\.scrollTop = 0/);
+    assert.match(openCheck, /pane\.scrollTop = 0/);
+    assert.match(openCheck, /\.ck-text/);
+    assert.doesNotMatch(openCheck, /ckTick\.focus|ckSend\.focus/);
+    assert.match(openCheck, /cfg\.signature\.html/);
+    assert.doesNotMatch(openCheck, /rv-signature-preview/);
     assert.match(openCheck, /ck-signature/);
     assert.match(openCheck, /cfg\.signature\.warning/);
     const bodyInCheck = openCheck.indexOf('aria-label=\\"Email text\\"');
     const sigInCheck = openCheck.indexOf("ck-signature");
     const photosInCheck = openCheck.indexOf('ck-photos-label\\">Attached');
-    assert.ok(bodyInCheck >= 0 && sigInCheck > bodyInCheck && photosInCheck > sigInCheck);
+    assert.ok(bodyInCheck >= 0 && photosInCheck > bodyInCheck && sigInCheck > photosInCheck, "check-screen photos sit under the body and above the signature");
 
     const personnel = readFileSync("views/personnel.ejs", "utf8");
     const admins = personnel.slice(personnel.indexOf("C. Admins"));

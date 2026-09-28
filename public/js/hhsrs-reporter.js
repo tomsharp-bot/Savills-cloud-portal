@@ -159,7 +159,19 @@
   var caseLocked = false;
   var DRAG_HINT = "Drag a photo into your email draft. If that doesn’t work, download the photo.";
 
+  function sentStage() {
+    return !!(cfg.send && cfg.send.sent);
+  }
+
+  function lockSentEmailFields() {
+    var nodes = document.querySelectorAll(
+      ".email-draft-panel.is-sent-lock .field-locked, .email-draft-panel.is-sent-lock .field-with-copy, .email-draft-panel.is-sent-lock .attach-block, .email-draft-panel.is-sent-lock .email-photo-tools"
+    );
+    for (var i = 0; i < nodes.length; i++) nodes[i].inert = true;
+  }
+
   function clearEmailDraft() {
+    if (sentStage()) return;
     ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"].forEach(function (id) {
       var el = $(id);
       if (!el) return;
@@ -179,23 +191,32 @@
 
   function applyProjectChange(opts) {
     opts = opts || {};
+    var sent = sentStage();
     var name = ($("rv-project") && $("rv-project").value) || "";
     var projectCfg = matchProject(name);
     var fields = $("rv-case-fields");
     var hint = $("rv-project-hint");
     var generateBtn = $("btn-generate-email");
+    var genRow = document.querySelector("#rv-case-panel .generate-email-row");
     if (fields) {
-      if (!name && cfg.mode !== "filled") fields.setAttribute("disabled", "disabled");
+      // After send, CSS supplies the same grey as Generate email. inert keeps the
+      // fields read-only without the extra browser disabled fade.
+      if (sent) fields.removeAttribute("disabled");
+      else if (!name && cfg.mode !== "filled") fields.setAttribute("disabled", "disabled");
       else fields.removeAttribute("disabled");
+      fields.inert = sent;
     }
-    if (generateBtn) generateBtn.disabled = !name;
-    if (hint) {
+    if (genRow) genRow.inert = sent;
+    if (generateBtn) generateBtn.disabled = sent || !name;
+    if (sent) lockSentEmailFields();
+    if (hint && !sent) {
       hint.textContent = projectCfg
         ? projectCfg.hint
         : "Choose the project first. Extra fields and the email draft follow its rules.";
     }
     fillRatingOptions(projectCfg ? projectCfg.ratingScheme : "NEW", opts.keepRating);
     setExtraVisibility(projectCfg);
+    if (sent) return;
     if (!(opts.skipDraft || opts.keepEmail)) clearEmailDraft();
   }
 
@@ -389,7 +410,9 @@
     var panel = $("rv-case-panel");
     if (panel) panel.classList.toggle("is-drafted", caseLocked);
     var photos = $("rv-photos-block");
-    if (photos) photos.hidden = caseLocked;
+    // Filled site-form cases keep the case photos on screen when the draft locks.
+    // Blank mode ('Create new email') still hides them with the other case fields.
+    if (photos) photos.hidden = caseLocked && cfg.mode !== "filled";
     var amend = $("btn-amend-case");
     if (amend) amend.hidden = !caseLocked;
     setEmailPhotoTools(caseLocked);
@@ -1678,6 +1701,7 @@
     var form = $("rv-send-form");
     var lastFocus = null;
     var sending = false;
+    var restoreCheckScroll = function () {};
 
     function esc(value) {
       return String(value == null ? "" : value)
@@ -1720,14 +1744,6 @@
       var bodyEl = $("hhsrs-body");
       var body = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
       h += "<div class=\"ck-text\" tabindex=\"0\" aria-label=\"Email text\">" + esc(body || "(empty)") + "</div>";
-      var sig = $("rv-signature-preview");
-      if (sig) {
-        h += "<p class=\"ck-photos-label\">Signature</p>";
-        if (cfg.signature && cfg.signature.missing && cfg.signature.warning) {
-          h += "<p class=\"ck-name-warn\">" + esc(cfg.signature.warning) + "</p>";
-        }
-        h += "<div class=\"ck-signature\" aria-readonly=\"true\">" + sig.innerHTML + "</div>";
-      }
       h += "<p class=\"ck-photos-label\">Attached: " + photos.length + (photos.length === 1 ? " photo" : " photos") + "</p>";
       if (photos.length) {
         h += "<div class=\"ck-photos\">" + photos.map(function (p) {
@@ -1736,20 +1752,57 @@
       } else {
         h += "<p class=\"ck-none\">No photos.</p>";
       }
+      var sigHtml = cfg.signature && cfg.signature.html;
+      if (sigHtml) {
+        h += "<p class=\"ck-photos-label\">Signature</p>";
+        if (cfg.signature.missing && cfg.signature.warning) {
+          h += "<p class=\"ck-name-warn\">" + esc(cfg.signature.warning) + "</p>";
+        }
+        h += "<div class=\"ck-signature\" aria-readonly=\"true\">" + sigHtml + "</div>";
+      }
       ckBody.innerHTML = h;
       ckTick.checked = false;
       ckSend.disabled = true;
       ckTickLabel.classList.remove("is-on");
       lastFocus = document.activeElement;
+      var pane = document.querySelector(".content-pane");
+      var root = document.scrollingElement || document.documentElement;
+      var savedPaneScroll = pane ? pane.scrollTop : 0;
+      var savedPageScroll = root ? root.scrollTop : 0;
+      restoreCheckScroll = function () {
+        if (pane) pane.scrollTop = savedPaneScroll;
+        if (root) root.scrollTop = savedPageScroll;
+      };
       ck.hidden = false;
       document.body.style.overflow = "hidden";
-      ckTick.focus();
+      function pinCheckToTop() {
+        if (pane) pane.scrollTop = 0;
+        if (root) root.scrollTop = 0;
+        ck.scrollTop = 0;
+        var text = ck.querySelector(".ck-text");
+        if (text) text.scrollTop = 0;
+      }
+      pinCheckToTop();
+      var title = $("ck-title");
+      if (title) {
+        try { title.focus({ preventScroll: true }); }
+        catch (err) { title.focus(); }
+      }
+      pinCheckToTop();
+      requestAnimationFrame(function () {
+        pinCheckToTop();
+        requestAnimationFrame(pinCheckToTop);
+      });
     }
     function closeCheck() {
       if (sending) return;
       ck.hidden = true;
       document.body.style.overflow = "";
-      if (lastFocus && lastFocus.focus) lastFocus.focus();
+      restoreCheckScroll();
+      if (lastFocus && lastFocus.focus) {
+        try { lastFocus.focus({ preventScroll: true }); }
+        catch (err) { lastFocus.focus(); }
+      }
     }
     ckTick.addEventListener("change", function () {
       ckSend.disabled = !ckTick.checked;
