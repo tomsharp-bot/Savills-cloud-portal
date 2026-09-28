@@ -1949,11 +1949,39 @@ body.hhsrs-reporter {
   border-top: 1px solid var(--border);
 }
 .hhsrs-reporter .generate-email-row .review-project-hint { margin: 0; }
-.hhsrs-reporter #rv-case-panel.is-drafted #rv-case-fields {
+.hhsrs-reporter #rv-case-panel.is-drafted #rv-case-fields,
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-case-fields {
   opacity: 0.45;
   filter: grayscale(0.65);
   pointer-events: none;
   user-select: none;
+}
+.hhsrs-reporter #rv-case-panel.is-drafted #rv-photos-block img,
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-photos-block img {
+  filter: grayscale(1);
+}
+.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row {
+  opacity: 0.45;
+  filter: grayscale(0.65);
+  pointer-events: none;
+  user-select: none;
+}
+.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row .btn:disabled,
+.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row button:disabled {
+  opacity: 1;
+}
+.hhsrs-reporter .email-draft-panel.is-sent-lock .field-locked,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .field-with-copy,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-block,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .signature-added-note,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .email-photo-tools {
+  opacity: 0.45;
+  filter: grayscale(0.65);
+  pointer-events: none;
+  user-select: none;
+}
+.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-item img {
+  filter: grayscale(1);
 }
 .hhsrs-reporter #rv-photos-block[hidden],
 .hhsrs-reporter #btn-amend-case[hidden] { display: none !important; }

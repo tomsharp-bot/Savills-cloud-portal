@@ -158,7 +158,19 @@
   var caseLocked = false;
   var DRAG_HINT = "Drag a photo into your email draft. If that doesn’t work, download the photo.";
 
+  function sentStage() {
+    return !!(cfg.send && cfg.send.sent);
+  }
+
+  function lockSentEmailFields() {
+    var nodes = document.querySelectorAll(
+      ".email-draft-panel.is-sent-lock .field-locked, .email-draft-panel.is-sent-lock .field-with-copy, .email-draft-panel.is-sent-lock .attach-block, .email-draft-panel.is-sent-lock .email-photo-tools"
+    );
+    for (var i = 0; i < nodes.length; i++) nodes[i].inert = true;
+  }
+
   function clearEmailDraft() {
+    if (sentStage()) return;
     ["rv-email-to", "rv-email-cc", "rv-email-bcc", "rv-email-subject", "rv-email-body"].forEach(function (id) {
       var el = $(id);
       if (!el) return;
@@ -178,23 +190,32 @@
 
   function applyProjectChange(opts) {
     opts = opts || {};
+    var sent = sentStage();
     var name = ($("rv-project") && $("rv-project").value) || "";
     var projectCfg = matchProject(name);
     var fields = $("rv-case-fields");
     var hint = $("rv-project-hint");
     var generateBtn = $("btn-generate-email");
+    var genRow = document.querySelector("#rv-case-panel .generate-email-row");
     if (fields) {
-      if (!name && cfg.mode !== "filled") fields.setAttribute("disabled", "disabled");
+      // After send, CSS supplies the same grey as Generate email. inert keeps the
+      // fields read-only without the extra browser disabled fade.
+      if (sent) fields.removeAttribute("disabled");
+      else if (!name && cfg.mode !== "filled") fields.setAttribute("disabled", "disabled");
       else fields.removeAttribute("disabled");
+      fields.inert = sent;
     }
-    if (generateBtn) generateBtn.disabled = !name;
-    if (hint) {
+    if (genRow) genRow.inert = sent;
+    if (generateBtn) generateBtn.disabled = sent || !name;
+    if (sent) lockSentEmailFields();
+    if (hint && !sent) {
       hint.textContent = projectCfg
         ? projectCfg.hint
         : "Choose the project first. Extra fields and the email draft follow its rules.";
     }
     fillRatingOptions(projectCfg ? projectCfg.ratingScheme : "NEW", opts.keepRating);
     setExtraVisibility(projectCfg);
+    if (sent) return;
     if (!(opts.skipDraft || opts.keepEmail)) clearEmailDraft();
   }
 
