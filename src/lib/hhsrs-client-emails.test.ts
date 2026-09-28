@@ -1,5 +1,6 @@
 import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
@@ -108,6 +109,12 @@ describe("HHSRS client email address lists", () => {
     const cards = buildClientEmailCards(REPORTER_DEMO_PROJECTS, [row], null);
     assert.equal(cards.length, REPORTER_DEMO_PROJECTS.length);
     assert.equal(cards.some((card) => card.projectName === "Flagship 2026"), false);
+    assert.deepEqual(
+      cards.map((card) => card.projectName),
+      [...cards.map((card) => card.projectName)].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }))
+    );
+    assert.equal(cards[0]?.projectName, "A2D 2026 Phase 4");
+    assert.equal(cards.every((card) => card.open === false), true);
     const testHousing = cards.find((card) => card.projectName === "Test Housing");
     const gateway = cards.find((card) => card.projectName === "Gateway 2026");
     assert.ok(testHousing && gateway);
@@ -131,6 +138,15 @@ describe("HHSRS client email address lists", () => {
     assert.equal(gatewayInvalid.toText, "not-an-email");
     assert.equal(gatewayInvalid.error, "Not a valid address: not-an-email.");
     assert.equal(gatewayInvalid.saved, false);
+    assert.equal(gatewayInvalid.open, true);
+    assert.equal(invalid.find((card) => card.projectName === "Test Housing")?.open, false);
+
+    const view = readFileSync("views/hhsrs-reporter/partials/client-email-card.ejs", "utf8");
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    assert.match(view, /Choose a project/);
+    assert.match(view, /id="client-email-project"/);
+    assert.match(js, /Discard unsaved changes\?/);
+    assert.match(js, /sessionStorage/);
   });
 
   it("fills a blank send form from stored recipients and leaves a typed To alone", () => {
@@ -274,10 +290,15 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
       const page = await request(app, "GET", "/HHSRSreporter/admin", { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /Client email addresses/);
+      assert.match(page.body, /Choose a project/);
       assert.match(page.body, /One address per line, or commas/);
       assert.match(page.body, /id="client-email-test-housing-to"[^>]*>cfarrell@savillshousing\.co\.uk<\/textarea>/);
       assert.match(page.body, /id="client-email-gateway-2026-to"[^>]*>\s*<\/textarea>/);
       assert.doesNotMatch(page.body, /Flagship 2026/);
+      const closed = [...page.body.matchAll(/<form class="client-email-row"[^>]*>/g)].map((match) => match[0]);
+      assert.ok(closed.length > 1);
+      assert.equal(closed.every((tag) => /\shidden/.test(tag)), true);
+      assert.match(page.body, /<option value="">Choose a project<\/option>\s*<option value="A2D 2026 Phase 4">/);
       const surveyorPage = await request(app, "GET", "/HHSRSreporter/admin", { cookie: surveyorCookie });
       assert.equal(surveyorPage.status, 403);
 
@@ -291,6 +312,11 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
       });
       assert.match(badPage.body, /Not a valid address: not-an-email\./);
       assert.match(badPage.body, /id="client-email-gateway-2026-to"[^>]*>not-an-email<\/textarea>/);
+      assert.match(badPage.body, /<option value="Gateway 2026" selected>/);
+      const badForms = [...badPage.body.matchAll(/<form class="client-email-row"[^>]*>/g)].map((match) => match[0]);
+      const badOpen = badForms.filter((tag) => !/\shidden/.test(tag));
+      assert.equal(badOpen.length, 1);
+      assert.match(badOpen[0], /data-project="Gateway 2026"/);
       assert.equal(await prisma.hhsrsClientEmail.findUnique({ where: { projectName: "Gateway 2026" } }), null);
 
       const unknown = await request(app, "POST", "/HHSRSreporter/admin/client-emails", {
@@ -317,6 +343,11 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
       });
       assert.match(savedPage.body, /Saved\./);
       assert.match(savedPage.body, /Last changed \d{2}\/\d{2}\/\d{4} by Phil Moon/);
+      assert.match(savedPage.body, /<option value="Gateway 2026" selected>/);
+      const savedForms = [...savedPage.body.matchAll(/<form class="client-email-row"[^>]*>/g)].map((match) => match[0]);
+      const savedOpen = savedForms.filter((tag) => !/\shidden/.test(tag));
+      assert.equal(savedOpen.length, 1);
+      assert.match(savedOpen[0], /data-project="Gateway 2026"/);
       const gatewayRow = await prisma.hhsrsClientEmail.findUnique({ where: { projectName: "Gateway 2026" } });
       assert.ok(gatewayRow);
       assert.equal(gatewayRow.toAddresses, "desk@client.test");

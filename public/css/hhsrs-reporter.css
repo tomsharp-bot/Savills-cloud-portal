@@ -1092,23 +1092,37 @@ a.linkish.active, .linkish.active {
   margin-top: 0.75rem;
 }
 .client-email-panel { margin-top: 1rem; }
-.client-email-box { padding: 1rem 1.15rem 0.35rem; }
+.client-email-box { padding: 1rem 1.15rem 1.15rem; }
 .client-email-help {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.85rem;
   font-size: 0.8125rem;
   color: var(--muted);
 }
-.client-email-row {
-  margin: 0;
-  padding: 0.85rem 0;
-  border-top: 1px solid var(--border);
-}
-.client-email-row h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.95rem;
+.client-email-project-label {
+  display: block;
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--navy);
 }
+#client-email-project {
+  width: min(100%, 420px);
+  min-height: var(--tap);
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--navy);
+  background: #fff;
+}
+.client-email-row {
+  margin: 0.9rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.client-email-row[hidden] { display: none; }
 .client-email-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

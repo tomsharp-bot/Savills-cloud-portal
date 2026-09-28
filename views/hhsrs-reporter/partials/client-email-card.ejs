@@ -3,21 +3,27 @@
     <h2>Client email addresses</h2>
   </div>
   <div class="client-email-box">
-    <p class="client-email-help">To, Cc, and Bcc for each project. One address per line, or commas. A project with no To address cannot send.</p>
+    <p class="client-email-help">Pick a project. One address per line, or commas. A project with no To address cannot send.</p>
     <% if (clientEmailFormError) { %><p class="client-email-err" role="alert"><%= clientEmailFormError %></p><% } %>
+    <label class="client-email-project-label" for="client-email-project">Project</label>
+    <select id="client-email-project">
+      <option value="">Choose a project</option>
+      <% clientEmailCards.forEach(function (card) { %>
+        <option value="<%= card.projectName %>"<% if (card.open) { %> selected<% } %>><%= card.projectName %></option>
+      <% }) %>
+    </select>
     <% clientEmailCards.forEach(function (card) { %>
-      <form class="client-email-row" method="post" action="<%= reporterBase %>/admin/client-emails">
-        <h3><%= card.projectName %></h3>
+      <form class="client-email-row" data-project="<%= card.projectName %>" method="post" action="<%= reporterBase %>/admin/client-emails"<% if (!card.open) { %> hidden<% } %>>
         <input type="hidden" name="projectName" value="<%= card.projectName %>" />
         <div class="client-email-fields">
           <label for="<%= card.toId %>">To
-            <textarea id="<%= card.toId %>" name="to" rows="2" autocomplete="off"><%= card.toText %></textarea>
+            <textarea id="<%= card.toId %>" name="to" rows="3" autocomplete="off"><%= card.toText %></textarea>
           </label>
           <label for="<%= card.ccId %>">Cc
-            <textarea id="<%= card.ccId %>" name="cc" rows="2" autocomplete="off"><%= card.ccText %></textarea>
+            <textarea id="<%= card.ccId %>" name="cc" rows="3" autocomplete="off"><%= card.ccText %></textarea>
           </label>
           <label for="<%= card.bccId %>">Bcc
-            <textarea id="<%= card.bccId %>" name="bcc" rows="2" autocomplete="off"><%= card.bccText %></textarea>
+            <textarea id="<%= card.bccId %>" name="bcc" rows="3" autocomplete="off"><%= card.bccText %></textarea>
           </label>
         </div>
         <div class="client-email-actions">

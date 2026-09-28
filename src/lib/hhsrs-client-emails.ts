@@ -39,6 +39,7 @@ export type ClientEmailCard = {
   changedLine: string;
   saved: boolean;
   error: string;
+  open: boolean;
 };
 
 export function clientEmailInputId(projectName: string, field: "to" | "cc" | "bcc"): string {
@@ -103,7 +104,8 @@ export function buildClientEmailCards(
   rows: readonly ClientEmailRow[],
   flash: ClientEmailFlash | null
 ): ClientEmailCard[] {
-  return projects.map((project) => {
+  const ordered = [...projects].sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+  return ordered.map((project) => {
     const row = rows.find((item) => item.projectName === project.name) || null;
     const posted = flash && flash.projectName === project.name ? flash : null;
     const showingError = Boolean(posted && !posted.saved && posted.error);
@@ -118,6 +120,7 @@ export function buildClientEmailCards(
       changedLine: row ? clientEmailChangedLine(row.changedAt, row.changedByName) : "",
       saved: Boolean(posted?.saved),
       error: showingError && posted ? posted.error : "",
+      open: Boolean(posted && (posted.saved || showingError)),
     };
   });
 }
