@@ -293,24 +293,29 @@ function csvEscape(value: string): string {
 
 /* ---------- Lightweight poll for new pending hazards ---------- */
 hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Response) => {
-  const rows = await prisma.hhsrsSiteSubmission.findMany({
-    where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    select: {
-      id: true,
-      projectName: true,
-      fullAddress: true,
-      category: true,
-      rating: true,
-      comment: true,
-      createdAt: true,
-      claimedBy: true,
-      claimedAt: true,
-    },
-  });
+  const waitingWhere = { status: { in: [...HHSRS_WAITING_STATUSES] } };
+  const [rows, waitingCount] = await Promise.all([
+    prisma.hhsrsSiteSubmission.findMany({
+      where: waitingWhere,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        projectName: true,
+        fullAddress: true,
+        category: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        claimedBy: true,
+        claimedAt: true,
+      },
+    }),
+    prisma.hhsrsSiteSubmission.count({ where: waitingWhere }),
+  ]);
   res.setHeader("Cache-Control", "no-store");
   res.json({
+    waitingCount,
     pending: rows.map((row) => {
       const claim = claimView(row);
       return {

@@ -239,8 +239,11 @@ describe("HHSRS Reporter auth and queue", () => {
       });
       assert.equal(alerts.status, 200);
       const payload = JSON.parse(alerts.body) as {
+        waitingCount: number;
         pending: Array<{ id: string; fullAddress: string; summary: string; projectName: string }>;
       };
+      assert.equal(typeof payload.waitingCount, "number");
+      assert.ok(payload.waitingCount >= payload.pending.length);
       const match = payload.pending.find((item) => item.id === row.id);
       assert.ok(match, "new pending submission is in the poll payload");
       assert.equal(match?.fullAddress, "9 Harbour Road");
