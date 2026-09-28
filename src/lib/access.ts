@@ -2,7 +2,18 @@ import type { Project, ProjectStage, Role, User } from "@prisma/client";
 
 export type AuthedUser = Pick<
   User,
-  "id" | "username" | "role" | "name" | "email" | "initials" | "agency" | "company" | "clientRole" | "frozen"
+  | "id"
+  | "username"
+  | "role"
+  | "name"
+  | "firstName"
+  | "surname"
+  | "email"
+  | "initials"
+  | "agency"
+  | "company"
+  | "clientRole"
+  | "frozen"
 >;
 
 export function isAdmin(user: AuthedUser | null | undefined): boolean {

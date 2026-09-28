@@ -8,6 +8,7 @@ import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
 import { ImapFlow } from "imapflow";
 import type { OutboundEmail } from "./hhsrs-send.js";
+import { signatureLogoAttachment } from "./hhsrs-signature.js";
 
 export type SentMessage = { messageId: string; raw: Buffer };
 
@@ -46,13 +47,19 @@ async function compileRaw(mail: OutboundEmail, keepBcc: boolean): Promise<Buffer
     bcc: keepBcc && mail.bcc.length ? mail.bcc : undefined,
     subject: mail.subject,
     text: mail.text,
+    html: mail.html,
     messageId: mail.messageId,
     keepBcc,
-    attachments: mail.attachments.map((file) => ({
-      filename: file.filename,
-      content: file.content,
-      contentType: file.contentType,
-    })),
+    attachments: [
+      ...mail.attachments.map((file) => ({
+        filename: file.filename,
+        content: file.content,
+        contentType: file.contentType,
+        contentDisposition: "attachment" as const,
+      })),
+      // Inline signature logo. Not one of the case photos.
+      signatureLogoAttachment(),
+    ],
   });
   return composer.compile().build();
 }

@@ -4,6 +4,7 @@
  * The mailbox password is never read, returned, or logged by this module.
  */
 import { randomUUID } from "node:crypto";
+import { SIGNATURE_LOGO_CID, composeEmailHtml, composeEmailText } from "./hhsrs-signature.js";
 
 export const DEFAULT_ALLOW_DOMAIN = "savillshousing.co.uk";
 export const TEST_MODE_BANNER = "Test mode: only Savills addresses can receive emails.";
@@ -240,7 +241,9 @@ export type OutboundEmail = {
   bcc: string[];
   subject: string;
   text: string;
+  html: string;
   messageId: string;
+  /** Case photos only. The signature logo is added later as an inline image. */
   attachments: OutboundAttachment[];
 };
 
@@ -263,6 +266,9 @@ export type DeliverInput = {
   fromName?: string;
   fromAddress?: string;
   sentAt?: Date;
+  /** Signature name. Empty when no name is on file; sending still proceeds. */
+  senderFirstName?: string;
+  senderFullName?: string;
 };
 
 export type DeliverResult =
@@ -295,6 +301,10 @@ export async function deliverPortalEmail(
   const sentAt = input.sentAt || new Date();
   const body = String(input.body || "").replace(/\s+$/, "");
   const subject = String(input.subject || "").trim();
+  const signatureNames = {
+    firstName: String(input.senderFirstName || "").trim(),
+    fullName: String(input.senderFullName || "").trim(),
+  };
 
   try {
     const record = await deps.exclusive(async () => {
@@ -306,7 +316,8 @@ export async function deliverPortalEmail(
         cc: check.cc,
         bcc: check.bcc,
         subject,
-        text: body,
+        text: composeEmailText(body, signatureNames),
+        html: composeEmailHtml(body, signatureNames, `cid:${SIGNATURE_LOGO_CID}`),
         messageId,
         attachments: input.attachments,
       };

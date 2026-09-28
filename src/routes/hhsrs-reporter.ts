@@ -52,7 +52,7 @@ import {
 } from "../lib/hhsrs-reporter-overview.js";
 import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
 import { claimRowClass, claimView, claimerLabel, type ClaimView } from "../lib/hhsrs-claims.js";
-import { isAdmin } from "../lib/access.js";
+import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
   buildMainLogEntry,
   publicSendSettings,
@@ -65,6 +65,47 @@ import {
   sitePhotoStorageFromApp,
   type SitePhotoStorage,
 } from "../lib/hhsrs-site-photos.js";
+import {
+  MISSING_SENDER_NAME_WARNING,
+  renderSignatureHtml,
+  resolveSenderSignature,
+  signatureFromLoggedSender,
+  type SenderSignature,
+} from "../lib/hhsrs-signature.js";
+
+function signatureLogoUrl(res: Response): string {
+  if (typeof res.locals.baseUrl === "function") {
+    return res.locals.baseUrl("/img/savills-hhsrs-signature.png");
+  }
+  return "/img/savills-hhsrs-signature.png";
+}
+
+/** Login first name and surname. Personnel (surveyors) only if the login has neither. */
+async function senderSignatureFor(user: AuthedUser | null | undefined): Promise<SenderSignature> {
+  const firstName = user?.firstName;
+  const surname = user?.surname;
+  const email = String(user?.email || "").trim();
+  const loginNamed = Boolean(String(firstName || "").trim() || String(surname || "").trim());
+  const personnel: { name: string; email: string | null }[] = [];
+  if (!loginNamed && email) {
+    const hit = await prisma.user.findFirst({
+      where: { role: "surveyor", email: { equals: email, mode: "insensitive" } },
+      select: { name: true, email: true },
+    });
+    if (hit) personnel.push(hit);
+  }
+  return resolveSenderSignature({ firstName, surname, email, personnel });
+}
+
+function signatureLocals(res: Response, names: SenderSignature) {
+  return {
+    signatureHtml: renderSignatureHtml(names, signatureLogoUrl(res)),
+    emailSignature: {
+      missing: names.missing,
+      warning: names.missing ? MISSING_SENDER_NAME_WARNING : "",
+    },
+  };
+}
 
 export const hhsrsReporterRouter = Router();
 
@@ -309,6 +350,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     loadWaitingIds(),
   ]);
   const flash = takeFlash(req);
+  const signature = signatureLocals(res, await senderSignatureFor(req.user));
   res.render("hhsrs-reporter/review", {
     ...shellLocals({
       activeNav: "review",
@@ -344,6 +386,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     sendConfig: publicSendSettings(false),
     sentEmail: null,
     sentBanner: "",
+    ...signature,
   });
 });
 
@@ -382,6 +425,10 @@ async function renderReview(
   const matched = matchDemoProject(reviewProjectValue) || matchDemoProject(row.projectName);
   const recipients = emailRecipientsFromProject(matched);
   const flash = takeFlash(req);
+  const signatureNames = sentEmail
+    ? signatureFromLoggedSender(sentEmail.sentBy)
+    : await senderSignatureFor(req.user);
+  const signature = signatureLocals(res, signatureNames);
   res.render("hhsrs-reporter/review", {
     ...shellLocals({
       activeNav: "review",
@@ -417,6 +464,7 @@ async function renderReview(
     sendConfig: publicSendSettings(Boolean(sentEmail)),
     sentEmail,
     sentBanner: sentEmail ? sentBannerText(sentEmail.sentBy, sentEmail.sentAt) : "",
+    ...signature,
   });
 }
 
@@ -900,9 +948,12 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
     return;
   }
   const user = req.user;
+  const signature = await senderSignatureFor(user);
   const result = await sendCaseEmail({
     row,
-    sentBy: user?.name || user?.username || "",
+    sentBy: signature.fullName || user?.username || "",
+    senderFirstName: signature.firstName,
+    senderFullName: signature.fullName,
     hasReporterAccess: Boolean(user && isAdmin(user)),
     body: (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>,
     storage: sitePhotoStorageFromApp(req.app),

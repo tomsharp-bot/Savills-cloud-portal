@@ -496,6 +496,37 @@
       postJson(appUrl("/personnel/" + inp.dataset.agency + "/agency"), { agency: inp.value });
     });
   });
+  const signatureSave = new Map();
+  async function saveSignatureRow(row, id) {
+    const first = row.querySelector("[data-part='first']");
+    const surname = row.querySelector("[data-part='surname']");
+    const res = await postJson(appUrl("/personnel/" + id + "/signature-name"), {
+      firstName: first ? first.value : "",
+      surname: surname ? surname.value : "",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Could not save the first name and surname.");
+      return;
+    }
+    row.querySelectorAll("input[data-signature]").forEach((el) => {
+      el.classList.add("is-saved");
+      window.setTimeout(() => el.classList.remove("is-saved"), 1600);
+    });
+  }
+  document.querySelectorAll("input[data-signature]").forEach((inp) => {
+    inp.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") inp.blur();
+    });
+    inp.addEventListener("change", () => {
+      const row = inp.closest("tr");
+      const id = inp.dataset.signature;
+      if (!row || !id) return;
+      const previous = signatureSave.get(id) || Promise.resolve();
+      const next = previous.catch(() => {}).then(() => saveSignatureRow(row, id));
+      signatureSave.set(id, next);
+    });
+  });
 
   const clearModal = document.getElementById("modal-clear-stock");
   const clearStep1 = document.getElementById("clear-step-1");

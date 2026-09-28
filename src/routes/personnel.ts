@@ -105,9 +105,15 @@ personnelRouter.post("/clients", async (req: Request, res: Response) => {
   res.redirect("/personnel?notice=" + encodeURIComponent(`Added client ${person} · temp password ${pw}.`));
 });
 
+function tidyPersonName(value: unknown): string {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
 personnelRouter.post("/admins", async (req: Request, res: Response) => {
   const name = String(req.body.name || "").trim();
   const email = String(req.body.email || "").trim();
+  const firstName = tidyPersonName(req.body.firstName);
+  const surname = tidyPersonName(req.body.surname);
   if (!name || !email) {
     res.redirect("/personnel?error=" + encodeURIComponent("Enter a name and email."));
     return;
@@ -123,6 +129,8 @@ personnelRouter.post("/admins", async (req: Request, res: Response) => {
       username,
       email,
       name,
+      firstName,
+      surname,
       role: "admin",
       passwordHash: hash,
       lastTempPassword: pw,
@@ -153,6 +161,18 @@ personnelRouter.post("/:id/access", async (req: Request, res: Response) => {
     return;
   }
   res.redirect("/personnel");
+});
+
+personnelRouter.post("/:id/signature-name", async (req: Request, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!user) {
+    res.status(404).json({ error: "Account not found." });
+    return;
+  }
+  const firstName = tidyPersonName(req.body.firstName);
+  const surname = tidyPersonName(req.body.surname);
+  await prisma.user.update({ where: { id: user.id }, data: { firstName, surname } });
+  res.json({ ok: true, firstName, surname });
 });
 
 personnelRouter.post("/:id/initials", async (req: Request, res: Response) => {

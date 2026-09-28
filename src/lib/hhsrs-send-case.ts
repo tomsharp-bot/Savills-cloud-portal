@@ -138,6 +138,8 @@ export async function sendCaseEmail(args: {
   row: HhsrsSiteSubmission;
   sentBy: string;
   hasReporterAccess: boolean;
+  senderFirstName?: string;
+  senderFullName?: string;
   body: Record<string, unknown>;
   storage?: SitePhotoStorage;
 }): Promise<{ ok: true; warning: string } | { ok: false; error: string }> {
@@ -168,6 +170,8 @@ export async function sendCaseEmail(args: {
       bcc: String(args.body.bcc ?? ""),
       subject: String(args.body.subject ?? ""),
       body: String(args.body.body ?? ""),
+      senderFirstName: args.senderFirstName,
+      senderFullName: args.senderFullName,
       photoNames: picked.names,
       attachments,
       allowDomainsRaw: process.env.HHSRS_SEND_ALLOW_DOMAINS,
