@@ -326,13 +326,6 @@
           <textarea id="rv-email-body" placeholder="Draft email…" <%= sentEmail ? "readonly" : "" %>><%= sentEmail ? sentEmail.body : "" %></textarea>
           <button type="button" class="btn-copy" data-copy="rv-email-body">Copy</button>
         </div>
-        <div class="email-signature-block" id="rv-email-signature">
-          <div class="signature-label" id="rv-signature-label">Signature</div>
-          <% if (emailSignature && emailSignature.missing) { %>
-            <p class="sig-name-warn" id="rv-signature-warn"><%= emailSignature.warning %></p>
-          <% } %>
-          <div class="email-signature" id="rv-signature-preview" role="group" aria-labelledby="rv-signature-label" aria-readonly="true"><%- signatureHtml %></div>
-        </div>
         <% if (isFilled) { %>
           <div class="attach-block" id="rv-attach-block">
             <div class="attach-head">
@@ -358,11 +351,6 @@
             </div>
           </div>
         <% } %>
-        <div class="send-block" id="rv-send-block">
-          <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
-          <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
-        </div>
-        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
         <div id="rv-email-photos" class="email-photo-tools" hidden>
           <div class="photo-thumbs email-photo-thumbs" id="rv-email-photo-thumbs" aria-label="Drag case photos into your email draft"></div>
           <p class="photos-drag-hint" id="rv-photos-hint">Drag a photo into your email draft. If that doesn’t work, download the photo.</p>
@@ -370,6 +358,18 @@
             <button type="button" class="btn btn-sm btn-photo-fallback" id="btn-download-photos" disabled>Download photos</button>
           </div>
         </div>
+        <div class="email-signature-block" id="rv-email-signature">
+          <div class="signature-label" id="rv-signature-label">Signature</div>
+          <% if (emailSignature && emailSignature.missing) { %>
+            <p class="sig-name-warn" id="rv-signature-warn"><%= emailSignature.warning %></p>
+          <% } %>
+          <div class="email-signature" id="rv-signature-preview" role="group" aria-labelledby="rv-signature-label" aria-readonly="true"><%- signatureHtml %></div>
+        </div>
+        <div class="send-block" id="rv-send-block">
+          <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
+          <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
+        </div>
+        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
       </form>
     </section>
   </div>

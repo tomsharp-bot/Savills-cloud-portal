@@ -388,7 +388,9 @@
     var panel = $("rv-case-panel");
     if (panel) panel.classList.toggle("is-drafted", caseLocked);
     var photos = $("rv-photos-block");
-    if (photos) photos.hidden = caseLocked;
+    // Filled site-form cases keep the case photos on screen when the draft locks.
+    // Blank mode ('Create new email') still hides them with the other case fields.
+    if (photos) photos.hidden = caseLocked && cfg.mode !== "filled";
     var amend = $("btn-amend-case");
     if (amend) amend.hidden = !caseLocked;
     setEmailPhotoTools(caseLocked);

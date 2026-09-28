@@ -1967,7 +1967,7 @@ body.hhsrs-reporter {
 .hhsrs-reporter #rv-photos-block[hidden],
 .hhsrs-reporter #btn-amend-case[hidden] { display: none !important; }
 .hhsrs-reporter .email-empty-hint[hidden] { display: none !important; }
-.hhsrs-reporter .email-photo-tools { margin-top: 0.85rem; }
+.hhsrs-reporter .email-photo-tools { margin-top: 0.75rem; }
 .hhsrs-reporter .email-photo-tools[hidden] { display: none !important; }
 .hhsrs-reporter .email-photo-thumb { cursor: grab; }
 .hhsrs-reporter .email-photo-thumb:active { cursor: grabbing; }
@@ -2301,7 +2301,7 @@ body.hhsrs-reporter {
   margin-left: auto; font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--muted);
 }
-.hhsrs-reporter .attach-block { margin-top: 0.75rem; }
+.hhsrs-reporter .attach-block { margin-top: 0; }
 .hhsrs-reporter .attach-block[hidden] { display: none; }
 .hhsrs-reporter .attach-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .hhsrs-reporter .attach-head label { margin: 0.75rem 0 0.3rem; }

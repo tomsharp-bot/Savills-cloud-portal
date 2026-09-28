@@ -136,8 +136,10 @@ describe("HHSRS email signature", () => {
     const bodyAt = review.indexOf('id="rv-email-body"');
     const sigAt = review.indexOf('id="rv-signature-preview"');
     const attachAt = review.indexOf('id="rv-attach-block"');
+    const emailPhotosAt = review.indexOf('id="rv-email-photos"');
     assert.ok(bodyAt > 0 && sigAt > bodyAt, "signature follows the body");
-    assert.ok(attachAt > sigAt, "signature stays out of the photo list");
+    assert.ok(attachAt > bodyAt && sigAt > attachAt, "filled-mode photos sit under the body and above the signature");
+    assert.ok(emailPhotosAt > bodyAt && sigAt > emailPhotosAt, "blank-mode photo strip sits under the body and above the signature");
     assert.match(review, /aria-readonly="true"/);
     assert.doesNotMatch(review.slice(bodyAt, sigAt), /signatureHtml/);
     const openCheck = js.slice(js.indexOf("function openCheck"), js.indexOf("function closeCheck"));

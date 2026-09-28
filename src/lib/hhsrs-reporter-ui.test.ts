@@ -283,6 +283,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /callNotes:/);
     assert.match(js, /function amendCaseDetails/);
     assert.match(js, /caseLocked = true/);
+    assert.match(js, /photos\.hidden = caseLocked && cfg\.mode !== "filled"/);
     assert.match(js, /DownloadURL/);
     assert.doesNotMatch(js, /function stubDraft/);
     assert.match(css, /#rv-case-panel\.is-drafted/);
