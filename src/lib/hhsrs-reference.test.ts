@@ -23,6 +23,7 @@ import {
 } from "./hhsrs-reference.js";
 import { sendCaseEmail } from "./hhsrs-send-case.js";
 import type { OutboundEmail } from "./hhsrs-send.js";
+import { composeEmailText } from "./hhsrs-signature.js";
 
 describe("HHSRS project codes", () => {
   it("uses the named client codes, then the first four letters", () => {
@@ -237,6 +238,7 @@ describe("HHSRS thanks summary", () => {
     assert.match(find, /Amend &amp; resend/);
     assert.match(find, /Check before sending/);
     assert.match(find, /Reason for correction/);
+    assert.match(find, /id="rv-signature-preview"/);
     assert.doesNotMatch(find, /Goes through the same checks|Mock only|MOCK/);
     assert.equal(MISSING_EMAIL_BODY, "Full text not stored for this email");
   });
@@ -447,7 +449,11 @@ describe("HHSRS find search and resend", () => {
       assert.equal(sent[0].fromAddress, "hhsrs@savillshousing.co.uk");
       assert.deepEqual(sent[0].to, ["repairs@savillshousing.co.uk"]);
       assert.equal(sent[0].subject, "CORRECTION: HHSRS hazard – Falls on Stairs");
-      assert.equal(sent[0].text, "Please use the repairs team.");
+      assert.equal(
+        sent[0].text,
+        composeEmailText("Please use the repairs team.", { firstName: "Tom", fullName: "Tom Sharp" })
+      );
+      assert.match(sent[0].html, />Tom Sharp</);
 
       const again = await prisma.hhsrsSentEmail.findMany({
         where: { submissionId: hit.id },
