@@ -4,7 +4,7 @@
  * HHSRS does not keep a second archive.
  */
 
-import { HHSRS_PROJECT_ROSTER, hhsrsKey, progressNameForCase } from "./hhsrs-reporter-projects.js";
+import { resolveHhsrsProject, progressNameForCase } from "./hhsrs-reporter-projects.js";
 
 export const PROJECT_PROGRESS_CHANGE_TOAST = "Change this on Project Progress.";
 
@@ -50,12 +50,9 @@ export function overviewStatus(waiting: number): OverviewStatus {
 }
 
 function rosterMeta(name: string): { template: string; ratingScheme: string } {
-  const key = hhsrsKey(name);
-  const row = HHSRS_PROJECT_ROSTER.find(
-    (project) => project.name.toLowerCase() === key.toLowerCase() || project.name.toLowerCase() === name.toLowerCase()
-  );
-  if (!row) return { template: "—", ratingScheme: "—" };
-  return { template: row.template, ratingScheme: row.ratingScheme };
+  const roster = resolveHhsrsProject(name).roster;
+  if (!roster) return { template: "—", ratingScheme: "—" };
+  return { template: roster.template, ratingScheme: roster.ratingScheme };
 }
 
 function byName(a: { name: string }, b: { name: string }): number {

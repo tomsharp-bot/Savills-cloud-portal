@@ -336,7 +336,6 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
     let caseId = "";
     try {
       for (const name of liveNames) {
-        if (name === "Test Housing") continue;
         const existing = await prisma.project.findUnique({ where: { name } });
         if (!existing) {
           const created = await prisma.project.create({

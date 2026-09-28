@@ -2491,6 +2491,7 @@ body.hhsrs-reporter {
 }
 .find-search { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .find-search input[type="text"] { width: min(320px, 100%); }
+.find-search select { min-width: 14rem; max-width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 14px; color: #0f172a; background: #fff; }
 .find-search input, .find-pair input, .find-pair textarea, .find-reason input {
   padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 14px; color: #0f172a;
   width: 100%; background: #fff;

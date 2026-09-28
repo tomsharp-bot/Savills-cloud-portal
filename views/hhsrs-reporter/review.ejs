@@ -3,7 +3,7 @@
   const isFilled = mode === "filled" && row;
   const projectValue = typeof reviewProjectValue === "string"
     ? reviewProjectValue
-    : (isFilled ? ((matchedProject && matchedProject.name) || row.projectName) : "");
+    : (isFilled ? row.projectName : "");
   const projectNames = Array.isArray(reviewProjectNames) ? reviewProjectNames : [];
   const casePhotos = Array.isArray(photos) ? photos : [];
   const claimState = typeof claim !== "undefined" && claim ? claim : null;

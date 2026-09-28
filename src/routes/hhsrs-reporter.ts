@@ -46,13 +46,14 @@ import {
   type ReporterSummary,
 } from "../lib/hhsrs-reporter.js";
 import {
-  PP_HHSRS_ALIAS,
+  HHSRS_PORTAL_NAME_ALIASES,
   RATING_OPTIONS,
-  REPORTER_DEMO_PROJECTS,
   SITE_FORM_PUBLIC_URL,
-  matchDemoProject,
-  progressNameForCase,
+  hhsrsProjectSettings,
+  portalNameInList,
+  resolveHhsrsProject,
 } from "../lib/hhsrs-reporter-projects.js";
+import { loadPortalProjectNames, storedNamesForPortalProject } from "../lib/hhsrs-portal-projects.js";
 import {
   PROJECT_PROGRESS_CHANGE_TOAST,
   buildProjectOverview,
@@ -296,6 +297,10 @@ function reviewProjectNames(progress: ProgressProject[], selected: string): stri
   return names;
 }
 
+function settingsForProjects(names: readonly string[]) {
+  return names.map((name) => hhsrsProjectSettings(name));
+}
+
 /** Claim an open waiting case. Claimed and stale rows are left with their current owner. */
 async function claimIfOpen(
   row: NonNullable<Awaited<ReturnType<typeof loadCase>>>,
@@ -406,6 +411,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
   ]);
   const flash = takeFlash(req);
   const signature = signatureLocals(res, await senderSignatureFor(req.user));
+  const blankProjects = reviewProjectNames(progress, "");
   res.render("hhsrs-reporter/review", {
     ...shellLocals({
       activeNav: "review",
@@ -424,10 +430,10 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     draftBcc: "",
     draftError: "",
     alsoWaiting,
-    demoProjects: REPORTER_DEMO_PROJECTS,
-    reviewProjectNames: reviewProjectNames(progress, ""),
+    demoProjects: settingsForProjects(blankProjects),
+    reviewProjectNames: blankProjects,
     reviewProjectValue: "",
-    projectAliases: PP_HHSRS_ALIAS,
+    projectAliases: HHSRS_PORTAL_NAME_ALIASES,
     waitingIds,
     claim: null as ClaimView | null,
     ratingOptions: RATING_OPTIONS,
@@ -478,8 +484,9 @@ async function renderReview(
   const [photos, sentEmail] = await Promise.all([reviewPhotos(row, storage), originalSentEmail(row.id)]);
   const draft = tryDraftFromRow(row);
   const currentNames = opts.progress.filter((project) => project.stage === "current").map((project) => project.name);
-  const reviewProjectValue = progressNameForCase(row.projectName, currentNames);
-  const matched = matchDemoProject(reviewProjectValue) || matchDemoProject(row.projectName);
+  const reviewProjectValue = portalNameInList(row.projectName, currentNames);
+  const projectList = reviewProjectNames(opts.progress, reviewProjectValue);
+  const matched = resolveHhsrsProject(reviewProjectValue || row.projectName).roster;
   const recipients = await clientRecipientsForProject(reviewProjectValue || row.projectName);
   const flash = takeFlash(req);
   const signatureNames = sentEmail
@@ -504,10 +511,10 @@ async function renderReview(
     draftBcc: recipients.bcc,
     draftError: opts.draftError || draft.error,
     alsoWaiting: opts.alsoWaiting.filter((r) => r.id !== row.id),
-    demoProjects: REPORTER_DEMO_PROJECTS,
-    reviewProjectNames: reviewProjectNames(opts.progress, reviewProjectValue),
+    demoProjects: settingsForProjects(projectList),
+    reviewProjectNames: projectList,
     reviewProjectValue,
-    projectAliases: PP_HHSRS_ALIAS,
+    projectAliases: HHSRS_PORTAL_NAME_ALIASES,
     waitingIds: opts.waitingIds,
     claim: claimView(row),
     ratingOptions: RATING_OPTIONS,
@@ -576,10 +583,11 @@ hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
   await renderReview(req, res, row, ctx);
 });
 
-function findUrl(parts: { q?: string; date?: string; caseId?: string; view?: string; sent?: string }): string {
+function findUrl(parts: { q?: string; date?: string; project?: string; caseId?: string; view?: string; sent?: string }): string {
   const params = new URLSearchParams();
   if (parts.q) params.set("q", parts.q);
   if (parts.date) params.set("date", parts.date);
+  if (parts.project) params.set("project", parts.project);
   if (parts.caseId) params.set("case", parts.caseId);
   if (parts.view) params.set("view", parts.view);
   if (parts.sent) params.set("sent", parts.sent);
@@ -610,15 +618,24 @@ function toSentLog(row: Awaited<ReturnType<typeof listSentEmails>>[number]): Sen
 hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
   const q = String(req.query.q || "").trim();
   const date = String(req.query.date || "").trim();
+  const project = String(req.query.project || "").trim();
   const caseId = String(req.query.case || "").trim();
   const view = String(req.query.view || "").trim() === "amend" ? "amend" : "list";
   const justSent = String(req.query.sent || "") === "1";
   const storage = sitePhotoStorageFromApp(req.app);
+  const projectNames = await loadPortalProjectNames();
+  if (project && !projectNames.some((name) => name === project)) projectNames.push(project);
+  const where = findCaseWhere(q, date);
+  if (project) {
+    const names = await storedNamesForPortalProject(project);
+    const projectWhere = { projectName: { in: names.length ? names : [project] } };
+    where.AND = Array.isArray(where.AND) ? [...where.AND, projectWhere] : [projectWhere];
+  }
 
   const [summary, matches] = await Promise.all([
     loadSummary(),
     prisma.hhsrsSiteSubmission.findMany({
-      where: findCaseWhere(q, date),
+      where,
       orderBy: { createdAt: "desc" },
       take: 200,
     }),
@@ -635,7 +652,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
       hazard: row.category,
       statusLabel: label,
       statusClass: label.replace(/\s+/g, "-"),
-      href: findUrl({ q, date, caseId: row.id }),
+      href: findUrl({ q, date, project, caseId: row.id }),
     };
   });
 
@@ -684,9 +701,9 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
       statusLabel: label,
       statusClass: label.replace(/\s+/g, "-"),
       reviewUrl: `${HHSRS_REPORTER_PATH}/review/${picked.id}`,
-      amendUrl: findUrl({ q, date, caseId: picked.id, view: "amend" }),
-      backUrl: findUrl({ q, date, caseId: picked.id }),
-      viewUrl: findUrl({ q, date, caseId: picked.id }),
+      amendUrl: findUrl({ q, date, project, caseId: picked.id, view: "amend" }),
+      backUrl: findUrl({ q, date, project, caseId: picked.id }),
+      viewUrl: findUrl({ q, date, project, caseId: picked.id }),
       sent,
       notice,
       log,
@@ -724,7 +741,8 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
       flashErr: flash.err,
     }),
     user: req.user,
-    filters: { q, date },
+    filters: { q, date, project },
+    projectNames,
     rows,
     found,
     view: amend ? "amend" : "list",
@@ -745,6 +763,7 @@ hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response)
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
   const q = String(body.q || "").trim();
   const date = String(body.date || "").trim();
+  const project = String(body.project || "").trim();
   const signature = await senderSignatureFor(req.user);
   const stored = await clientRecipientsForProject(row.projectName);
   const sendBody = sendBodyWithClientRecipients(body, stored);
@@ -762,7 +781,7 @@ hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response)
     },
   });
   if (!result.ok) flashErr(req, result.error);
-  res.redirect(findUrl({ q, date, caseId: row.id, view: result.ok ? undefined : "amend", sent: result.ok ? "1" : undefined }));
+  res.redirect(findUrl({ q, date, project, caseId: row.id, view: result.ok ? undefined : "amend", sent: result.ok ? "1" : undefined }));
 });
 
 function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {}): string {
@@ -1360,19 +1379,12 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
     reason: String(req.query.reason || ""),
   };
   const openId = String(req.query.open || "");
-  const [summary, cases, progress] = await Promise.all([
+  const [summary, cases, names] = await Promise.all([
     loadSummary(),
     loadDuplicates(filters, HHSRS_REPORTER_PATH),
-    loadProgressProjects(),
+    loadPortalProjectNames(),
   ]);
-  const names = new Set<string>();
-  for (const project of progress) {
-    if (project.stage === "current" && project.name) names.add(project.name);
-  }
-  for (const item of cases) {
-    if (item.projectName) names.add(item.projectName);
-  }
-  if (filters.project) names.add(filters.project);
+  if (filters.project && !names.some((name) => name === filters.project)) names.push(filters.project);
   const flash = takeFlash(req);
   const jsUrl =
     typeof res.locals.baseUrl === "function"

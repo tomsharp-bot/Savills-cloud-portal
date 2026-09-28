@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
-import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import {
   defaultSitePhotoStorage,
   prepareSitePhoto,
@@ -240,12 +240,12 @@ export type SiteFormProjectFlags = {
 };
 
 export function siteFormProjectFlags(projectName: string): SiteFormProjectFlags {
-  const matched = matchDemoProject(projectName);
+  const roster = resolveHhsrsProject(projectName).roster;
   return {
-    calls: Boolean(matched?.extras.calls),
-    onward: Boolean(matched?.extras.onward),
-    saxon: Boolean(matched && /^saxon\b/i.test(matched.name)),
-    online: Boolean(matched?.extras.online_form),
+    calls: Boolean(roster?.extras.calls),
+    onward: Boolean(roster?.extras.onward),
+    saxon: Boolean(roster && /^saxon\b/i.test(roster.name)),
+    online: Boolean(roster?.extras.online_form),
   };
 }
 

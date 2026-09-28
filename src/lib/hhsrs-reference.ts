@@ -10,32 +10,11 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { isLfhaRosterName } from "./hhsrs-reporter-projects.js";
+import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 
-const NAMED_CODES: Array<{ test: RegExp; code: string }> = [
-  { test: /saxon/, code: "SAXW" },
-  { test: /test\s*housing/, code: "TEST" },
-  { test: /cornwall/, code: "CORN" },
-  { test: /onward/, code: "ONW" },
-  { test: /vico/, code: "VICO" },
-  { test: /bpha/, code: "BPHA" },
-  { test: /metropolitan|\bmtvh\b/, code: "MTVH" },
-  { test: /a2d|a2\s*dominion/, code: "A2D" },
-];
-
-/** Project code from a project name. Named clients first, otherwise the first four letters. */
+/** Project code from a portal project name, via the shared roster resolver. */
 export function hhsrsCodeFromProjectName(name: string): string {
-  const folded = String(name || "").trim().toLowerCase();
-  for (const rule of NAMED_CODES) {
-    if (rule.test.test(folded)) return rule.code;
-  }
-  // Same match as the Reporter roster entry "LFHA (Leeds)", including "Leeds Fed HA 2026".
-  if (isLfhaRosterName(name)) return "LFHA";
-  const letters = String(name || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 4);
-  return letters || "HHSR";
+  return resolveHhsrsProject(name).code;
 }
 
 /** Letters and digits only, so a typed code can be stored and used in a reference. */
@@ -78,7 +57,8 @@ export function formatHhsrsReference(code: string, n: number): string {
 export function referenceCounterKey(projectId: string | null | undefined, projectName: string): string {
   const id = String(projectId || "").trim();
   if (id) return id;
-  return `name:${String(projectName || "").trim().toLowerCase()}`;
+  const name = resolveHhsrsProject(projectName).name || String(projectName || "").trim();
+  return `name:${name.toLowerCase()}`;
 }
 
 export async function resolveProjectHhsrsCode(

@@ -234,7 +234,8 @@ describe("HHSRS thanks summary", () => {
     assert.match(thanks, /Report another issue/);
     assert.match(thanks, /Tip: take a screenshot to keep a copy/);
     assert.doesNotMatch(thanks, /MOCK|Mock only|example data only|Preview/i);
-    assert.match(find, /Use either box, or both together/);
+    assert.match(find, /id="find-project"/);
+    assert.match(find, /The project list is the same one the site form uses/);
     assert.match(find, /Amend &amp; resend/);
     assert.match(find, /Check before sending/);
     assert.match(find, /Reason for correction/);

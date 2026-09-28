@@ -1,6 +1,6 @@
 import type { HhsrsSiteSubmission } from "@prisma/client";
 import { draftFromSubmission, type SubmissionDraftInput } from "./hhsrs-reporter-draft.js";
-import { matchDemoProject } from "./hhsrs-reporter-projects.js";
+import { matchDemoProject, resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import { composeCallNotes, isCallRefBlankReason } from "./hhsrs-site-form.js";
 
 export const HHSRS_REPORTER_PATH = "/HHSRSreporter";
@@ -249,7 +249,7 @@ export function draftEmailFromReviewFields(
   subject: string;
   body: string;
 } {
-  const matched = matchDemoProject(fields.projectName);
+  const matched = resolveHhsrsProject(fields.projectName).roster;
   const draft = draftFromSubmission(fields);
   const resolved = recipients ?? emailRecipientsFromProject(matched);
   return {

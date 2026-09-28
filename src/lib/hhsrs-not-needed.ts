@@ -6,6 +6,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { formatLondonDateTime } from "./hhsrs-find.js";
+import { storedNamesForPortalProject } from "./hhsrs-portal-projects.js";
 import { isWaitingStatus, reporterCasePhotos, type ReporterCasePhoto } from "./hhsrs-reporter.js";
 
 export const NOT_NEEDED_REASONS = [
@@ -270,7 +271,10 @@ export async function loadDuplicates(
     });
   }
   const project = String(filters.project || "").trim();
-  if (project) and.push({ projectName: project });
+  if (project) {
+    const names = await storedNamesForPortalProject(project);
+    and.push({ projectName: { in: names.length ? names : [project] } });
+  }
   const reason = String(filters.reason || "").trim();
   if (reason && isNotNeededReason(reason)) and.push({ notNeededReason: reason });
 

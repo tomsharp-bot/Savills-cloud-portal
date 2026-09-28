@@ -69,32 +69,22 @@
     });
   }
 
-  function matchProject(name) {
-    if (!name) return null;
-    if (DEMO[name]) return DEMO[name];
+  function portalProjectName(name) {
+    var raw = String(name || "").trim();
+    if (!raw) return "";
     var aliases = cfg.projectAliases || {};
-    var alias = aliases[name];
-    if (!alias) {
-      var aliasKeys = Object.keys(aliases);
-      for (var a = 0; a < aliasKeys.length; a++) {
-        if (aliasKeys[a].toLowerCase() === String(name).toLowerCase()) {
-          alias = aliases[aliasKeys[a]];
-          break;
-        }
-      }
-    }
-    if (alias && DEMO[alias]) return DEMO[alias];
-    var lower = name.toLowerCase();
+    var direct = aliases[raw] || aliases[raw.toLowerCase()];
+    return direct || raw;
+  }
+
+  function matchProject(name) {
+    var key = portalProjectName(name);
+    if (!key) return null;
+    if (DEMO[key]) return DEMO[key];
+    var lower = key.toLowerCase();
     var keys = Object.keys(DEMO);
     for (var i = 0; i < keys.length; i++) {
-      var p = DEMO[keys[i]];
-      if (keys[i].toLowerCase() === lower) return p;
-      if (lower.indexOf("onward") === 0 && p.template === "Onward") return p;
-      if (/^vico\b/i.test(name) && p.template === "Vico Homes") return p;
-      if (lower.indexOf("cornwall") === 0 && p.template === "Cornwall") return p;
-      if (lower.indexOf("bpha") === 0 && p.template === "BPHA") return p;
-      if (lower.indexOf("mtvh") !== -1 && p.name === "MTVH Pilot 2026") return p;
-      if ((lower.indexOf("lfha") === 0 || lower.indexOf("leeds fed") === 0 || lower.indexOf("(leeds)") !== -1) && p.name === "LFHA (Leeds)") return p;
+      if (keys[i].toLowerCase() === lower) return DEMO[keys[i]];
     }
     return null;
   }

@@ -7,58 +7,23 @@
  * the email template; the address row is "Leeds Fed HA 2026".
  */
 import { prisma } from "./prisma.js";
-import { matchDemoProject, type ReporterProjectDemo } from "./hhsrs-reporter-projects.js";
+import { resolveHhsrsProject, type ReporterProjectDemo } from "./hhsrs-reporter-projects.js";
+import { loadPortalProjectNames } from "./hhsrs-portal-projects.js";
 import { emailRecipientsFromProject } from "./hhsrs-reporter.js";
 import { isValidEmailAddress } from "./hhsrs-send.js";
 import { formatAccessDay } from "./hhsrs-site-access.js";
 
-/** Dummy project. Its seeded address row must stay editable even when it is not a live Project. */
-export const TEST_HOUSING_PROJECT = "Test Housing";
-
-/**
- * Roster labels that are not the Project.name stored on a submission.
- * Lookup and Admin save both run through resolveClientEmailProject.
- */
-const ROSTER_TO_LIVE_NAME: Record<string, string> = {
-  lfha: "Leeds Fed HA 2026",
-  "lfha 2026": "Leeds Fed HA 2026",
-  "lfha (leeds)": "Leeds Fed HA 2026",
-  "leeds federation": "Leeds Fed HA 2026",
-  "leeds federation (leeds)": "Leeds Fed HA 2026",
-  "mtvh pilot 2026": "MTVH 2026",
-  "mtvh phase 1 2026": "MTVH 2026",
-  "vico 2026 8k": "Vico 2026",
-};
-
-/** Live names whose casing must survive a differently cased submission. */
-const LIVE_NAME_CANONICAL = [
-  "Leeds Fed HA 2026",
-  "MTVH 2026",
-  "Vico 2026",
-  "Onward 2026",
-  TEST_HOUSING_PROJECT,
-];
-
 export type ResolvedClientEmailProject = {
-  /** HhsrsClientEmail.projectName. The live Project.name submissions use. */
+  /** HhsrsClientEmail.projectName. The portal Project.name submissions use. */
   key: string;
   /** Roster email settings (template lists). Null when the name matches no roster. */
   roster: ReporterProjectDemo | null;
 };
 
-/**
- * One resolver for Admin save and for Generate / Send / Send and log / Find & resend.
- * "Leeds Fed HA 2026" stays that key and still picks up LFHA roster settings.
- * "MTVH 2026" and "Vico 2026" stay those keys, not "MTVH Pilot 2026" or "Vico 2026 8k".
- */
+/** Address-row key for a submission. Same resolver as templates, calls, and reference codes. */
 export function resolveClientEmailProject(projectName: string): ResolvedClientEmailProject {
-  const raw = String(projectName || "").trim();
-  if (!raw) return { key: "", roster: null };
-  const lower = raw.toLowerCase();
-  const aliased = ROSTER_TO_LIVE_NAME[lower];
-  const canonical = LIVE_NAME_CANONICAL.find((name) => name.toLowerCase() === lower);
-  const key = aliased || canonical || raw;
-  return { key, roster: matchDemoProject(raw) || matchDemoProject(key) };
+  const resolved = resolveHhsrsProject(projectName);
+  return { key: resolved.name, roster: resolved.roster };
 }
 
 export type ClientEmailDraft = { to: string; cc: string; bcc: string };
@@ -203,19 +168,11 @@ export async function loadClientEmailRows(): Promise<ClientEmailRow[]> {
   return prisma.hhsrsClientEmail.findMany({ orderBy: { projectName: "asc" } });
 }
 
-/** Current HHSRS projects, by the Project.name a submission stores, plus Test Housing. */
+/** Current portal projects, the same names the site form dropdown uses. */
 export async function loadClientEmailProjects(): Promise<
   { name: string; to: readonly string[]; cc: readonly string[]; bcc?: readonly string[] }[]
 > {
-  const rows = await prisma.project.findMany({
-    where: { stage: "current" },
-    select: { name: true },
-    orderBy: { name: "asc" },
-  });
-  const names = rows.map((row) => row.name.trim()).filter(Boolean);
-  if (!names.some((name) => name.toLowerCase() === TEST_HOUSING_PROJECT.toLowerCase())) {
-    names.push(TEST_HOUSING_PROJECT);
-  }
+  const names = await loadPortalProjectNames();
   return names.map((name) => {
     const { roster } = resolveClientEmailProject(name);
     return { name, to: roster?.to ?? [], cc: roster?.cc ?? [], bcc: roster?.bcc };

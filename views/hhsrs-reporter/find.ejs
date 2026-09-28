@@ -131,6 +131,7 @@
       <input type="hidden" name="correctionNote" id="fr-send-note" value="" />
       <input type="hidden" name="q" value="<%= filters.q %>" />
       <input type="hidden" name="date" value="<%= filters.date %>" />
+      <input type="hidden" name="project" value="<%= filters.project || "" %>" />
       <div id="rv-send-photo-fields"></div>
       <div class="ck-foot">
         <button type="button" class="btn btn-back" id="ck-back">Go back</button>
@@ -150,13 +151,22 @@
         <input id="find-q" name="q" type="text" value="<%= filters.q %>" placeholder="e.g. MTVH-011, 10010120, Moor" />
       </div>
       <div>
+        <label class="find-label" for="find-project">Project</label>
+        <select id="find-project" name="project">
+          <option value="">All projects</option>
+          <% (Array.isArray(projectNames) ? projectNames : []).forEach((name) => { %>
+            <option value="<%= name %>" <%= filters.project === name ? "selected" : "" %>><%= name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
         <label class="find-label" for="find-date">Date submitted</label>
         <input id="find-date" name="date" type="date" value="<%= filters.date %>" />
       </div>
       <button type="submit" class="btn btn-primary">Search</button>
       <a class="btn btn-ghost" href="<%= reporterBase %>/find">Clear</a>
     </div>
-    <p class="find-hint">Use either box, or both together.</p>
+    <p class="find-hint">Search by reference, UPRN, or address. The project list is the same one the site form uses.</p>
   </form>
 </section>
 

@@ -6,6 +6,7 @@
 import ExcelJS from "exceljs";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import { loadPortalProjectNames, storedNamesForPortalProject } from "./hhsrs-portal-projects.js";
 import { HHSRS_ACTIONED_STATUSES, ratingDisplayClass } from "./hhsrs-reporter.js";
 import { formatLondonDateTime, londonDayBounds, MISSING_EMAIL_BODY } from "./hhsrs-find.js";
 
@@ -51,6 +52,8 @@ export type MainLogFilters = {
   page: number;
   open: string;
   pageGiven: boolean;
+  /** Submission projectName values that resolve to filters.project. */
+  projectMatchNames?: string[];
 };
 
 export type MainLogKind = "original" | "correction" | "not_sent";
@@ -198,7 +201,10 @@ function sentRange(filters: MainLogFilters): { gte?: Date; lt?: Date } {
 
 function submissionSearch(filters: MainLogFilters): Prisma.HhsrsSiteSubmissionWhereInput | null {
   const and: Prisma.HhsrsSiteSubmissionWhereInput[] = [];
-  if (filters.project) and.push({ projectName: filters.project });
+  if (filters.project) {
+    const names = filters.projectMatchNames?.length ? filters.projectMatchNames : [filters.project];
+    and.push({ projectName: { in: names } });
+  }
   const q = filters.q;
   if (q) {
     const compact = q.replace(/\s+/g, "");
@@ -531,8 +537,13 @@ export type LoadedMainLog = {
   senders: string[];
 };
 
+async function withPortalProjectMatch(filters: MainLogFilters): Promise<MainLogFilters> {
+  if (!filters.project) return filters;
+  return { ...filters, projectMatchNames: await storedNamesForPortalProject(filters.project) };
+}
+
 export async function loadMainLog(query: Record<string, unknown>): Promise<LoadedMainLog> {
-  const filters = parseMainLogFilters(query);
+  const filters = await withPortalProjectMatch(parseMainLogFilters(query));
   const items = await listSortItems(filters);
   const originalIds = items.filter((item) => item.kind === "original").map((item) => item.key.slice(6));
   const corrected = await correctedKeySet(originalIds);
@@ -545,7 +556,11 @@ export async function loadMainLog(query: Record<string, unknown>): Promise<Loade
   const entries = arranged.pageKeys.map((key) => hydrated.get(key)).filter((row): row is MainLogEntry => Boolean(row));
   let panel = filters.open ? entries.find((row) => row.key === filters.open) || null : null;
   if (filters.open && !panel) panel = await loadOpenEntry(filters.open);
-  const [projects, senders, unfiltered] = await Promise.all([projectNames(), senderNames(), unfilteredCount()]);
+  const [projects, senders, unfiltered] = await Promise.all([
+    projectNames(filters.project),
+    senderNames(),
+    unfilteredCount(),
+  ]);
   const from = entries.length ? (arranged.pages.slice(0, arranged.page - 1).reduce((sum, page) => sum + page.length, 0) + 1) : 0;
   const to = from ? from + entries.length - 1 : 0;
   return {
@@ -578,14 +593,10 @@ async function loadOpenEntry(open: string): Promise<MainLogEntry | null> {
   return null;
 }
 
-async function projectNames(): Promise<string[]> {
-  const rows = await prisma.hhsrsSiteSubmission.findMany({
-    where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
-    distinct: ["projectName"],
-    select: { projectName: true },
-    orderBy: { projectName: "asc" },
-  });
-  return rows.map((row) => row.projectName).filter(Boolean);
+async function projectNames(selected = ""): Promise<string[]> {
+  const names = await loadPortalProjectNames();
+  if (selected && !names.some((name) => name === selected)) names.push(selected);
+  return names;
 }
 
 async function senderNames(): Promise<string[]> {
@@ -616,7 +627,7 @@ async function unfilteredCount(): Promise<number> {
 }
 
 export async function loadMainLogExport(query: Record<string, unknown>): Promise<{ filters: MainLogFilters; entries: MainLogEntry[] }> {
-  const filters = parseMainLogFilters(query);
+  const filters = await withPortalProjectMatch(parseMainLogFilters(query));
   const items = await listSortItems(filters);
   const arranged = arrangeMainLog(items, new Set(), 1, Math.max(items.length, 1));
   const hydrated = await hydrate(arranged.pages.flat());
