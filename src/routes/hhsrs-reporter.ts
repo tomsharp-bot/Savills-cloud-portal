@@ -60,6 +60,14 @@ import {
 } from "../lib/hhsrs-send.js";
 import { latestSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
 import {
+  SITE_FORM_CODE_CHANGED,
+  SITE_FORM_CODE_INVALID,
+  SiteFormAccessError,
+  accessChangedLine,
+  changeSiteFormAccessCode,
+  loadSiteFormAccess,
+} from "../lib/hhsrs-site-access.js";
+import {
   loadSiteFormPhoto,
   privateInlineHeaders,
   sitePhotoStorageFromApp,
@@ -715,10 +723,21 @@ hhsrsReporterRouter.post("/project-overview/restore", async (req: Request, res: 
   res.redirect(`${HHSRS_REPORTER_PATH}/project-overview`);
 });
 
+function takeAccessFlash(req: Request): { ok: string; err: string } {
+  const ok = req.session?.flashAccessCode || "";
+  const err = req.session?.flashAccessCodeErr || "";
+  if (req.session) {
+    delete req.session.flashAccessCode;
+    delete req.session.flashAccessCodeErr;
+  }
+  return { ok, err };
+}
+
 /* ---------- Admin ---------- */
 hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
-  const summary = await loadSummary();
+  const [summary, access] = await Promise.all([loadSummary(), loadSiteFormAccess()]);
   const flash = takeFlash(req);
+  const accessFlash = takeAccessFlash(req);
   res.render("hhsrs-reporter/admin", {
     ...shellLocals({
       activeNav: "admin",
@@ -728,7 +747,25 @@ hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
       flashErr: flash.err,
     }),
     user: req.user,
+    siteFormAccessCode: access.code,
+    siteFormAccessChangedLine: accessChangedLine(access),
+    siteFormAccessSaved: accessFlash.ok === SITE_FORM_CODE_CHANGED,
+    siteFormAccessError: accessFlash.err,
+    siteFormAccessEditing: Boolean(accessFlash.err),
   });
+});
+
+hhsrsReporterRouter.post("/admin/site-form-access", async (req: Request, res: Response) => {
+  const name = String(req.user?.name || req.user?.username || "").trim();
+  try {
+    await changeSiteFormAccessCode(String(req.body?.code ?? ""), name);
+    req.session = req.session || {};
+    req.session.flashAccessCode = SITE_FORM_CODE_CHANGED;
+  } catch (err) {
+    req.session = req.session || {};
+    req.session.flashAccessCodeErr = err instanceof SiteFormAccessError ? err.message : SITE_FORM_CODE_INVALID;
+  }
+  res.redirect(`${HHSRS_REPORTER_PATH}/admin`);
 });
 
 /* ---------- Case save / mark actioned (canonical under /review/:id) ---------- */

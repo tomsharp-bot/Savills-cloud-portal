@@ -440,6 +440,18 @@ model HhsrsReporterProjectArchive {
   updatedAt DateTime @updatedAt
 }
 
+/// Shared surveyor code for the public HHSRS site form.
+/// Plaintext on purpose: admins read it out and give it to surveyors. It is not a password.
+/// Phones store `version` and `fingerprint` in a signed cookie, never the code.
+model HhsrsSiteFormAccess {
+  id            String   @id
+  code          String
+  version       Int      @default(1)
+  fingerprint   String
+  changedAt     DateTime @default(now())
+  changedByName String   @default("")
+}
+
 /// Shared reference library (admins + surveyors). Not project-scoped and never shown to clients.
 /// Production bytes live only in Spaces (spacesKey set). An empty spacesKey is local-dev disk
 /// and is not read or written when NODE_ENV=production or REQUIRE_SPACES=true.
