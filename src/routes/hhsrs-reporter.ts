@@ -62,6 +62,7 @@ import {
   type ProjectOverview,
 } from "../lib/hhsrs-reporter-overview.js";
 import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
+import { pendingIssueListArgs, withoutOpenCase } from "../lib/hhsrs-pending-list.js";
 import { claimRowClass, claimView, claimerLabel, type ClaimView } from "../lib/hhsrs-claims.js";
 import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
@@ -381,11 +382,7 @@ hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Respo
 /* ---------- Pending Issues ---------- */
 hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
   const [waitingRows, actionedRows, summary] = await Promise.all([
-    prisma.hhsrsSiteSubmission.findMany({
-      where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    }),
+    prisma.hhsrsSiteSubmission.findMany(pendingIssueListArgs()),
     prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
       orderBy: [{ emailSentAt: "desc" }, { updatedAt: "desc" }],
@@ -406,11 +403,7 @@ hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
 hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
   const [summary, alsoWaiting, progress, waitingIds] = await Promise.all([
     loadSummary(),
-    prisma.hhsrsSiteSubmission.findMany({
-      where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
+    prisma.hhsrsSiteSubmission.findMany(pendingIssueListArgs()),
     loadProgressProjects(),
     loadWaitingIds(),
   ]);
@@ -515,7 +508,7 @@ async function renderReview(
     draftCc: recipients.cc,
     draftBcc: recipients.bcc,
     draftError: opts.draftError || draft.error,
-    alsoWaiting: opts.alsoWaiting.filter((r) => r.id !== row.id),
+    alsoWaiting: withoutOpenCase(opts.alsoWaiting, row.id),
     demoProjects: settingsForProjects(projectList),
     reviewProjectNames: projectList,
     reviewProjectValue,
@@ -541,20 +534,13 @@ async function renderReview(
 }
 
 async function reviewContext(excludeId?: string) {
-  const [summary, alsoWaiting, progress, waitingIds] = await Promise.all([
+  const [summary, pendingRows, progress, waitingIds] = await Promise.all([
     loadSummary(),
-    prisma.hhsrsSiteSubmission.findMany({
-      where: {
-        status: { in: [...HHSRS_WAITING_STATUSES] },
-        ...(excludeId ? { id: { not: excludeId } } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
+    prisma.hhsrsSiteSubmission.findMany(pendingIssueListArgs()),
     loadProgressProjects(),
     loadWaitingIds(),
   ]);
-  return { summary, alsoWaiting, progress, waitingIds };
+  return { summary, alsoWaiting: withoutOpenCase(pendingRows, excludeId), progress, waitingIds };
 }
 
 hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
