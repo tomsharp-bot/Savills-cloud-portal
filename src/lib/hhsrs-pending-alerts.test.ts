@@ -412,6 +412,18 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(sharedJs, /New issue, refresh list/);
     assert.match(sharedJs, /id === "not-actioned"/);
     assert.match(sharedJs, /id === "rv-also-waiting"/);
+    assert.match(sharedJs, /live\.replaceWith\(fresh\)/);
+    assert.doesNotMatch(sharedJs, /<td|createElement\("td"\)|createElement\("th"\)/);
+    const pendingTable = fs.readFileSync(
+      path.join(root, "views/hhsrs-reporter/partials/pending-issues-table.ejs"),
+      "utf8"
+    );
+    const review = fs.readFileSync(path.join(root, "views/hhsrs-reporter/review.ejs"), "utf8");
+    const also = review.slice(review.indexOf('id="rv-also-waiting"'), review.indexOf('id="rv-project-block"'));
+    assert.match(pendingTable, />Reference</);
+    assert.match(pendingTable, />UPRN</);
+    assert.match(pending, /partials\/pending-issues-table/);
+    assert.match(also, /partials\/pending-issues-table/);
     assert.match(sharedJs, /waitingCount/);
     assert.match(sharedJs, /#side-tabs a\.tab-link\[title="Dashboard"\]/);
     assert.match(sharedJs, /side-summary-row/);
