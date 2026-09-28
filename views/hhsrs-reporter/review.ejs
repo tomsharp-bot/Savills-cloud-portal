@@ -87,7 +87,7 @@
     </div>
     <div class="review-project-body">
       <label for="rv-project">Project</label>
-      <select id="rv-project" name="projectNameDisplay" aria-describedby="rv-project-hint">
+      <select id="rv-project" name="projectNameDisplay" aria-describedby="rv-project-hint" <%= sentEmail ? "disabled" : "" %>>
         <option value="">Select a project…</option>
         <% projectNames.forEach((name) => { %>
           <option value="<%= name %>" <%= projectValue === name ? "selected" : "" %>><%= name %></option>
@@ -98,7 +98,7 @@
   </section>
 
   <div class="review-grid">
-    <section class="panel panel-overflow-visible" id="rv-case-panel" aria-label="Case details">
+    <section class="panel panel-overflow-visible<%= sentEmail ? ' is-sent-case' : '' %>" id="rv-case-panel" aria-label="Case details">
       <% if (isFilled) { %>
       <form method="post" action="<%= reporterBase %>/review/<%= row.id %>" id="rv-save-form">
         <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
@@ -109,7 +109,7 @@
         <span class="count count-review" id="rv-case-badge"><%= isFilled ? "Case" : "Blank" %></span>
       </div>
       <div class="blank-case-form" id="rv-case-form">
-        <fieldset class="case-fields" id="rv-case-fields" <%= isFilled || projectValue ? "" : "disabled" %>>
+        <fieldset class="case-fields" id="rv-case-fields" <%= sentEmail || (!isFilled && !projectValue) ? "disabled" : "" %>>
           <div class="field-row">
             <div>
               <label for="rv-uprn">UPRN</label>
@@ -275,7 +275,7 @@
           <button type="button" class="btn btn-primary" id="btn-generate-email" <%= isFilled && !sentEmail ? "" : "disabled" %>>Generate email</button>
           <button type="button" class="btn btn-ghost" id="btn-amend-case" hidden>Amend case details</button>
           <% if (isFilled) { %>
-            <button type="submit" class="btn btn-ghost">Save review</button>
+            <button type="submit" class="btn btn-ghost" <%= sentEmail ? "disabled" : "" %>>Save review</button>
           <% } %>
           <span class="review-project-hint" id="rv-generate-note">Choose a project, complete the case details, then generate the email.</span>
         </div>
@@ -283,7 +283,7 @@
       <% if (isFilled) { %></form><% } %>
     </section>
 
-    <section class="panel email-draft-panel" aria-label="Client email draft">
+    <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : '' %>" aria-label="Client email draft">
       <div class="panel-head neutral">
         <h2>Client email draft</h2>
         <span class="count <%= sentEmail ? 'count-dealt' : 'count-review' %>" id="rv-email-badge"><%= sentEmail ? "Sent" : "Draft" %></span>
@@ -326,13 +326,6 @@
           <textarea id="rv-email-body" placeholder="Draft email…" <%= sentEmail ? "readonly" : "" %>><%= sentEmail ? sentEmail.body : "" %></textarea>
           <button type="button" class="btn-copy" data-copy="rv-email-body">Copy</button>
         </div>
-        <div class="email-signature-block" id="rv-email-signature">
-          <div class="signature-label" id="rv-signature-label">Signature</div>
-          <% if (emailSignature && emailSignature.missing) { %>
-            <p class="sig-name-warn" id="rv-signature-warn"><%= emailSignature.warning %></p>
-          <% } %>
-          <div class="email-signature" id="rv-signature-preview" role="group" aria-labelledby="rv-signature-label" aria-readonly="true"><%- signatureHtml %></div>
-        </div>
         <% if (isFilled) { %>
           <div class="attach-block" id="rv-attach-block">
             <div class="attach-head">
@@ -358,11 +351,6 @@
             </div>
           </div>
         <% } %>
-        <div class="send-block" id="rv-send-block">
-          <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
-          <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
-        </div>
-        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
         <div id="rv-email-photos" class="email-photo-tools" hidden>
           <div class="photo-thumbs email-photo-thumbs" id="rv-email-photo-thumbs" aria-label="Drag case photos into your email draft"></div>
           <p class="photos-drag-hint" id="rv-photos-hint">Drag a photo into your email draft. If that doesn’t work, download the photo.</p>
@@ -370,6 +358,12 @@
             <button type="button" class="btn btn-sm btn-photo-fallback" id="btn-download-photos" disabled>Download photos</button>
           </div>
         </div>
+        <p class="signature-added-note" id="rv-signature-note">Signature added when sent</p>
+        <div class="send-block" id="rv-send-block">
+          <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" disabled aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send email" %></button>
+          <p class="send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Generate the email first.<% } %></p>
+        </div>
+        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
       </form>
     </section>
   </div>
@@ -402,7 +396,7 @@
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
     <form id="rv-send-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/send">
-      <div class="ck-head"><h2 id="ck-title">Check before sending</h2></div>
+      <div class="ck-head"><h2 id="ck-title" tabindex="-1">Check before sending</h2></div>
       <div class="ck-body" id="ck-body">
         <% if (sendConfig.testMode) { %>
           <p class="ck-test" id="ck-test"><%= sendConfig.testBanner %></p>

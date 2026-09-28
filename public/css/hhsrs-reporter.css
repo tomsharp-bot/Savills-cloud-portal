@@ -1295,21 +1295,12 @@ a.linkish.active, .linkish.active {
   align-self: start;
   height: 42px;
 }
-.hhsrs-reporter .email-signature-block { margin-top: 0.85rem; }
-.hhsrs-reporter .signature-label {
-  display: block;
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.hhsrs-reporter .signature-added-note {
+  margin: 0.85rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
   color: var(--muted);
-  font-weight: 700;
-  margin: 0 0 0.3rem;
-}
-.hhsrs-reporter .email-signature {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  padding: 0.85rem 1rem 1rem;
 }
 .hhsrs-reporter .sig-name-warn,
 .hhsrs-reporter .ck-name-warn {
@@ -1958,16 +1949,44 @@ body.hhsrs-reporter {
   border-top: 1px solid var(--border);
 }
 .hhsrs-reporter .generate-email-row .review-project-hint { margin: 0; }
-.hhsrs-reporter #rv-case-panel.is-drafted #rv-case-fields {
+.hhsrs-reporter #rv-case-panel.is-drafted #rv-case-fields,
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-case-fields {
   opacity: 0.45;
   filter: grayscale(0.65);
   pointer-events: none;
   user-select: none;
 }
+.hhsrs-reporter #rv-case-panel.is-drafted #rv-photos-block img,
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-photos-block img {
+  filter: grayscale(1);
+}
+.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row {
+  opacity: 0.45;
+  filter: grayscale(0.65);
+  pointer-events: none;
+  user-select: none;
+}
+.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row .btn:disabled,
+.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row button:disabled {
+  opacity: 1;
+}
+.hhsrs-reporter .email-draft-panel.is-sent-lock .field-locked,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .field-with-copy,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-block,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .signature-added-note,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .email-photo-tools {
+  opacity: 0.45;
+  filter: grayscale(0.65);
+  pointer-events: none;
+  user-select: none;
+}
+.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-item img {
+  filter: grayscale(1);
+}
 .hhsrs-reporter #rv-photos-block[hidden],
 .hhsrs-reporter #btn-amend-case[hidden] { display: none !important; }
 .hhsrs-reporter .email-empty-hint[hidden] { display: none !important; }
-.hhsrs-reporter .email-photo-tools { margin-top: 0.85rem; }
+.hhsrs-reporter .email-photo-tools { margin-top: 0.75rem; }
 .hhsrs-reporter .email-photo-tools[hidden] { display: none !important; }
 .hhsrs-reporter .email-photo-thumb { cursor: grab; }
 .hhsrs-reporter .email-photo-thumb:active { cursor: grabbing; }
@@ -2301,7 +2320,7 @@ body.hhsrs-reporter {
   margin-left: auto; font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--muted);
 }
-.hhsrs-reporter .attach-block { margin-top: 0.75rem; }
+.hhsrs-reporter .attach-block { margin-top: 0; }
 .hhsrs-reporter .attach-block[hidden] { display: none; }
 .hhsrs-reporter .attach-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .hhsrs-reporter .attach-head label { margin: 0.75rem 0 0.3rem; }
