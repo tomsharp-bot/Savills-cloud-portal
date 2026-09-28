@@ -27,6 +27,11 @@ import {
   siteFormProjectFlags,
   siteFormSectionState,
   siteSubmissionCallFields,
+  ADDRESS_SOURCE_MANUAL,
+  applyManualAddress,
+  composeManualFullAddress,
+  isBasicUkPostcode,
+  normalizeUkPostcode,
   stockMatchFromRows,
   todayLondonDate,
   validateHhsrsForm,
@@ -518,7 +523,7 @@ describe("HHSRS site form project option flags", () => {
           { id: "a2", name: "A2Dominion 2026 - Ph4", flags: { calls: true, onward: false, saxon: false, online: false } },
           { id: "sx", name: "Saxon Weald 2026", flags: { calls: true, onward: false, saxon: true, online: false } },
           { id: "cw", name: "Cornwall 2026", flags: { calls: false, onward: false, saxon: false, online: true } },
-          { id: "gw", name: "Gateway 2026", flags: { calls: false, onward: false, saxon: false, online: false } },
+          { id: "gw", name: "Gateway 2026", manualAddress: true, flags: { calls: false, onward: false, saxon: false, online: false } },
         ],
       },
       { filename: join(process.cwd(), "views/hhsrs-site-form/form.ejs") }
@@ -541,8 +546,88 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(cornwall, /data-calls=/);
     const gateway = option("gw");
     assert.doesNotMatch(gateway, /data-calls=|data-saxon=|data-online=/);
+    assert.match(gateway, /data-manual-address="1"/);
+    assert.doesNotMatch(a2, /data-manual-address/);
+    assert.match(html, /id="manual-address-hint"[^>]*hidden/);
+    assert.match(html, /No address list for this project yet\. Type the address\./);
+    assert.match(html, /id="btn-lookup-uprn"/);
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
     assert.match(html, /data-jump=""/);
     assert.match(html, /viewport-fit=cover/);
+  });
+});
+
+describe("manual address for a project with no stock", () => {
+  const project = { id: "proj-1", name: "ZZ No Stock" };
+
+  function manualValues(overrides: Record<string, string> = {}) {
+    return applyManualAddress({
+      ...emptyHhsrsValues(),
+      projectId: project.id,
+      surveyDate: "2026-09-20",
+      uprn: "100040123456",
+      addressSource: ADDRESS_SOURCE_MANUAL,
+      addressLine1: "12 Moor Lane",
+      addressLine2: "Flat 2",
+      town: "Leeds",
+      postcode: "ls1 4dy",
+      surveyorName: "Alex Surveyor",
+      category: "Damp & Mould Growth",
+      rating: "Low",
+      comment: "Visible mould in the bathroom.",
+      ...overrides,
+    });
+  }
+
+  it("stores a typed address in the same fields a stock lookup fills", () => {
+    assert.equal(normalizeUkPostcode("ls14dy"), "LS1 4DY");
+    assert.equal(normalizeUkPostcode("sw1a 1aa"), "SW1A 1AA");
+    assert.equal(isBasicUkPostcode("M1 1AE"), true);
+    assert.equal(isBasicUkPostcode("not a postcode"), false);
+    assert.equal(composeManualFullAddress("12 Moor Lane", "Flat 2", "Leeds"), "12 Moor Lane, Flat 2, Leeds");
+    assert.equal(composeManualFullAddress("12 Moor Lane", "", ""), "12 Moor Lane");
+
+    const result = validateHhsrsForm(manualValues(), project);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.addressSource, ADDRESS_SOURCE_MANUAL);
+    assert.equal(result.data.fullAddress, "12 Moor Lane, Flat 2, Leeds");
+    assert.equal(result.data.postcode, "LS1 4DY");
+    assert.equal(result.data.uprn, "100040123456");
+    assert.equal(result.data.addressConfirmed, true);
+  });
+
+  it("requires address line 1, a UK postcode and the same UPRN check", () => {
+    const missingLine = validateHhsrsForm(manualValues({ addressLine1: "" }), project);
+    assert.equal(missingLine.ok, false);
+    if (!missingLine.ok) assert.equal(missingLine.errors.addressLine1, "Enter address line 1.");
+
+    const badPostcode = validateHhsrsForm(manualValues({ postcode: "LEEDS" }), project);
+    assert.equal(badPostcode.ok, false);
+    if (!badPostcode.ok) assert.equal(badPostcode.errors.postcode, "Enter a valid UK postcode.");
+
+    const missingUprn = validateHhsrsForm(manualValues({ uprn: "" }), project);
+    assert.equal(missingUprn.ok, false);
+    if (!missingUprn.ok) assert.equal(missingUprn.errors.uprn, "Enter the UPRN.");
+  });
+
+  it("still requires a confirmed stock address when the address was not typed", () => {
+    const stock = validateHhsrsForm(
+      {
+        ...emptyHhsrsValues(),
+        projectId: project.id,
+        surveyDate: "2026-09-20",
+        uprn: "1001",
+        fullAddress: "1 High Street",
+        postcode: "EX1 1AA",
+        surveyorName: "Alex Surveyor",
+        category: "Damp & Mould Growth",
+        rating: "Low",
+        comment: "Damp patch.",
+      },
+      project
+    );
+    assert.equal(stock.ok, false);
+    if (!stock.ok) assert.equal(stock.errors.addressConfirmed, "Confirm the address is correct.");
   });
 });

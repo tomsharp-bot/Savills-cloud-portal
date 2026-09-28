@@ -123,6 +123,9 @@
           <div>
             <label for="rv-address">Address</label>
             <input id="rv-address" type="text" value="<%= isFilled ? (row.fullAddress + (row.postcode ? ', ' + row.postcode : '')) : '' %>" <%= isFilled ? "readonly" : "" %> placeholder="Flat / house address" autocomplete="off" />
+            <% if (isFilled && row.addressSource === "manual") { %>
+              <p class="address-typed-note" id="address-typed-note">Address typed by surveyor</p>
+            <% } %>
           </div>
           <div class="field-row">
             <div>

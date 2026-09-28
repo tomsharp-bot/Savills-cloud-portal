@@ -325,6 +325,8 @@ model HhsrsSiteSubmission {
   uprn                 String
   fullAddress          String
   postcode             String
+  /// "" for a stock lookup. "manual" when the surveyor typed the address because the project had no stock.
+  addressSource        String    @default("")
   surveyorName         String
   category             String
   rating               String
