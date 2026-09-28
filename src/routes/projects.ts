@@ -18,7 +18,7 @@ import { formatDocDate, formatStockDate } from "../lib/dates.js";
 import { formatBytes } from "../lib/documents.js";
 import { reapplyExternalLink } from "../lib/external.js";
 import { parseProjectTarget } from "../lib/project-target.js";
-import { hhsrsCodeFromProjectName } from "../lib/hhsrs-reference.js";
+import { hhsrsCodeForSave, hhsrsCodeFromProjectName } from "../lib/hhsrs-reference.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
 import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { buildSampleAnalysis } from "../lib/sample-analysis.js";
@@ -159,7 +159,14 @@ projectsRouter.post("/", async (req: Request, res: Response) => {
     return;
   }
   await prisma.project.create({
-    data: { name, projectManager, stage, ...types, ...target, hhsrsCode: hhsrsCodeFromProjectName(name) },
+    data: {
+      name,
+      projectManager,
+      stage,
+      ...types,
+      ...target,
+      hhsrsCode: hhsrsCodeForSave({ name, submitted: String(req.body.hhsrsCode || "") }),
+    },
   });
   res.redirect("/projects?notice=" + encodeURIComponent("Created " + name));
 });
@@ -178,6 +185,11 @@ projectsRouter.post("/:id/edit", async (req: Request, res: Response) => {
     res.redirect("/projects?error=" + encodeURIComponent("Name and at least one survey type are required"));
     return;
   }
+  const existing = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!existing) {
+    res.redirect("/projects?error=" + encodeURIComponent("Select a project first"));
+    return;
+  }
   const clash = await prisma.project.findFirst({ where: { name, NOT: { id: req.params.id } } });
   if (clash) {
     res.redirect("/projects?error=" + encodeURIComponent("Name already used"));
@@ -185,7 +197,19 @@ projectsRouter.post("/:id/edit", async (req: Request, res: Response) => {
   }
   await prisma.project.update({
     where: { id: req.params.id },
-    data: { name, projectManager, stage, ...types, ...target },
+    data: {
+      name,
+      projectManager,
+      stage,
+      ...types,
+      ...target,
+      hhsrsCode: hhsrsCodeForSave({
+        name,
+        submitted: String(req.body.hhsrsCode || ""),
+        previousName: existing.name,
+        previousCode: existing.hhsrsCode,
+      }),
+    },
   });
   res.redirect("/projects?notice=" + encodeURIComponent("Updated " + name));
 });

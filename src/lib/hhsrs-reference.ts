@@ -12,6 +12,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
 const NAMED_CODES: Array<{ test: RegExp; code: string }> = [
+  { test: /lhfa/, code: "LHFA" },
   { test: /saxon/, code: "SAXW" },
   { test: /test\s*housing/, code: "TEST" },
   { test: /cornwall/, code: "CORN" },
@@ -33,6 +34,32 @@ export function hhsrsCodeFromProjectName(name: string): string {
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, 4);
   return letters || "HHSR";
+}
+
+/** Letters and digits only, so a typed code can be stored and used in a reference. */
+export function normalizeHhsrsCode(raw: string): string {
+  return String(raw || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+}
+
+/**
+ * Code to store when a project is created or edited.
+ * A blank box, or a box that still holds the code taken from the old name,
+ * follows the name (so a later LHFA project becomes LHFA). A code someone typed stays.
+ */
+export function hhsrsCodeForSave(input: {
+  name: string;
+  submitted?: string;
+  previousName?: string;
+  previousCode?: string;
+}): string {
+  const fromName = hhsrsCodeFromProjectName(input.name);
+  const typed = normalizeHhsrsCode(input.submitted || "");
+  if (!typed) return fromName;
+  if (input.previousName && typed === hhsrsCodeFromProjectName(input.previousName)) return fromName;
+  return typed;
 }
 
 export function formatHhsrsReference(code: string, n: number): string {
