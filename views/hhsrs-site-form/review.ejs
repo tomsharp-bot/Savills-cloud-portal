@@ -20,6 +20,11 @@
               <h1>Review issue</h1>
               <p>Check the details below. Nothing is saved until you tap Submit.</p>
             </div>
+            <% if (typeof storeError !== "undefined" && storeError) { %>
+              <div class="hhsrs-errors" role="alert">
+                <p><%= storeError %></p>
+              </div>
+            <% } %>
             <form id="edit-form" method="post" action="<%= hhsrsUrl('/edit') %>">
               <input type="hidden" name="draftId" value="<%= draft.id %>" />
             </form>
