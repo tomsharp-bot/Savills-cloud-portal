@@ -551,6 +551,11 @@ describe("HHSRS site form project option flags", () => {
     assert.match(html, /id="manual-address-hint"[^>]*hidden/);
     assert.match(html, /No address list for this project yet\. Type the address\./);
     assert.match(html, /id="btn-lookup-uprn"/);
+    assert.match(html, /id="btn-type-address"[^>]*hidden/);
+    assert.match(html, /Type the address instead/);
+    assert.match(html, /id="btn-back-uprn"[^>]*hidden/);
+    assert.match(html, /Back to UPRN search/);
+    assert.match(readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8"), /UPRN not found\./);
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
     assert.match(html, /data-jump=""/);
     assert.match(html, /viewport-fit=cover/);

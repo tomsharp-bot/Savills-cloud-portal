@@ -156,18 +156,10 @@ async function flagProjectsWithoutStock(
   }));
 }
 
-async function projectAllowsManualAddress(projectId: string): Promise<boolean> {
-  if (!projectId || isDemoProject(projectId)) return false;
-  try {
-    const count = await prisma.asset.count({ where: { projectId } });
-    return count === 0;
-  } catch {
-    return false;
-  }
-}
-
 async function valuesForAddressMode(values: HhsrsFormValues, projectId: string): Promise<HhsrsFormValues> {
-  const manual = values.addressSource === ADDRESS_SOURCE_MANUAL && (await projectAllowsManualAddress(projectId));
+  // Typed address is the no-stock path, and the backup when a stock UPRN is not found.
+  // The demo project stays on lookup.
+  const manual = values.addressSource === ADDRESS_SOURCE_MANUAL && Boolean(projectId) && !isDemoProject(projectId);
   if (!manual) {
     return { ...values, addressSource: "", addressLine1: "", addressLine2: "", town: "" };
   }
