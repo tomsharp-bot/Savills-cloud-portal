@@ -306,8 +306,9 @@ describe("HHSRS completed photo pages", () => {
     assert.doesNotMatch(reporter, /handleMarkActioned/);
     assert.match(reporter, /status\(410\)/);
     const sendCase = readFileSync(path.join(root, "src/lib/hhsrs-send-case.ts"), "utf8");
-    assert.match(sendCase, /status: "email_sent"/);
-    assert.match(sendCase, /status: "corrected"/);
+    assert.match(sendCase, /'email_sent'/);
+    assert.match(sendCase, /'corrected'/);
+    assert.match(sendCase, /INSERT INTO "HhsrsSentEmail"/);
     const script = readFileSync(path.join(root, "scripts/backfill-hhsrs-completed-photos.ts"), "utf8");
     assert.match(script, /--backfill/);
     assert.match(script, /Nothing was copied/);
