@@ -154,6 +154,12 @@ describe("HHSRS email signature", () => {
     assert.match(admins, /name="firstName"/);
     assert.match(admins, /name="surname"/);
     assert.match(admins, /data-part="surname"/);
+    assert.match(admins, /boxes save on their own/);
+    const adminHome = readFileSync("views/admin.ejs", "utf8");
+    assert.match(adminHome, /section C\. Admins/);
+    const appJs = readFileSync("public/js/app.js", "utf8");
+    assert.match(appJs, /signature-name/);
+    assert.match(appJs, /is-saved/);
     const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
     const lookup = route.slice(route.indexOf("async function senderSignatureFor"), route.indexOf("function signatureLocals"));
     assert.match(lookup, /role: "surveyor"/);

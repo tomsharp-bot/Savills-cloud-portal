@@ -156,7 +156,8 @@ th{font-size:.54rem;text-transform:uppercase;color:var(--muted);background:#fafb
 .personnel-table th{font-size:.68rem;text-transform:uppercase;color:var(--muted);background:#fafbfc}
 .personnel-table input[type=text],.personnel-table input.agency-input,.personnel-table input.initials-input{width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:3px 5px;font-size:.8rem}
 .personnel-table .col-name{width:88px;max-width:88px}
-.personnel-table .col-sig{width:110px;max-width:140px}
+.personnel-table .col-sig{width:140px;max-width:180px}
+.personnel-table input.is-saved{border:1px solid #1f7a4c;background:#e7f6ed}
 .personnel-table .col-actions{width:118px;white-space:normal}
 .personnel-table .col-tick{width:96px;min-width:96px;max-width:96px;text-align:center;white-space:normal;overflow:hidden;text-overflow:ellipsis;font-size:.62rem;line-height:1.15;font-weight:600;vertical-align:bottom;word-break:break-word}
 .personnel-table td.col-tick{vertical-align:middle;font-size:inherit;font-weight:inherit;white-space:nowrap}

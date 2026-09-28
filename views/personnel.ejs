@@ -130,11 +130,11 @@
 
       <div class="personnel-section">
         <h3>C. Admins</h3>
-        <p class="sec-sub">Portal administrators. Name, email and temp password. First name and surname are what the HHSRS email signature uses.</p>
+        <p class="sec-sub">Portal administrators. On each row, type the first name and surname for the HHSRS email signature, then click away. The boxes save on their own.</p>
         <form class="admin-add" method="post" action="<%= baseUrl('/personnel/admins') %>">
           <div><label for="new-admin-name">Name</label><br/><input id="new-admin-name" name="name" type="text" placeholder="Jane Admin" /></div>
-          <div><label for="new-admin-first">First name</label><br/><input id="new-admin-first" name="firstName" type="text" placeholder="Jane" /></div>
-          <div><label for="new-admin-surname">Surname</label><br/><input id="new-admin-surname" name="surname" type="text" placeholder="Admin" /></div>
+          <div><label for="new-admin-first">First name</label><br/><input id="new-admin-first" name="firstName" type="text" autocomplete="off" /></div>
+          <div><label for="new-admin-surname">Surname</label><br/><input id="new-admin-surname" name="surname" type="text" autocomplete="off" /></div>
           <div><label for="new-admin-email">Email</label><br/><input id="new-admin-email" name="email" type="email" placeholder="jane.a@savills.com" /></div>
           <button type="submit" class="btn btn-primary">Add admin</button>
         </form>
@@ -154,8 +154,8 @@
               <% admins.forEach(a => { %>
                 <tr>
                   <td class="col-name"><%= a.name %></td>
-                  <td class="col-sig"><input type="text" data-signature="<%= a.id %>" data-part="first" value="<%= a.firstName || '' %>" autocomplete="off" /></td>
-                  <td class="col-sig"><input type="text" data-signature="<%= a.id %>" data-part="surname" value="<%= a.surname || '' %>" autocomplete="off" /></td>
+                  <td class="col-sig"><input type="text" aria-label="First name" data-signature="<%= a.id %>" data-part="first" value="<%= a.firstName || '' %>" autocomplete="off" /></td>
+                  <td class="col-sig"><input type="text" aria-label="Surname" data-signature="<%= a.id %>" data-part="surname" value="<%= a.surname || '' %>" autocomplete="off" /></td>
                   <td class="col-email"><%= a.email %></td>
                   <%- include("partials/temp-password-cell", { person: a }) %>
                   <td class="col-actions">
