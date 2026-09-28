@@ -1653,6 +1653,7 @@
     var form = $("rv-send-form");
     var lastFocus = null;
     var sending = false;
+    var restoreCheckScroll = function () {};
 
     function esc(value) {
       return String(value == null ? "" : value)
@@ -1716,15 +1717,44 @@
       ckSend.disabled = true;
       ckTickLabel.classList.remove("is-on");
       lastFocus = document.activeElement;
+      var pane = document.querySelector(".content-pane");
+      var root = document.scrollingElement || document.documentElement;
+      var savedPaneScroll = pane ? pane.scrollTop : 0;
+      var savedPageScroll = root ? root.scrollTop : 0;
+      restoreCheckScroll = function () {
+        if (pane) pane.scrollTop = savedPaneScroll;
+        if (root) root.scrollTop = savedPageScroll;
+      };
       ck.hidden = false;
       document.body.style.overflow = "hidden";
-      ckTick.focus();
+      function pinCheckToTop() {
+        if (pane) pane.scrollTop = 0;
+        if (root) root.scrollTop = 0;
+        ck.scrollTop = 0;
+        var text = ck.querySelector(".ck-text");
+        if (text) text.scrollTop = 0;
+      }
+      pinCheckToTop();
+      var title = $("ck-title");
+      if (title) {
+        try { title.focus({ preventScroll: true }); }
+        catch (err) { title.focus(); }
+      }
+      pinCheckToTop();
+      requestAnimationFrame(function () {
+        pinCheckToTop();
+        requestAnimationFrame(pinCheckToTop);
+      });
     }
     function closeCheck() {
       if (sending) return;
       ck.hidden = true;
       document.body.style.overflow = "";
-      if (lastFocus && lastFocus.focus) lastFocus.focus();
+      restoreCheckScroll();
+      if (lastFocus && lastFocus.focus) {
+        try { lastFocus.focus({ preventScroll: true }); }
+        catch (err) { lastFocus.focus(); }
+      }
     }
     ckTick.addEventListener("change", function () {
       ckSend.disabled = !ckTick.checked;

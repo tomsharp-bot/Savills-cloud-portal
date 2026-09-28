@@ -143,6 +143,13 @@ describe("HHSRS email signature", () => {
     assert.match(review, /aria-readonly="true"/);
     assert.doesNotMatch(review.slice(bodyAt, sigAt), /signatureHtml/);
     const openCheck = js.slice(js.indexOf("function openCheck"), js.indexOf("function closeCheck"));
+    assert.match(review, /id="ck-title" tabindex="-1"/);
+    assert.match(openCheck, /ck-title/);
+    assert.match(openCheck, /preventScroll:\s*true/);
+    assert.match(openCheck, /ck\.scrollTop = 0/);
+    assert.match(openCheck, /pane\.scrollTop = 0/);
+    assert.match(openCheck, /\.ck-text/);
+    assert.doesNotMatch(openCheck, /ckTick\.focus|ckSend\.focus/);
     assert.match(openCheck, /rv-signature-preview/);
     assert.match(openCheck, /ck-signature/);
     assert.match(openCheck, /cfg\.signature\.warning/);
