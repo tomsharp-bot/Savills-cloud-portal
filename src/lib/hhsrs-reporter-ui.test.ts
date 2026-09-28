@@ -276,7 +276,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /Create new email/);
     assert.match(review, /value=""/);
     assert.match(pending, /photo-att-col/);
-    assert.match(pending, /Review Case/);
+    assert.match(readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8"), /Review Case/);
     assert.match(review, /id="hhsrs-bcc"/);
     assert.match(review, /id="btn-abandon-claim"/);
     assert.match(review, /id="rv-draft-status"/);
@@ -467,6 +467,25 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(testHousing.to, "cfarrell@savillshousing.co.uk");
     assert.equal(testHousing.cc, "");
     assert.equal(testHousing.bcc, "");
+  });
+
+  it("shares one pending-issues table between Pending Issues and Review and create", () => {
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    const waiting = pending.slice(pending.indexOf('id="not-actioned"'), pending.indexOf('id="last-actioned"'));
+    const also = review.slice(review.indexOf('id="rv-also-waiting"'), review.indexOf('id="rv-project-block"'));
+    assert.match(waiting, /partials\/pending-issues-table/);
+    assert.match(also, /partials\/pending-issues-table/);
+    assert.doesNotMatch(waiting, /<thead>/);
+    assert.doesNotMatch(also, /<thead>/);
+    const head = table.slice(table.indexOf("<thead>"), table.indexOf("</thead>"));
+    const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
+    assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
+    assert.match(table, /row\.reference/);
+    assert.match(table, /ref-chip/);
+    assert.match(table, /row\.uprn/);
+    assert.match(table, /row\.surveyorName/);
   });
 
   it("turns browser autofill off on email compose fields", () => {

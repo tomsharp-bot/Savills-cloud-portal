@@ -49,43 +49,7 @@
       <% if (!alsoWaiting.length) { %>
         <p class="waiting-empty-msg" id="rv-also-empty">No other pending issues — you’re up to date.</p>
       <% } else { %>
-        <div class="table-wrap" id="rv-also-table-wrap">
-          <table class="landing-table" id="rv-also-table">
-            <thead>
-              <tr>
-                <th>Project</th>
-                <th>Address</th>
-                <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
-                <th>Category</th>
-                <th>Rating</th>
-                <th>Received</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <% alsoWaiting.forEach((r) => {
-                const ago = formatTimeAgo(r.createdAt);
-                const claim = claimView(r);
-              %>
-                <tr class="<%= claimRowClass(r) %>" data-claim-status="<%= claim.status %>">
-                  <td><span class="project-pill"><%= r.projectName %></span></td>
-                  <td class="addr-cell">
-                    <strong><%= r.fullAddress %></strong>
-                    <%- include("partials/claim-chip", { claimRow: claim }) %>
-                  </td>
-                  <%- include("partials/photo-att-cell", { count: photoAttachmentCount(r.photoPaths), photoThumbs: reporterCasePhotos(r, reporterBase) }) %>
-                  <td><%= r.category %></td>
-                  <td class="<%= ratingDisplayClass(r.rating) %>"><%= r.rating %></td>
-                  <td>
-                    <span class="<%= ago.urgent ? 'time-ago-urgent' : '' %>"><%= ago.relative %></span>
-                    <span class="time-ago-abs"><%= ago.absolute %></span>
-                  </td>
-                  <td><a class="btn-review-create" href="<%= reporterBase %>/review/<%= r.id %>">Review Case</a></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
+        <%- include("partials/pending-issues-table", { pendingRows: alsoWaiting, pendingTableId: "rv-also-table", pendingWrapId: "rv-also-table-wrap" }) %>
       <% } %>
     </details>
   </section>

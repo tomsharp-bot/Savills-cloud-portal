@@ -1,0 +1,51 @@
+<%
+  const rows = Array.isArray(pendingRows) ? pendingRows : [];
+  const tableId = typeof pendingTableId === "string" ? pendingTableId : "waiting-table";
+  const wrapId = typeof pendingWrapId === "string" ? pendingWrapId : "";
+%>
+<div class="table-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
+  <table class="landing-table" id="<%= tableId %>">
+    <thead>
+      <tr>
+        <th>Reference</th>
+        <th>Project</th>
+        <th>Address</th>
+        <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
+        <th>UPRN</th>
+        <th>Surveyor</th>
+        <th>Category</th>
+        <th>Rating</th>
+        <th>Received</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rows.forEach((row) => {
+        const ago = formatTimeAgo(row.createdAt);
+        const claim = claimView(row);
+      %>
+        <tr class="<%= claimRowClass(row) %>" data-claim-status="<%= claim.status %>">
+          <td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
+          <td><span class="project-pill"><%= row.projectName %></span></td>
+          <td class="addr-cell">
+            <strong><%= row.fullAddress %></strong>
+            <%- include("claim-chip", { claimRow: claim }) %>
+          </td>
+          <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase) }) %>
+          <td><span style="color:var(--muted)"><%= row.uprn %></span></td>
+          <td><%= row.surveyorName %></td>
+          <td><%= row.category %></td>
+          <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
+          <td>
+            <span class="<%= ago.urgent ? 'time-ago-urgent' : '' %>"><%= ago.relative %></span>
+            <span class="time-ago-abs"><%= ago.absolute %></span>
+          </td>
+          <td>
+            <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review Case</a>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<div class="table-foot"><span>Newest first</span></div>
