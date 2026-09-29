@@ -392,7 +392,7 @@
 <div class="nn-overlay" id="nn-overlay" hidden>
   <div class="nn-dialog" role="dialog" aria-modal="true" aria-labelledby="nn-title">
     <form id="nn-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/not-needed" data-ref="<%= row.reference || '' %>">
-      <h2 id="nn-title">Move to Duplicates &amp; errors?</h2>
+      <h2 id="nn-title">Move to Duplicates &amp; Errors?</h2>
       <p class="nn-case">
         <% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } %>
         <%= row.fullAddress %><% if (row.postcode) { %>, <%= row.postcode %><% } %> · <%= row.category %>

@@ -1312,7 +1312,7 @@ async function handleNotNeeded(req: Request, res: Response, id: string): Promise
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${id}`);
     return;
   }
-  flashOk(req, "Moved to Duplicates & errors.");
+  flashOk(req, "Moved to Duplicates & Errors.");
   res.redirect(HHSRS_REPORTER_PATH);
 }
 
@@ -1348,7 +1348,7 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
     ...shellLocals({
       activeNav: "duplicates",
       summary,
-      title: "Duplicates & errors — HHSRS Reporter",
+      title: "Duplicates & Errors — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),

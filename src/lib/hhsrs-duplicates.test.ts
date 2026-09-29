@@ -92,7 +92,7 @@ describe("not needed checks", () => {
     assert.match(page, /Yes, move back/);
     assert.match(page, />No</);
     assert.doesNotMatch(page, /delete/i);
-    assert.match(side, /Duplicates &amp; errors/);
+    assert.match(side, /Duplicates &amp; Errors/);
     assert.match(side, /summary\.duplicates/);
     assert.match(review, /showNotNeeded/);
     assert.match(review, /review\/office-send/);
@@ -272,7 +272,7 @@ describe("duplicates and office emails with the database", () => {
       assert.equal(moved.location, "/HHSRSreporter");
       cookie = cookieHeader(moved.setCookie, cookie);
       const pending = await request(port, "GET", moved.location, { cookie });
-      assert.match(pending.body, /Moved to Duplicates &amp; errors\./);
+      assert.match(pending.body, /Moved to Duplicates &amp; Errors\./);
       assert.doesNotMatch(pending.body, new RegExp(duplicate.reference || "no-ref"));
 
       const stored = await prisma.hhsrsSiteSubmission.findUnique({ where: { id: duplicate.id } });
@@ -285,7 +285,7 @@ describe("duplicates and office emails with the database", () => {
       const tab = await request(port, "GET", "/HHSRSreporter/duplicates", { cookie });
       assert.equal(tab.status, 200);
       assert.match(tab.body, /Cases here were not sent\. They are not in the Main Log\./);
-      assert.match(tab.body, /Duplicates &amp; errors/);
+      assert.match(tab.body, /Duplicates &amp; Errors/);
       assert.match(tab.body, new RegExp(duplicate.reference || ""));
       assert.match(tab.body, /Same mould report, sent again from site\./);
       assert.doesNotMatch(tab.body, /id="tool-header"|class="tool-header"/);

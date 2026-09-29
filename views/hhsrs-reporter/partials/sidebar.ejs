@@ -17,9 +17,9 @@
     <span class="tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6.5h12.5"/><path d="M8 12h12.5"/><path d="M8 17.5h9"/><rect x="3.2" y="5.2" width="2.6" height="2.6" rx="0.5"/><rect x="3.2" y="10.7" width="2.6" height="2.6" rx="0.5"/><rect x="3.2" y="16.2" width="2.6" height="2.6" rx="0.5"/></svg></span>
     <span class="tab-label">Main Log</span>
   </a>
-  <a href="<%= reporterBase %>/duplicates" class="tab-link <%= activeNav === 'duplicates' ? 'active' : '' %>" title="Duplicates and errors">
+  <a href="<%= reporterBase %>/duplicates" class="tab-link <%= activeNav === 'duplicates' ? 'active' : '' %>" title="Duplicates &amp; Errors">
     <span class="tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7.2" y="7.2" width="12" height="12" rx="1.4"/><path d="M4.8 15.2V4.8h10.4"/><path d="m10.2 11.3 5.4 5.4M15.6 11.3l-5.4 5.4"/></svg></span>
-    <span class="tab-label">Duplicates &amp; errors</span>
+    <span class="tab-label">Duplicates &amp; Errors</span>
     <% if (summary.duplicates > 0) { %><span class="tab-badge"><%= summary.duplicates %></span><% } %>
   </a>
   <div class="side-divider" aria-hidden="true"></div>
@@ -37,7 +37,7 @@
     <div class="side-summary-row"><span>In review</span><strong><%= summary.inReview %></strong></div>
     <div class="side-summary-row"><span>Actioned (mo)</span><strong><%= summary.actionedMonth %></strong></div>
     <div class="side-summary-row"><span>Main Log</span><strong><%= summary.mainLog %></strong></div>
-    <div class="side-summary-row"><span>Duplicates &amp; errors</span><strong><%= summary.duplicates %></strong></div>
+    <div class="side-summary-row"><span>Duplicates &amp; Errors</span><strong><%= summary.duplicates %></strong></div>
   </div>
   <div class="side-footnote">Yellow = active · Live submissions</div>
 </nav>
