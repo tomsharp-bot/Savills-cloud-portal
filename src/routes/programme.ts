@@ -85,7 +85,10 @@ programmeRouter.get("/", async (req: Request, res: Response) => {
 
 programmeRouter.post("/board", async (req: Request, res: Response) => {
   if (!requireProgrammeEditor(req, res)) return;
-  const saved = boardFromClient(req.body);
+  const existing = await prisma.programmeBoard.findUnique({ where: { id: PROGRAMME_BOARD_ID } });
+  const saved = boardFromClient(req.body, {
+    previous: existing ? parseSavedBoard(existing.data) : null,
+  });
   if (!saved) {
     res.status(400).json({ error: "Board payload was not valid." });
     return;
