@@ -411,7 +411,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /data-jump/);
     assert.match(js.body, /step-visit\|step-property\|step-hazard\|extra-box\|step-photos/);
     assert.match(js.body, /f\.hasAttribute\("data-optional"\)\) continue/);
-    assert.match(js.body, /causeField\.tabIndex = -1/);
+    assert.match(js.body, /function stepKeyboardNext/);
+    assert.doesNotMatch(js.body, /causeField\.tabIndex = -1/);
   });
 
   it("keeps 14px between a field box and the next field label", async () => {

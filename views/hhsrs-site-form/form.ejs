@@ -188,11 +188,11 @@
                 </div>
 
                 <label for="otherDetails">Any other details <span class="optional">(optional)</span></label>
-                <textarea id="otherDetails" name="otherDetails" rows="4" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
+                <textarea id="otherDetails" name="otherDetails" rows="4" enterkeyhint="next" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
                 <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
 
                 <label for="suspectedCause">Suspected cause <span class="optional">(optional)</span></label>
-                <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || '' %>" autocomplete="off" data-optional="true" />
+                <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || '' %>" autocomplete="off" data-optional="true" enterkeyhint="next" />
                 <p class="hhsrs-hint" id="suspected-cause-hint">Only if you know a likely cause. Leave it blank if not.</p>
               </div>
 

@@ -593,9 +593,13 @@ describe("HHSRS site form project option flags", () => {
     assert.match(extras, /Suspected cause <span class="optional">\(optional\)<\/span>/);
     assert.match(extras, /Only if you know a likely cause\. Leave it blank if not\./);
     assert.doesNotMatch(extras, /id="suspectedCause"[^>]*\brequired\b/);
+    assert.match(extras, /id="otherDetails"[^>]*enterkeyhint="next"/);
+    assert.match(extras, /id="suspectedCause"[^>]*enterkeyhint="next"/);
     assert.match(extras, /id="suspectedCause"[^>]*data-optional="true"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     const flowJs = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
+    assert.match(flowJs, /function stepKeyboardNext/);
+    assert.doesNotMatch(flowJs, /causeField\.tabIndex = -1/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsRequired"));
     assert.doesNotMatch(hazardFn, /suspectedCause/);
     assert.match(flowJs, /if \(!extrasDone\(\) \|\| !extrasPassed\)/);
