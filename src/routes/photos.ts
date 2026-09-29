@@ -46,7 +46,7 @@ import {
   hhsrsCompletedProjectPath,
   listFailedHhsrsCopyIds,
   listHhsrsCompletedTiles,
-  listHhsrsProperties,
+  listHhsrsProjectProperties,
   listHhsrsPropertyPhotos,
   readHhsrsCompletedPhoto,
   searchPhotoStorage,
@@ -709,7 +709,7 @@ photosRouter.get("/hhsrs/:projectName", async (req: Request, res: Response) => {
   });
   const tiles = await listHhsrsCompletedTiles(current);
   const tile = tiles.find((item) => item.projectName === projectName);
-  const properties = await listHhsrsProperties(projectName);
+  const properties = await listHhsrsProjectProperties(projectName);
   res.render("photos-hhsrs-project", {
     title: `${projectName} — HHSRS - Completed`,
     user: req.user,
