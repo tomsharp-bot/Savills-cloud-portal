@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { ASSET_STATUS_SYNONYMS, type AssetStatus } from "./asset-status.js";
 import { STOCK_DATE_COLS, STOCK_SELECT_COLS } from "./stock-columns.js";
-import { BLANK_FILTER, NONBLANK_FILTER } from "./stock-filter.js";
+import { BLANK_FILTER, NONBLANK_FILTER, stockFilterValues } from "./stock-filter.js";
 import { STOCK_SELECT_OPTION_CAP } from "./stock-page.js";
 
 const IDENT = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -134,8 +134,21 @@ function filterPredicate(column: string, q: string, exact: boolean, conditionEpc
   return Prisma.sql`lower(btrim(COALESCE(${expr}, ''))) LIKE ${pattern} ESCAPE ${"\\"}`;
 }
 
+function columnFilterSql(
+  column: string,
+  raw: unknown,
+  exact: boolean,
+  conditionEpc: boolean
+): Prisma.Sql | null {
+  const values = stockFilterValues(raw).map((value) => value.toLowerCase());
+  if (!values.length) return null;
+  const parts = values.map((q) => filterPredicate(column, q, exact, conditionEpc));
+  if (parts.length === 1) return parts[0];
+  return Prisma.sql`(${Prisma.join(parts, " OR ")})`;
+}
+
 export function stockFilterSql(
-  filters: Record<string, string>,
+  filters: Record<string, string | readonly string[]>,
   exact: Set<string>,
   conditionEpc: boolean,
   allowed: ReadonlySet<string>
@@ -143,10 +156,9 @@ export function stockFilterSql(
   const parts: Prisma.Sql[] = [];
   for (const [key, raw] of Object.entries(filters)) {
     if (!allowed.has(key)) continue;
-    const q = String(raw ?? "").trim().toLowerCase();
-    if (!q) continue;
     const isExact = exact.has(key) || key === "omitAsset";
-    parts.push(filterPredicate(key, q, isExact, conditionEpc));
+    const predicate = columnFilterSql(key, raw, isExact, conditionEpc);
+    if (predicate) parts.push(predicate);
   }
   if (!parts.length) return Prisma.sql`TRUE`;
   return Prisma.join(parts, " AND ");

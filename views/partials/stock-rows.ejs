@@ -41,13 +41,7 @@
             <% } %>
           </td>
         <% } else if (c === "epcRequired") { %>
-          <td class="omit-cell" data-col="epcRequired" data-value="<%= r.epcRequired ? 'YES' : '' %>">
-            <% if (isAdmin) { %>
-              <label><input type="checkbox" data-epc="<%= r.id %>" <%= r.epcRequired ? "checked" : "" %> /> <% if (r.epcRequired) { %>YES<% } %></label>
-            <% } else { %>
-              <%= r.epcRequired ? "YES" : "" %>
-            <% } %>
-          </td>
+          <td class="omit-cell" data-col="epcRequired" data-value="<%= r.epcRequired ? 'YES' : '' %>"><%= r.epcRequired ? "YES" : "" %></td>
         <% } else if (editCols.has(c) && isAdmin) { %>
           <td data-col="<%= c %>">
             <input class="comment-input" data-admin-field="<%= c %>" data-asset="<%= r.id %>" value="<%= displayVal(r, c) %>" placeholder="<%= dateCols.has(c) ? 'DD/MM/YY' : '' %>" />

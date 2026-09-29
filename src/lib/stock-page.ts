@@ -1,7 +1,7 @@
 import type { AssetKind } from "@prisma/client";
 import { assetStatusFilterOptions } from "./asset-status.js";
 import { STOCK_SELECT_COLS } from "./stock-columns.js";
-import { filterStockRows, stockFilterCellText, type StockFilterRow } from "./stock-filter.js";
+import { filterStockRows, stockFilterCellText, stockFilterValues, type StockFilterRow } from "./stock-filter.js";
 
 /** One page of stock rows. The grid never mounts more than this many `<tr>`s. */
 export const STOCK_PAGE_SIZE = 100;
@@ -27,7 +27,7 @@ export type StockListQuery = {
   pageSize: number;
   sort: string;
   dir: StockSortDir;
-  filters: Record<string, string>;
+  filters: Record<string, string[]>;
 };
 
 export type StockPage<T> = {
@@ -60,12 +60,10 @@ export function parseStockListQuery(
   const sortRaw = String(query.sort ?? "");
   const sort = columns.includes(sortRaw) ? sortRaw : columns.includes("uprn") ? "uprn" : columns[0] || "uprn";
   const dir: StockSortDir = String(query.dir ?? "").toLowerCase() === "desc" ? "desc" : "asc";
-  const filters: Record<string, string> = {};
+  const filters: Record<string, string[]> = {};
   for (const col of columns) {
-    const raw = query[`f_${col}`];
-    if (raw == null) continue;
-    const value = String(Array.isArray(raw) ? raw[0] : raw);
-    if (value.trim()) filters[col] = value;
+    const values = stockFilterValues(query[`f_${col}`]);
+    if (values.length) filters[col] = values;
   }
   return { page, pageSize: clampStockPageSize(query.pageSize), sort, dir, filters };
 }

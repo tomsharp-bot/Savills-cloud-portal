@@ -415,7 +415,7 @@ projectsRouter.get("/:id", async (req: Request, res: Response) => {
     garage: stockColumns("garage", { includeAdminOnly: isAdmin(user) }),
   };
   let stockRows: Awaited<ReturnType<typeof loadStockWindow>>["page"]["rows"] = [];
-  let stockFilters: Record<string, string> = {};
+  let stockFilters: Record<string, string[]> = {};
   let stockFilterOptions: Record<string, string[]> = {};
   let stockPage = {
     page: 1,

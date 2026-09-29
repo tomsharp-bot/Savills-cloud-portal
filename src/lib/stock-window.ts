@@ -1,6 +1,6 @@
 import { assetStatusFilterOptions } from "./asset-status.js";
 import { STOCK_SELECT_COLS } from "./stock-columns.js";
-import { filterStockRows, type StockFilterRow } from "./stock-filter.js";
+import { filterStockRows, stockFilterValues, type StockFilterRow } from "./stock-filter.js";
 import {
   STOCK_SELECT_OPTION_CAP,
   collectSelectOptions,
@@ -25,7 +25,7 @@ export type StockWindowRequest = {
   limit: number;
   sort: string;
   dir: StockSortDir;
-  filters: Record<string, string>;
+  filters: Record<string, string[]>;
   exact: Set<string>;
 };
 
@@ -113,7 +113,7 @@ export async function assembleStockWindow<T>(
   const parsed = parseStockWindowQuery(query, columns);
   const [options, total] = await Promise.all([gateway.options(), gateway.total()]);
   const exact = exactFilterColumns(options);
-  const hasFilters = Object.values(parsed.filters).some((value) => String(value || "").trim());
+  const hasFilters = Object.values(parsed.filters).some((value) => stockFilterValues(value).length > 0);
   const matched = hasFilters ? await gateway.matched({ filters: parsed.filters, exact }) : total;
   const limit = parsed.limit;
   const offset = matched === 0 ? 0 : Math.min(parsed.offset, Math.max(0, matched - 1));
