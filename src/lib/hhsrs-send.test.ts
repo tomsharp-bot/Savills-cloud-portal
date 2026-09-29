@@ -14,6 +14,7 @@ import {
   parseAllowDomains,
   publicSendSettings,
   redactSecrets,
+  REVIEW_SENT_CONFIRMATION,
   sentBannerText,
   type OutboundEmail,
   type SendCommit,
@@ -239,7 +240,11 @@ describe("HHSRS portal send and Main Log record", () => {
     assert.equal(first.record.sentCopySaved, true);
     assert.equal(box.sent.length, 1);
     assert.equal(box.appended.length, 1);
-    assert.match(sentBannerText(first.record.sentBy, first.record.sentAt), /Sent by Tom Sharp · 12:15 · from HHSRS/);
+    assert.equal(REVIEW_SENT_CONFIRMATION, "Sent and logged in the Main Log.");
+    assert.match(
+      sentBannerText(first.record.sentBy, first.record.sentAt),
+      /✓ Sent and logged in the Main Log by Tom Sharp · 12:15 · from HHSRS/
+    );
 
     const entry = buildMainLogEntry({
       uprn: "98756",

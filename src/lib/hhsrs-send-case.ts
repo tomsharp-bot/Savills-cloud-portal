@@ -36,6 +36,7 @@ import {
   readAmendmentFields,
 } from "./hhsrs-correction-email.js";
 import { correctionSubject, validateCorrection } from "./hhsrs-find.js";
+import { prepareClientEmailBody } from "./hhsrs-reporter-draft.js";
 
 export function contentTypeFor(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
@@ -370,7 +371,7 @@ export async function sendCaseEmail(args: {
 
   const submissionId = args.row.id;
   let subject = correction ? correctionSubject(String(args.body.subject ?? "")) : String(args.body.subject ?? "");
-  let body = String(args.body.body ?? "");
+  let body = prepareClientEmailBody(args.row.projectName, String(args.body.body ?? ""));
   let messageHtml: string | undefined;
   if (amendmentMail) {
     subject = amendmentMail.subject;

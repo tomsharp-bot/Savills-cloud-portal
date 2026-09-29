@@ -252,6 +252,12 @@ describe("HHSRS thanks summary", () => {
     assert.match(thanks, /What you sent/);
     assert.match(thanks, /Report another issue/);
     assert.match(thanks, /Tip: take a screenshot to keep a copy/);
+    assert.match(
+      thanks,
+      /For any amendments please email <a href="mailto:HHSRS@savillshousing\.co\.uk">HHSRS@savillshousing\.co\.uk<\/a>\./
+    );
+    assert.doesNotMatch(thanks, /Need to change something\?/);
+    assert.doesNotMatch(thanks, /Send the office your reference/);
     assert.doesNotMatch(thanks, /MOCK|Mock only|example data only|Preview/i);
     assert.match(find, /id="find-project"/);
     assert.match(find, /The project list is the same one the site form uses/);

@@ -56,13 +56,28 @@ describe("admin hub tiles", () => {
     assert.match(topbar, /Reference Documents/);
     assert.match(topbar, /baseUrl\('\/photos'\)/);
     assert.match(topbar, /Photo Storage/);
-    assert.match(topbar, /href="<%= baseUrl\('\/projects'\) %>">Projects/);
-    assert.match(topbar, /<details class="nav-menu">/);
-    assert.match(topbar, /baseUrl\('\/personnel'\)/);
-    const projectsAt = topbar.indexOf(`baseUrl('/projects') %>">Projects`);
-    const menuAt = topbar.indexOf("nav-menu");
-    const personnelAt = topbar.indexOf("baseUrl('/personnel')");
-    assert.ok(projectsAt >= 0 && projectsAt < menuAt && menuAt < personnelAt);
-    assert.doesNotMatch(topbar, /<a class="linkish"[^>]*>Personnel<\/a>/);
+    assert.match(topbar, /href="<%= baseUrl\('\/projects'\) %>">Projects Progress/);
+    assert.match(topbar, /href="<%= baseUrl\('\/projects-programme'\) %>">Programme/);
+    assert.match(topbar, /href="<%= baseUrl\('\/personnel'\) %>">Personnel/);
+    assert.match(topbar, /HHSRS Reporter/);
+    assert.match(topbar, /HHSRS site reports/);
+    assert.doesNotMatch(topbar, /<details class="nav-menu">/);
+    assert.doesNotMatch(topbar, /<summary>Admin<\/summary>/);
+    const projectsAt = topbar.indexOf(`baseUrl('/projects') %>">Projects Progress`);
+    const programmeAt = topbar.indexOf(`baseUrl('/projects-programme') %>">Programme`);
+    const referenceAt = topbar.indexOf("Reference Documents");
+    const personnelAt = topbar.indexOf(`baseUrl('/personnel') %>">Personnel`);
+    const reporterAt = topbar.indexOf("HHSRS Reporter");
+    const photosAt = topbar.indexOf("Photo Storage");
+    const reportsAt = topbar.indexOf("HHSRS site reports");
+    assert.ok(
+      projectsAt >= 0 &&
+        projectsAt < programmeAt &&
+        programmeAt < referenceAt &&
+        referenceAt < personnelAt &&
+        personnelAt < reporterAt &&
+        reporterAt < photosAt &&
+        photosAt < reportsAt
+    );
   });
 });

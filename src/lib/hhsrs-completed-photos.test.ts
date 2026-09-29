@@ -301,7 +301,7 @@ describe("HHSRS completed photo pages", () => {
     const sendAt = reporter.indexOf("async function handleSend");
     const copyAt = reporter.indexOf("archiveLoggedPhotos", sendAt);
     assert.ok(sendAt > 0 && copyAt > sendAt);
-    assert.match(reporter, /Sent and logged\./);
+    assert.match(reporter, /REVIEW_SENT_CONFIRMATION/);
     assert.doesNotMatch(reporter, /Attach photos in Outlook before you send/);
     assert.doesNotMatch(reporter, /handleMarkActioned/);
     assert.match(reporter, /status\(410\)/);
