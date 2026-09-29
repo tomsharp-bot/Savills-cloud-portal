@@ -1,9 +1,9 @@
 /**
- * Same UPRN means the later case is a duplicate, even when the addresses differ.
- * The earliest case stays where it is. Each later waiting case is moved with the
- * existing Duplicates & errors action (reason duplicate, duplicateOf = the earliest
- * reference). Nothing is deleted. A case that was already emailed stays in the
- * Main Log. A case is never a duplicate of itself.
+ * Same UPRN means every waiting case in the group is a duplicate, even when the
+ * addresses differ. All of them move to Duplicates & errors so the office can
+ * compare them. Each one notes the other case references. Nothing is deleted.
+ * A case that was already emailed stays in the Main Log. A case is never a
+ * duplicate of itself.
  */
 import { prisma } from "./prisma.js";
 import { isWaitingStatus } from "./hhsrs-reporter.js";
@@ -11,7 +11,15 @@ import { normalizeUprn } from "./hhsrs-site-form.js";
 import { moveCaseToNotNeeded } from "./hhsrs-not-needed.js";
 
 export const UPRN_DUPLICATE_MOVED_BY = "HHSRS Reporter";
-export const UPRN_DUPLICATE_NOTE = "Same UPRN.";
+
+/** Note that names every other case with this UPRN. */
+export function uprnDuplicateNote(otherReferences: string[]): string {
+  const refs = otherReferences.map((ref) => String(ref || "").trim()).filter(Boolean);
+  if (!refs.length) return "";
+  if (refs.length === 1) return `Same UPRN as ${refs[0]}.`;
+  if (refs.length === 2) return `Same UPRN as ${refs[0]} and ${refs[1]}.`;
+  return `Same UPRN as ${refs.slice(0, -1).join(", ")} and ${refs[refs.length - 1]}.`;
+}
 
 export type UprnDuplicateCandidate = {
   id: string;
@@ -51,14 +59,38 @@ function byAge(a: UprnDuplicateCandidate, b: UprnDuplicateCandidate): number {
   return 0;
 }
 
+function canMove(row: UprnDuplicateCandidate): boolean {
+  if (row.emailSentAt) return false;
+  return isWaitingStatus(row.status);
+}
+
+/** Other references in this UPRN group, earliest first. Skips this case. */
+function otherReferences(group: UprnDuplicateCandidate[], self: UprnDuplicateCandidate): string[] {
+  const selfRef = referenceOf(self).toUpperCase();
+  const seen = new Set<string>();
+  const refs: string[] = [];
+  for (const row of [...group].sort(byAge)) {
+    if (row.id === self.id) continue;
+    const ref = referenceOf(row);
+    if (!ref) continue;
+    const key = ref.toUpperCase();
+    if (selfRef && key === selfRef) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push(ref);
+  }
+  return refs;
+}
+
 /**
- * Later waiting cases that share a UPRN with an earlier case.
- * The earliest case is the keeper, including when it was already emailed or
- * already sits in Duplicates & errors. Address is not read.
+ * Every waiting case that shares a UPRN with another case.
+ * duplicateOf is one other reference (the existing link). The note names every
+ * other reference, including a case that stays in the Main Log because it was
+ * already emailed. Address is not read.
  */
 export function planUprnDuplicateMoves(
   cases: UprnDuplicateCandidate[]
-): { id: string; duplicateOf: string }[] {
+): { id: string; duplicateOf: string; note: string }[] {
   const groups = new Map<string, UprnDuplicateCandidate[]>();
   for (const row of cases) {
     const key = uprnMatchKey(row.uprn);
@@ -70,20 +102,14 @@ export function planUprnDuplicateMoves(
     groups.set(key, list);
   }
 
-  const moves: { id: string; duplicateOf: string }[] = [];
+  const moves: { id: string; duplicateOf: string; note: string }[] = [];
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    const ordered = [...group].sort(byAge);
-    const earliest = ordered[0];
-    const keeper = referenceOf(earliest);
-    if (!keeper) continue;
-    for (const later of ordered.slice(1)) {
-      if (later.id === earliest.id) continue;
-      const self = referenceOf(later).toUpperCase();
-      if (self && self === keeper.toUpperCase()) continue;
-      if (later.emailSentAt) continue;
-      if (!isWaitingStatus(later.status)) continue;
-      moves.push({ id: later.id, duplicateOf: keeper });
+    for (const row of group) {
+      if (!canMove(row)) continue;
+      const others = otherReferences(group, row);
+      if (!others.length) continue;
+      moves.push({ id: row.id, duplicateOf: others[0], note: uprnDuplicateNote(others) });
     }
   }
   moves.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -130,7 +156,7 @@ async function loadUprnDuplicateCandidates(): Promise<UprnDuplicateCandidate[]> 
 }
 
 /**
- * Move every later waiting case that shares a UPRN. Safe to call on submit and
+ * Move every waiting case that shares a UPRN. Safe to call on submit and
  * again when a reporter page opens: a case already moved, already emailed, or
  * matching only itself is left alone.
  */
@@ -143,7 +169,7 @@ export async function sweepWaitingUprnDuplicates(): Promise<UprnDuplicateMove[]>
         id: item.id,
         reason: "duplicate",
         duplicateOf: item.duplicateOf,
-        note: UPRN_DUPLICATE_NOTE,
+        note: item.note,
         by: UPRN_DUPLICATE_MOVED_BY,
       });
       if (result.ok) {

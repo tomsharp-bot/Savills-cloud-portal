@@ -18,8 +18,8 @@ import {
 import { HHSRS_SITE_PHOTO_STORAGE, type SitePhotoStorage } from "./hhsrs-site-photos.js";
 import {
   UPRN_DUPLICATE_MOVED_BY,
-  UPRN_DUPLICATE_NOTE,
   planUprnDuplicateMoves,
+  uprnDuplicateNote,
   sweepWaitingUprnDuplicates,
   type UprnDuplicateCandidate,
 } from "./hhsrs-uprn-duplicates.js";
@@ -44,7 +44,7 @@ function candidate(partial: Partial<UprnDuplicateCandidate> & Pick<UprnDuplicate
 }
 
 describe("planUprnDuplicateMoves", () => {
-  it("moves each later case onto the earliest UPRN and ignores the address", () => {
+  it("moves every waiting case that shares a UPRN and each notes the others", () => {
     const moves = planUprnDuplicateMoves([
       candidate({ id: "later", reference: "MTVH-021", createdAt: at("2026-09-02T09:00:00.000Z") }),
       candidate({ id: "earliest", reference: "MTVH-014", createdAt: at("2026-09-01T09:00:00.000Z") }),
@@ -57,9 +57,26 @@ describe("planUprnDuplicateMoves", () => {
       candidate({ id: "other", reference: "MTVH-099", uprn: "999", createdAt: at("2026-09-04T09:00:00.000Z") }),
     ]);
     assert.deepEqual(moves, [
-      { id: "later", duplicateOf: "MTVH-014" },
-      { id: "latest", duplicateOf: "MTVH-014" },
+      {
+        id: "earliest",
+        duplicateOf: "MTVH-021",
+        note: uprnDuplicateNote(["MTVH-021", "MTVH-030"]),
+      },
+      {
+        id: "later",
+        duplicateOf: "MTVH-014",
+        note: uprnDuplicateNote(["MTVH-014", "MTVH-030"]),
+      },
+      {
+        id: "latest",
+        duplicateOf: "MTVH-014",
+        note: uprnDuplicateNote(["MTVH-014", "MTVH-021"]),
+      },
     ]);
+    for (const move of moves) {
+      assert.notEqual(move.duplicateOf, move.id);
+      assert.match(move.note, new RegExp(move.duplicateOf));
+    }
   });
 
   it("does not mark a case as a duplicate of itself, or match a blank UPRN", () => {
@@ -83,11 +100,17 @@ describe("planUprnDuplicateMoves", () => {
         candidate({ id: "keeper", reference: null, createdAt: at("2026-09-01T09:00:00.000Z") }),
         candidate({ id: "next", reference: "MTVH-015", createdAt: at("2026-09-02T09:00:00.000Z") }),
       ]),
-      []
+      [
+        {
+          id: "keeper",
+          duplicateOf: "MTVH-015",
+          note: "Same UPRN as MTVH-015.",
+        },
+      ]
     );
   });
 
-  it("leaves an emailed case in place and still points later waiting cases at the earliest", () => {
+  it("leaves an emailed case in the Main Log and still links the waiting cases to it", () => {
     const emailedLater = planUprnDuplicateMoves([
       candidate({ id: "earliest", reference: "MTVH-014" }),
       candidate({
@@ -98,7 +121,9 @@ describe("planUprnDuplicateMoves", () => {
         createdAt: at("2026-09-02T09:00:00.000Z"),
       }),
     ]);
-    assert.deepEqual(emailedLater, []);
+    assert.deepEqual(emailedLater, [
+      { id: "earliest", duplicateOf: "MTVH-021", note: "Same UPRN as MTVH-021." },
+    ]);
 
     const emailedEarliest = planUprnDuplicateMoves([
       candidate({
@@ -120,9 +145,18 @@ describe("planUprnDuplicateMoves", () => {
       }),
     ]);
     assert.deepEqual(emailedEarliest, [
-      { id: "also", duplicateOf: "MTVH-014" },
-      { id: "waiting", duplicateOf: "MTVH-014" },
+      {
+        id: "also",
+        duplicateOf: "MTVH-014",
+        note: "Same UPRN as MTVH-014 and MTVH-021.",
+      },
+      {
+        id: "waiting",
+        duplicateOf: "MTVH-014",
+        note: "Same UPRN as MTVH-014 and MTVH-022.",
+      },
     ]);
+    assert.equal(emailedEarliest.some((move) => move.id === "sent-first"), false);
   });
 
   it("treats spacing and letter case as the same UPRN", () => {
@@ -143,8 +177,10 @@ describe("planUprnDuplicateMoves", () => {
       }),
     ]);
     assert.deepEqual(moves, [
-      { id: "block-again", duplicateOf: "BLK-001" },
-      { id: "second", duplicateOf: "MTVH-014" },
+      { id: "block", duplicateOf: "BLK-002", note: "Same UPRN as BLK-002." },
+      { id: "block-again", duplicateOf: "BLK-001", note: "Same UPRN as BLK-001." },
+      { id: "first", duplicateOf: "MTVH-021", note: "Same UPRN as MTVH-021." },
+      { id: "second", duplicateOf: "MTVH-014", note: "Same UPRN as MTVH-014." },
     ]);
   });
 });
@@ -209,7 +245,7 @@ async function request(
 }
 
 describe("UPRN duplicates in the database", () => {
-  it("moves the newer waiting case on submit, and leaves an emailed case in the Main Log", async (t) => {
+  it("moves every waiting case that shares a UPRN on submit, and leaves an emailed case in the Main Log", async (t) => {
     try {
       await prisma.$queryRaw`SELECT "notNeededReason" FROM "HhsrsSiteSubmission" LIMIT 1`;
     } catch {
@@ -321,19 +357,23 @@ describe("UPRN duplicates in the database", () => {
     ]);
     assert.equal(before, 1);
     assert.equal(count, 2);
-    assert.equal(kept.status, "new");
+    assert.equal(kept.status, "not_needed");
+    assert.equal(kept.notNeededReason, "duplicate");
+    assert.equal(kept.notNeededDuplicateOf, moved.reference);
+    assert.equal(kept.notNeededNote, `Same UPRN as ${moved.reference}.`);
+    assert.equal(kept.notNeededBy, UPRN_DUPLICATE_MOVED_BY);
     assert.equal(kept.fullAddress, "12 High Street, Exeter");
-    assert.equal(kept.notNeededReason, "");
     assert.equal(moved.status, "not_needed");
     assert.equal(moved.notNeededReason, "duplicate");
     assert.equal(moved.notNeededDuplicateOf, earlier.reference);
-    assert.equal(moved.notNeededNote, UPRN_DUPLICATE_NOTE);
+    assert.equal(moved.notNeededNote, `Same UPRN as ${earlier.reference}.`);
     assert.equal(moved.notNeededBy, UPRN_DUPLICATE_MOVED_BY);
     assert.equal(moved.fullAddress, "Flat 4, 88 Other Road, Plymouth");
     assert.notEqual(moved.fullAddress, kept.fullAddress);
     assert.equal(moved.uprn.replace(/\s+/g, ""), kept.uprn.replace(/\s+/g, ""));
     assert.notEqual(moved.id, kept.id);
     assert.notEqual(moved.notNeededDuplicateOf, moved.reference);
+    assert.notEqual(kept.notNeededDuplicateOf, kept.reference);
 
     const sent = await createSubmissionWithReference(
       { projectId: project.id, projectName: project.name },
@@ -365,7 +405,8 @@ describe("UPRN duplicates in the database", () => {
     assert.equal(stillSent.notNeededReason, "");
     assert.ok(stillSent.emailSentAt);
     const stillKept = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: earlier.id } });
-    assert.equal(stillKept.status, "new");
+    assert.equal(stillKept.status, "not_needed");
+    assert.equal(stillKept.notNeededDuplicateOf, moved.reference);
 
     const spacedKey = `3000${stamp}`;
     const spacedFirst = await createSubmissionWithReference(
@@ -416,10 +457,13 @@ describe("UPRN duplicates in the database", () => {
     await sweepWaitingUprnDuplicates();
     const spacedMoved = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: spacedSecond.id } });
     const spacedKept = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: spacedFirst.id } });
-    assert.equal(spacedKept.status, "new");
+    assert.equal(spacedKept.status, "not_needed");
+    assert.equal(spacedKept.notNeededDuplicateOf, spacedSecond.reference);
+    assert.equal(spacedKept.notNeededNote, `Same UPRN as ${spacedSecond.reference}.`);
     assert.equal(spacedKept.fullAddress, "12 High Street, Exeter");
     assert.equal(spacedMoved.status, "not_needed");
     assert.equal(spacedMoved.notNeededDuplicateOf, spacedFirst.reference);
+    assert.equal(spacedMoved.notNeededNote, `Same UPRN as ${spacedFirst.reference}.`);
     assert.equal(spacedMoved.fullAddress, "Flat 4, 88 Other Road, Plymouth");
 
     const loggedUprn = `4000${stamp}`;
@@ -477,7 +521,9 @@ describe("UPRN duplicates in the database", () => {
     assert.equal(repeatRow.status, "not_needed");
     assert.equal(repeatRow.notNeededReason, "duplicate");
     assert.equal(repeatRow.notNeededDuplicateOf, logged.reference);
+    assert.equal(repeatRow.notNeededNote, `Same UPRN as ${logged.reference}.`);
     assert.notEqual(repeatRow.fullAddress, loggedRow.fullAddress);
+    assert.notEqual(repeatRow.notNeededDuplicateOf, repeatRow.reference);
   });
 
   it("catches existing waiting cases when Duplicates is opened, including a third case", async (t) => {
@@ -574,10 +620,12 @@ describe("UPRN duplicates in the database", () => {
 
     const page = await request(port, "GET", `/HHSRSreporter/duplicates?q=${encodeURIComponent(uprn)}`, { cookie });
     assert.equal(page.status, 200);
+    assert.match(page.body, new RegExp(earliest.reference || "missing-earliest"));
     assert.match(page.body, new RegExp(middle.reference || "missing-middle"));
     assert.match(page.body, new RegExp(latest.reference || "missing-latest"));
-    assert.match(page.body, /Same UPRN\./);
-    assert.doesNotMatch(page.body, new RegExp(`12 High Street ${stamp}`));
+    assert.match(page.body, new RegExp(`12 High Street ${stamp}`));
+    assert.match(page.body, new RegExp(`Flat 4, 88 Other Road ${stamp}`));
+    assert.match(page.body, /Same UPRN as /);
 
     const [kept, movedMiddle, movedLatest, single] = await Promise.all([
       prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: earliest.id } }),
@@ -585,14 +633,19 @@ describe("UPRN duplicates in the database", () => {
       prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: latest.id } }),
       prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: alone.id } }),
     ]);
-    assert.equal(kept.status, "new");
-    assert.equal(kept.notNeededDuplicateOf, "");
+    assert.equal(kept.status, "not_needed");
+    assert.equal(kept.notNeededReason, "duplicate");
+    assert.equal(kept.notNeededDuplicateOf, middle.reference);
+    assert.equal(kept.notNeededNote, `Same UPRN as ${middle.reference} and ${latest.reference}.`);
+    assert.notEqual(kept.notNeededDuplicateOf, kept.reference);
     assert.equal(movedMiddle.status, "not_needed");
     assert.equal(movedMiddle.notNeededReason, "duplicate");
     assert.equal(movedMiddle.notNeededDuplicateOf, earliest.reference);
+    assert.match(movedMiddle.notNeededNote, new RegExp(latest.reference || "missing"));
     assert.equal(movedLatest.status, "not_needed");
     assert.equal(movedLatest.notNeededDuplicateOf, earliest.reference);
-    assert.notEqual(movedLatest.notNeededDuplicateOf, middle.reference);
+    assert.match(movedLatest.notNeededNote, new RegExp(middle.reference || "missing"));
+    assert.notEqual(movedLatest.notNeededDuplicateOf, movedLatest.reference);
     assert.equal(single.status, "new");
     assert.equal(single.notNeededDuplicateOf, "");
     const remaining = await prisma.hhsrsSiteSubmission.count({
