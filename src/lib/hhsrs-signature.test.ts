@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { sendMailboxMessage } from "./hhsrs-send-transport.js";
 import {
   MISSING_SENDER_NAME_WARNING,
-  SIGNATURE_LEGAL_PARAGRAPHS,
   SIGNATURE_LOGO_CID,
   SIGNATURE_LOGO_PUBLIC_PATH,
   SIGNATURE_LOGO_PX,
@@ -47,13 +46,51 @@ describe("HHSRS email signature", () => {
     assert.match(html, /https:\/\/www\.savills\.co\.uk/);
     assert.match(html, />www\.savills\.co\.uk</);
     assert.match(text, /Email: HHSRS@savillshousing\.co\.uk\nWebsite: www\.savills\.co\.uk/);
-    assert.match(html, /Before printing, think about the environment/);
+    const printLine = "\u{1F33F} Before printing, think about the environment";
+    assert.equal(
+      text,
+      [
+        "Regards",
+        "",
+        "HHSRS Reporting Team",
+        "",
+        "Savills, 33 Margaret Street, London, W1G 0JD",
+        "",
+        "Email: HHSRS@savillshousing.co.uk",
+        "Website: www.savills.co.uk",
+        "",
+        printLine,
+      ].join("\n")
+    );
+    const regardsAt = html.indexOf(">Regards<");
+    const teamAt = html.indexOf(">HHSRS Reporting Team<");
+    const addressAt = html.indexOf(">Savills, 33 Margaret Street, London, W1G 0JD<");
+    const logoAt = html.indexOf("<img ");
+    const emailAt = html.indexOf(">Email: ");
+    const webAt = html.indexOf(">Website: ");
+    const printAt = html.indexOf("Before printing, think about the environment");
+    assert.ok(
+      regardsAt >= 0 &&
+        teamAt > regardsAt &&
+        addressAt > teamAt &&
+        logoAt > addressAt &&
+        emailAt > logoAt &&
+        webAt > emailAt &&
+        printAt > webAt,
+      "signature blocks stay in the approved order"
+    );
+    assert.match(html, /Before printing, think about the environment<\/p><\/div>$/);
     assert.doesNotMatch(html, /dbeafe|#dbeafe|class="name"/);
-    assert.doesNotMatch(html, /<a[^>]*>privacy policy<\/a>/i);
-    for (const paragraph of SIGNATURE_LEGAL_PARAGRAPHS) {
-      assert.equal(text.includes(paragraph), true);
-      assert.equal(html.includes(paragraph.replace(/"/g, "&quot;")), true);
+    for (const forbidden of ["NOTICE:", "privacy policy", "Savills plc", "Regulated by RICS", "Scottish Letting Agent Register"]) {
+      assert.equal(text.includes(forbidden), false, forbidden);
+      assert.equal(html.includes(forbidden), false, forbidden);
     }
+    const generated = composeEmailText("Dear Sir/Madam,\n\nPlease find details.", names);
+    assert.match(generated, new RegExp(`${printLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+    assert.doesNotMatch(generated, /NOTICE:|Savills plc|Scottish Letting Agent Register/);
+    const generatedHtml = composeEmailHtml("Dear Sir/Madam,\n\nPlease find details.", names, `cid:${SIGNATURE_LOGO_CID}`);
+    assert.match(generatedHtml, /Before printing, think about the environment<\/p><\/div><\/body><\/html>$/);
+    assert.doesNotMatch(generatedHtml, /NOTICE:|Savills plc|Scottish Letting Agent Register/);
   });
 
   it("falls back to a Personnel email match only when the login has no name", () => {
@@ -116,6 +153,10 @@ describe("HHSRS email signature", () => {
       assert.match(raw, /Dear Sir\/Madam/);
       assert.doesNotMatch(unfolded, /Tom Sharp/);
       assert.match(unfolded, /HHSRS Reporting Team/);
+      assert.match(unfolded, /Before printing, think about the environment/);
+      assert.doesNotMatch(unfolded, /NOTICE:/);
+      assert.doesNotMatch(unfolded, /Savills plc/);
+      assert.doesNotMatch(unfolded, /Scottish Letting Agent Register/);
       assert.match(unfolded, new RegExp(`cid:${SIGNATURE_LOGO_CID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
       assert.match(raw, new RegExp(`Content-ID:\\s*<${SIGNATURE_LOGO_CID}>`, "i"));
       assert.match(raw, /Content-Disposition:\s*inline/i);
