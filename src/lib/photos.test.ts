@@ -10,6 +10,8 @@ import {
   canonicalCodes,
   deleteStoredPhoto,
   isProjectPoolKey,
+  keysUnderFolderPrefix,
+  photoFolderStoragePrefix,
   leadFirstName,
   moveStoredPhoto,
   nextFolderSequence,
@@ -250,6 +252,29 @@ describe("Spaces photo delete and rename", () => {
     assert.deepEqual(storage.calls, [`remove ${key}`]);
   });
 
+  it("keeps folder cleanup inside that folder prefix, including an empty marker", () => {
+    const prefix = photoFolderStoragePrefix("proj 1", "folder/1");
+    assert.equal(prefix, null);
+    const ok = photoFolderStoragePrefix("proj1", "folder1");
+    assert.equal(ok, "photos/proj1/folders/folder1/");
+    const listed = [
+      "photos/proj1/folders/folder1/",
+      "photos/proj1/folders/folder1",
+      "photos/proj1/folders/folder1/note.txt",
+      "photos/proj1/folders/folder1-other/file.jpg",
+      "photos/proj1/pool/Kitchen.jpg",
+      "HHSRS - Completed/MTVH/1/a.jpg",
+      "",
+    ];
+    assert.deepEqual(keysUnderFolderPrefix(ok!, listed), [
+      "photos/proj1/folders/folder1/note.txt",
+      "photos/proj1/folders/folder1/",
+      "photos/proj1/folders/folder1",
+    ]);
+    assert.deepEqual(keysUnderFolderPrefix(ok!, []), []);
+    assert.deepEqual(keysUnderFolderPrefix("photos/proj1/pool/", listed), []);
+  });
+
   it("does not delete a key outside the project, or when storage is down", async () => {
     const foreign = ops();
     const blocked = await deleteStoredPhoto(projectId, "photos/other/pool/Kitchen.jpg", foreign);
@@ -390,6 +415,9 @@ describe("photo lightbox markup", () => {
     assert.match(js, /Delete " \+ n \+ " " \+ noun \+ "\? This cannot be undone\./);
     assert.match(js, /rename\.disabled = !poolSelectMode \|\| n !== 1/);
     assert.match(js, /data-folder-delete/);
+    assert.match(js, /data-delete-folder/);
+    assert.match(js, /Delete folder "/);
+    assert.match(js, /Those photos are also removed from the Photos Pool/);
     assert.match(js, /data-folder-rename/);
     assert.match(js, /data-folder-zip/);
     assert.match(view, /id="poolUploadInput"/);
