@@ -364,7 +364,7 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
 
       const page = await request(app, "GET", "/HHSRSreporter/admin", { cookie });
       assert.equal(page.status, 200);
-      assert.match(page.body, /Client email addresses/);
+      assert.match(page.body, /Client Email Addresses/);
       assert.match(page.body, /Choose a project/);
       assert.match(page.body, /One address per line, or commas/);
       assert.match(page.body, /autocomplete="off"[^>]*id="hhsrs-addr-test-housing-to"[^>]*>cfarrell@savillshousing\.co\.uk<\/textarea>/);

@@ -262,7 +262,7 @@ describe("HHSRS thanks summary", () => {
     assert.match(find, /id="find-project"/);
     assert.match(find, /The project list is the same one the site form uses/);
     assert.match(find, /Amend &amp; resend/);
-    assert.match(find, /Check before sending/);
+    assert.match(find, /Check Before Sending/);
     assert.match(find, /Reason for correction/);
     assert.match(find, /id="rv-signature-preview"/);
     assert.doesNotMatch(find, /Goes through the same checks|Mock only|MOCK/);

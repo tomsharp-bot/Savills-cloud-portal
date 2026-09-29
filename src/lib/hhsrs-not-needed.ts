@@ -122,7 +122,7 @@ export async function moveCaseToNotNeeded(args: {
     return await prisma.$transaction(async (tx) => {
       const row = await lockCase(tx, args.id);
       if (!row) return { ok: false, error: "Case not found." };
-      if (row.status === "not_needed") return { ok: false, error: "Already in Duplicates & errors." };
+      if (row.status === "not_needed") return { ok: false, error: "Already in Duplicates & Errors." };
       if (row.emailSentAt || !isWaitingStatus(row.status)) return { ok: false, error: ALREADY_SENT };
       const checked = await validateNotNeededMove({
         reason: args.reason,
@@ -180,7 +180,7 @@ export async function restoreCaseToPending(args: {
     return await prisma.$transaction(async (tx) => {
       const row = await lockCase(tx, args.id);
       if (!row) return { ok: false, error: "Case not found." };
-      if (row.status !== "not_needed") return { ok: false, error: "This case is not in Duplicates & errors." };
+      if (row.status !== "not_needed") return { ok: false, error: "This case is not in Duplicates & Errors." };
       const at = new Date();
       const log = readNotNeededLog(row.notNeededLog);
       log.push({

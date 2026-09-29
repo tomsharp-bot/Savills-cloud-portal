@@ -373,7 +373,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(finish, /Sent and logged in the Main Log\. Can't be sent again\./);
     assert.doesNotMatch(finish, /✓ Sent</);
     assert.doesNotMatch(finish, /id="btn-abandon-claim"/);
-    assert.match(review, /Move to Duplicates &amp; errors\?/);
+    assert.match(review, /Move to Duplicates &amp; Errors\?/);
     assert.match(review, /Nothing is deleted\. You can move it back\./);
     assert.match(review, /showNotNeeded/);
     assert.doesNotMatch(workspace, /id="mark-actioned-form"/);
@@ -384,7 +384,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(workspace, /id="abandon-claim-form"/);
     assert.match(workspace, /btn-copy/);
     assert.match(workspace, /Download photos/);
-    assert.match(review, /Check before sending/);
+    assert.match(review, /Check Before Sending/);
     assert.match(review, /I've checked the details/);
     assert.match(review, /id="ck-send"[^>]*>Send and log</);
     assert.match(review, /Nothing is sent until you press Send and log\./);
