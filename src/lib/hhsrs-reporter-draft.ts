@@ -4,7 +4,7 @@
  */
 
 import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
-import { composeCallNotes, formatHhsrsSurveyDate, splitCallNotes } from "./hhsrs-site-form.js";
+import { formatHhsrsSurveyDate, splitCallNotes } from "./hhsrs-site-form.js";
 
 export class DraftError extends Error {
   constructor(message: string) {
@@ -816,11 +816,36 @@ export function baseProjectDraft(data: DraftCase, photos: string[]): { subject: 
   void photos;
   const lines = ["Hi all,", "", ...bulletBodyLines({ ...data, hazard, rating, description, address })];
 
-  return { subject, body: lines.join("\n") };
+  return { subject, body: prepareClientEmailBody(data.project, lines.join("\n")) };
 }
 
 function bullet(label: string, value: string): string {
   return `• ${label}: ${value.replace(/\s+/g, " ").trim()}`;
+}
+
+/** A client call reference belongs in the email only for projects that require one. */
+export function projectRequiresCallReference(projectName: string): boolean {
+  return Boolean(resolveHhsrsProject(projectName).roster?.extras.calls);
+}
+
+const WHY_CALL_REFERENCE_BLANK = /^•\s*Why the call reference is blank\s*:/i;
+const CALL_REFERENCE_LINE = /^•\s*(?:Client call reference|Onward call reference|Call reference)\s*:/i;
+
+/**
+ * Drop a blank-call explanation, and drop any call-reference line when this
+ * project does not use one. Other bullets are left as they are.
+ */
+export function prepareClientEmailBody(projectName: string, body: string): string {
+  const keepCallReference = projectRequiresCallReference(projectName);
+  return String(body || "")
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (WHY_CALL_REFERENCE_BLANK.test(trimmed)) return false;
+      if (!keepCallReference && CALL_REFERENCE_LINE.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
 }
 
 /**
@@ -844,7 +869,7 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
   lines.push(bullet("Rating", data.rating || ""));
   lines.push(bullet("Site notes", data.description));
 
-  const needsCall = Boolean(resolveHhsrsProject(data.project).roster?.extras.calls);
+  const needsCall = projectRequiresCallReference(data.project);
   const reference = (data.callRef || "").trim();
   if (needsCall && reference) {
     const label = templateId(data.project) === "Onward" ? "Onward call reference" : "Client call reference";
@@ -863,17 +888,18 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
   if ((data.workOrder || "").trim()) lines.push(bullet("Work order", data.workOrder!.trim()));
 
   if (needsCall && !reference) {
-    const onward = templateId(data.project) === "Onward";
-    const outcome = data.callStatus || "";
     const blank = splitCallNotes(data.callNotes || "");
-    if (blank.reason) {
-      lines.push(bullet("Why the call reference is blank", composeCallNotes(blank.reason, blank.note)));
-    } else if (outcome === "Completed") {
-      const centre = onward ? "the Onward Call Centre" : "the contact centre";
-      lines.push(bullet(onward ? "Onward call" : "Call", `Called ${centre}. No reference supplied.`));
-    } else if (outcome === "Attempted" || outcome === "Not yet called") {
-      const prose = callUpdate(data).replace(/\s*(?:Onward Call Reference|Call reference):.*$/, "").trim();
-      if (prose) lines.push(bullet(onward ? "Onward call" : "Call", prose.replace(/\.$/, "")));
+    // A blank call reference is left out. Do not explain why it is blank.
+    if (!blank.reason) {
+      const onward = templateId(data.project) === "Onward";
+      const outcome = data.callStatus || "";
+      if (outcome === "Completed") {
+        const centre = onward ? "the Onward Call Centre" : "the contact centre";
+        lines.push(bullet(onward ? "Onward call" : "Call", `Called ${centre}. No reference supplied.`));
+      } else if (outcome === "Attempted" || outcome === "Not yet called") {
+        const prose = callUpdate(data).replace(/\s*(?:Onward Call Reference|Call reference):.*$/, "").trim();
+        if (prose) lines.push(bullet(onward ? "Onward call" : "Call", prose.replace(/\.$/, "")));
+      }
     }
   }
   return lines;
@@ -909,7 +935,7 @@ export function projectDraft(data: DraftCase, photos: string[]): { subject: stri
       lines.push(line);
     }
   }
-  return { subject, body: lines.join("\n") };
+  return { subject, body: prepareClientEmailBody(data.project, lines.join("\n")) };
 }
 
 /** Build a draft from a portal HHSRS site submission (+ office review fields). */

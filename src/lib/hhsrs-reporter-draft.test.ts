@@ -5,6 +5,7 @@ import {
   DraftError,
   draftFromSubmission,
   formatAddress,
+  prepareClientEmailBody,
   projectDraft,
   templateId,
 } from "./hhsrs-reporter-draft.js";
@@ -264,9 +265,11 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callOutcome: "Attempted",
       callNotes: "No answer",
     });
-    assert.match(noAnswer.body, /• Why the call reference is blank: No answer/);
-    assert.doesNotMatch(noAnswer.body, /Client call reference/);
+    assert.doesNotMatch(noAnswer.body, /Why the call reference is blank/);
+    assert.doesNotMatch(noAnswer.body, /call reference/i);
     assert.doesNotMatch(noAnswer.body, /• Call:/);
+    assert.match(noAnswer.body, /• Site notes: Visible mould in bathroom\./);
+    assert.match(noAnswer.body, /• Survey date: 20\/09\/2026/);
 
     const busy = draftFromSubmission({
       ...shared,
@@ -275,7 +278,9 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callOutcome: "Attempted",
       callNotes: "Engaged/busy — Line stayed busy",
     });
-    assert.match(busy.body, /• Why the call reference is blank: Engaged\/busy — Line stayed busy/);
+    assert.doesNotMatch(busy.body, /Why the call reference is blank/);
+    assert.doesNotMatch(busy.body, /Engaged\/busy/);
+    assert.doesNotMatch(busy.body, /call reference/i);
 
     const other = draftFromSubmission({
       ...shared,
@@ -284,7 +289,9 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callOutcome: "Attempted",
       callNotes: "Other — Voicemail full.",
     });
-    assert.match(other.body, /• Why the call reference is blank: Other — Voicemail full\./);
+    assert.doesNotMatch(other.body, /Why the call reference is blank/);
+    assert.doesNotMatch(other.body, /Voicemail full/);
+    assert.doesNotMatch(other.body, /call reference/i);
 
     const mtvh = draftFromSubmission({
       ...shared,
@@ -296,6 +303,78 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.doesNotMatch(mtvh.body, /Client call reference/);
     assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
     assert.doesNotMatch(mtvh.body, /• Call:/);
+  });
+
+  it("leaves a blank call reference out of Test Housing and any project that does not use one", () => {
+    const shared = {
+      fullAddress: "1 jenkins house",
+      postcode: "B14 6ES",
+      uprn: "98756",
+      surveyDate: "2026-09-20",
+      category: "Damp & Mould Growth",
+      rating: "High",
+      comment: "Visible mould in bathroom.",
+      photoCount: 0,
+    };
+    const testHousing = draftFromSubmission({
+      ...shared,
+      projectName: "Test Housing",
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "No answer",
+    });
+    assert.equal(testHousing.subject, "Test Housing - HHSRS – 1 jenkins house, B14 6ES");
+    assert.equal(
+      testHousing.body,
+      [
+        "Hi all,",
+        "",
+        "• Address: 1 jenkins house, B14 6ES",
+        "• UPRN: 98756",
+        "• Hazard: Damp / Mould Growth",
+        "• Rating: High",
+        "• Site notes: Visible mould in bathroom.",
+        "• Survey date: 20/09/2026",
+      ].join("\n")
+    );
+    assert.doesNotMatch(testHousing.body, /call reference/i);
+    assert.doesNotMatch(testHousing.body, /No answer/);
+
+    const strayRef = draftFromSubmission({
+      ...shared,
+      projectName: "Test Housing",
+      clientCallReference: "CR-9",
+      callOutcome: "Attempted",
+      callNotes: "No answer",
+    });
+    assert.doesNotMatch(strayRef.body, /call reference/i);
+    assert.doesNotMatch(strayRef.body, /CR-9/);
+    assert.match(strayRef.body, /• Site notes: Visible mould in bathroom\./);
+
+    const pasted = prepareClientEmailBody(
+      "Test Housing",
+      [
+        "Hi all,",
+        "",
+        "• Address: 1 jenkins house, B14 6ES",
+        "• UPRN: 98756",
+        "• Hazard: Damp / Mould Growth",
+        "• Rating: High",
+        "• Site notes: Visible mould in bathroom.",
+        "• Survey date: 20/09/2026",
+        "• Why the call reference is blank: No answer",
+        "• Client call reference: CR-9",
+      ].join("\n")
+    );
+    assert.equal(pasted, testHousing.body);
+
+    const vicoKept = prepareClientEmailBody(
+      "Vico 2026",
+      "Hi all,\n\n• Address: 1 High Street\n• Client call reference: CR-9\n• Why the call reference is blank: No answer"
+    );
+    assert.match(vicoKept, /• Client call reference: CR-9/);
+    assert.doesNotMatch(vicoKept, /Why the call reference is blank/);
+    assert.match(vicoKept, /• Address: 1 High Street/);
   });
 
   it("adds a suspected cause for MTVH and leaves a blank cause out of the email", () => {
