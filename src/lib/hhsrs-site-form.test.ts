@@ -588,6 +588,7 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
     const hazard = html.slice(html.indexOf('id="step-hazard"'), html.indexOf('id="extra-box"'));
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
+    assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = html.slice(html.indexOf('id="extra-box"'), html.indexOf('id="step-photos"'));
     assert.ok(extras.indexOf('id="otherDetails"') < extras.indexOf('id="suspectedCause"'));
     assert.match(extras, /Suspected cause <span class="optional">\(optional\)<\/span>/);
@@ -599,6 +600,7 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(hazard, /data-extra=/);
     const flowJs = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
     assert.match(flowJs, /function stepKeyboardNext/);
+    assert.match(flowJs, /from\.id === "comment"/);
     assert.doesNotMatch(flowJs, /causeField\.tabIndex = -1/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsRequired"));
     assert.doesNotMatch(hazardFn, /suspectedCause/);

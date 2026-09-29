@@ -288,6 +288,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /HHSRS category/);
     const hazard = form.body.slice(form.body.indexOf('id="step-hazard"'), form.body.indexOf('id="extra-box"'));
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
+    assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = form.body.slice(form.body.indexOf('id="extra-box"'), form.body.indexOf('id="step-photos"'));
     assert.ok(extras.indexOf('id="otherDetails"') < extras.indexOf('id="suspectedCause"'), "Suspected cause comes after Extra details");
     assert.match(extras, /Suspected cause <span class="optional">\(optional\)<\/span>/);
@@ -412,6 +413,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /step-visit\|step-property\|step-hazard\|extra-box\|step-photos/);
     assert.match(js.body, /f\.hasAttribute\("data-optional"\)\) continue/);
     assert.match(js.body, /function stepKeyboardNext/);
+    assert.match(js.body, /from\.id === "comment"/);
+    assert.match(js.body, /el\.id === "comment" \|\| el\.id === "otherDetails" \|\| el\.id === "suspectedCause"/);
     assert.doesNotMatch(js.body, /causeField\.tabIndex = -1/);
   });
 
