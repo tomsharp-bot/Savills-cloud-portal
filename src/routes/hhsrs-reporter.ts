@@ -105,13 +105,14 @@ import {
   type MainLogFilters,
   type MainLogSortKey,
 } from "../lib/hhsrs-main-log.js";
+import { loadDuplicateComparisons } from "../lib/hhsrs-duplicate-compare.js";
 import {
   NOT_NEEDED_REASONS,
-  loadDuplicates,
   moveCaseToNotNeeded,
   restoreCaseToPending,
 } from "../lib/hhsrs-not-needed.js";
 import { createOfficeCaseAndSend } from "../lib/hhsrs-office-case.js";
+import { sweepWaitingUprnDuplicates } from "../lib/hhsrs-uprn-duplicates.js";
 import {
   loadSiteFormPhoto,
   privateInlineHeaders,
@@ -210,6 +211,7 @@ hhsrsReporterRouter.use(async (req: Request, res: Response, next) => {
     return;
   }
   try {
+    await sweepWaitingUprnDuplicates();
     const rows = await prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
       orderBy: { createdAt: "desc" },
@@ -333,6 +335,7 @@ function shellLocals(opts: {
 
 /* ---------- Lightweight poll for new pending hazards ---------- */
 hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Response) => {
+  await sweepWaitingUprnDuplicates();
   const waitingWhere = { status: { in: [...HHSRS_WAITING_STATUSES] } };
   const [rows, waitingCount] = await Promise.all([
     prisma.hhsrsSiteSubmission.findMany({
@@ -1327,6 +1330,8 @@ async function handleOfficeSend(req: Request, res: Response): Promise<void> {
     storage: sitePhotoStorageFromApp(req.app),
     send: (row, sendBody) => deliverCaseEmail(req, row, sendBody),
   });
+  const moved = result.id ? await sweepWaitingUprnDuplicates() : [];
+  const filedAsDuplicate = Boolean(result.id && moved.some((item) => item.id === result.id));
   if (result.ok) {
     flashOk(req, REVIEW_SENT_CONFIRMATION);
     await archiveLoggedPhotos(req, result.id);
@@ -1334,7 +1339,12 @@ async function handleOfficeSend(req: Request, res: Response): Promise<void> {
     return;
   }
   if (result.pending && result.id) {
-    flashErr(req, "Not sent. The case is in Pending so you can try again.");
+    flashErr(
+      req,
+      filedAsDuplicate
+        ? "Not sent. The UPRN matches an earlier case, so this one is in Duplicates & errors."
+        : "Not sent. The case is in Pending so you can try again."
+    );
     finishOfficeSend(req, res, `${HHSRS_REPORTER_PATH}/review/${result.id}`);
     return;
   }
@@ -1364,16 +1374,6 @@ async function handleNotNeeded(req: Request, res: Response, id: string): Promise
   res.redirect(HHSRS_REPORTER_PATH);
 }
 
-function duplicatesHref(filters: { q?: string; project?: string; reason?: string }, openId = ""): string {
-  const params = new URLSearchParams();
-  if (filters.q) params.set("q", filters.q);
-  if (filters.project) params.set("project", filters.project);
-  if (filters.reason) params.set("reason", filters.reason);
-  if (openId) params.set("open", openId);
-  const query = params.toString();
-  return `${HHSRS_REPORTER_PATH}/duplicates${query ? `?${query}` : ""}`;
-}
-
 async function handleDuplicates(req: Request, res: Response): Promise<void> {
   const filters = {
     q: String(req.query.q || ""),
@@ -1381,12 +1381,10 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
     reason: String(req.query.reason || ""),
   };
   const openId = String(req.query.open || "");
-  const [summary, cases, names] = await Promise.all([
+  const [summary, comparisons] = await Promise.all([
     loadSummary(),
-    loadDuplicates(filters, HHSRS_REPORTER_PATH),
-    loadPortalProjectNames(),
+    loadDuplicateComparisons(filters, HHSRS_REPORTER_PATH, openId),
   ]);
-  if (filters.project && !names.some((name) => name === filters.project)) names.push(filters.project);
   const flash = takeFlash(req);
   const jsUrl =
     typeof res.locals.baseUrl === "function"
@@ -1401,12 +1399,7 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
       flashErr: flash.err,
     }),
     user: req.user,
-    cases,
-    filters,
-    reasons: NOT_NEEDED_REASONS,
-    projectNames: [...names].sort((a, b) => a.localeCompare(b, "en-GB")),
-    openId,
-    closeHref: duplicatesHref(filters),
+    comparisons,
     duplicatesJsUrl: jsUrl,
   });
 }

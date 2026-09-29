@@ -151,6 +151,8 @@ describe("HHSRS manual address when a project has no stock", () => {
     assert.match(formPage.body, /id="btn-lookup-uprn"/);
     assert.match(formPage.body, /No address list for this project yet\. Type the address\./);
 
+    // Unique UPRN so this waiting case stays on its own.
+    const manualUprn = `1000${Date.now()}`;
     const common = {
       surveyDate: "2026-09-20",
       surveyorName: surveyor.name,
@@ -163,7 +165,7 @@ describe("HHSRS manual address when a project has no stock", () => {
       form: reviewForm({
         ...common,
         projectId: bare.id,
-        uprn: "100040123456",
+        uprn: manualUprn,
         addressSource: "manual",
         addressLine1: "12 Moor Lane",
         addressLine2: "Flat 2",
@@ -191,7 +193,7 @@ describe("HHSRS manual address when a project has no stock", () => {
     assert.equal(row.addressSource, "manual");
     assert.equal(row.fullAddress, "12 Moor Lane, Flat 2, Leeds");
     assert.equal(row.postcode, "LS1 4DY");
-    assert.equal(row.uprn, "100040123456");
+    assert.equal(row.uprn, manualUprn);
 
     const office = await request(port, "GET", `/HHSRSreporter/review/${submissionId}`, { cookie });
     assert.equal(office.status, 200);
@@ -205,7 +207,7 @@ describe("HHSRS manual address when a project has no stock", () => {
         caseId: submissionId,
         projectName: bare.name,
         address: "12 Moor Lane, Flat 2, Leeds, LS1 4DY",
-        uprn: "100040123456",
+        uprn: manualUprn,
         surveyDate: "2026-09-20",
         hazard: "Damp & Mould Growth",
         rating: "Low",

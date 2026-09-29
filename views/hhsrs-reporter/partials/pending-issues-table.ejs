@@ -5,7 +5,7 @@
   const action = typeof pendingAction === "string" ? pendingAction : "review";
   const foot = typeof pendingFoot === "string" ? pendingFoot : "Newest first";
   const showPhotoCount = typeof pendingShowPhotoCount !== "undefined" && pendingShowPhotoCount === true;
-  const sortColumns = Array.isArray(pendingSortColumns) ? pendingSortColumns : [];
+  const sortColumns = typeof pendingSortColumns !== "undefined" && Array.isArray(pendingSortColumns) ? pendingSortColumns : [];
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
   <table class="landing-table pending-issues-table" id="<%= tableId %>">

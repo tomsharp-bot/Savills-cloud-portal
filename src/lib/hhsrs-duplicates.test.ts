@@ -9,6 +9,7 @@ import { HHSRS_CASE_SEND, HHSRS_PHOTO_COPY } from "../routes/hhsrs-reporter.js";
 import { HHSRS_SITE_PHOTO_STORAGE } from "./hhsrs-site-photos.js";
 import { createSubmissionWithReference } from "./hhsrs-reference.js";
 import { splitAddressPostcode } from "./hhsrs-office-case.js";
+import { toDuplicateCompareRow, type CompareCase } from "./hhsrs-duplicate-compare.js";
 import { validateNotNeededMove } from "./hhsrs-not-needed.js";
 
 function refNumber(reference: string | null): number {
@@ -85,17 +86,80 @@ describe("not needed checks", () => {
     const page = readFileSync("views/hhsrs-reporter/duplicates.ejs", "utf8");
     const side = readFileSync("views/hhsrs-reporter/partials/sidebar.ejs", "utf8");
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
-    assert.match(page, /Cases here were not sent\. They are not in the Main Log\./);
-    assert.match(page, /placeholder="Reference, UPRN or address"/);
-    assert.match(page, /All reasons/);
-    assert.match(page, /Move back to Pending/);
-    assert.match(page, /Yes, move back/);
-    assert.match(page, />No</);
+    assert.match(page, /page-section-title/);
+    assert.match(page, /Click the later case to compare it with the one already sent\./);
+    assert.match(page, /View duplicate/);
+    assert.match(page, /Close duplicate/);
+    assert.match(page, /Amend and resend/);
+    assert.match(page, /already sent/);
+    assert.match(page, /Where the first is/);
     assert.doesNotMatch(page, /delete/i);
     assert.match(side, /Duplicates &amp; Errors/);
-    assert.match(side, /summary\.duplicates/);
+    assert.match(side, /summary\.duplicates > 0 \? 'needs-attention'/);
+    assert.match(side, /summary\.waiting > 0 \? '' : ' is-clear'/);
+    assert.match(
+      readFileSync("public/css/hhsrs-reporter.css", "utf8"),
+      /\.side-tabs \.tab-link\.needs-attention\s*\{[\s\S]*?background:\s*var\(--savills-red\)/
+    );
     assert.match(review, /showNotNeeded/);
     assert.match(review, /review\/office-send/);
+  });
+
+  it("puts the sent case on the left and offers amend only when the later case differs", () => {
+    const sent: CompareCase = {
+      id: "sent-id",
+      reference: "MTVH-014",
+      uprn: "98756",
+      fullAddress: "1 Jenkins House",
+      postcode: "B14 6ES",
+      category: "Damp & Mould Growth",
+      rating: "Medium",
+      comment: "Mould around window",
+      surveyDate: "2026-09-20",
+      status: "email_sent",
+      emailSentAt: new Date("2026-09-20T12:00:00.000Z"),
+      createdAt: new Date("2026-09-20T09:00:00.000Z"),
+      notNeededReason: "",
+      notNeededDuplicateOf: "",
+    };
+    const later: CompareCase = {
+      ...sent,
+      id: "later-id",
+      reference: "MTVH-021",
+      rating: "High",
+      comment: "Visible mould in bathroom",
+      surveyDate: "2026-09-28",
+      status: "not_needed",
+      emailSentAt: null,
+      createdAt: new Date("2026-09-28T09:00:00.000Z"),
+      notNeededReason: "duplicate",
+      notNeededDuplicateOf: "MTVH-014",
+    };
+    const row = toDuplicateCompareRow(later, sent, { open: false, reporterBase: "/HHSRSreporter" });
+    assert.equal(row.address, "1 Jenkins House, B14 6ES");
+    assert.equal(row.matches, "Case MTVH-014");
+    assert.equal(row.whereFirst, "Main Log, emailed 20/09/2026");
+    assert.equal(row.left?.heading, "Case MTVH-014 · already sent");
+    assert.equal(row.right?.heading, "Later case · not emailed");
+    assert.equal(row.diff.address, false);
+    assert.equal(row.diff.uprn, false);
+    assert.equal(row.diff.hazard, false);
+    assert.equal(row.diff.rating, true);
+    assert.equal(row.diff.siteNotes, true);
+    assert.equal(row.diff.surveyDate, true);
+    assert.equal(row.amendUrl, "/HHSRSreporter/find?case=sent-id&view=amend");
+
+    const same = toDuplicateCompareRow(
+      { ...later, rating: "Medium", comment: "Mould around window", surveyDate: "2026-09-20", uprn: "98 756" },
+      sent,
+      { open: true, reporterBase: "/HHSRSreporter" }
+    );
+    assert.equal(same.diff.rating, false);
+    assert.equal(same.diff.siteNotes, false);
+    assert.equal(same.diff.surveyDate, false);
+    assert.equal(same.diff.uprn, false);
+    assert.equal(same.amendUrl, "");
+    assert.equal(same.open, true);
   });
 });
 
@@ -284,21 +348,30 @@ describe("duplicates and office emails with the database", () => {
 
       const tab = await request(port, "GET", "/HHSRSreporter/duplicates", { cookie });
       assert.equal(tab.status, 200);
-      assert.match(tab.body, /Cases here were not sent\. They are not in the Main Log\./);
+      assert.match(tab.body, /tab-link[^"]*needs-attention/);
+      assert.match(tab.body, /Click the later case to compare it with the one already sent\./);
       assert.match(tab.body, /Duplicates &amp; Errors/);
-      assert.match(tab.body, new RegExp(duplicate.reference || ""));
-      assert.match(tab.body, /Same mould report, sent again from site\./);
-      assert.doesNotMatch(tab.body, /id="tool-header"|class="tool-header"/);
+      assert.match(tab.body, /View duplicate/);
+      assert.match(tab.body, new RegExp(`9 Duplicate Street ${stamp}`));
+      assert.match(tab.body, new RegExp(`Case ${original.reference}`));
+      assert.match(tab.body, /class="tool-header"/);
+      assert.doesNotMatch(tab.body, /class="step-tabs"/);
 
       const mainLog = await request(port, "GET", "/HHSRSreporter/main-log", { cookie });
       assert.doesNotMatch(mainLog.body, new RegExp(duplicate.reference || "no-ref"));
 
-      const panel = await request(port, "GET", `/HHSRSreporter/duplicates?open=${duplicate.id}`, { cookie });
-      assert.match(panel.body, /Move back to Pending/);
-      assert.match(panel.body, /Yes, move back/);
+      const panel = await request(
+        port,
+        "GET",
+        `/HHSRSreporter/duplicates?q=${encodeURIComponent(duplicate.uprn)}&open=${duplicate.id}`,
+        { cookie }
+      );
+      assert.match(panel.body, /Close duplicate/);
       assert.match(panel.body, /Black mould on the bedroom ceiling/);
-      assert.match(panel.body, new RegExp(`/HHSRSreporter/review/${original.id}`));
-      assert.match(panel.body, /Original Submission/);
+      assert.match(panel.body, new RegExp(`8 Original Street ${stamp}`));
+      assert.match(panel.body, new RegExp(`9 Duplicate Street ${stamp}`));
+      assert.match(panel.body, /Pending/);
+      assert.doesNotMatch(panel.body, /Amend and resend/);
 
       const back = await request(port, "POST", `/HHSRSreporter/duplicates/${duplicate.id}/restore`, { cookie });
       assert.equal(back.status, 302);

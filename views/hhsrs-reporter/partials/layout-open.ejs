@@ -29,8 +29,10 @@
       <%- include("./sidebar") %>
       <div class="work-panel">
         <div class="content-pane">
-          <% if (activeNav !== 'main-log' && activeNav !== 'duplicates') { %>
+          <% if (activeNav !== 'main-log') { %>
           <%- include("./tool-header") %>
+          <% } %>
+          <% if (activeNav !== 'main-log' && activeNav !== 'duplicates') { %>
           <%- include("./step-tabs") %>
           <% } %>
           <% if (typeof flashOk !== 'undefined' && flashOk) { %><p class="flash flash-ok"><%= flashOk %></p><% } %>
