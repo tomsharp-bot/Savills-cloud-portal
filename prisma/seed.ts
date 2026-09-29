@@ -131,6 +131,7 @@ async function main() {
           name: p.name,
           projectManager: p.projectManager,
           stage: p.stage,
+          archivedAt: p.stage === "archive" ? new Date("2024-01-01T00:00:00.000Z") : null,
           hhsrsCode: hhsrsCodeFromProjectName(p.name),
         },
       })

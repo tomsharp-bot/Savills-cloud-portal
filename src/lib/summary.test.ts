@@ -10,6 +10,7 @@ function project(partial: Partial<Project> = {}): Project {
     name: "Cornwall",
     projectManager: "Greg K",
     stage: "current",
+    archivedAt: null,
     typeConditionOnly: true,
     typeConditionEpc: false,
     typeBlocks: true,
