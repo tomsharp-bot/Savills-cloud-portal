@@ -7,22 +7,6 @@ import { prisma } from "../lib/prisma.js";
 import { isProduction } from "../config.js";
 import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS } from "../lib/hhsrs-categories.js";
 import {
-  SITE_FORM_ACCESS_REQUIRED,
-  SITE_FORM_TOO_MANY,
-  SITE_FORM_UNAVAILABLE,
-  SITE_FORM_WRONG_CODE,
-  clearSiteFormAttempts,
-  clientIp,
-  codesMatch,
-  isSixDigitCode,
-  loadSiteFormAccess,
-  noteSiteFormWrongAttempt,
-  safeSiteFormNext,
-  setSiteFormAccessCookie,
-  siteFormAttemptLocked,
-  siteFormCookieMatches,
-} from "../lib/hhsrs-site-access.js";
-import {
   ADDRESS_SOURCE_MANUAL,
   CALL_REF_BLANK_REASONS,
   applyManualAddress,
@@ -299,87 +283,6 @@ hhsrsSiteFormRouter.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 hhsrsSiteFormRouter.use("/assets", express.static(assetsDir));
-
-function renderAccessGate(
-  res: Response,
-  opts: { status: number; error: string; next: string }
-): void {
-  res.status(opts.status).render("hhsrs-site-form/access", {
-    title: "Enter access code — Savills HHSRS Site Reporting",
-    error: opts.error,
-    next: opts.next,
-  });
-}
-
-function siteFormApiPath(path: string): boolean {
-  return path === "/stock-lookup" || path.includes("/photo/");
-}
-
-function denySiteForm(req: Request, res: Response): void {
-  const accept = req.get("accept") || "";
-  const wantsJson = siteFormApiPath(req.path) || (accept.includes("application/json") && !accept.includes("text/html"));
-  if (wantsJson) {
-    res.status(401).json({ error: SITE_FORM_ACCESS_REQUIRED });
-    return;
-  }
-  const nextUrl = safeSiteFormNext(req.originalUrl || HHSRS_SITE_FORM_PATH);
-  const status = req.method === "GET" || req.method === "HEAD" ? 200 : 401;
-  renderAccessGate(res, { status, error: "", next: nextUrl });
-}
-
-/**
- * Shared access code for phones. Signed-in portal users skip it.
- * Styles and scripts under /assets have no stock data and stay open so the code screen can render.
- */
-hhsrsSiteFormRouter.use(async (req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith("/assets")) {
-    next();
-    return;
-  }
-  if (req.method === "POST" && req.path === "/access") {
-    next();
-    return;
-  }
-  if (req.user) {
-    next();
-    return;
-  }
-  try {
-    if (await siteFormCookieMatches(req)) {
-      next();
-      return;
-    }
-  } catch {
-    denySiteForm(req, res);
-    return;
-  }
-  denySiteForm(req, res);
-});
-
-hhsrsSiteFormRouter.post("/access", async (req: Request, res: Response) => {
-  const ip = clientIp(req);
-  const nextUrl = safeSiteFormNext(req.body?.next);
-  if (siteFormAttemptLocked(ip)) {
-    renderAccessGate(res, { status: 429, error: SITE_FORM_TOO_MANY, next: nextUrl });
-    return;
-  }
-  let record;
-  try {
-    record = await loadSiteFormAccess();
-  } catch {
-    renderAccessGate(res, { status: 503, error: SITE_FORM_UNAVAILABLE, next: nextUrl });
-    return;
-  }
-  const given = String(req.body?.code ?? "").trim();
-  if (!isSixDigitCode(given) || !codesMatch(given, record.code)) {
-    noteSiteFormWrongAttempt(ip);
-    renderAccessGate(res, { status: 401, error: SITE_FORM_WRONG_CODE, next: nextUrl });
-    return;
-  }
-  clearSiteFormAttempts(ip);
-  setSiteFormAccessCookie(res, record);
-  res.redirect(nextUrl);
-});
 
 function queryValue(value: unknown): string {
   return (Array.isArray(value) ? String(value[0] ?? "") : String(value ?? "")).trim();

@@ -1922,65 +1922,6 @@
     });
   }
 
-  var accessCode = $("site-access-code");
-  var accessToggle = $("site-access-toggle");
-  var accessChange = $("site-access-change");
-  var accessForm = $("site-access-form");
-  var accessNew = $("site-access-new");
-  var accessGenerate = $("site-access-generate");
-  var accessCancel = $("site-access-cancel");
-  if (accessCode && accessToggle) {
-    accessToggle.addEventListener("click", function () {
-      var shown = accessToggle.getAttribute("aria-pressed") === "true";
-      if (shown) {
-        accessCode.textContent = "••••••";
-        accessToggle.textContent = "Show";
-        accessToggle.setAttribute("aria-pressed", "false");
-      } else {
-        accessCode.textContent = accessCode.getAttribute("data-code") || "";
-        accessToggle.textContent = "Hide";
-        accessToggle.setAttribute("aria-pressed", "true");
-      }
-    });
-  }
-  function randomAccessCode() {
-    var value = "";
-    if (window.crypto && window.crypto.getRandomValues) {
-      var buf = new Uint32Array(1);
-      window.crypto.getRandomValues(buf);
-      value = String(buf[0] % 1000000);
-    } else {
-      value = String(Math.floor(Math.random() * 1000000));
-    }
-    return value.padStart(6, "0");
-  }
-  if (accessChange && accessForm) {
-    accessChange.addEventListener("click", function () {
-      accessForm.hidden = false;
-      accessChange.hidden = true;
-      if (accessNew) accessNew.focus();
-    });
-  }
-  if (accessGenerate && accessNew) {
-    accessGenerate.addEventListener("click", function () {
-      accessNew.value = randomAccessCode();
-      accessNew.focus();
-    });
-  }
-  if (accessNew) {
-    accessNew.addEventListener("input", function () {
-      var digits = String(accessNew.value || "").replace(/\D/g, "").slice(0, 6);
-      if (digits !== accessNew.value) accessNew.value = digits;
-    });
-  }
-  if (accessCancel && accessForm && accessChange) {
-    accessCancel.addEventListener("click", function () {
-      accessForm.hidden = true;
-      accessChange.hidden = false;
-      if (accessNew) accessNew.value = "";
-    });
-  }
-
   var clientEmailPick = $("client-email-project");
   var clientEmailRows = document.querySelectorAll("#client-email-card .client-email-row");
   if (clientEmailPick && clientEmailRows.length) {

@@ -11,7 +11,6 @@ import { resolveHhsrsProject, type ReporterProjectDemo } from "./hhsrs-reporter-
 import { loadPortalProjectNames } from "./hhsrs-portal-projects.js";
 import { emailRecipientsFromProject } from "./hhsrs-reporter.js";
 import { isValidEmailAddress } from "./hhsrs-send.js";
-import { formatAccessDay } from "./hhsrs-site-access.js";
 
 export type ResolvedClientEmailProject = {
   /** HhsrsClientEmail.projectName. The portal Project.name submissions use. */
@@ -68,8 +67,17 @@ export function clientEmailInputId(projectName: string, field: "to" | "cc" | "bc
   return `hhsrs-addr-${slug}-${field}`;
 }
 
+function formatLondonDay(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
 export function clientEmailChangedLine(changedAt: Date, changedByName: string): string {
-  const day = formatAccessDay(changedAt);
+  const day = formatLondonDay(changedAt);
   const name = changedByName.trim();
   return name ? `Last changed ${day} by ${name}` : `Last changed ${day}`;
 }
