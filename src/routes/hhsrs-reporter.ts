@@ -111,6 +111,7 @@ import {
   restoreCaseToPending,
 } from "../lib/hhsrs-not-needed.js";
 import { createOfficeCaseAndSend } from "../lib/hhsrs-office-case.js";
+import { sweepWaitingUprnDuplicates } from "../lib/hhsrs-uprn-duplicates.js";
 import {
   loadSiteFormPhoto,
   privateInlineHeaders,
@@ -209,6 +210,7 @@ hhsrsReporterRouter.use(async (req: Request, res: Response, next) => {
     return;
   }
   try {
+    await sweepWaitingUprnDuplicates();
     const rows = await prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_WAITING_STATUSES] } },
       orderBy: { createdAt: "desc" },
@@ -332,6 +334,7 @@ function shellLocals(opts: {
 
 /* ---------- Lightweight poll for new pending hazards ---------- */
 hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Response) => {
+  await sweepWaitingUprnDuplicates();
   const waitingWhere = { status: { in: [...HHSRS_WAITING_STATUSES] } };
   const [rows, waitingCount] = await Promise.all([
     prisma.hhsrsSiteSubmission.findMany({
@@ -1279,6 +1282,8 @@ async function handleOfficeSend(req: Request, res: Response): Promise<void> {
     storage: sitePhotoStorageFromApp(req.app),
     send: (row, sendBody) => deliverCaseEmail(req, row, sendBody),
   });
+  const moved = result.id ? await sweepWaitingUprnDuplicates() : [];
+  const filedAsDuplicate = Boolean(result.id && moved.some((item) => item.id === result.id));
   if (result.ok) {
     flashOk(req, REVIEW_SENT_CONFIRMATION);
     await archiveLoggedPhotos(req, result.id);
@@ -1286,7 +1291,12 @@ async function handleOfficeSend(req: Request, res: Response): Promise<void> {
     return;
   }
   if (result.pending && result.id) {
-    flashErr(req, "Not sent. The case is in Pending so you can try again.");
+    flashErr(
+      req,
+      filedAsDuplicate
+        ? "Not sent. The UPRN matches an earlier case, so this one is in Duplicates & errors."
+        : "Not sent. The case is in Pending so you can try again."
+    );
     finishOfficeSend(req, res, `${HHSRS_REPORTER_PATH}/review/${result.id}`);
     return;
   }

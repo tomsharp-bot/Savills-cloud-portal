@@ -51,6 +51,7 @@ import {
   safeStoredName,
 } from "../lib/hhsrs-site-form.js";
 import { createSubmissionWithReference } from "../lib/hhsrs-reference.js";
+import { sweepWaitingUprnDuplicates } from "../lib/hhsrs-uprn-duplicates.js";
 import {
   PHOTOS_NOT_STORED,
   SitePhotoError,
@@ -552,6 +553,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
       });
     }
     await deleteDraft(draft.id);
+    await sweepWaitingUprnDuplicates();
     res.redirect(hhsrsUrl(`/thanks?id=${encodeURIComponent(created.id)}`));
   } catch (err) {
     if (storedKeys.length) {
