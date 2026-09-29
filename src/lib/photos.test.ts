@@ -5,6 +5,8 @@ import { join } from "node:path";
 import {
   accentClassForName,
   buildFolderName,
+  IMPORTED_FOLDER_NAME_MAX,
+  parseImportedFolderName,
   buildPlaceholderZip,
   buildPoolCodes,
   canonicalCodes,
@@ -80,6 +82,23 @@ describe("folder naming", () => {
     assert.equal(buildFolderName(3, "Pictures Batch 3"), "3. Pictures Batch 3");
     assert.equal(buildFolderName(3, "3. Extra"), "3. Extra");
     assert.equal(buildFolderName(3, ""), null);
+  });
+
+  it("keeps an imported computer folder name and rejects a path", () => {
+    const named = parseImportedFolderName("  March site visit  ");
+    assert.equal(named.ok, true);
+    if (named.ok) assert.equal(named.name, "March site visit");
+    assert.equal(parseImportedFolderName("").ok, false);
+    assert.equal(parseImportedFolderName("   ").ok, false);
+    assert.equal(parseImportedFolderName(".").ok, false);
+    assert.equal(parseImportedFolderName("..").ok, false);
+    assert.equal(parseImportedFolderName("../secret").ok, false);
+    assert.equal(parseImportedFolderName("photos/pool").ok, false);
+    assert.equal(parseImportedFolderName("photos\\pool").ok, false);
+    assert.equal(parseImportedFolderName("a\u0000b").ok, false);
+    assert.equal(parseImportedFolderName("x".repeat(IMPORTED_FOLDER_NAME_MAX + 1)).ok, false);
+    const maxed = parseImportedFolderName("x".repeat(IMPORTED_FOLDER_NAME_MAX));
+    assert.equal(maxed.ok, true);
   });
 });
 
@@ -448,6 +467,17 @@ describe("photo lightbox markup", () => {
     assert.doesNotMatch(css, /repeat\(15,\s*minmax\(0,\s*1fr\)\)/);
     assert.match(js, /data-folder-replace-confirm/);
     assert.match(js, /poolReplaceApi/);
+    assert.match(view, /id="btnImportPhotoFolder"/);
+    assert.match(view, />Import Photo Folder</);
+    assert.match(view, /webkitdirectory/);
+    assert.match(view, /id="importPhotoFolderInput"/);
+    assert.match(js, /importFolderApi/);
+    assert.match(js, /function chosenFolderName/);
+    assert.match(js, /Nothing was deleted/);
+    const importFn = js.slice(js.indexOf("async function importChosenFolder"), js.indexOf("const importFolderBtn"));
+    assert.ok(importFn.length > 0);
+    assert.doesNotMatch(importFn, /\/delete/);
+    assert.doesNotMatch(importFn, /openDelete/);
     assert.match(view, /id="btnPoolShowAll"/);
     assert.match(view, />Show all</);
     assert.match(view, /Showing photos added in the last 7 days/);

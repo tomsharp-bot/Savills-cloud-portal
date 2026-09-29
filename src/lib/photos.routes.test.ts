@@ -140,6 +140,9 @@ describe("Photo Storage routes", () => {
     assert.match(project.body, /id="btnDownloadZip"/);
     assert.match(project.body, /id="btnDeletePhotos"/);
     assert.match(project.body, /id="btnRenamePhoto"/);
+    assert.match(project.body, /id="btnImportPhotoFolder"/);
+    assert.match(project.body, />Import Photo Folder</);
+    assert.match(project.body, /webkitdirectory/);
 
     const bootMatch = project.body.match(/window\.__PHOTOS__ = (\{[\s\S]*?\});\s*<\/script>/);
     assert.ok(bootMatch, "expected bootstrap JSON");
@@ -217,6 +220,12 @@ describe("Photo Storage routes", () => {
     assert.equal(boot.uploadConcurrency, 4);
     assert.equal(typeof boot.poolUploadApi, "string");
     assert.match(boot.poolUploadApi, /\/pool\/upload$/);
+    assert.match(boot.importFolderApi, /\/folders\/import$/);
+    const surveyorImport = await request(port, "POST", `/projectprogress${boot.importFolderApi}`, {
+      cookie: surveyorCookie,
+      body: { name: "Surveyor must not import" },
+    });
+    assert.equal(surveyorImport.status, 403);
   });
 
   it("admins can rename and delete pool and folder photos, scoped to that project", async (t) => {
@@ -1214,5 +1223,162 @@ describe("Photo Storage routes", () => {
     assert.equal(zipRes.status, 200);
     assert.equal(await prisma.photoFolder.findUnique({ where: { id: zip.id } }), null);
     assert.ok(await prisma.photoPoolItem.findUnique({ where: { id: only.id } }));
+  });
+
+  it("imports a photo folder under the computer folder name and does not change existing folders", async (t) => {
+    let projectCount = 0;
+    try {
+      projectCount = await prisma.project.count();
+    } catch {
+      t.skip("Postgres not available");
+      return;
+    }
+    if (!projectCount) {
+      t.skip("No seeded projects");
+      return;
+    }
+
+    const app = createApp({ basePath: "/projectprogress" });
+    const { server, port } = await listen(app);
+    t.after(() => server.close());
+
+    const login = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "phil.m", password: "PhilMoon2468" },
+    });
+    const cookie = cookieHeader(login.setCookie);
+    const landing = await request(port, "GET", "/projectprogress/photos", { cookie });
+    const m = landing.body.match(/href="\/projectprogress\/photos\/projects\/([^"]+)"/);
+    assert.ok(m, "expected a project tile link");
+    const projectId = m![1];
+    const stamp = Date.now().toString(36);
+    const folderName = `Site visit ${stamp}`;
+    const keepCode = `zz-import-keep-${stamp}`;
+    const addedCode = `zz-import-add-${stamp}`;
+
+    const keep = await prisma.photoPoolItem.create({
+      data: { projectId, code: keepCode, fileName: `${keepCode}.jpg`, spacesKey: "" },
+    });
+    const existingFolder = await prisma.photoFolder.create({
+      data: {
+        projectId,
+        name: `1. Existing ${stamp}`,
+        kind: "folder",
+        photoCodes: [keepCode],
+      },
+    });
+    const zip = await prisma.photoFolder.create({
+      data: { projectId, name: `pack-${stamp}.zip`, kind: "zip", sizeLabel: "12 MB", photoCodes: [] },
+    });
+    const createdFolderIds = [existingFolder.id, zip.id];
+    const createdPoolIds = [keep.id];
+    t.after(async () => {
+      await prisma.photoFolder.deleteMany({ where: { id: { in: createdFolderIds } } });
+      await prisma.photoPoolItem.deleteMany({ where: { id: { in: createdPoolIds } } });
+      await prisma.photoPoolItem.deleteMany({ where: { projectId, code: addedCode } });
+    });
+
+    const beforePool = await prisma.photoPoolItem.count({ where: { projectId } });
+    const beforeFolders = await prisma.photoFolder.count({ where: { projectId } });
+
+    const missing = await request(port, "POST", "/projectprogress/photos/projects/not-a-project/folders/import", {
+      cookie,
+      body: { name: folderName },
+    });
+    assert.equal(missing.status, 404);
+
+    const blank = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/folders/import`, {
+      cookie,
+      body: { name: "   " },
+    });
+    assert.equal(blank.status, 400);
+
+    const unsafe = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/folders/import`, {
+      cookie,
+      body: { name: "../secret" },
+    });
+    assert.equal(unsafe.status, 400);
+    assert.equal(await prisma.photoFolder.count({ where: { projectId } }), beforeFolders);
+
+    const created = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/folders/import`, {
+      cookie,
+      body: { name: `  ${folderName}  ` },
+    });
+    assert.equal(created.status, 200);
+    const createdJson = JSON.parse(created.body);
+    assert.equal(createdJson.ok, true);
+    assert.equal(createdJson.folder.name, folderName);
+    assert.equal(createdJson.folder.kind, "folder");
+    assert.equal(createdJson.folder.clientAccess, false);
+    assert.deepEqual(createdJson.folder.photoCodes, []);
+    createdFolderIds.push(createdJson.folder.id);
+
+    const again = await request(port, "POST", `/projectprogress/photos/projects/${projectId}/folders/import`, {
+      cookie,
+      body: { name: folderName },
+    });
+    assert.equal(again.status, 200);
+    const againJson = JSON.parse(again.body);
+    assert.notEqual(againJson.folder.id, createdJson.folder.id);
+    assert.equal(againJson.folder.name, folderName);
+    assert.deepEqual(againJson.folder.photoCodes, []);
+    createdFolderIds.push(againJson.folder.id);
+
+    const existingAfter = await prisma.photoFolder.findUnique({ where: { id: existingFolder.id } });
+    assert.deepEqual(existingAfter?.photoCodes, [keepCode]);
+    const zipAfter = await prisma.photoFolder.findUnique({ where: { id: zip.id } });
+    assert.equal(zipAfter?.kind, "zip");
+    assert.equal(zipAfter?.name, `pack-${stamp}.zip`);
+    assert.equal(zipAfter?.sizeLabel, "12 MB");
+    assert.ok(await prisma.photoPoolItem.findUnique({ where: { id: keep.id } }));
+    assert.equal(await prisma.photoPoolItem.count({ where: { projectId } }), beforePool);
+    assert.equal(await prisma.photoFolder.count({ where: { projectId } }), beforeFolders + 2);
+
+    const removed: string[] = [];
+    const storage: PhotoStorageOps = {
+      configured: () => true,
+      remove: async (key) => {
+        removed.push(key);
+        return true;
+      },
+      copy: async () => "copied",
+      put: async () => true,
+    };
+    const uploaded = await uploadProjectPhoto(
+      projectId,
+      { originalName: `${addedCode}.jpg`, buffer: Buffer.from("import-bytes"), mime: "image/jpeg" },
+      { kind: "folder", folderId: createdJson.folder.id },
+      storage
+    );
+    assert.equal(uploaded.ok, true);
+    if (!uploaded.ok) return;
+    assert.equal(removed.length, 0);
+    const added = await prisma.photoPoolItem.findFirst({ where: { projectId, code: addedCode } });
+    assert.ok(added);
+    if (added) createdPoolIds.push(added.id);
+    const importedRow = await prisma.photoFolder.findUnique({ where: { id: createdJson.folder.id } });
+    const importedCodes = Array.isArray(importedRow?.photoCodes) ? importedRow.photoCodes.map(String) : [];
+    assert.deepEqual(importedCodes, [addedCode]);
+    const duplicateRow = await prisma.photoFolder.findUnique({ where: { id: againJson.folder.id } });
+    assert.deepEqual(duplicateRow?.photoCodes, []);
+    const existingStill = await prisma.photoFolder.findUnique({ where: { id: existingFolder.id } });
+    assert.deepEqual(existingStill?.photoCodes, [keepCode]);
+    const zipStill = await prisma.photoFolder.findUnique({ where: { id: zip.id } });
+    assert.equal(zipStill?.kind, "zip");
+    assert.equal((await prisma.photoPoolItem.findUnique({ where: { id: keep.id } }))?.code, keepCode);
+
+    const clash = await uploadProjectPhoto(
+      projectId,
+      { originalName: `${keepCode}.jpg`, buffer: Buffer.from("nope"), mime: "image/jpeg" },
+      { kind: "folder", folderId: createdJson.folder.id },
+      storage
+    );
+    assert.equal(clash.ok, false);
+    if (!clash.ok) assert.equal(clash.status, 409);
+    assert.equal(removed.length, 0);
+    assert.equal((await prisma.photoPoolItem.findUnique({ where: { id: keep.id } }))?.spacesKey, "");
+    const importedAfterClash = await prisma.photoFolder.findUnique({ where: { id: createdJson.folder.id } });
+    const afterCodes = Array.isArray(importedAfterClash?.photoCodes) ? importedAfterClash.photoCodes.map(String) : [];
+    assert.deepEqual(afterCodes, [addedCode]);
+    assert.equal(afterCodes.includes(keepCode), false);
   });
 });

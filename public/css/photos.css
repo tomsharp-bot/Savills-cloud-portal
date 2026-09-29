@@ -390,6 +390,7 @@
 .photos-page .photo-code-ext { font-size: 0.7rem; color: var(--muted); flex: none; line-height: 1.3; padding-bottom: 2px; }
 .photos-page .photo-meta { padding: 0 5px 8px; font-size: 0.65rem; color: var(--muted); word-break: break-all; line-height: 1.25; }
 .photos-page .folders-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.photos-page .folders-toolbar #btnImportPhotoFolder { flex: none; }
 .photos-page .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 .photos-page table.folders-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .photos-page .folders-table th {

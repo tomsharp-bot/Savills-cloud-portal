@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import {
   buildPlaceholderZip,
   canonicalCodes,
+  createImportedPhotoFolder,
   createPhotosExtract,
   defaultPhotoStorageOps,
   deleteProjectFolder,
@@ -233,6 +234,7 @@ photosRouter.get("/projects/:id", async (req: Request, res: Response) => {
       poolRenameApi: `/photos/projects/${project.id}/pool/rename`,
       poolReplaceApi: `/photos/projects/${project.id}/pool/replace`,
       poolUploadApi: `/photos/projects/${project.id}/pool/upload`,
+      importFolderApi: `/photos/projects/${project.id}/folders/import`,
       poolQueryApi: `/photos/projects/${project.id}/pool`,
       poolRecentDays: POOL_RECENT_DAYS,
       photoShareApi: `/photos/projects/${project.id}/photo-share`,
@@ -337,6 +339,20 @@ photosRouter.post("/projects/:id/extract", async (req: Request, res: Response) =
     return;
   }
   res.json({ ok: true, ...result.result });
+});
+
+photosRouter.post("/projects/:id/folders/import", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Project not found." });
+    return;
+  }
+  const result = await createImportedPhotoFolder(project.id, String(req.body?.name ?? ""));
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error });
+    return;
+  }
+  res.json({ ok: true, folder: result.folder });
 });
 
 photosRouter.post("/projects/:id/folders/:folderId/client-access", async (req: Request, res: Response) => {
