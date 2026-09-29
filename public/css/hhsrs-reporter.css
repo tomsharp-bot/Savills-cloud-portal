@@ -3064,10 +3064,10 @@ tr.is-new-log td { background: #f5f3ff; }
 
 .dup-page { padding-bottom: 24px; }
 
-/* Approved compare: card titles hug the words. The page title stays the full pale-grey bar. */
+/* Approved compare: grey bar hugs the words, sent case left, later case right. */
 .dup-compare .page-header { justify-content: flex-start; margin-bottom: 14px; }
 .dup-compare .page-header > div { max-width: 100%; }
-.dup-compare .dup-card .page-section-title {
+.dup-compare .page-section-title {
   display: inline-block;
   width: fit-content;
   max-width: 100%;
