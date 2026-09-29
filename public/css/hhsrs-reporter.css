@@ -219,6 +219,44 @@ a.linkish.active, .linkish.active {
   background: var(--navy);
   color: var(--savills-yellow);
 }
+/* A case in Duplicates & errors: the menu item is red until the list is empty. */
+.side-tabs .tab-link.needs-attention {
+  background: var(--savills-red);
+  color: #fff;
+  border-color: var(--savills-red);
+  box-shadow: 0 0 0 1px rgba(206, 23, 30, 0.45);
+}
+.side-tabs .tab-link.needs-attention .tab-ico {
+  color: #fff;
+}
+.side-tabs .tab-link.needs-attention .tab-ico svg {
+  stroke: #fff;
+}
+.side-tabs .tab-link.needs-attention:hover {
+  background: #a81218;
+  color: #fff;
+  border-color: #a81218;
+}
+.side-tabs .tab-link.needs-attention .tab-badge {
+  background: #fff;
+  color: var(--savills-red);
+}
+.side-tabs .tab-link.needs-attention.active {
+  background: var(--savills-red);
+  color: #fff;
+  border-color: #fff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.side-tabs .tab-link.needs-attention.active .tab-ico {
+  color: #fff;
+}
+.side-tabs .tab-link.needs-attention.active .tab-ico svg {
+  stroke: #fff;
+}
+.side-tabs .tab-link.needs-attention.active .tab-badge {
+  background: #fff;
+  color: var(--savills-red);
+}
 .side-footnote {
   margin-top: auto;
   padding: 0.75rem 0.7rem 0.25rem;

@@ -93,7 +93,11 @@ describe("not needed checks", () => {
     assert.match(page, />No</);
     assert.doesNotMatch(page, /delete/i);
     assert.match(side, /Duplicates &amp; errors/);
-    assert.match(side, /summary\.duplicates/);
+    assert.match(side, /summary\.duplicates > 0 \? 'needs-attention'/);
+    assert.match(
+      readFileSync("public/css/hhsrs-reporter.css", "utf8"),
+      /\.side-tabs \.tab-link\.needs-attention\s*\{[\s\S]*?background:\s*var\(--savills-red\)/
+    );
     assert.match(review, /showNotNeeded/);
     assert.match(review, /review\/office-send/);
   });
@@ -284,6 +288,7 @@ describe("duplicates and office emails with the database", () => {
 
       const tab = await request(port, "GET", "/HHSRSreporter/duplicates", { cookie });
       assert.equal(tab.status, 200);
+      assert.match(tab.body, /tab-link[^"]*needs-attention/);
       assert.match(tab.body, /Cases here were not sent\. They are not in the Main Log\./);
       assert.match(tab.body, /Duplicates &amp; errors/);
       assert.match(tab.body, new RegExp(duplicate.reference || ""));

@@ -626,6 +626,7 @@ describe("UPRN duplicates in the database", () => {
     assert.match(page.body, new RegExp(`12 High Street ${stamp}`));
     assert.match(page.body, new RegExp(`Flat 4, 88 Other Road ${stamp}`));
     assert.match(page.body, /Same UPRN as /);
+    assert.match(page.body, /tab-link[^"]*needs-attention/);
 
     const [kept, movedMiddle, movedLatest, single] = await Promise.all([
       prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: earliest.id } }),
