@@ -135,7 +135,7 @@ describe("HHSRS Reporter auth and queue", () => {
 
     const blank = await request(app, "GET", "/HHSRSreporter/review", { cookie });
     assert.equal(blank.status, 200);
-    assert.match(blank.body, /Review and create/);
+    assert.match(blank.body, /Review &amp; Create/);
     assert.match(blank.body, /Select a project/);
     assert.match(blank.body, /Send and log/);
     assert.doesNotMatch(blank.body, /Mark as actioned/);

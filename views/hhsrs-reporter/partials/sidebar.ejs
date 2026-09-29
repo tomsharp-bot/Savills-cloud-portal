@@ -5,9 +5,9 @@
     <span class="tab-label">Dashboard</span>
     <% if (summary.waiting > 0) { %><span class="tab-badge"><%= summary.waiting %></span><% } %>
   </a>
-  <a href="<%= reporterBase %>/review" class="tab-link <%= activeNav === 'review' ? 'active' : '' %>" title="Review and create">
+  <a href="<%= reporterBase %>/review" class="tab-link <%= activeNav === 'review' ? 'active' : '' %>" title="Review &amp; Create">
     <span class="tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 4.5h7a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 19V6a1.5 1.5 0 0 1 1.5-1.5Z"/><path d="M9.5 4.5V3.8a1.3 1.3 0 0 1 1.3-1.3h2.4a1.3 1.3 0 0 1 1.3 1.3v.7"/><path d="m9.2 12.2 2 2 3.8-4"/></svg></span>
-    <span class="tab-label">Review and create</span>
+    <span class="tab-label">Review &amp; Create</span>
   </a>
   <a href="<%= reporterBase %>/find" class="tab-link <%= activeNav === 'find' ? 'active' : '' %>" title="Find and resend">
     <span class="tab-ico find-emoji" aria-hidden="true">🔍</span>

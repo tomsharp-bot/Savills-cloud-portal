@@ -407,7 +407,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     ...shellLocals({
       activeNav: "review",
       summary,
-      title: "Review and create — HHSRS Reporter",
+      title: "Review & Create — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
@@ -488,7 +488,7 @@ async function renderReview(
     ...shellLocals({
       activeNav: "review",
       summary: opts.summary,
-      title: "Review and create — " + row.projectName,
+      title: "Review & Create — " + row.projectName,
       flashOk: opts.flashOk || flash.ok,
       flashErr: opts.flashErr || flash.err,
     }),

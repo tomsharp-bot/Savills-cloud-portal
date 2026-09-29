@@ -15,7 +15,7 @@
 
 <div class="page-header">
   <div>
-    <h2 class="page-section-title">Review and create<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
+    <h2 class="page-section-title">Review &amp; Create<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
     <% if (isFilled) { %>
       <p class="subtitle" id="review-subtitle">Review the site submission for <%= row.projectName %>, then send the client email.</p>
     <% } else { %>
@@ -354,7 +354,7 @@
   </section>
 </div>
 
-<p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
+<p class="footer-note">Review &amp; Create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
 
 <% if (!sentEmail && !caseNotNeeded) { %>
 <div class="ck-overlay" id="ck-overlay" hidden>
