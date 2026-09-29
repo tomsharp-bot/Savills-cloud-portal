@@ -12,7 +12,6 @@ export type ProjectExtras = {
   survey_date: boolean;
   vulnerabilities: boolean;
   cause: boolean;
-  escalation: boolean;
   onward: boolean;
   work_order: boolean;
   online_form: boolean;
@@ -42,7 +41,6 @@ const NONE: ProjectExtras = {
   survey_date: false,
   vulnerabilities: false,
   cause: false,
-  escalation: false,
   onward: false,
   work_order: false,
   online_form: false,
@@ -94,7 +92,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
     name: "Vico 2026 8k",
     template: "Vico Homes",
     ratingScheme: "OLD",
-    extras: { ...NONE, calls: true, vulnerabilities: true, cause: true, escalation: true },
+    extras: { ...NONE, calls: true, vulnerabilities: true, cause: true },
     to: [],
     cc: [],
     hint: "Vico: mod DMC emailed with cause + vulnerabilities; Cat 1 Emerg ring / Significant do not.",

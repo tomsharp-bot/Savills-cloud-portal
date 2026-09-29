@@ -667,7 +667,6 @@
       suspectedCause: ($("rv-cause") && $("rv-cause").value) || "",
       includeCause: !!($("rv-include-cause") && $("rv-include-cause").checked),
       vulnerabilities: ($("rv-vulnerabilities") && $("rv-vulnerabilities").value) || "",
-      escalation: ($("rv-escalation") && $("rv-escalation").value) || "",
       onwardTopic: ($("rv-onward-topic") && $("rv-onward-topic").value) || "",
       cat1Confirmed: !!($("rv-cat1") && $("rv-cat1").checked),
       workOrder: ($("rv-work-order") && $("rv-work-order").value) || "",
@@ -741,7 +740,7 @@
   }
 
   function clearBlankReview() {
-    ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-notes", "rv-call-ref", "rv-call-notes", "rv-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"].forEach(function (id) {
+    ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-notes", "rv-call-ref", "rv-call-notes", "rv-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"].forEach(function (id) {
       var el = $(id);
       if (el && !el.readOnly) el.value = "";
     });
@@ -799,7 +798,7 @@
      declarations, and var initialisers are not hoisted with their values. */
   var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
   var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
-  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
+  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"];
   var REVIEW_EMAIL_FIELD_IDS = ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"];
   var reviewDraftSaveTimer = null;
   var resumeCleared = false;

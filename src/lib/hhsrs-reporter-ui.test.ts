@@ -105,7 +105,7 @@ describe("HHSRS Reporter UI helpers", () => {
       suspectedCause: "",
       includeCause: true,
       vulnerabilities: "",
-      escalation: "",
+      escalation: "Significant Severe",
       onwardTopic: "",
       cat1Confirmed: false,
       photoPaths: ["hhsrs-site-form/x/a.jpg", "hhsrs-site-form/x/b.jpg"],
@@ -128,6 +128,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
     assert.match(draft.body, /• Hazard: Electrical Hazards/);
+    assert.match(draft.body, /• Rating: High/);
+    assert.doesNotMatch(draft.body, /Escalation/);
     assert.match(draft.body, /• Survey date: 20\/09\/2026/);
     assert.doesNotMatch(draft.body, /2026-09-20/);
     assert.doesNotMatch(draft.body, /Attached are photos/);
@@ -261,7 +263,6 @@ describe("HHSRS Reporter UI helpers", () => {
       'data-extra="onward"',
       'data-extra="cause"',
       'data-extra="vulnerabilities"',
-      'data-extra="escalation"',
       'data-extra="work_order"',
       'data-extra="online_form"',
       'id="rv-internal-notes"',
@@ -269,6 +270,9 @@ describe("HHSRS Reporter UI helpers", () => {
       const at = caseFields.indexOf(marker);
       assert.ok(at >= 0 && at < photosInFields, `${marker} sits above the case Photos block`);
     }
+    assert.equal(caseFields.includes("Escalation category"), false);
+    assert.equal(caseFields.includes('id="rv-escalation"'), false);
+    assert.match(caseFields, /<label for="rv-rating">Rating<\/label>/);
     assert.ok(photosAt > 0 && generateAt > photosAt);
     assert.ok(emailPhotosAt > generateAt && downloadAt > emailPhotosAt);
     assert.equal(review.slice(photosAt, generateAt).includes("btn-download-photos"), false);
