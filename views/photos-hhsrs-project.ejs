@@ -53,6 +53,7 @@
                   <button type="button" class="photo-card" role="listitem" data-photo-open data-src="<%= baseUrl(photo.imageUrl) %>" data-title="<%= photo.fileName %>" data-sub="<%= sub %>" aria-label="<%= photo.fileName %>">
                     <img class="photo-thumb-img" src="<%= baseUrl(photo.imageUrl) %>" alt="" loading="lazy" decoding="async" />
                     <div class="photo-name"><%= photo.fileName %></div>
+                    <div class="hhsrs-copied-at"><%= photo.copiedAtLabel %></div>
                     <div class="photo-meta">UPRN <%= photo.uprn %></div>
                   </button>
                 <% }) %>

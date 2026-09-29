@@ -19,6 +19,7 @@ import {
   defaultHhsrsCopyDeps,
   displayAddress,
   fileNameFromSource,
+  formatHhsrsCopiedAt,
   hhsrsCompletedObjectKey,
   hhsrsDiskPath,
   mergePhotoSearchHits,
@@ -281,6 +282,15 @@ describe("photo storage search", () => {
   });
 });
 
+describe("HHSRS copied-at label", () => {
+  it("shows the completed-photo write time in UK day/month/year and 24-hour time", () => {
+    assert.equal(formatHhsrsCopiedAt(new Date("2026-09-29T13:51:00.000Z")), "29/09/2026 14:51");
+    assert.equal(formatHhsrsCopiedAt(new Date("2026-01-15T14:51:00.000Z")), "15/01/2026 14:51");
+    assert.equal(formatHhsrsCopiedAt(new Date("2026-09-29T23:05:00.000Z")), "30/09/2026 00:05");
+    assert.equal(formatHhsrsCopiedAt(new Date(Number.NaN)), "");
+  });
+});
+
 describe("HHSRS completed photo pages", () => {
   it("keeps the current project tiles and adds the completed section and find bar", () => {
     const page = readFileSync(path.join(root, "views/photos.ejs"), "utf8");
@@ -299,10 +309,18 @@ describe("HHSRS completed photo pages", () => {
     assert.match(project, /photo-thumb-img/);
     assert.match(project, /data-photo-open/);
     assert.match(project, /photo\.imageUrl/);
+    assert.match(project, /hhsrs-copied-at/);
+    assert.match(project, /photo\.copiedAtLabel/);
+    const nameAt = project.indexOf('class="photo-name"');
+    const copiedAt = project.indexOf("hhsrs-copied-at");
+    assert.ok(nameAt > 0 && copiedAt > nameAt);
     assert.doesNotMatch(project, /folders-table/);
     assert.doesNotMatch(project, /open one to see its photos/);
     const property = readFileSync(path.join(root, "views/photos-hhsrs-property.ejs"), "utf8");
     assert.match(property, /data-photo-open/);
+    assert.doesNotMatch(property, /hhsrs-copied-at|copiedAtLabel/);
+    const pool = readFileSync(path.join(root, "views/photos-project.ejs"), "utf8");
+    assert.doesNotMatch(pool, /hhsrs-copied-at|copiedAtLabel/);
     const reporter = readFileSync(path.join(root, "src/routes/hhsrs-reporter.ts"), "utf8");
     const sendAt = reporter.indexOf("async function handleSend");
     const copyAt = reporter.indexOf("archiveLoggedPhotos", sendAt);
@@ -517,6 +535,8 @@ describe("HHSRS completed photos with the database", () => {
       assert.match(properties.body, /data-photo-open/);
       assert.match(properties.body, /photo-thumb-img/);
       assert.match(properties.body, /\/photos\/hhsrs-photo\//);
+      assert.match(properties.body, /hhsrs-copied-at/);
+      assert.match(properties.body, /\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/);
       assert.doesNotMatch(properties.body, /folders-table/);
 
       const property = await request(

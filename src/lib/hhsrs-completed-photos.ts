@@ -125,6 +125,8 @@ export type HhsrsCompletedPhotoView = {
   address: string;
   contentType: string;
   imageUrl: string;
+  /** UK wall time when this photo was copied into HHSRS - Completed, e.g. 29/09/2026 14:51. */
+  copiedAtLabel: string;
 };
 
 export type PhotoSearchHit = {
@@ -165,6 +167,28 @@ export function completedProjectName(input: {
     if (mapped) return mapped;
   }
   return stored || "Unassigned";
+}
+
+/** Day/month/year and 24-hour UK time for a completed-photo write (`copiedAt`). */
+export function formatHhsrsCopiedAt(value: Date | null | undefined): string {
+  if (!value || Number.isNaN(value.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const pick = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  const day = pick("day").padStart(2, "0");
+  const month = pick("month").padStart(2, "0");
+  const year = pick("year");
+  const hour = pick("hour").padStart(2, "0");
+  const minute = pick("minute").padStart(2, "0");
+  if (!day || !month || !year || !hour || !minute) return "";
+  return `${day}/${month}/${year} ${hour}:${minute}`;
 }
 
 export function displayAddress(fullAddress: string, postcode = ""): string {
@@ -617,6 +641,7 @@ function completedPhotoView(row: {
   fullAddress: string;
   postcode: string;
   contentType: string;
+  copiedAt: Date;
 }): HhsrsCompletedPhotoView {
   return {
     id: row.id,
@@ -625,6 +650,7 @@ function completedPhotoView(row: {
     address: displayAddress(row.fullAddress, row.postcode),
     contentType: row.contentType,
     imageUrl: hhsrsCompletedFilePath(row.id),
+    copiedAtLabel: formatHhsrsCopiedAt(row.copiedAt),
   };
 }
 
