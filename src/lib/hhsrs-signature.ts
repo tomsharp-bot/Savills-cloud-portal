@@ -1,6 +1,6 @@
 /**
  * Savills HHSRS email signature.
- * The wording is fixed. Only the sender's first name and full name change.
+ * The wording is fixed and has no personal name.
  * The logo is an inline image, not a case photo.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -14,6 +14,9 @@ export const SIGNATURE_TEAM = "HHSRS Reporting Team";
 export const SIGNATURE_ADDRESS = "Savills, 33 Margaret Street, London, W1G 0JD";
 export const SIGNATURE_LOGO_CID = "savills-logo@savillshousing.co.uk";
 export const SIGNATURE_LOGO_FILENAME = "savills-logo.png";
+/** Same square as the approved email crop. Do not stretch it. */
+export const SIGNATURE_LOGO_PX = 53;
+export const SIGNATURE_LOGO_PUBLIC_PATH = "/img/savills-logo.png";
 /** Short, plain. Shown when the signed-in person has no name on file. */
 export const MISSING_SENDER_NAME_WARNING = "No name found for the signature.";
 
@@ -101,8 +104,8 @@ export function signatureFromLoggedSender(sentBy: string | null | undefined): Se
 
 function signatureLogoPath(): string {
   const candidates = [
-    path.join(process.cwd(), "public/img/savills-hhsrs-signature.png"),
-    path.join(process.cwd(), "dist/public/img/savills-hhsrs-signature.png"),
+    path.join(process.cwd(), "public/img/savills-logo.png"),
+    path.join(process.cwd(), "dist/public/img/savills-logo.png"),
   ];
   const found = candidates.find((item) => existsSync(item));
   if (!found) throw new Error("Savills signature logo is missing.");
@@ -132,16 +135,21 @@ export function signatureLogoAttachment(): {
   };
 }
 
-export function renderSignatureText(names: Pick<SenderSignature, "firstName" | "fullName">): string {
-  const lines: string[] = ["Regards", ""];
-  const firstName = tidyName(names.firstName);
-  const fullName = tidyName(names.fullName);
-  if (firstName) lines.push(firstName, "");
-  if (fullName) lines.push(fullName);
-  lines.push(SIGNATURE_TEAM, "", SIGNATURE_ADDRESS, "");
-  lines.push(`Email: ${SIGNATURE_EMAIL}`, `Website: ${SIGNATURE_WEB}`, "");
-  lines.push(`${LEAF} Before printing, think about the environment`, "");
-  lines.push(SIGNATURE_LEGAL_PARAGRAPHS.join("\n\n"));
+export function renderSignatureText(_names: Pick<SenderSignature, "firstName" | "fullName">): string {
+  const lines: string[] = [
+    "Regards",
+    "",
+    SIGNATURE_TEAM,
+    "",
+    SIGNATURE_ADDRESS,
+    "",
+    `Email: ${SIGNATURE_EMAIL}`,
+    `Website: ${SIGNATURE_WEB}`,
+    "",
+    `${LEAF} Before printing, think about the environment`,
+    "",
+    SIGNATURE_LEGAL_PARAGRAPHS.join("\n\n"),
+  ];
   return lines.join("\n");
 }
 
@@ -150,22 +158,16 @@ function signatureParagraph(text: string, marginBottom: string): string {
 }
 
 export function renderSignatureHtml(
-  names: Pick<SenderSignature, "firstName" | "fullName">,
+  _names: Pick<SenderSignature, "firstName" | "fullName">,
   logoSrc: string
 ): string {
-  const firstName = tidyName(names.firstName);
-  const fullName = tidyName(names.fullName);
   const parts: string[] = [
     `<div class="hhsrs-signature" style="font-family:Calibri,Aptos,Arial,sans-serif;font-size:14.5px;line-height:1.45;color:#111111;">`,
     signatureParagraph("Regards", "16px"),
+    signatureParagraph(SIGNATURE_TEAM, "16px"),
+    signatureParagraph(escapeHtml(SIGNATURE_ADDRESS), "16px"),
+    `<p style="margin:0 0 16px;"><img src="${escapeHtml(logoSrc)}" alt="Savills" width="${SIGNATURE_LOGO_PX}" height="${SIGNATURE_LOGO_PX}" style="width:${SIGNATURE_LOGO_PX}px;height:${SIGNATURE_LOGO_PX}px;object-fit:contain;border:0;display:block;" /></p>`,
   ];
-  if (firstName) parts.push(signatureParagraph(escapeHtml(firstName), "16px"));
-  if (fullName) parts.push(`<p style="margin:0;">${escapeHtml(fullName)}</p>`);
-  parts.push(signatureParagraph(SIGNATURE_TEAM, "16px"));
-  parts.push(signatureParagraph(escapeHtml(SIGNATURE_ADDRESS), "16px"));
-  parts.push(
-    `<p style="margin:0 0 16px;"><img src="${escapeHtml(logoSrc)}" alt="Savills" height="52" style="height:52px;width:52px;border:0;display:block;" /></p>`
-  );
   parts.push(
     `<p style="margin:0;">Email: <a href="${SIGNATURE_EMAIL_URL}" style="color:#2563eb;text-decoration:underline;">${SIGNATURE_EMAIL}</a></p>`
   );

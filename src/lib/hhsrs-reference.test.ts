@@ -454,7 +454,8 @@ describe("HHSRS find search and resend", () => {
         sent[0].text,
         composeEmailText("Please use the repairs team.", { firstName: "Tom", fullName: "Tom Sharp" })
       );
-      assert.match(sent[0].html, />Tom Sharp</);
+      assert.match(sent[0].html, /HHSRS Reporting Team/);
+      assert.doesNotMatch(sent[0].html, />Tom Sharp</);
 
       const again = await prisma.hhsrsSentEmail.findMany({
         where: { submissionId: hit.id },

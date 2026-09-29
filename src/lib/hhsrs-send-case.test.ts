@@ -98,7 +98,8 @@ describe("HHSRS send closes the case", () => {
     });
     assert.equal(result.ok, true);
     assert.equal(sent.length, 1);
-    assert.match(sent[0].text, /Please arrange a repair\.\n\nRegards\n\nTom/);
+    assert.match(sent[0].text, /Please arrange a repair\.\n\nRegards\n\nHHSRS Reporting Team\n/);
+    assert.doesNotMatch(sent[0].text, /Regards\n\nTom/);
 
     const closed = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: open.id } });
     assert.equal(closed.status, "email_sent");

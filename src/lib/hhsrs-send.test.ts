@@ -318,9 +318,11 @@ describe("HHSRS portal send and Main Log record", () => {
       mail.attachments.map((file) => file.filename),
       ["sample-photo-1.jpg", "sample-photo-2.jpg"]
     );
-    assert.match(mail.text, /Hi all,\n\n• Address: 1 jenkins house, B14 6ES\n\nRegards\n\nTom\n\nTom Sharp\nHHSRS Reporting Team/);
+    assert.match(mail.text, /Hi all,\n\n• Address: 1 jenkins house, B14 6ES\n\nRegards\n\nHHSRS Reporting Team\n\nSavills, 33 Margaret Street, London, W1G 0JD\n/);
+    assert.doesNotMatch(mail.text, /Tom Sharp/);
     assert.match(mail.html, /cid:savills-logo@savillshousing\.co\.uk/);
-    assert.match(mail.html, />Tom Sharp</);
+    assert.match(mail.html, /width:53px;height:53px;object-fit:contain/);
+    assert.doesNotMatch(mail.html, />Tom Sharp</);
     assert.doesNotMatch(mail.html, /dbeafe/);
     assert.equal(mail.html.includes("savills-logo.png"), false);
     assert.equal(result.record.photoNames.includes("savills-logo.png"), false);

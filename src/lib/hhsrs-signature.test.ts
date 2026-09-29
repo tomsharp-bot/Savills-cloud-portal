@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -6,6 +7,8 @@ import {
   MISSING_SENDER_NAME_WARNING,
   SIGNATURE_LEGAL_PARAGRAPHS,
   SIGNATURE_LOGO_CID,
+  SIGNATURE_LOGO_PUBLIC_PATH,
+  SIGNATURE_LOGO_PX,
   composeEmailHtml,
   composeEmailText,
   renderSignatureHtml,
@@ -13,6 +16,9 @@ import {
   resolveSenderSignature,
   signatureLogoBytes,
 } from "./hhsrs-signature.js";
+
+/** Exact bytes of the yellow square cropped from the approved email. */
+const APPROVED_LOGO_SHA256 = "0f4fd034363bd2c955d8f8e6529e234a5018e3ed1d0e566f8c7d212f3b628400";
 
 const personnel = [
   { name: "Tom Sharp", email: "tsharp@savillshousing.co.uk" },
@@ -33,9 +39,10 @@ describe("HHSRS email signature", () => {
 
     const html = renderSignatureHtml(names, `cid:${SIGNATURE_LOGO_CID}`);
     const text = renderSignatureText(names);
-    assert.match(html, />Tom</);
-    assert.match(html, />Tom Sharp</);
-    assert.match(text, /Regards\n\nTom\n\nTom Sharp\nHHSRS Reporting Team/);
+    assert.doesNotMatch(html, />Tom</);
+    assert.doesNotMatch(html, /Tom Sharp/);
+    assert.doesNotMatch(text, /Tom/);
+    assert.match(text, /^Regards\n\nHHSRS Reporting Team\n\nSavills, 33 Margaret Street, London, W1G 0JD\n/);
     assert.match(html, /mailto:HHSRS@savillshousing\.co\.uk/);
     assert.match(html, /https:\/\/www\.savills\.co\.uk/);
     assert.match(html, />www\.savills\.co\.uk</);
@@ -58,7 +65,8 @@ describe("HHSRS email signature", () => {
     });
     assert.deepEqual(names, { firstName: "Phil", fullName: "Phil Moon", missing: false });
     const text = composeEmailText("Dear Sir/Madam,", names);
-    assert.match(text, /^Dear Sir\/Madam,\n\nRegards\n\nPhil\n\nPhil Moon\nHHSRS Reporting Team/);
+    assert.match(text, /^Dear Sir\/Madam,\n\nRegards\n\nHHSRS Reporting Team\n/);
+    assert.doesNotMatch(text, /Phil/);
 
     const blankPersonnelName = resolveSenderSignature({
       firstName: "",
@@ -102,12 +110,13 @@ describe("HHSRS email signature", () => {
         attachments: photos,
       });
       const raw = sent.raw.toString("utf8");
+      const unfolded = raw.replace(/=\r\n/g, "");
       assert.match(raw, /text\/plain/);
       assert.match(raw, /text\/html/);
       assert.match(raw, /Dear Sir\/Madam/);
-      assert.match(raw, /Tom Sharp/);
-      assert.match(raw, /HHSRS Reporting Team/);
-      assert.match(raw, new RegExp(`cid:${SIGNATURE_LOGO_CID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+      assert.doesNotMatch(unfolded, /Tom Sharp/);
+      assert.match(unfolded, /HHSRS Reporting Team/);
+      assert.match(unfolded, new RegExp(`cid:${SIGNATURE_LOGO_CID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
       assert.match(raw, new RegExp(`Content-ID:\\s*<${SIGNATURE_LOGO_CID}>`, "i"));
       assert.match(raw, /Content-Disposition:\s*inline/i);
       assert.match(raw, /filename="?kitchen\.jpg"?/i);
@@ -170,6 +179,25 @@ describe("HHSRS email signature", () => {
     const appJs = readFileSync("public/js/app.js", "utf8");
     assert.match(appJs, /signature-name/);
     assert.match(appJs, /is-saved/);
+
+    const logo = readFileSync("public/img/savills-logo.png");
+    assert.equal(logo.readUInt32BE(16), SIGNATURE_LOGO_PX);
+    assert.equal(logo.readUInt32BE(20), SIGNATURE_LOGO_PX);
+    assert.equal(createHash("sha256").update(logo).digest("hex"), APPROVED_LOGO_SHA256);
+    assert.equal(signatureLogoBytes().equals(logo), true);
+    const signed = renderSignatureHtml({ firstName: "Tom", fullName: "Tom Sharp" }, SIGNATURE_LOGO_PUBLIC_PATH);
+    assert.match(signed, new RegExp(`width="${SIGNATURE_LOGO_PX}" height="${SIGNATURE_LOGO_PX}"`));
+    assert.match(signed, /width:53px;height:53px;object-fit:contain/);
+    assert.doesNotMatch(signed, /Tom Sharp/);
+    const routeLogo = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    assert.match(routeLogo, /SIGNATURE_LOGO_PUBLIC_PATH/);
+    assert.doesNotMatch(routeLogo, /savills-logo\.svg|savills-hhsrs-signature\.png/);
+    assert.match(readFileSync("views/hhsrs-reporter/partials/tool-header.ejs", "utf8"), /width="53" height="53"/);
+    assert.match(readFileSync("views/hhsrs-reporter/partials/layout-open.ejs", "utf8"), /width="53" height="53"/);
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    assert.match(css, /\.topbar \.brand-lockup img \{\s*width: 53px; height: 53px; object-fit: contain/);
+    assert.match(css, /\.tool-header \.tool-logo \{\s*width: 53px; height: 53px;\s*object-fit: contain/);
+    assert.doesNotMatch(css, /\.tool-header \.tool-logo \{ width: 34px/);
     const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
     const lookup = route.slice(route.indexOf("async function senderSignatureFor"), route.indexOf("function signatureLocals"));
     assert.match(lookup, /role: "surveyor"/);

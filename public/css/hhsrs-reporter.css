@@ -69,7 +69,7 @@ body {
 .topbar > strong { font-size: 0.95rem; letter-spacing: 0.01em; white-space: nowrap; }
 .topbar .brand-lockup { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .topbar .brand-lockup img {
-  width: 28px; height: 28px; border-radius: 4px; display: block; flex-shrink: 0;
+  width: 53px; height: 53px; object-fit: contain; border-radius: 4px; display: block; flex-shrink: 0;
 }
 .topbar .right {
   display: flex; align-items: center; gap: 12px; font-size: 0.9rem;
@@ -958,7 +958,8 @@ a.linkish.active, .linkish.active {
   min-width: 0;
 }
 .tool-header .tool-logo {
-  width: 40px; height: 40px;
+  width: 53px; height: 53px;
+  object-fit: contain;
   border-radius: 7px;
   flex-shrink: 0;
   display: block;
@@ -1196,7 +1197,6 @@ a.linkish.active, .linkish.active {
     align-items: flex-start;
     gap: 0.1rem;
   }
-  .tool-header .tool-logo { width: 34px; height: 34px; }
   .tool-header .tool-title { font-size: 1.45rem; }
 }
 
@@ -1320,6 +1320,13 @@ a.linkish.active, .linkish.active {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fff;
+}
+.hhsrs-reporter .ck-signature img,
+.hhsrs-reporter .email-signature img {
+  width: 53px;
+  height: 53px;
+  object-fit: contain;
+  display: block;
 }
 .review-mode-badge {
   display: inline-block;
