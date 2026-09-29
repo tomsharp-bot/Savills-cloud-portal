@@ -287,7 +287,7 @@
 
   function appendThumb(grid, photo, opts) {
     var card = document.createElement("div");
-    card.className = "photo-thumb " + (opts.email ? "email-photo-thumb" : "case-photo-thumb");
+    card.className = "photo-thumb photo-zoom " + (opts.email ? "email-photo-thumb" : "case-photo-thumb");
     card.setAttribute("data-photo-id", photo.id);
     if (opts.email) {
       card.draggable = true;
@@ -326,6 +326,8 @@
     var img = document.createElement("img");
     img.alt = "";
     preview.appendChild(img);
+    var cap = document.createElement("figcaption");
+    preview.appendChild(cap);
     document.body.appendChild(preview);
     return preview;
   }
@@ -345,14 +347,25 @@
     var preview = photoPreviewEl();
     var img = preview.querySelector("img");
     if (img.getAttribute("src") !== source.src) img.src = source.src;
+    var cap = preview.querySelector("figcaption");
+    var sourceCap = card.querySelector("figcaption, .photo-caption");
+    if (cap) cap.textContent = sourceCap ? sourceCap.textContent : "";
     var rect = card.getBoundingClientRect();
+    var width = 340;
+    var x = rect.right + 12;
+    var y = rect.top;
+    if (x + width + 16 > window.innerWidth) x = Math.max(8, rect.left - width - 12);
     preview.hidden = false;
-    preview.style.left = Math.round(rect.right + 8) + "px";
-    preview.style.top = Math.round(rect.top) + "px";
+    preview.style.left = Math.round(x) + "px";
+    preview.style.top = Math.round(Math.max(8, y)) + "px";
+    var height = preview.offsetHeight || 280;
+    if (y + height > window.innerHeight) {
+      preview.style.top = Math.round(Math.max(8, window.innerHeight - height - 8)) + "px";
+    }
   }
 
   function thumbFromEvent(target) {
-    return target && target.closest ? target.closest(".case-photo-thumb, .email-photo-thumb") : null;
+    return target && target.closest ? target.closest(".photo-zoom, .case-photo-thumb, .email-photo-thumb") : null;
   }
 
   function wirePhotoPreview(root) {
@@ -654,7 +667,6 @@
       suspectedCause: ($("rv-cause") && $("rv-cause").value) || "",
       includeCause: !!($("rv-include-cause") && $("rv-include-cause").checked),
       vulnerabilities: ($("rv-vulnerabilities") && $("rv-vulnerabilities").value) || "",
-      escalation: ($("rv-escalation") && $("rv-escalation").value) || "",
       onwardTopic: ($("rv-onward-topic") && $("rv-onward-topic").value) || "",
       cat1Confirmed: !!($("rv-cat1") && $("rv-cat1").checked),
       workOrder: ($("rv-work-order") && $("rv-work-order").value) || "",
@@ -728,7 +740,7 @@
   }
 
   function clearBlankReview() {
-    ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-notes", "rv-call-ref", "rv-call-notes", "rv-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"].forEach(function (id) {
+    ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-notes", "rv-call-ref", "rv-call-notes", "rv-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"].forEach(function (id) {
       var el = $(id);
       if (el && !el.readOnly) el.value = "";
     });
@@ -786,7 +798,7 @@
      declarations, and var initialisers are not hoisted with their values. */
   var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
   var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
-  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-escalation", "rv-work-order", "rv-online-action", "rv-internal-notes"];
+  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"];
   var REVIEW_EMAIL_FIELD_IDS = ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"];
   var reviewDraftSaveTimer = null;
   var resumeCleared = false;
@@ -835,6 +847,7 @@
     hazardEl.addEventListener("input", refreshExtras);
   }
 
+  wirePhotoPreview(document.body);
   if ($("rv-photo-thumbs") || $("rv-email-photos")) {
     wirePhotoInteractions();
     resetCasePhotos(Array.isArray(cfg.casePhotos) ? cfg.casePhotos : []);
@@ -1764,38 +1777,37 @@
       });
       return picked;
     }
+    function cardBodyHtml(text) {
+      var trimmed = String(text || "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
+      if (!trimmed) return "";
+      return esc(trimmed).replace(/\n/g, "<br>\n");
+    }
     function openCheck() {
       if (btn.disabled || sending) return;
       var photos = tickedPhotos();
       var h = "";
       var test = $("ck-test");
       if (test) h += test.outerHTML;
-      h += "<dl class=\"ck-list\">";
-      h += "<dt>From</dt><dd class=\"ck-from\">" + esc(cfg.send && cfg.send.fromLine) + "</dd>";
-      h += "<dt>To</dt><dd>" + esc(val("hhsrs-to")) + "</dd>";
-      if (val("hhsrs-cc")) h += "<dt>Cc</dt><dd>" + esc(val("hhsrs-cc")) + "</dd>";
-      if (val("hhsrs-bcc")) h += "<dt>Bcc</dt><dd>" + esc(val("hhsrs-bcc")) + "</dd>";
-      h += "<dt>Subject</dt><dd>" + (val("hhsrs-subject") ? esc(val("hhsrs-subject")) : "(no subject)") + "</dd>";
-      h += "</dl>";
+      var subject = val("hhsrs-subject");
       var bodyEl = $("hhsrs-body");
       var body = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
-      h += "<div class=\"ck-text\" tabindex=\"0\" aria-label=\"Email text\">" + esc(body || "(empty)") + "</div>";
-      h += "<p class=\"ck-photos-label\">Attached: " + photos.length + (photos.length === 1 ? " photo" : " photos") + "</p>";
-      if (photos.length) {
-        h += "<div class=\"ck-photos\">" + photos.map(function (p) {
-          return "<figure><img src=\"" + esc(p.url || "") + "\" alt=\"" + esc(p.caption || p.name) + "\"><figcaption>" + esc(p.name) + "</figcaption></figure>";
-        }).join("") + "</div>";
-      } else {
-        h += "<p class=\"ck-none\">No photos.</p>";
-      }
+      h += "<div class=\"ck-mail\" style=\"background:#e7edf3\">";
+      h += "<article class=\"sent-card\" aria-label=\"Client email\">";
+      if (subject) h += "<h2>" + esc(subject) + "</h2>";
+      h += "<div class=\"sent-body\"><div class=\"sent-copy\">" + cardBodyHtml(body) + "</div>";
       var sigHtml = cfg.signature && cfg.signature.html;
-      if (sigHtml) {
-        h += "<p class=\"ck-photos-label\">Signature</p>";
-        if (cfg.signature.missing && cfg.signature.warning) {
-          h += "<p class=\"ck-name-warn\">" + esc(cfg.signature.warning) + "</p>";
-        }
-        h += "<div class=\"ck-signature\" aria-readonly=\"true\">" + sigHtml + "</div>";
+      if (sigHtml) h += "<div class=\"sent-sign\">" + sigHtml + "</div>";
+      if (photos.length) {
+        h += "<div class=\"sent-photos\">" + photos.map(function (p) {
+          var name = esc(p.name || "Photo");
+          var alt = esc(p.caption || p.name || "Photo");
+          var img = p.url
+            ? "<img src=\"" + esc(p.url) + "\" alt=\"" + alt + "\" />"
+            : "<div class=\"art-miss\">No file</div>";
+          return "<figure class=\"photo-zoom\"><div class=\"art\">" + img + "</div><figcaption>" + name + "</figcaption></figure>";
+        }).join("") + "</div>";
       }
+      h += "</div></article></div>";
       ckBody.innerHTML = h;
       ckTick.checked = false;
       ckSend.disabled = true;
@@ -1815,7 +1827,7 @@
         if (pane) pane.scrollTop = 0;
         if (root) root.scrollTop = 0;
         ck.scrollTop = 0;
-        var text = ck.querySelector(".ck-text");
+        var text = ck.querySelector(".ck-mail");
         if (text) text.scrollTop = 0;
       }
       pinCheckToTop();

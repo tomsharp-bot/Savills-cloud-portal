@@ -1463,6 +1463,8 @@ body.hhsrs-reporter {
   white-space: nowrap;
   text-align: right;
 }
+.hhsrs-reporter .pending-issues-table tr.find-result { cursor: pointer; }
+.hhsrs-reporter .pending-issues-table tr.is-sel td { background: #fffbea; }
 .hhsrs-reporter .btn-review-create:hover { filter: brightness(1.05); color: #fff; }
 .hhsrs-reporter .status-pill {
   display: inline-block;
@@ -1921,24 +1923,34 @@ body.hhsrs-reporter {
 }
 .hhsrs-reporter .photo-float-preview {
   position: fixed;
-  z-index: 80;
-  width: 192px;
+  z-index: 120;
+  width: 340px;
   margin: 0;
-  padding: 0;
-  border: 1.5px solid var(--blue);
-  border-radius: 8px;
+  padding: 8px;
+  border: 1px solid #d5dee8;
+  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 10px 26px rgba(11, 31, 51, 0.28);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   overflow: hidden;
   pointer-events: none;
 }
 .hhsrs-reporter .photo-float-preview[hidden] { display: none !important; }
 .hhsrs-reporter .photo-float-preview img {
   display: block;
-  width: 192px;
-  height: 144px;
+  width: 100%;
+  height: auto;
+  max-height: 260px;
   object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #d5dee8;
 }
+.hhsrs-reporter .photo-float-preview figcaption {
+  margin: 0;
+  padding: 6px 4px 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.hhsrs-reporter .photo-zoom { cursor: zoom-in; }
 .hhsrs-reporter .photo-thumb img {
   display: block;
   width: 96px;
@@ -2454,12 +2466,13 @@ body.hhsrs-reporter {
 }
 .ck-overlay[hidden] { display: none; }
 .ck-dialog {
-  width: 100%; max-width: 720px; background: #fff; border-radius: var(--radius, 12px);
+  width: 100%; max-width: 720px; background: #e7edf3; border-radius: var(--radius, 12px);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3); border: 1px solid var(--border); font-family: var(--font);
 }
-.ck-head { padding: 0.9rem 1.15rem; border-bottom: 1px solid var(--border); }
+.ck-head { padding: 0.9rem 1.15rem 0.2rem; }
 .ck-head h2 { margin: 0; font-size: 1.15rem; color: var(--navy); }
-.ck-body { padding: 0.9rem 1.15rem 0.2rem; }
+.ck-body { padding: 0.9rem 1.15rem 0.2rem; background: #e7edf3; }
+.ck-mail { background: #e7edf3; }
 .ck-test {
   margin: 0 0 0.75rem; padding: 0.55rem 0.75rem; border-radius: 8px;
   background: #fff8e1; border: 1px solid #e6c34d; color: #6b5200;
@@ -2488,7 +2501,7 @@ body.hhsrs-reporter {
 .ck-tick.is-on { border-color: #8fbf9f; background: #eef8f1; }
 .ck-tick input { width: 24px; height: 24px; margin: 0; accent-color: var(--success); flex: none; cursor: pointer; }
 .ck-safe { margin: 0.6rem 0 0; font-size: 0.8rem; color: var(--muted); }
-.ck-foot { display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.9rem 1.15rem; border-top: 1px solid var(--border); margin-top: 0.9rem; }
+.ck-foot { display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.9rem 1.15rem; margin-top: 0.4rem; }
 .ck-foot .btn { min-height: 48px; padding: 12px 24px; font-size: 1rem; font-weight: 700; }
 .ck-foot .btn-back { background: #fff; color: var(--navy); border: 1px solid var(--border); }
 .ck-foot .btn-back:hover { background: #f4f6f8; }
@@ -2699,6 +2712,57 @@ tr.is-new-log td { background: #f5f3ff; }
   font-size: 12px; font-weight: 800; align-items: center; justify-content: center;
 }
 .ml-table-wrap { overflow-x: auto; max-width: 100%; }
+/* The Main Log list is the Pending table. These rules are only for a leftover .ml-table. */
+.ml-page .pending-issues-table {
+  font-size: 0.8125rem;
+  font-family: var(--font);
+}
+.ml-page .pending-issues-table thead th,
+.ml-page .pending-issues-table tbody td {
+  font-size: 0.8125rem;
+  font-family: var(--font);
+  letter-spacing: normal;
+  padding: 0.45rem 0.32rem;
+  vertical-align: middle;
+}
+.ml-page .pending-issues-table thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: #fafbfc;
+}
+.ml-page .pending-issues-table .ref-chip {
+  font-size: 12.5px;
+  padding: 2px 7px;
+  letter-spacing: normal;
+}
+.ml-page .pending-issues-table .project-pill { font-size: 0.75rem; font-weight: 600; }
+.ml-page .pending-issues-table .btn-review-create { font-size: 0.75rem; font-weight: 700; }
+.ml-page .pending-issues-table td.photo-att-cell,
+.ml-page .pending-issues-table th.photo-att-col { overflow: visible; white-space: nowrap; }
+.ml-page .pending-issues-table .photo-att-counted .photo-att-icon {
+  width: auto;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem 0 0.28rem;
+  gap: 0.2rem;
+}
+.ml-page .pending-issues-table .photo-att-count.is-shown {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #44546a;
+  font-family: var(--font);
+}
 .ml-page .ml-table {
   width: 100%;
   border-collapse: collapse;
@@ -2739,7 +2803,8 @@ tr.is-new-log td { background: #f5f3ff; }
   overflow-wrap: normal;
   letter-spacing: 0;
 }
-.ml-page .ml-table thead th a.ml-sort {
+.ml-page .ml-table thead th a.ml-sort,
+.ml-page .pending-issues-table thead th a.ml-sort {
   color: inherit;
   text-decoration: none;
   display: inline-flex;
@@ -2747,13 +2812,17 @@ tr.is-new-log td { background: #f5f3ff; }
   gap: 0.15rem;
   max-width: 100%;
 }
-.ml-page .ml-table thead th a.ml-sort:hover { color: var(--navy); }
-.ml-page .ml-table thead th.is-sorted {
+.ml-page .ml-table thead th a.ml-sort:hover,
+.ml-page .pending-issues-table thead th a.ml-sort:hover { color: var(--navy); }
+.ml-page .ml-table thead th.is-sorted,
+.ml-page .pending-issues-table thead th.is-sorted {
   color: var(--navy);
   box-shadow: inset 0 -2px 0 var(--navy);
 }
-.ml-page .ml-table thead th.is-sorted a.ml-sort { color: var(--navy); }
-.ml-page .ml-table thead th .ml-sort-ind {
+.ml-page .ml-table thead th.is-sorted a.ml-sort,
+.ml-page .pending-issues-table thead th.is-sorted a.ml-sort { color: var(--navy); }
+.ml-page .ml-table thead th .ml-sort-ind,
+.ml-page .pending-issues-table thead th .ml-sort-ind {
   font-size: 0.8rem;
   font-weight: 700;
   line-height: 1;
@@ -2994,4 +3063,126 @@ tr.is-new-log td { background: #f5f3ff; }
 @media (max-width: 720px) {
   .dup-d-foot { flex-wrap: wrap; }
   .dup-d-foot .ml-close-link { margin-left: 0; }
+}
+
+/* Find and resend: the sent email is a right-hand column beside the results.
+   The page stays within the screen so the card cannot continue underneath. */
+html:has(.find-split.has-case),
+body.hhsrs-reporter:has(.find-split.has-case) {
+  height: 100%;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) #screen-app {
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) .stage,
+body.hhsrs-reporter:has(.find-split.has-case) .app-shell,
+body.hhsrs-reporter:has(.find-split.has-case) .work-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) .app-shell { height: auto; }
+body.hhsrs-reporter:has(.find-split.has-case) .content-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) .content-pane > :not(.find-page) { flex-shrink: 0; }
+body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.find-split:not(.has-case) { display: block; }
+.find-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.find-split.has-case {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.find-split.has-case > .find-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.find-split.has-case > .find-main > .page-header,
+.find-split.has-case > .find-main > .panel { flex-shrink: 0; }
+.find-split.has-case .find-table { min-width: 0; }
+.find-split.has-case .find-table thead th { white-space: normal; }
+.fr-drawer {
+  flex: 0 0 420px;
+  width: 420px;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  background: #e7edf3;
+  border-radius: 12px;
+  overflow: auto;
+  padding: 14px 14px 18px;
+}
+.fr-drawer-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.fr-drawer-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.fr-x {
+  margin-left: auto; border: none; background: #fff; width: 36px; height: 36px; border-radius: 10px;
+  font-size: 22px; line-height: 34px; text-align: center; color: var(--navy); text-decoration: none;
+}
+.fr-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
+.fr-log { margin-top: 16px; font-size: 13px; color: var(--muted); }
+.fr-log-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+.fr-log p { margin: 0 0 6px; }
+.fr-log .is-fresh { color: var(--navy); }
+.sent-card {
+  background: #fff; border: 1px solid var(--navy); border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(11, 31, 51, 0.08); padding: 0 0 16px; overflow: hidden;
+}
+.sent-card h2, .sent-sec {
+  display: inline-block; margin: 14px 16px; padding: 8px 14px; border-radius: 10px;
+  font-size: 16px; font-weight: 800; letter-spacing: -0.02em; color: var(--navy);
+  background: linear-gradient(180deg, #dde3ee 0%, #d0d8e6 100%);
+  border-bottom: 1px solid #b8c2d4; border-left: 5px solid var(--navy);
+}
+.sent-sec { margin: 0 0 8px; }
+.sent-body {
+  margin: 0 16px; background: #f7f9fb; border: 1px solid #d5dee8; border-radius: 10px;
+  padding: 14px 16px; font-size: 14px; line-height: 1.5;
+}
+.sent-body p { margin: 0 0 12px; }
+.sent-body ul { margin: 0 0 12px; padding-left: 1.2em; }
+.sent-photos { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.sent-photos .photo-zoom { width: 96px; margin: 0; }
+.sent-photos .art, .sent-photos .art-miss {
+  height: 72px; border-radius: 8px; border: 1px solid #d5dee8; overflow: hidden; background: #eef1f4;
+}
+.sent-photos img { width: 100%; height: 72px; object-fit: cover; display: block; }
+.sent-photos .art-miss { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 11px; }
+.sent-photos figcaption { margin: 4px 0 0; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.amend-box {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px;
+  background: #fff; border: 1px solid var(--navy); border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(11, 31, 51, 0.08);
+}
+.amend-head { grid-column: 1 / -1; }
+.amend-box label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); }
+.amend-why { font-weight: 400; }
+.amend-box input, .amend-box select {
+  display: block; width: 100%; height: 40px; margin-top: 4px; border: 1px solid #9aabbd;
+  border-radius: 8px; padding: 0 12px; font: inherit; background: #fff; color: var(--navy); font-weight: 500;
+}
+.amend-box input:focus, .amend-box select:focus { outline: 2px solid var(--navy); border-color: var(--navy); }
+.amend-check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-weight: 650; }
+.amend-note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.amend-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+#btn-send-correction:disabled { background: #c5ced6; color: #fff; cursor: not-allowed; opacity: 1; }
+.ml-d-body .sent-card { margin-top: 8px; }
+@media (max-width: 720px) {
+  .amend-box { grid-template-columns: 1fr; }
 }

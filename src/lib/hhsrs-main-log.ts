@@ -55,6 +55,8 @@ export const MAIN_LOG_SORT_KEYS = [
   "to",
   "photos",
   "type",
+  "surveyor",
+  "received",
 ] as const;
 
 export type MainLogSortKey = (typeof MAIN_LOG_SORT_KEYS)[number];
@@ -65,18 +67,17 @@ export type MainLogSort = {
   dir: MainLogSortDir;
 };
 
+/** Headings on the shared case list. Sent, recipient, and type stay sortable by URL. */
 export const MAIN_LOG_COLUMNS: ReadonlyArray<{ key: MainLogSortKey; label: string; className: string }> = [
-  { key: "sent", label: "Sent", className: "" },
-  { key: "ref", label: "Ref", className: "" },
+  { key: "ref", label: "Reference", className: "" },
   { key: "project", label: "Project", className: "" },
-  { key: "uprn", label: "UPRN", className: "" },
   { key: "address", label: "Address", className: "" },
-  { key: "hazard", label: "Hazard", className: "" },
+  { key: "photos", label: "Photos", className: "photo-att-col" },
+  { key: "uprn", label: "UPRN", className: "" },
+  { key: "surveyor", label: "Surveyor", className: "" },
+  { key: "hazard", label: "Category", className: "" },
   { key: "rating", label: "Rating", className: "" },
-  { key: "by", label: "Sent by", className: "" },
-  { key: "to", label: "To", className: "" },
-  { key: "photos", label: "Photos", className: "ml-ph" },
-  { key: "type", label: "Type", className: "" },
+  { key: "received", label: "Received", className: "" },
 ];
 
 export type MainLogFilters = {
@@ -110,6 +111,8 @@ export type MainLogEntry = {
   postcode: string;
   hazard: string;
   rating: string;
+  surveyorName: string;
+  createdAt: Date;
   sentBy: string;
   to: string;
   cc: string;
@@ -143,6 +146,8 @@ type SortItem = {
   to?: string;
   photos?: number;
   typeLabel?: string;
+  surveyor?: string;
+  receivedAt?: number;
 };
 
 export type ArrangedLog = {
@@ -336,6 +341,8 @@ function sortText(item: SortItem, key: MainLogSortKey): string {
       return item.to || "";
     case "type":
       return item.typeLabel || "";
+    case "surveyor":
+      return item.surveyor || "";
     default:
       return "";
   }
@@ -346,6 +353,8 @@ function compareSortItems(a: SortItem, b: SortItem, sort: MainLogSort): number {
   let cmp = 0;
   if (sort.key === "sent") {
     cmp = a.at - b.at;
+  } else if (sort.key === "received") {
+    cmp = (a.receivedAt ?? 0) - (b.receivedAt ?? 0);
   } else if (sort.key === "photos") {
     cmp = (a.photos ?? 0) - (b.photos ?? 0);
   } else {
@@ -464,6 +473,8 @@ type EmailRow = {
     category: string;
     rating: string;
     photoPaths: unknown;
+    surveyorName: string;
+    createdAt: Date;
   };
 };
 
@@ -477,6 +488,8 @@ type CaseRow = {
   category: string;
   rating: string;
   photoPaths: unknown;
+  surveyorName: string;
+  createdAt: Date;
   emailSentAt: Date | null;
   emailSentBy: string;
   lastEditedBy: string;
@@ -505,6 +518,8 @@ function emailEntry(row: EmailRow): MainLogEntry {
     postcode: address.postcode,
     hazard: row.submission.category,
     rating: row.submission.rating,
+    surveyorName: row.submission.surveyorName,
+    createdAt: row.submission.createdAt,
     sentBy: row.sentBy,
     to: row.to,
     cc: row.cc,
@@ -546,6 +561,8 @@ function caseEntry(row: CaseRow): MainLogEntry {
     postcode: address.postcode,
     hazard: row.category,
     rating: row.rating,
+    surveyorName: row.surveyorName,
+    createdAt: row.createdAt,
     sentBy: row.emailSentBy || row.lastEditedBy || "",
     to: "",
     cc: "",
@@ -593,7 +610,9 @@ function columnValues(input: {
   to: string;
   photos: unknown;
   kind: MainLogKind;
-}): Pick<SortItem, "ref" | "project" | "uprn" | "address" | "hazard" | "rating" | "by" | "to" | "photos" | "typeLabel"> {
+  surveyorName: string;
+  createdAt: Date | null;
+}): Pick<SortItem, "ref" | "project" | "uprn" | "address" | "hazard" | "rating" | "by" | "to" | "photos" | "typeLabel" | "surveyor" | "receivedAt"> {
   return {
     ref: input.reference || "",
     project: input.projectName || "",
@@ -605,6 +624,8 @@ function columnValues(input: {
     to: input.to || "",
     photos: namesOf(input.photos).length,
     typeLabel: mainLogTypeLabel(input.kind),
+    surveyor: input.surveyorName || "",
+    receivedAt: input.createdAt ? input.createdAt.getTime() : 0,
   };
 }
 
@@ -662,6 +683,8 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
                 postcode: true,
                 category: true,
                 rating: true,
+                surveyorName: true,
+                createdAt: true,
               },
             },
           },
@@ -681,6 +704,8 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
             postcode: true,
             category: true,
             rating: true,
+            surveyorName: true,
+            createdAt: true,
             emailSentBy: true,
             lastEditedBy: true,
             photoPaths: true,
@@ -708,6 +733,8 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
           to: row.to,
           photos: row.photoNames,
           kind,
+          surveyorName: row.submission.surveyorName,
+          createdAt: row.submission.createdAt,
         }),
       };
     }),
@@ -728,6 +755,8 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
         to: "",
         photos: row.photoPaths,
         kind: "not_sent",
+        surveyorName: row.surveyorName,
+        createdAt: row.createdAt,
       }),
     })),
   ];

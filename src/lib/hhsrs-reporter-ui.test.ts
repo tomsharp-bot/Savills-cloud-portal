@@ -105,7 +105,7 @@ describe("HHSRS Reporter UI helpers", () => {
       suspectedCause: "",
       includeCause: true,
       vulnerabilities: "",
-      escalation: "",
+      escalation: "Significant Severe",
       onwardTopic: "",
       cat1Confirmed: false,
       photoPaths: ["hhsrs-site-form/x/a.jpg", "hhsrs-site-form/x/b.jpg"],
@@ -128,6 +128,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
     assert.match(draft.body, /• Hazard: Electrical Hazards/);
+    assert.match(draft.body, /• Rating: High/);
+    assert.doesNotMatch(draft.body, /Escalation/);
     assert.match(draft.body, /• Survey date: 20\/09\/2026/);
     assert.doesNotMatch(draft.body, /2026-09-20/);
     assert.doesNotMatch(draft.body, /Attached are photos/);
@@ -261,7 +263,6 @@ describe("HHSRS Reporter UI helpers", () => {
       'data-extra="onward"',
       'data-extra="cause"',
       'data-extra="vulnerabilities"',
-      'data-extra="escalation"',
       'data-extra="work_order"',
       'data-extra="online_form"',
       'id="rv-internal-notes"',
@@ -269,6 +270,9 @@ describe("HHSRS Reporter UI helpers", () => {
       const at = caseFields.indexOf(marker);
       assert.ok(at >= 0 && at < photosInFields, `${marker} sits above the case Photos block`);
     }
+    assert.equal(caseFields.includes("Escalation category"), false);
+    assert.equal(caseFields.includes('id="rv-escalation"'), false);
+    assert.match(caseFields, /<label for="rv-rating">Rating<\/label>/);
     assert.ok(photosAt > 0 && generateAt > photosAt);
     assert.ok(emailPhotosAt > generateAt && downloadAt > emailPhotosAt);
     assert.equal(review.slice(photosAt, generateAt).includes("btn-download-photos"), false);
@@ -278,8 +282,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /id="btn-create-plain-email"/);
     assert.match(review, /Create new email/);
     assert.match(review, /value=""/);
-    assert.match(pending, /photo-att-col/);
-    assert.match(readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8"), /Review Case/);
+    const pendingTable = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    assert.match(pending, /partials\/pending-issues-table/);
+    assert.match(pendingTable, /photo-att-col/);
+    assert.match(pendingTable, /Review Case/);
     assert.match(review, /id="hhsrs-bcc"/);
     assert.match(review, /id="btn-abandon-claim"/);
     assert.match(review, /id="rv-draft-status"/);
@@ -501,13 +507,28 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(also, /partials\/pending-issues-table/);
     assert.doesNotMatch(waiting, /<thead>/);
     assert.doesNotMatch(also, /<thead>/);
-    const head = table.slice(table.indexOf("<thead>"), table.indexOf("</thead>"));
+    const head = table.slice(table.indexOf("<th>Reference</th>"), table.indexOf("</thead>"));
     const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
     assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
     assert.match(table, /row\.reference/);
     assert.match(table, /ref-chip/);
     assert.match(table, /row\.uprn/);
     assert.match(table, /row\.surveyorName/);
+    assert.match(table, /row\.rating/);
+    assert.match(table, /photo-att-cell/);
+    assert.match(table, /Review Case/);
+    assert.match(table, />Amend</);
+
+    const last = pending.slice(pending.indexOf('id="last-actioned"'));
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    assert.match(last, /partials\/pending-issues-table/);
+    assert.doesNotMatch(last, /<thead>/);
+    assert.match(find, /partials\/pending-issues-table/);
+    assert.match(find, /pendingAction:\s*"amend"/);
+    assert.doesNotMatch(find, /<th>Hazard<\/th>|<th>Status<\/th>/);
+    assert.match(main, /partials\/pending-issues-table/);
+    assert.doesNotMatch(main, /<th>Sent<\/th>|<th>Hazard<\/th>/);
   });
 
   it("turns Pending Issues green when the waiting list is empty", () => {
@@ -551,27 +572,27 @@ describe("HHSRS Reporter UI helpers", () => {
       return match[0];
     }
     for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"]) {
-      for (const html of [review, find]) {
-        const tag = tagWithId(html, id);
-        assert.match(tag, /autocomplete="off"/, id);
-        assert.match(tag, new RegExp(`name="${id}"`), id);
-        assert.doesNotMatch(tag, /type="email"/, id);
-      }
+      const tag = tagWithId(review, id);
+      assert.match(tag, /autocomplete="off"/, id);
+      assert.match(tag, new RegExp(`name="${id}"`), id);
+      assert.doesNotMatch(tag, /type="email"/, id);
     }
     for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {
-      for (const html of [review, find]) {
-        const tag = tagWithId(html, id);
-        assert.match(tag, /type="text"/, id);
-        assert.match(tag, /inputmode="email"/, id);
-      }
+      const tag = tagWithId(review, id);
+      assert.match(tag, /type="text"/, id);
+      assert.match(tag, /inputmode="email"/, id);
     }
     assert.match(review, /id="rv-email-form"[^>]*autocomplete="off"/);
     assert.match(review, /id="rv-send-form"[^>]*autocomplete="off"/);
-    assert.match(find, /class="find-compose"[^>]*autocomplete="off"/);
     assert.match(find, /id="rv-send-form"[^>]*autocomplete="off"/);
+    assert.doesNotMatch(find, /type="email"/);
+    for (const id of ["f-address", "f-uprn", "f-notes", "f-date", "f-amendment", "f-hazard", "f-rating"]) {
+      const tag = find.match(new RegExp(`<(?:input|select)\\b[^>]*\\bid="${id}"[^>]*>`));
+      assert.ok(tag, id);
+      assert.match(tag[0], /autocomplete="off"/, id);
+    }
     for (const id of ["rv-send-to", "rv-send-cc", "rv-send-bcc", "rv-send-subject", "rv-send-body"]) {
       assert.match(tagWithId(review, id), /autocomplete="off"/, id);
-      assert.match(tagWithId(find, id), /autocomplete="off"/, id);
     }
     assert.match(card, /class="client-email-row"[^>]*autocomplete="off"/);
     for (const name of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {
@@ -639,21 +660,27 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.ml-page \.ml-table col\.c-haz \{ width: 120px; \}/);
     assert.match(css, /\.ml-page \.ml-table \{[^}]*font-size:\s*13px/);
     assert.match(css, /\.ml-page \.ml-table thead th \{[^}]*white-space:\s*nowrap/);
-    assert.match(view, /@<wbr>/);
-    assert.match(view, /\.<wbr>/);
     assert.doesNotMatch(css, /\.ml-proj\s*\{[^}]*white-space:\s*nowrap/);
     assert.doesNotMatch(css, /\.ml-by\s*\{[^}]*white-space:\s*nowrap/);
     assert.doesNotMatch(css, /\.ml-to\s*\{[^}]*white-space:\s*nowrap/);
     assert.match(css, /\.ml-page \.ml-table thead th\.ml-ph \{[^}]*white-space:\s*nowrap/);
-    assert.match(view, /class="ml-rate <%= row\.ratingClass %>"/);
+    assert.match(view, /partials\/pending-issues-table/);
+    assert.match(view, /photoNames/);
+    assert.match(view, /pendingShowPhotoCount:\s*true/);
+    assert.match(view, /id="ml-drawer"/);
+    assert.match(view, /partials\/sent-email-card/);
+    assert.match(view, /panel\.photoCount/);
+    assert.match(view, /class="panel"/);
+    assert.doesNotMatch(view, /<th>Sent<\/th>|<th>To<\/th>/);
+    assert.match(css, /\.ml-page \.pending-issues-table \.photo-att-count\.is-shown \{[^}]*font-size:\s*0\.8125rem/);
+    const photoCell = readFileSync("views/hhsrs-reporter/partials/photo-att-cell.ejs", "utf8");
+    assert.match(photoCell, /showPhotoCount/);
+    assert.match(photoCell, /photo-att-count is-shown/);
+    assert.match(css, /\.ml-page \.pending-issues-table \{[^}]*font-size:\s*0\.8125rem/);
+    assert.match(css, /\.ml-page \.pending-issues-table thead th \{[^}]*font-size:\s*0\.6875rem/);
+    assert.match(css, /\.ml-page \.pending-issues-table \.ref-chip \{[^}]*font-size:\s*12\.5px/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: 12%; \}/);
-    for (const cls of ["ml-proj", "ml-by", "ml-to"]) {
-      const cell = view.match(new RegExp(`<td class="${cls}"[^>]*>[\\s\\S]*?</td>`));
-      assert.ok(cell, cls);
-      assert.match(cell[0], /title="/);
-      assert.match(cell[0], /class="ml-clamp"/);
-    }
   });
 
   it("declares review draft storage keys before restore runs", () => {

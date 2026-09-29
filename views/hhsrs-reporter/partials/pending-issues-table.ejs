@@ -2,6 +2,10 @@
   const rows = Array.isArray(pendingRows) ? pendingRows : [];
   const tableId = typeof pendingTableId === "string" ? pendingTableId : "waiting-table";
   const wrapId = typeof pendingWrapId === "string" ? pendingWrapId : "";
+  const action = typeof pendingAction === "string" ? pendingAction : "review";
+  const foot = typeof pendingFoot === "string" ? pendingFoot : "Newest first";
+  const showPhotoCount = typeof pendingShowPhotoCount !== "undefined" && pendingShowPhotoCount === true;
+  const sortColumns = Array.isArray(pendingSortColumns) ? pendingSortColumns : [];
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
   <table class="landing-table pending-issues-table" id="<%= tableId %>">
@@ -12,16 +16,27 @@
     </colgroup>
     <thead>
       <tr>
-        <th>Reference</th>
-        <th>Project</th>
-        <th>Address</th>
-        <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
-        <th>UPRN</th>
-        <th>Surveyor</th>
-        <th>Category</th>
-        <th>Rating</th>
-        <th>Received</th>
-        <th></th>
+        <% if (sortColumns.length) { %>
+          <% sortColumns.forEach((col) => {
+            const thClass = [col.className, col.active ? "is-sorted" : ""].filter(Boolean).join(" ");
+          %>
+            <th class="<%= thClass %>"<% if (col.className === "photo-att-col") { %> scope="col"<% } %> aria-sort="<%= col.active ? (col.dir === "desc" ? "descending" : "ascending") : "none" %>">
+              <a class="ml-sort" href="<%= col.href %>" title="<%= col.title %>"><%= col.label %><% if (col.active) { %><span class="ml-sort-ind" aria-hidden="true"><%= col.dir === "desc" ? "▼" : "▲" %></span><% } %></a>
+            </th>
+          <% }) %>
+          <th></th>
+        <% } else { %>
+          <th>Reference</th>
+          <th>Project</th>
+          <th>Address</th>
+          <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
+          <th>UPRN</th>
+          <th>Surveyor</th>
+          <th>Category</th>
+          <th>Rating</th>
+          <th>Received</th>
+          <th></th>
+        <% } %>
       </tr>
     </thead>
     <tbody>
@@ -29,14 +44,14 @@
         const ago = formatTimeAgo(row.createdAt);
         const claim = claimView(row);
       %>
-        <tr class="<%= claimRowClass(row) %>" data-claim-status="<%= claim.status %>">
+        <tr class="<%= [claimRowClass(row), row.href ? "find-result" : "", row.rowClass || ""].filter(Boolean).join(" ") %>" data-claim-status="<%= claim.status %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
           <td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
           <td><span class="project-pill"><%= row.projectName %></span></td>
           <td class="addr-cell">
             <strong><%= row.fullAddress %></strong>
             <%- include("claim-chip", { claimRow: claim }) %>
           </td>
-          <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase) }) %>
+          <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase), showPhotoCount }) %>
           <td><span style="color:var(--muted)"><%= row.uprn %></span></td>
           <td><%= row.surveyorName %></td>
           <td><%= row.category %></td>
@@ -46,11 +61,15 @@
             <span class="time-ago-abs"><%= ago.absolute %></span>
           </td>
           <td>
-            <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review Case</a>
+            <% if (action === "amend") { %>
+              <a class="btn-review-create" href="<%= row.amendUrl %>">Amend</a>
+            <% } else { %>
+              <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review Case</a>
+            <% } %>
           </td>
         </tr>
       <% }) %>
     </tbody>
   </table>
 </div>
-<div class="table-foot"><span>Newest first</span></div>
+<% if (foot) { %><div class="table-foot"><span><%- foot %></span></div><% } %>

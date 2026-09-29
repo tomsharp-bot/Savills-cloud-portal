@@ -191,6 +191,8 @@ function excelEntry(patch: Partial<MainLogEntry> & Pick<MainLogEntry, "key" | "k
     postcode: "ZZ1 3GH",
     hazard: "Falling On Stairs Etc.",
     rating: "High - Emergency Risk",
+    surveyorName: "Jane Example",
+    createdAt: new Date("2026-09-20T09:00:00.000Z"),
     sentBy: "Carly Farrell",
     to: "repairs@savillshousing.co.uk",
     cc: "",
@@ -458,7 +460,6 @@ describe("HHSRS main log filters", () => {
     const html = page.body.toString("utf8");
     assert.equal(page.status, 200);
     assert.match(html, /Not sent from portal/);
-    assert.match(html, /Corrected ↓/);
     assert.match(html, /Correction of email sent 24\/09\/2026 14:32/);
     assert.match(html, /Reason: Wrong address/);
     assert.match(html, /View original email/);
@@ -471,8 +472,10 @@ describe("HHSRS main log filters", () => {
     assert.doesNotMatch(html, /Mock/);
     assert.doesNotMatch(html, /is-sorted/);
     assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=project&amp;dir=asc"`));
-    assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=sent&amp;dir=asc"`));
-    assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=by&amp;dir=asc"`));
+    assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=received&amp;dir=asc"`));
+    assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=surveyor&amp;dir=asc"`));
+    assert.match(html, />Reference</);
+    assert.doesNotMatch(html, /<th>Sent<\/th>|<th>Hazard<\/th>/);
 
     const sorted = await request(app, "GET", `/HHSRSreporter/main-log?q=${stamp}&sort=project&dir=asc`, { cookie });
     const sortedHtml = sorted.body.toString("utf8");
@@ -482,17 +485,17 @@ describe("HHSRS main log filters", () => {
     assert.match(sortedHtml, /Sorted A to Z\. Click to reverse\./);
     assert.match(sortedHtml, /▲/);
     assert.match(sortedHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=project&amp;dir=desc"`));
-    assert.match(sortedHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=sent&amp;dir=asc"`));
+    assert.match(sortedHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=received&amp;dir=asc"`));
     const projectTh = sortedHtml.match(/<th class="is-sorted"[\s\S]*?<\/th>/);
     assert.ok(projectTh);
     assert.match(projectTh[0], />Project<span class="ml-sort-ind"/);
 
-    const newestPage = await request(app, "GET", `/HHSRSreporter/main-log?q=${stamp}&sort=sent&dir=desc`, { cookie });
+    const newestPage = await request(app, "GET", `/HHSRSreporter/main-log?q=${stamp}&sort=received&dir=desc`, { cookie });
     const newestHtml = newestPage.body.toString("utf8");
     assert.match(newestHtml, /aria-sort="descending"/);
     assert.match(newestHtml, /Sorted newest first\. Click to reverse\./);
     assert.match(newestHtml, /▼/);
-    assert.match(newestHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=sent&amp;dir=asc"`));
+    assert.match(newestHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=received&amp;dir=asc"`));
 
     const file = await request(app, "GET", `/HHSRSreporter/main-log/export.xlsx?q=${stamp}&type=correction`, { cookie });
     assert.equal(file.status, 200);

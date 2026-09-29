@@ -1,16 +1,23 @@
 <%- include("partials/layout-open") %>
 <%
-  function breakEmail(value) {
-    const text = String(value || "").trim();
-    if (!text) return "—";
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/@/g, "@<wbr>")
-      .replace(/\./g, ".<wbr>");
-  }
+  const logRows = rows.map((row) => {
+    const emailed = Array.isArray(row.photoNames) ? row.photoNames.filter((name) => String(name || "").trim()) : [];
+    const stored = Array.isArray(row.photoPaths) ? row.photoPaths : [];
+    return {
+      id: row.submissionId,
+      reference: row.reference,
+      projectName: row.projectName,
+      fullAddress: row.fullAddress,
+      photoPaths: emailed.length ? emailed : stored,
+      uprn: row.uprn,
+      surveyorName: row.surveyorName,
+      category: row.hazard,
+      rating: row.rating,
+      createdAt: row.createdAt,
+      href: row.href,
+      rowClass: row.selected ? "is-sel" : ""
+    };
+  });
 %>
 
 <div class="ml-page">
@@ -93,55 +100,24 @@
         <a class="btn ml-excel" href="<%= exportHref %>"><span class="ml-x" aria-hidden="true">X</span>Export to Excel</a>
       </div>
     </div>
-    <div class="ml-table-wrap">
-      <table class="ml-table">
-        <colgroup>
-          <col class="c-sent" /><col class="c-ref" /><col class="c-proj" /><col class="c-uprn" />
-          <col class="c-addr" /><col class="c-haz" /><col class="c-rate" /><col class="c-by" />
-          <col class="c-to" /><col class="c-ph" /><col class="c-type" />
-        </colgroup>
-        <thead>
-          <tr>
-            <% sortColumns.forEach((col) => {
-              const thClass = [col.className, col.active ? "is-sorted" : ""].filter(Boolean).join(" ");
-            %>
-              <th class="<%= thClass %>" aria-sort="<%= col.active ? (col.dir === "desc" ? "descending" : "ascending") : "none" %>">
-                <a class="ml-sort" href="<%= col.href %>" title="<%= col.title %>"><%= col.label %><% if (col.active) { %><span class="ml-sort-ind" aria-hidden="true"><%= col.dir === "desc" ? "▼" : "▲" %></span><% } %></a>
-              </th>
-            <% }) %>
-          </tr>
-        </thead>
-        <tbody>
-          <% if (!rows.length) { %>
-            <tr><td colspan="11" class="ml-empty">No emails match. Try clearing the filters.</td></tr>
-          <% } %>
-          <% rows.forEach((row) => { %>
-            <tr class="ml-row <%= row.kind === "correction" ? "is-corr" : "" %> <%= row.hasCorrBelow ? "has-corr" : "" %> <%= row.selected ? "sel" : "" %>" data-href="<%= row.href %>">
-              <td class="ml-when"><b><%= row.whenDate %></b><span><%= row.whenTime %></span></td>
-              <td class="ml-ref" title="<%= row.reference %>"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
-              <td class="ml-proj" title="<%= row.projectName %>"><span class="ml-clamp"><%= row.projectName %></span></td>
-              <td class="ml-uprn"><%= row.uprn %></td>
-              <td class="ml-addr"><%= row.lineAddress || "—" %></td>
-              <td class="ml-hazard"><%= row.hazard %></td>
-              <td class="ml-rate <%= row.ratingClass %>"><%= row.rating %></td>
-              <td class="ml-by" title="<%= row.sentBy %>"><span class="ml-clamp"><%= row.sentBy || "—" %></span></td>
-              <td class="ml-to" title="<%= row.to %>"><span class="ml-clamp"><%- breakEmail(row.to) %></span></td>
-              <td class="ml-photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 8"/></svg><%= row.photoCount %></td>
-              <td class="ml-type">
-                <span class="ml-tag <%= row.kind === "correction" ? "c" : (row.kind === "not_sent" ? "n" : "o") %>"><%= row.typeLabel %></span>
-                <% if (row.correctedNote) { %><span class="ml-corr-note">Corrected ↓</span><% } %>
-              </td>
-            </tr>
-            <% if (row.linkLine) { %>
-              <tr class="ml-sub <%= row.selected ? "sel" : "" %>" data-href="<%= row.href %>">
-                <td></td>
-                <td colspan="10"><div class="ml-link"><span class="ml-arr" aria-hidden="true">↳</span><%= row.linkLine %></div></td>
-              </tr>
-            <% } %>
-          <% }) %>
-        </tbody>
-      </table>
+  </div>
+
+  <section class="panel" aria-label="Main Log">
+    <div class="panel-head">
+      <h2>Main Log</h2>
+      <span class="count"><%= showing %><% if (ofTotal) { %> of <%= ofTotal %><% } %></span>
     </div>
+    <% if (!rows.length) { %>
+      <p class="empty" style="padding:1rem 1.1rem;">No emails match. Try clearing the filters.</p>
+    <% } else { %>
+      <%- include("partials/pending-issues-table", {
+        pendingRows: logRows,
+        pendingTableId: "main-log-table",
+        pendingFoot: filters.sort ? "" : "Newest first",
+        pendingShowPhotoCount: true,
+        pendingSortColumns: sortColumns
+      }) %>
+    <% } %>
     <% if (pageCount > 1) { %>
       <div class="ml-pager">
         <% if (prevHref) { %><a href="<%= prevHref %>">Previous</a><% } %>
@@ -149,7 +125,7 @@
         <% if (nextHref) { %><a href="<%= nextHref %>">Next</a><% } %>
       </div>
     <% } %>
-  </div>
+  </section>
 </div>
 
 <% if (panel) { %>
@@ -193,21 +169,16 @@
       <dt>Bcc</dt><dd class="<%= panel.bcc ? "" : "none" %>"><%= panel.bcc || "—" %></dd>
       <dt>Subject</dt><dd class="<%= panel.subject ? "" : "none" %>"><% if (panel.subject) { %><b><%= panel.subject %></b><% } else { %>—<% } %></dd>
     </dl>
-    <div class="ml-sec">Email Text</div>
-    <% if (panel.bodyMissing) { %><p class="ml-missing">Full text not stored for this email</p><% } %>
-    <pre class="ml-body"><%= panel.bodyText || (panel.kind === "not_sent" ? "Not sent from the portal." : "") %></pre>
-    <div class="ml-sec">Photos Attached (<%= panel.photos.length %>)</div>
-    <% if (panel.photos.length) { %>
-      <div class="ml-thumbs">
-        <% panel.photos.forEach((photo) => { %>
-          <figure>
-            <% if (photo.url) { %><img src="<%= photo.url %>" alt="<%= photo.name %>" /><% } else { %><div class="ml-thumb-miss">No file</div><% } %>
-            <figcaption><%= photo.name %></figcaption>
-          </figure>
-        <% }) %>
-      </div>
-    <% } else { %>
-      <p class="ml-none">No photos.</p>
+    <% if (panel.kind !== "not_sent") { %>
+      <%- include("partials/sent-email-card", {
+        cardLabel: "Email that was sent",
+        card: {
+          subject: panel.subject,
+          bodyHtml: panel.bodyHtml,
+          signatureHtml: typeof signatureHtml !== "undefined" ? signatureHtml : "",
+          photos: panel.photos.map((photo) => ({ url: photo.url, name: photo.name, caption: photo.name }))
+        }
+      }) %>
     <% } %>
   </div>
   <div class="ml-d-foot">

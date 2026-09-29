@@ -1,0 +1,19 @@
+<article class="sent-card" <% if (typeof cardLabel !== "undefined" && cardLabel) { %>aria-label="<%= cardLabel %>"<% } %>>
+  <% if (card.subject) { %><h2><%= card.subject %></h2><% } %>
+  <div class="sent-body">
+    <div class="sent-copy"><%- card.bodyHtml || "" %></div>
+    <div class="sent-sign" <% if (card.signatureId) { %>id="<%= card.signatureId %>"<% } %>><%- card.signatureHtml || "" %></div>
+    <% if (card.photos && card.photos.length) { %>
+      <div class="sent-photos">
+        <% card.photos.forEach(function (photo) { %>
+          <figure class="photo-zoom">
+            <div class="art">
+              <% if (photo.url) { %><img src="<%= photo.url %>" alt="<%= photo.caption || photo.name %>" /><% } else { %><div class="art-miss">No file</div><% } %>
+            </div>
+            <figcaption><%= photo.caption || photo.name %></figcaption>
+          </figure>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+</article>

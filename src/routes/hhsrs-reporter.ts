@@ -73,13 +73,12 @@ import {
   sentBannerText,
 } from "../lib/hhsrs-send.js";
 import { listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import { buildAmendmentEmail, parseSentEmail } from "../lib/hhsrs-correction-email.js";
+import { emailBodyToHtml } from "../lib/hhsrs-signature.js";
 import {
-  CORRECTION_REASONS,
   MISSING_EMAIL_BODY,
-  correctionSubject,
   findCaseWhere,
   findStatusLabel,
-  formatLondonDate,
   formatLondonDateTime,
   latestSentLog,
   mainLogCardRows,
@@ -627,20 +626,12 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     }),
   ]);
 
-  const rows = matches.map((row) => {
-    const label = findStatusLabel(row.status);
-    return {
-      id: row.id,
-      reference: row.reference || "",
-      submitted: formatLondonDate(row.createdAt),
-      uprn: row.uprn,
-      address: row.fullAddress,
-      hazard: row.category,
-      statusLabel: label,
-      statusClass: label.replace(/\s+/g, "-"),
-      href: findUrl({ q, date, project, caseId: row.id }),
-    };
-  });
+  const rows = matches.map((row) => ({
+    ...row,
+    href: findUrl({ q, date, project, caseId: row.id }),
+    amendUrl: findUrl({ q, date, project, caseId: row.id, view: "amend" }),
+    rowClass: caseId === row.id ? "is-sel" : "",
+  }));
 
   const picked = caseId ? matches.find((row) => row.id === caseId) || (await loadCase(caseId)) : null;
   let found: Record<string, unknown> | null = null;
@@ -666,6 +657,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
           bcc: latest.bcc,
           subject: latest.subject,
           body: latest.body,
+          bodyHtml: emailBodyToHtml(latest.body) || `<p>${MISSING_EMAIL_BODY}</p>`,
           bodyMissing: !String(latest.body || "").trim(),
           missingText: MISSING_EMAIL_BODY,
           correction: latest.kind === "correction",
@@ -696,19 +688,35 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     };
     if (view === "amend" && latest) {
       const included = new Set(latest.photoNames);
-      photos = casePhotos;
+      const sentPhotos = latest.photoNames.map((name, index) => {
+        const known = casePhotos.find((photo) => photo.name === name);
+        return known || { id: name, name, caption: `Photo ${index + 1}`, url: "" };
+      });
+      const parsed = parseSentEmail(latest.body);
+      const preview = buildAmendmentEmail({
+        previousBody: latest.body,
+        previousSubject: latest.subject,
+        next: parsed.fields,
+        amendment: "",
+      });
+      photos = sentPhotos;
+      const withCurrent = (list: readonly string[], current: string) =>
+        current && !list.includes(current) ? [current, ...list] : [...list];
       amend = {
         to: latest.to,
         cc: latest.cc,
         bcc: latest.bcc,
-        subject: correctionSubject(latest.subject),
-        body: latest.body,
-        reasons: CORRECTION_REASONS,
-        note: "",
-        includedCount: casePhotos.filter((photo) => included.has(photo.name)).length,
-        photos: casePhotos.map((photo, index) => ({
+        subject: preview.subject,
+        previewHtml: preview.messageHtml,
+        fields: parsed.fields,
+        extras: parsed.extras,
+        prose: parsed.prose,
+        previousSubject: latest.subject,
+        categories: withCurrent(HHSRS_CATEGORIES, parsed.fields.hazard),
+        ratings: withCurrent(HHSRS_SITE_FORM_RATINGS, parsed.fields.rating),
+        photos: sentPhotos.map((photo, index) => ({
           ...photo,
-          caption: photo.caption || `Photo ${index + 1}`,
+          caption: photo.caption || photo.name || `Photo ${index + 1}`,
           included: included.has(photo.name),
         })),
         action: `${HHSRS_REPORTER_PATH}/find/${picked.id}/resend`,
@@ -791,7 +799,7 @@ function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {
 
 function mainLogSortTitle(key: MainLogSortKey, label: string, active: boolean, dir: MainLogFilters["dir"]): string {
   if (!active) return `Sort by ${label}`;
-  if (key === "sent") return dir === "desc" ? "Sorted newest first. Click to reverse." : "Sorted oldest first. Click to reverse.";
+  if (key === "sent" || key === "received") return dir === "desc" ? "Sorted newest first. Click to reverse." : "Sorted oldest first. Click to reverse.";
   if (key === "photos") return dir === "desc" ? "Sorted most first. Click to reverse." : "Sorted fewest first. Click to reverse.";
   return dir === "desc" ? "Sorted Z to A. Click to reverse." : "Sorted A to Z. Click to reverse.";
 }
@@ -875,8 +883,12 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
           : panelEntry.kind === "not_sent"
             ? ""
             : MISSING_EMAIL_BODY,
+        bodyHtml: emailBodyToHtml(panelEntry.body) || (panelEntry.kind === "not_sent"
+          ? "<p>Not sent from the portal.</p>"
+          : `<p>${MISSING_EMAIL_BODY}</p>`),
       }
     : null;
+  const signature = signatureLocals(res, await senderSignatureFor(req.user));
   res.render("hhsrs-reporter/main-log", {
     ...shellLocals({
       activeNav: "main-log",
@@ -904,6 +916,7 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
     pageCount: loaded.pageCount,
     sortColumns: mainLogSortColumns(filters),
     mainLogJsUrl: typeof res.locals.baseUrl === "function" ? res.locals.baseUrl("/js/hhsrs-main-log.js") : "/js/hhsrs-main-log.js",
+    ...signature,
   });
 });
 
