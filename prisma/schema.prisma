@@ -79,6 +79,7 @@ model Project {
   loaderHistory        LoaderHistory[]
   completions          Completion[]
   documents            ProjectDocument[]
+  masterDataFiles      MasterDataFile[]
   externalLink         ExternalLink?
   hhsrsSiteSubmissions HhsrsSiteSubmission[]
   programmeSurveyNote  ProgrammeSurveyNote?
@@ -313,6 +314,28 @@ model ProjectDocument {
   uploadedAt DateTime @default(now())
 
   @@index([projectId])
+}
+
+/// Master Data File for Data Checks, stored per project.
+/// The live file is the current master (`current`, not archived), named
+/// "{Project name}-Master Data File-V1.xlsm" (later V2, V3).
+/// Archiving clears `current` and sets `archivedAt`. The workbook stays on disk,
+/// validations included. It leaves the live list and is not deleted.
+model MasterDataFile {
+  id         String    @id @default(cuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  version    Int
+  storedName String
+  size       Int
+  current    Boolean   @default(true)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([current, archivedAt])
 }
 
 /// Site-raised HHSRS issue (surveyor phone form). Original photos stay on local disk.

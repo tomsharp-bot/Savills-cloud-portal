@@ -1,0 +1,7 @@
+.mdf-list{font-size:.9rem}
+.mdf-list th{font-size:.75rem}
+.mdf-list td{padding:10px 8px;vertical-align:middle}
+.mdf-name{font-weight:650;color:var(--blue)}
+.mdf-actions{white-space:nowrap;text-align:right}
+.mdf-actions form{display:inline;margin:0 0 0 8px}
+.mdf-actions .btn{margin:0}

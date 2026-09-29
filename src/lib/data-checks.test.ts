@@ -37,6 +37,32 @@ describe("Data Review practice page hosting", () => {
     assert.match(page, /Hide HHSRS Section/);
     assert.match(page, /Selected cell/);
     assert.match(page, /Load photo folder/);
+    assert.doesNotMatch(page, /Back to live files/);
+  });
+
+  it("adds a way back and opens one stored master in the same validator", () => {
+    const source = readDataReviewPage();
+    const page = assembleDataChecksPage(source, TOPBAR, {
+      backHref: "/projectprogress/data-checks",
+      boot: {
+        fileId: "file_1",
+        fileName: "Harbour Court-Master Data File-V1.xlsm",
+        fileUrl: "/projectprogress/data-checks/files/file_1/download",
+        saveUrl: "/projectprogress/data-checks/files/file_1/save",
+        listUrl: "/projectprogress/data-checks",
+      },
+    });
+    assert.match(page, /Back to live files/);
+    assert.match(page, /href="\/projectprogress\/data-checks"/);
+    assert.match(page, /id="scp-mdf-boot"/);
+    assert.match(page, /Harbour Court-Master Data File-V1\.xlsm/);
+    assert.match(page, /id="cellRead"/);
+    assert.match(page, /id="bSaveMaster"/);
+    assert.ok(page.indexOf('class="scp-host"') < page.indexOf('id="scp-app"'));
+    assert.ok(page.indexOf("Back to live files") < page.indexOf('id="scp-app"'));
+    assert.ok(page.lastIndexOf('id="scp-mdf-bridge"') > page.indexOf('id="xlsxlib"'));
+    assert.match(page, /sessionForThisFile/);
+    assert.match(page, /rec\.fileName === cfg\.fileName/);
   });
 });
 
@@ -214,15 +240,15 @@ describe("Data Checks route", () => {
     assert.equal(page.status, 200);
     assert.match(page.type || "", /text\/html/);
     assert.match(page.cache || "", /no-store/);
-    assert.ok(Buffer.byteLength(page.body) > 2_000_000);
     assert.equal(page.body.includes("<title>Data Checks — Savills Cloud Portal</title>"), true);
     assert.equal(page.body.includes('aria-current="page"'), true);
     assert.equal(page.body.includes('href="/projectprogress/projects"'), true);
     assert.equal(page.body.includes(">Projects Progress<"), true);
     assert.equal(page.body.includes('href="/projectprogress/projects-programme"'), true);
     assert.equal(page.body.includes(">Programme<"), true);
-    for (const marker of DATA_REVIEW_MARKERS) {
-      assert.equal(page.body.includes(marker), true, marker);
-    }
+    assert.match(page.body, /Live master files/);
+    assert.match(page.body, /class="docs-table mdf-list"/);
+    assert.doesNotMatch(page.body, /id="cellRead"/);
+    assert.doesNotMatch(page.body, /id="bSaveMaster"/);
   });
 });
