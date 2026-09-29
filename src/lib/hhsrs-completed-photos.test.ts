@@ -293,8 +293,14 @@ describe("HHSRS completed photo pages", () => {
     assert.match(page, /Properties: <%= t\.propertyCount %>/);
     const project = readFileSync(path.join(root, "views/photos-hhsrs-project.ejs"), "utf8");
     assert.match(project, /Numerical UPRN|numerical UPRN/);
-    assert.match(project, />UPRN</);
-    assert.match(project, />Address</);
+    assert.match(project, /hhsrs-uprn-block/);
+    assert.match(project, /UPRN <%= row\.uprn %>/);
+    assert.match(project, /hhsrs-uprn-address/);
+    assert.match(project, /photo-thumb-img/);
+    assert.match(project, /data-photo-open/);
+    assert.match(project, /photo\.imageUrl/);
+    assert.doesNotMatch(project, /folders-table/);
+    assert.doesNotMatch(project, /open one to see its photos/);
     const property = readFileSync(path.join(root, "views/photos-hhsrs-property.ejs"), "utf8");
     assert.match(property, /data-photo-open/);
     const reporter = readFileSync(path.join(root, "src/routes/hhsrs-reporter.ts"), "utf8");
@@ -506,6 +512,12 @@ describe("HHSRS completed photos with the database", () => {
       assert.match(properties.body, new RegExp(uprn));
       assert.match(properties.body, /Copy Lane/);
       assert.match(properties.body, /Sorted by UPRN \(numerical\)/);
+      assert.match(properties.body, /hhsrs-uprn-block/);
+      assert.match(properties.body, /front\.jpg/);
+      assert.match(properties.body, /data-photo-open/);
+      assert.match(properties.body, /photo-thumb-img/);
+      assert.match(properties.body, /\/photos\/hhsrs-photo\//);
+      assert.doesNotMatch(properties.body, /folders-table/);
 
       const property = await request(
         port,

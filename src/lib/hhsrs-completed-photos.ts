@@ -113,6 +113,11 @@ export type HhsrsPropertyRow = {
   photoCount: number;
 };
 
+/** One UPRN on the HHSRS - Completed project page, with its photos in copy order. */
+export type HhsrsProjectProperty = HhsrsPropertyRow & {
+  photos: HhsrsCompletedPhotoView[];
+};
+
 export type HhsrsCompletedPhotoView = {
   id: string;
   fileName: string;
@@ -605,6 +610,24 @@ type PropertySqlRow = {
   photos: bigint | number;
 };
 
+function completedPhotoView(row: {
+  id: string;
+  fileName: string;
+  uprn: string;
+  fullAddress: string;
+  postcode: string;
+  contentType: string;
+}): HhsrsCompletedPhotoView {
+  return {
+    id: row.id,
+    fileName: row.fileName,
+    uprn: row.uprn,
+    address: displayAddress(row.fullAddress, row.postcode),
+    contentType: row.contentType,
+    imageUrl: hhsrsCompletedFilePath(row.id),
+  };
+}
+
 export async function listHhsrsProperties(projectName: string): Promise<HhsrsPropertyRow[]> {
   const rows = await prisma.$queryRaw<PropertySqlRow[]>`
     SELECT DISTINCT ON ("uprn")
@@ -625,6 +648,36 @@ export async function listHhsrsProperties(projectName: string): Promise<HhsrsPro
     .sort((a, b) => compareUprn(a.uprn, b.uprn) || a.address.localeCompare(b.address, "en-GB"));
 }
 
+/**
+ * Properties for one HHSRS - Completed project, in numerical UPRN order.
+ * Each block includes the photo thumbnails so the project page can show them
+ * without a second click. Photo order matches the property page.
+ */
+export async function listHhsrsProjectProperties(projectName: string): Promise<HhsrsProjectProperty[]> {
+  const rows = await prisma.hhsrsCompletedPhoto.findMany({
+    where: { projectName },
+    orderBy: [{ copiedAt: "asc" }, { fileName: "asc" }],
+  });
+  const groups = new Map<string, { latest: (typeof rows)[number]; photos: HhsrsCompletedPhotoView[] }>();
+  for (const row of rows) {
+    const existing = groups.get(row.uprn);
+    if (!existing) {
+      groups.set(row.uprn, { latest: row, photos: [completedPhotoView(row)] });
+      continue;
+    }
+    if (row.copiedAt >= existing.latest.copiedAt) existing.latest = row;
+    existing.photos.push(completedPhotoView(row));
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      uprn: group.latest.uprn,
+      address: displayAddress(group.latest.fullAddress, group.latest.postcode),
+      photoCount: group.photos.length,
+      photos: group.photos,
+    }))
+    .sort((a, b) => compareUprn(a.uprn, b.uprn) || a.address.localeCompare(b.address, "en-GB"));
+}
+
 export async function listHhsrsPropertyPhotos(projectName: string, uprn: string): Promise<{
   address: string;
   photos: HhsrsCompletedPhotoView[];
@@ -639,14 +692,7 @@ export async function listHhsrsPropertyPhotos(projectName: string, uprn: string)
   }, null);
   return {
     address: latest ? displayAddress(latest.fullAddress, latest.postcode) : "",
-    photos: rows.map((row) => ({
-      id: row.id,
-      fileName: row.fileName,
-      uprn: row.uprn,
-      address: displayAddress(row.fullAddress, row.postcode),
-      contentType: row.contentType,
-      imageUrl: hhsrsCompletedFilePath(row.id),
-    })),
+    photos: rows.map((row) => completedPhotoView(row)),
   };
 }
 
