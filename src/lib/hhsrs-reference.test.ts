@@ -235,8 +235,9 @@ describe("HHSRS thanks summary", () => {
     assert.match(thanks, /Tip: take a screenshot to keep a copy/);
     assert.match(
       thanks,
-      /Send <a href="mailto:HHSRS@savillshousing\.co\.uk">HHSRS@savillshousing\.co\.uk<\/a> your reference\./
+      /For any amendments please email <a href="mailto:HHSRS@savillshousing\.co\.uk">HHSRS@savillshousing\.co\.uk<\/a>\./
     );
+    assert.doesNotMatch(thanks, /Need to change something\?/);
     assert.doesNotMatch(thanks, /Send the office your reference/);
     assert.doesNotMatch(thanks, /MOCK|Mock only|example data only|Preview/i);
     assert.match(find, /id="find-project"/);
