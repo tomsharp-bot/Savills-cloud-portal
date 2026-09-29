@@ -289,6 +289,8 @@ export type DeliverInput = {
   /** Signature name. Empty when no name is on file; sending still proceeds. */
   senderFirstName?: string;
   senderFullName?: string;
+  /** Escaped message HTML. When set, the HTML email uses it instead of escaping `body`. */
+  messageHtml?: string;
 };
 
 export type DeliverResult =
@@ -337,7 +339,7 @@ export async function deliverPortalEmail(
         bcc: check.bcc,
         subject,
         text: composeEmailText(body, signatureNames),
-        html: composeEmailHtml(body, signatureNames, `cid:${SIGNATURE_LOGO_CID}`),
+        html: composeEmailHtml(body, signatureNames, `cid:${SIGNATURE_LOGO_CID}`, input.messageHtml),
         messageId,
         attachments: input.attachments,
       };

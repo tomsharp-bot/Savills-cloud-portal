@@ -450,10 +450,18 @@ describe("HHSRS find search and resend", () => {
       assert.equal(sent[0].fromAddress, "hhsrs@savillshousing.co.uk");
       assert.deepEqual(sent[0].to, ["repairs@savillshousing.co.uk"]);
       assert.equal(sent[0].subject, "CORRECTION: HHSRS hazard – Falls on Stairs");
+      const correctionBody = [
+        "Please disregard our previous email. This corrects the recipient, which is now repairs@savillshousing.co.uk.",
+        "",
+        "Please use the repairs team.",
+      ].join("\n");
       assert.equal(
         sent[0].text,
-        composeEmailText("Please use the repairs team.", { firstName: "Tom", fullName: "Tom Sharp" })
+        composeEmailText(correctionBody, { firstName: "Tom", fullName: "Tom Sharp" })
       );
+      assert.match(sent[0].html, /<b>repairs@savillshousing\.co\.uk<\/b>/);
+      assert.doesNotMatch(sent[0].text, /Wrong recipient|was wrong/i);
+      assert.doesNotMatch(sent[0].text, /Should go to the repairs team/);
       assert.match(sent[0].html, /HHSRS Reporting Team/);
       assert.doesNotMatch(sent[0].html, />Tom Sharp</);
 
@@ -471,7 +479,7 @@ describe("HHSRS find search and resend", () => {
       assert.equal(again[1].correctsEmailId, original.id);
       assert.equal(again[1].correctionReason, "Wrong recipient");
       assert.equal(again[1].correctionNote, "Should go to the repairs team");
-      assert.equal(again[1].body, "Please use the repairs team.");
+      assert.equal(again[1].body, correctionBody);
 
       const fresh = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: hit.id } });
       assert.equal(fresh.status, "corrected");

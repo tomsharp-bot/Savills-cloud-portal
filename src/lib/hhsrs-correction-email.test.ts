@@ -1,0 +1,382 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { prepareCorrectionEmail, stripCorrectionIntro } from "./hhsrs-correction-email.js";
+import { correctionSubject } from "./hhsrs-find.js";
+import { deliverPortalEmail, type OutboundEmail, type SendCommit, type SentEmailRecord } from "./hhsrs-send.js";
+import { SIGNATURE_LOGO_CID, composeEmailHtml, composeEmailText } from "./hhsrs-signature.js";
+
+const SUBJECT = "CORRECTION: MTVH 2026 - HHSRS – 14 Example Street, London";
+const PREVIOUS_SUBJECT = "MTVH 2026 - HHSRS – 14 Example Street, London";
+
+const ORIGINAL = [
+  "Hi all,",
+  "",
+  "• Address: 14 Example Street, London",
+  "• UPRN: 100012345678",
+  "• Hazard: Damp and Mould Growth",
+  "• Rating: High - Emergency Risk",
+  "• Site notes: Damp to the bedroom ceiling.",
+  "• Survey date: 28/09/2026",
+].join("\n");
+
+function replaceBullet(body: string, label: string, value: string): string {
+  return body
+    .split("\n")
+    .map((line) => (line.startsWith(`• ${label}:`) ? `• ${label}: ${value}` : line))
+    .join("\n");
+}
+
+const base = {
+  previousTo: "client@example.com",
+  nextTo: "client@example.com",
+  previousPhotos: ["bedroom-ceiling.jpg"] as readonly string[],
+  nextPhotos: ["bedroom-ceiling.jpg"] as readonly string[],
+  note: "",
+};
+
+function htmlLines(messageHtml: string): string[] {
+  return messageHtml.split("<br>\n");
+}
+
+function bulletLine(messageHtml: string, label: string): string {
+  return htmlLines(messageHtml).find((line) => line.includes(`• ${label}:`)) || "";
+}
+
+describe("HHSRS correction email wording", () => {
+  it("corrects an address, bolds the new value, and leaves the old address in the subject", () => {
+    const next = replaceBullet(ORIGINAL, "Address", "15 Example Street, London");
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: next,
+      reason: "Wrong address",
+    });
+    assert.equal(
+      prepared.text,
+      [
+        "Hi all,",
+        "",
+        "Please disregard our previous email. This corrects the property address, which is now 15 Example Street, London.",
+        "",
+        "• Address: 15 Example Street, London",
+        "• UPRN: 100012345678",
+        "• Hazard: Damp and Mould Growth",
+        "• Rating: High - Emergency Risk",
+        "• Site notes: Damp to the bedroom ceiling.",
+        "• Survey date: 28/09/2026",
+      ].join("\n")
+    );
+    assert.match(
+      prepared.messageHtml,
+      /Please disregard our previous email\. This corrects the property address, which is now <b>15 Example Street, London<\/b>\./
+    );
+    assert.match(bulletLine(prepared.messageHtml, "Address"), /<b>15 Example Street, London<\/b>/);
+    for (const label of ["UPRN", "Hazard", "Rating", "Site notes", "Survey date"]) {
+      assert.equal(bulletLine(prepared.messageHtml, label).includes("<b>"), false, label);
+    }
+    assert.equal(correctionSubject(PREVIOUS_SUBJECT), SUBJECT);
+    assert.match(SUBJECT, /14 Example Street, London/);
+    assert.doesNotMatch(prepared.text, /14 Example Street/);
+    assert.doesNotMatch(prepared.text, /was wrong/i);
+    assert.doesNotMatch(prepared.text, /Wrong address/);
+    assert.doesNotMatch(prepared.messageHtml, /\*\*/);
+  });
+
+  it("corrects photos without naming the photo or adding a photo bullet", () => {
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      previousPhotos: ["bedroom-ceiling.jpg"],
+      nextPhotos: ["kitchen.jpg"],
+      reason: "Missing photo",
+    });
+    assert.equal(
+      prepared.text,
+      [
+        "Hi all,",
+        "",
+        "Please disregard our previous email. The correct photos are now attached.",
+        "",
+        ORIGINAL.split("\n").slice(2).join("\n"),
+      ].join("\n")
+    );
+    const intro = htmlLines(prepared.messageHtml)[2];
+    assert.equal(
+      intro,
+      "Please disregard our previous email. <b>The correct photos are now attached.</b>"
+    );
+    assert.doesNotMatch(intro, /bedroom|kitchen|\.jpg|ceiling/i);
+    assert.doesNotMatch(prepared.text, /• Photo/);
+    assert.equal(bulletLine(prepared.messageHtml, "Address").includes("<b>"), false);
+    assert.equal(bulletLine(prepared.messageHtml, "Hazard").includes("<b>"), false);
+    assert.doesNotMatch(prepared.text, /was wrong/i);
+    assert.doesNotMatch(prepared.messageHtml, /\*\*/);
+  });
+
+  it("uses the photo sentence when the reason is Missing photo and the file names are unchanged", () => {
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      reason: "Missing photo",
+    });
+    assert.match(prepared.text, /Please disregard our previous email\. The correct photos are now attached\./);
+    assert.doesNotMatch(prepared.text, /bedroom-ceiling/);
+  });
+
+  it("corrects a hazard and bolds only that value", () => {
+    const next = replaceBullet(ORIGINAL, "Hazard", "Excess Cold");
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: next,
+      reason: "Wrong details",
+    });
+    assert.equal(
+      prepared.text,
+      [
+        "Hi all,",
+        "",
+        "Please disregard our previous email. This corrects the hazard, which is now Excess Cold.",
+        "",
+        "• Address: 14 Example Street, London",
+        "• UPRN: 100012345678",
+        "• Hazard: Excess Cold",
+        "• Rating: High - Emergency Risk",
+        "• Site notes: Damp to the bedroom ceiling.",
+        "• Survey date: 28/09/2026",
+      ].join("\n")
+    );
+    assert.match(
+      prepared.messageHtml,
+      /This corrects the hazard, which is now <b>Excess Cold<\/b>\./
+    );
+    assert.match(bulletLine(prepared.messageHtml, "Hazard"), /<b>Excess Cold<\/b>/);
+    for (const label of ["Address", "UPRN", "Rating", "Site notes", "Survey date"]) {
+      assert.equal(bulletLine(prepared.messageHtml, label).includes("<b>"), false, label);
+    }
+    assert.doesNotMatch(prepared.text, /was wrong/i);
+    assert.doesNotMatch(prepared.text, /Wrong details/);
+    assert.doesNotMatch(prepared.messageHtml, /\*\*/);
+  });
+
+  it("names every changed field, including rating, site notes, and recipient", () => {
+    let next = replaceBullet(ORIGINAL, "Rating", "Moderate");
+    next = replaceBullet(next, "Site notes", "Damp in the kitchen.");
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: next,
+      previousTo: "repairs@example.com",
+      nextTo: "housing@example.com",
+      reason: "Wrong details",
+    });
+    assert.equal(
+      prepared.text.split("\n")[2],
+      "Please disregard our previous email. This corrects the rating, which is now Moderate. This corrects the site notes, which is now Damp in the kitchen. This corrects the recipient, which is now housing@example.com."
+    );
+    assert.match(prepared.messageHtml, /which is now <b>Moderate<\/b>\./);
+    assert.match(prepared.messageHtml, /which is now <b>Damp in the kitchen\.<\/b>/);
+    assert.match(prepared.messageHtml, /which is now <b>housing@example\.com<\/b>\./);
+    assert.match(bulletLine(prepared.messageHtml, "Rating"), /<b>Moderate<\/b>/);
+    assert.match(bulletLine(prepared.messageHtml, "Site notes"), /<b>Damp in the kitchen\.<\/b>/);
+    assert.equal(bulletLine(prepared.messageHtml, "Address").includes("<b>"), false);
+    assert.doesNotMatch(bulletLine(prepared.messageHtml, "Address"), /housing@example/);
+  });
+
+  it("names UPRN, cause, and call reference when those lines change", () => {
+    let next = replaceBullet(ORIGINAL, "UPRN", "100099988877");
+    next += "\n• Cause: Failed pointing.";
+    next += "\n• Client call reference: CALL-44";
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: next,
+      reason: "Wrong details",
+    });
+    assert.equal(
+      prepared.text.split("\n")[2],
+      "Please disregard our previous email. This corrects the UPRN, which is now 100099988877. This corrects the cause, which is now Failed pointing. This corrects the client call reference, which is now CALL-44."
+    );
+    assert.match(bulletLine(prepared.messageHtml, "UPRN"), /<b>100099988877<\/b>/);
+    assert.match(bulletLine(prepared.messageHtml, "Cause"), /<b>Failed pointing\.<\/b>/);
+    assert.equal(bulletLine(prepared.messageHtml, "Hazard").includes("<b>"), false);
+  });
+
+  it("puts an Other note in the opening without saying something was wrong", () => {
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      reason: "Other",
+      note: "Survey date should be 27/09/2026",
+    });
+    assert.equal(
+      prepared.text.split("\n")[2],
+      "Please disregard our previous email. This corrects the following: Survey date should be 27/09/2026."
+    );
+    assert.doesNotMatch(prepared.text, /was wrong/i);
+    assert.equal(bulletLine(prepared.messageHtml, "Survey date").includes("<b>"), false);
+  });
+
+  it("names a changed survey date and keeps an Other note as well", () => {
+    const next = replaceBullet(ORIGINAL, "Survey date", "27/09/2026");
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: next,
+      reason: "Other",
+      note: "Called in by the client.",
+    });
+    assert.match(
+      prepared.text,
+      /This corrects the survey date, which is now 27\/09\/2026\. This corrects the following: Called in by the client\./
+    );
+    assert.match(bulletLine(prepared.messageHtml, "Survey date"), /<b>27\/09\/2026<\/b>/);
+  });
+
+  it("does not treat an unchanged resend as a field change, and does not stack openings", () => {
+    const first = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: replaceBullet(ORIGINAL, "Address", "15 Example Street, London"),
+      reason: "Wrong address",
+    });
+    const second = prepareCorrectionEmail({
+      ...base,
+      previousBody: first.text,
+      nextBody: first.text.replaceAll("15 Example Street, London", "16 Example Street, London"),
+      reason: "Wrong address",
+    });
+    assert.equal(stripCorrectionIntro(first.text), replaceBullet(ORIGINAL, "Address", "15 Example Street, London"));
+    const openings = second.text.split("Please disregard our previous email.").length - 1;
+    assert.equal(openings, 1);
+    assert.match(second.text, /which is now 16 Example Street, London\./);
+    assert.doesNotMatch(second.text, /which is now 15 Example Street/);
+  });
+
+  it("escapes HTML in the new value and still bolds it", () => {
+    const next = replaceBullet(ORIGINAL, "Site notes", "Crack <north> & stair.");
+    const prepared = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: next,
+      reason: "Wrong details",
+    });
+    assert.match(
+      prepared.messageHtml,
+      /which is now <b>Crack &lt;north&gt; &amp; stair\.<\/b>/
+    );
+    assert.doesNotMatch(prepared.messageHtml, /<north>/);
+  });
+});
+
+describe("HHSRS correction send", () => {
+  const names = { firstName: "", fullName: "" };
+
+  async function sendPrepared(input: Parameters<typeof prepareCorrectionEmail>[0], photoNames: string[]) {
+    const prepared = prepareCorrectionEmail(input);
+    const sent: OutboundEmail[] = [];
+    const result = await deliverPortalEmail(
+      {
+        submissionId: "case-1",
+        sentBy: "Tom Sharp",
+        hasReporterAccess: true,
+        passwordSet: true,
+        alreadySent: false,
+        checked: true,
+        to: "client@savillshousing.co.uk",
+        cc: "",
+        bcc: "",
+        subject: correctionSubject(PREVIOUS_SUBJECT),
+        body: prepared.text,
+        messageHtml: prepared.messageHtml,
+        photoNames,
+        attachments: photoNames.map((filename) => ({
+          filename,
+          content: Buffer.from("photo"),
+          contentType: "image/jpeg",
+        })),
+        allowDomainsRaw: "*",
+        totalBytes: photoNames.length,
+        fromName: "Savills HHSRS",
+        fromAddress: "hhsrs@savillshousing.co.uk",
+      },
+      {
+        sendMail: async (mail) => {
+          sent.push(mail);
+          return { messageId: "<correction@savillshousing.co.uk>", raw: Buffer.from("raw") };
+        },
+        appendToSent: async () => undefined,
+        exclusive: async (run) => {
+          const commit: SendCommit = await run();
+          const record: SentEmailRecord = { id: "sent-1", submissionId: "case-1", ...commit };
+          return record;
+        },
+      }
+    );
+    assert.equal(result.ok, true);
+    assert.equal(sent.length, 1);
+    return { prepared, mail: sent[0] };
+  }
+
+  it("sends the address, photo, and hazard corrections with bold HTML and the old subject", async () => {
+    const address = await sendPrepared(
+      {
+        ...base,
+        previousBody: ORIGINAL,
+        nextBody: replaceBullet(ORIGINAL, "Address", "15 Example Street, London"),
+        reason: "Wrong address",
+      },
+      ["bedroom-ceiling.jpg"]
+    );
+    const photos = await sendPrepared(
+      {
+        ...base,
+        previousBody: ORIGINAL,
+        nextBody: ORIGINAL,
+        previousPhotos: ["bedroom-ceiling.jpg"],
+        nextPhotos: ["kitchen.jpg"],
+        reason: "Missing photo",
+      },
+      ["kitchen.jpg"]
+    );
+    const hazard = await sendPrepared(
+      {
+        ...base,
+        previousBody: ORIGINAL,
+        nextBody: replaceBullet(ORIGINAL, "Hazard", "Excess Cold"),
+        reason: "Wrong details",
+      },
+      ["bedroom-ceiling.jpg"]
+    );
+
+    for (const item of [address, photos, hazard]) {
+      assert.equal(item.mail.fromAddress, "hhsrs@savillshousing.co.uk");
+      assert.equal(item.mail.fromName, "Savills HHSRS");
+      assert.equal(item.mail.subject, SUBJECT);
+      assert.match(item.mail.subject, /14 Example Street, London/);
+      assert.equal(item.mail.text, composeEmailText(item.prepared.text, names));
+      assert.equal(
+        item.mail.html,
+        composeEmailHtml(item.prepared.text, names, `cid:${SIGNATURE_LOGO_CID}`, item.prepared.messageHtml)
+      );
+      assert.match(item.mail.html, /HHSRS Reporting Team/);
+      assert.match(item.mail.html, /HHSRS@savillshousing\.co\.uk/);
+      assert.match(item.mail.html, /www\.savills\.co\.uk/);
+      assert.match(item.mail.html, new RegExp(`cid:${SIGNATURE_LOGO_CID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+      assert.doesNotMatch(item.mail.html, /\*\*/);
+      assert.doesNotMatch(item.mail.text, /was wrong/i);
+      assert.match(item.mail.text, /Please disregard our previous email\./);
+    }
+
+    assert.match(address.mail.html, /<b>15 Example Street, London<\/b>/);
+    assert.doesNotMatch(address.mail.text, /<b>/);
+    assert.match(photos.mail.html, /<b>The correct photos are now attached\.<\/b>/);
+    assert.doesNotMatch(photos.mail.text, /kitchen\.jpg|bedroom-ceiling/);
+    assert.match(hazard.mail.html, /<b>Excess Cold<\/b>/);
+    assert.match(hazard.mail.text, /• Address: 14 Example Street, London/);
+    assert.equal(bulletLine(hazard.prepared.messageHtml, "Address").includes("<b>"), false);
+  });
+});

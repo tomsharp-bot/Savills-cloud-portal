@@ -197,11 +197,13 @@ export function composeEmailText(body: string, names: Pick<SenderSignature, "fir
 export function composeEmailHtml(
   body: string,
   names: Pick<SenderSignature, "firstName" | "fullName">,
-  logoSrc: string
+  logoSrc: string,
+  messageHtml?: string
 ): string {
   const typed = String(body || "").replace(/\s+$/, "");
-  const message = typed
-    ? `<div style="font-family:Calibri,Aptos,Arial,sans-serif;font-size:14.5px;line-height:1.45;color:#111111;">${plainToHtml(typed)}</div>`
+  const inner = messageHtml !== undefined ? messageHtml : typed ? plainToHtml(typed) : "";
+  const message = inner
+    ? `<div style="font-family:Calibri,Aptos,Arial,sans-serif;font-size:14.5px;line-height:1.45;color:#111111;">${inner}</div>`
     : "";
   return `<!DOCTYPE html><html lang="en-GB"><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">${message}${renderSignatureHtml(names, logoSrc)}</body></html>`;
 }
