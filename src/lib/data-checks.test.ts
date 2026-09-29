@@ -46,7 +46,9 @@ describe("Data Review practice page hosting", () => {
     assert.match(page, /wirePickList\('base'\)/);
     assert.match(page, /Not already in this master/);
     assert.match(page, /Tick at least one column\./);
-    assert.match(page, /cols\.splice\(0, cols\.length, \.\.\.out\)/);
+    assert.match(page, /function weaveMdfColumns/);
+    assert.match(page, /not stacked at the end/);
+    assert.match(page, /cols\.splice\(0, cols\.length, \.\.\.woven\.out\)/);
     assert.match(page, /Hide HHSRS Section/);
     assert.match(page, /Selected cell/);
     assert.match(page, /Load photo folder/);

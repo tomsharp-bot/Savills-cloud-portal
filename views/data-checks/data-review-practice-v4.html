@@ -384,7 +384,7 @@ body:not(.tab-grid) #main{visibility:hidden}
     <div id="iSummary"></div>
     <div id="iConf"></div>
     <h3 style="margin-top:22px">Import data from an existing MDF</h3>
-    <p class="lead">Drop a master that is already in the horizontal layout (one row per property), such as the checked pilot workbook. Columns are matched on the header name, ignoring capital letters and extra spaces. Nothing is guessed. Columns that do not match are listed in the order they have in this file. Select all, then untick any you do not want. Ticked columns are added in that same order. Unticked columns stay out, and headers are not renamed. Rows are matched on UPRN: values from this file replace the master, and properties that are not already there are added. A sheet that does not have a saved column order yet keeps the workbook&rsquo;s own header order.</p>
+    <p class="lead">Drop a master that is already in the horizontal layout (one row per property), such as the checked pilot workbook. Columns are matched on the header name, ignoring capital letters and extra spaces. Nothing is guessed. Columns that do not match are listed in the order they have in this file. Select all, then untick any you do not want. A ticked column is inserted where it sits in that file, between the neighbouring columns already on this sheet, so it is not stacked at the end. A header he already has is kept and not duplicated. Unticked columns stay out, and headers are not renamed. Rows are matched on UPRN: values from this file replace the master, and properties that are not already there are added. A sheet that does not have a saved column order yet keeps the workbook&rsquo;s own header order.</p>
     <div class="card drop" id="mdfDrop"><div class="big">&#11015; Drag an existing master here</div><div class="sub">.xlsx or .xlsm &middot; a sheet bigger than 40 MB uncompressed (for example a raw RDSAP dump) is skipped</div><button class="sbtn" id="mdfPick" type="button">Choose file&hellip;</button></div>
     <div id="mdfPreview"></div>
   </div>
@@ -5294,7 +5294,8 @@ function mdfPlanSheet(info, sheetName){
     if (!src) continue;
     used.add(src.c); matched.push({key:col.key, header:col.header, src:src.c});
   }
-  const unmatched = info.cols.filter(c => !used.has(c.c));
+  const masterNorms = new Set(saved.map(c => mdfNorm(c.header)));
+  const unmatched = info.cols.filter(c => !used.has(c.c) && !masterNorms.has(c.norm));
   const matchedNorm = new Set(matched.map(m => mdfNorm(m.header)));
   const v4missing = saved.filter(c => !matchedNorm.has(mdfNorm(c.header))).map(c => c.header);
   const have = new Set();
@@ -5338,7 +5339,7 @@ function renderMdfPreview(){
     html += '<h4>Not already in this master</h4>';
     if (!p.unmatched.length) html += '<div class="hint">Every source column matched a header already in this master.</div>';
     else {
-      html += '<div class="hint">' + nf(p.unmatched.length) + ' columns are in this file and not already in the master. They are listed in the file’s order. Select all, then untick any you do not want. Unticked columns stay out. Headers are not renamed.</div>';
+      html += '<div class="hint">' + nf(p.unmatched.length) + ' columns are in this file and not already in the master. They are listed in the file’s order. Select all, then untick any you do not want. Ticked columns are inserted between the neighbouring columns already on this sheet, in that same order, not stacked at the end. Unticked columns stay out. Headers are not renamed.</div>';
       html += pickListHtml('mdf', pi, p.unmatched.map(c => c.header), false);
     }
   });
@@ -5396,6 +5397,55 @@ function mdfMakeCols(info){
   }
   return cols;
 }
+/* Insert ticked columns where they sit in the existing file, between the neighbouring columns already on this sheet. His existing columns stay in their order and are not duplicated. */
+function weaveMdfColumns(cols, fileCols, srcToKey, pickedSrc){
+  const out = cols.slice();
+  const usedK = new Set(out.map(c => c.key));
+  const haveNorm = new Set(out.map(c => mdfNorm(c.header)));
+  const recs = [];
+  let prev = null;
+  for (const src of fileCols) {
+    const mk = srcToKey.get(src.c) || null;
+    recs.push({src, prev, match:mk});
+    if (mk) prev = mk;
+  }
+  let next = null;
+  for (let i = recs.length - 1; i >= 0; i--) {
+    recs[i].next = next;
+    if (recs[i].match) next = recs[i].match;
+  }
+  const slotTail = new Map();
+  const byKeyAdds = [];
+  let picked = 0;
+  for (const rec of recs) {
+    if (rec.match || !pickedSrc.has(rec.src.c) || haveNorm.has(rec.src.norm)) continue;
+    const src = rec.src;
+    let k = 'c|' + src.norm.slice(0, 80) + '|' + src.c;
+    while (usedK.has(k)) k += 'x';
+    usedK.add(k);
+    haveNorm.add(src.norm);
+    const col = {key:k, header:src.header, kind:'custom', visible:true, src:'Ticked in when importing an existing MDF'};
+    const prevIdx = rec.prev ? out.findIndex(c => c.key === rec.prev) : -1;
+    const nextIdx = rec.next ? out.findIndex(c => c.key === rec.next) : -1;
+    let slot;
+    if (prevIdx >= 0 && nextIdx >= 0 && prevIdx > nextIdx) slot = 'before:' + rec.next;
+    else if (prevIdx >= 0) slot = 'after:' + rec.prev;
+    else if (nextIdx >= 0) slot = 'before:' + rec.next;
+    else slot = 'end';
+    const tail = slotTail.get(slot);
+    let at;
+    if (tail) at = out.findIndex(c => c.key === tail) + 1;
+    else if (slot.indexOf('after:') === 0) at = prevIdx + 1;
+    else if (slot.indexOf('before:') === 0) at = out.findIndex(c => c.key === rec.next);
+    else at = out.length;
+    if (at < 0) at = out.length;
+    out.splice(at, 0, col);
+    slotTail.set(slot, k);
+    byKeyAdds.push([k, src.c]);
+    picked++;
+  }
+  return {out, picked, byKeyAdds};
+}
 function applyMdfImport(){
   const P = V4.mdf; if (!P) return;
   const picks = new Set();
@@ -5419,30 +5469,14 @@ function applyMdfImport(){
     const byKey = new Map();
     if (p.mode === 'match') {
       for (const m of p.matched) byKey.set(m.key, m.src);
-      const usedK = new Set(cols.map(c => c.key));
       const srcToKey = new Map();
       for (const m of p.matched) if (!srcToKey.has(m.src)) srcToKey.set(m.src, m.key);
       const pickedSrc = new Set();
       p.unmatched.forEach((c, ci) => { if (picks.has(pi + ':' + ci)) pickedSrc.add(c.c); });
-      const out = cols.slice();
-      let lastKey = null, picked = 0;
-      for (const src of p.info.cols) {
-        const mk = srcToKey.get(src.c);
-        if (mk) { lastKey = mk; continue; }
-        if (!pickedSrc.has(src.c)) continue;
-        let k = 'c|' + src.norm.slice(0, 80) + '|' + src.c;
-        while (usedK.has(k)) k += 'x';
-        usedK.add(k);
-        const col = {key:k, header:src.header, kind:'custom', visible:true, src:'Ticked in when importing an existing MDF'};
-        const i = lastKey ? out.findIndex(x => x.key === lastKey) : -1;
-        const at = i < 0 ? (lastKey ? out.length : 0) : i + 1;
-        out.splice(at, 0, col);
-        byKey.set(k, src.c);
-        lastKey = k;
-        picked++;
-      }
-      cols.splice(0, cols.length, ...out);
-      p._picked = picked;
+      const woven = weaveMdfColumns(cols, p.info.cols, srcToKey, pickedSrc);
+      for (const [k, srcC] of woven.byKeyAdds) byKey.set(k, srcC);
+      cols.splice(0, cols.length, ...woven.out);
+      p._picked = woven.picked;
     } else {
       cols.forEach((col, idx) => { const src = p.info.cols[idx]; if (src) byKey.set(col.key, src.c); });
     }
