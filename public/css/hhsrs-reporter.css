@@ -1368,6 +1368,8 @@ body.hhsrs-reporter {
   white-space: nowrap;
   text-align: right;
 }
+.hhsrs-reporter .pending-issues-table tr.find-result { cursor: pointer; }
+.hhsrs-reporter .pending-issues-table tr.is-sel td { background: #fffbea; }
 .hhsrs-reporter .btn-review-create:hover { filter: brightness(1.05); color: #fff; }
 .hhsrs-reporter .status-pill {
   display: inline-block;

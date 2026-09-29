@@ -97,6 +97,8 @@ function excelEntry(patch: Partial<MainLogEntry> & Pick<MainLogEntry, "key" | "k
     postcode: "ZZ1 3GH",
     hazard: "Falling On Stairs Etc.",
     rating: "High - Emergency Risk",
+    surveyorName: "Jane Example",
+    createdAt: new Date("2026-09-20T09:00:00.000Z"),
     sentBy: "Carly Farrell",
     to: "repairs@savillshousing.co.uk",
     cc: "",

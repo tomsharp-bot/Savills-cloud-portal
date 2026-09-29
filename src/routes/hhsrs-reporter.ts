@@ -78,7 +78,6 @@ import {
   MISSING_EMAIL_BODY,
   findCaseWhere,
   findStatusLabel,
-  formatLondonDate,
   formatLondonDateTime,
   latestSentLog,
   mainLogCardRows,
@@ -624,20 +623,12 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     }),
   ]);
 
-  const rows = matches.map((row) => {
-    const label = findStatusLabel(row.status);
-    return {
-      id: row.id,
-      reference: row.reference || "",
-      submitted: formatLondonDate(row.createdAt),
-      uprn: row.uprn,
-      address: row.fullAddress,
-      hazard: row.category,
-      statusLabel: label,
-      statusClass: label.replace(/\s+/g, "-"),
-      href: findUrl({ q, date, project, caseId: row.id }),
-    };
-  });
+  const rows = matches.map((row) => ({
+    ...row,
+    href: findUrl({ q, date, project, caseId: row.id }),
+    amendUrl: findUrl({ q, date, project, caseId: row.id, view: "amend" }),
+    rowClass: caseId === row.id ? "is-sel" : "",
+  }));
 
   const picked = caseId ? matches.find((row) => row.id === caseId) || (await loadCase(caseId)) : null;
   let found: Record<string, unknown> | null = null;

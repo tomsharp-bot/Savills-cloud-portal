@@ -70,6 +70,8 @@ export type MainLogEntry = {
   postcode: string;
   hazard: string;
   rating: string;
+  surveyorName: string;
+  createdAt: Date;
   sentBy: string;
   to: string;
   cc: string;
@@ -350,6 +352,8 @@ type EmailRow = {
     category: string;
     rating: string;
     photoPaths: unknown;
+    surveyorName: string;
+    createdAt: Date;
   };
 };
 
@@ -363,6 +367,8 @@ type CaseRow = {
   category: string;
   rating: string;
   photoPaths: unknown;
+  surveyorName: string;
+  createdAt: Date;
   emailSentAt: Date | null;
   emailSentBy: string;
   lastEditedBy: string;
@@ -391,6 +397,8 @@ function emailEntry(row: EmailRow): MainLogEntry {
     postcode: address.postcode,
     hazard: row.submission.category,
     rating: row.submission.rating,
+    surveyorName: row.submission.surveyorName,
+    createdAt: row.submission.createdAt,
     sentBy: row.sentBy,
     to: row.to,
     cc: row.cc,
@@ -432,6 +440,8 @@ function caseEntry(row: CaseRow): MainLogEntry {
     postcode: address.postcode,
     hazard: row.category,
     rating: row.rating,
+    surveyorName: row.surveyorName,
+    createdAt: row.createdAt,
     sentBy: row.emailSentBy || row.lastEditedBy || "",
     to: "",
     cc: "",

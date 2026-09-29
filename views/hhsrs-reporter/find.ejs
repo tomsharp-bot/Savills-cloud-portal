@@ -55,35 +55,16 @@
     <h2>Results</h2>
     <span class="count"><%= rows.length %> found</span>
   </div>
-  <div class="table-wrap">
-    <table class="landing-table find-table">
-      <thead>
-        <tr>
-          <th>Ref</th>
-          <th>Submitted</th>
-          <th>UPRN</th>
-          <th>Address</th>
-          <th>Hazard</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (!rows.length) { %>
-          <tr><td colspan="6" class="find-empty">No cases found.</td></tr>
-        <% } %>
-        <% rows.forEach((row) => { %>
-          <tr class="find-result <%= selected && selected.id === row.id ? "is-sel" : "" %>" data-href="<%= row.href %>">
-            <td><a class="ref-chip" href="<%= row.href %>"><%= row.reference || "—" %></a></td>
-            <td><%= row.submitted %></td>
-            <td><%= row.uprn %></td>
-            <td><%= row.address %></td>
-            <td><%= row.hazard %></td>
-            <td><span class="find-status st-<%= row.statusClass %>"><%= row.statusLabel %></span></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
+  <% if (!rows.length) { %>
+    <p class="empty" style="padding:1rem 1.1rem;">No cases found.</p>
+  <% } else { %>
+    <%- include("partials/pending-issues-table", {
+      pendingRows: rows,
+      pendingTableId: "find-table",
+      pendingAction: "amend",
+      pendingFoot: "Newest first"
+    }) %>
+  <% } %>
 </section>
 </div>
 

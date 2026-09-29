@@ -33,45 +33,11 @@
   <% if (!actionedRows.length) { %>
     <p class="empty" style="padding:1rem 1.1rem;">Nothing actioned yet. Cases move to Main Log when you press Send and log.</p>
   <% } else { %>
-    <div class="table-wrap">
-      <table class="landing-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Project</th>
-            <th>Address</th>
-            <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
-            <th>UPRN</th>
-            <th>Surveyor</th>
-            <th>Category</th>
-            <th>Rating</th>
-            <th>Actioned</th>
-            <th>By</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% actionedRows.forEach((row, i) => {
-            const when = row.emailSentAt || row.updatedAt;
-          %>
-            <tr>
-              <td><%= i + 1 %></td>
-              <td><span class="project-pill"><%= row.projectName %></span></td>
-              <td><strong><%= row.fullAddress %></strong></td>
-              <%- include("partials/photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase) }) %>
-              <td><%= row.uprn %></td>
-              <td><%= row.surveyorName %></td>
-              <td><%= row.category %></td>
-              <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
-              <td><%= formatDocDate(when) %></td>
-              <td><%= row.emailSentBy || row.lastEditedBy || "—" %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-    <div class="table-foot">
-      <span>Most recently actioned first · Full history in <a class="linkish dark" href="<%= reporterBase %>/main-log">Main Log</a></span>
-    </div>
+    <%- include("partials/pending-issues-table", {
+      pendingRows: actionedRows,
+      pendingTableId: "last-actioned-table",
+      pendingFoot: 'Most recently actioned first · Full history in <a class="linkish dark" href="' + reporterBase + '/main-log">Main Log</a>'
+    }) %>
   <% } %>
 </section>
 

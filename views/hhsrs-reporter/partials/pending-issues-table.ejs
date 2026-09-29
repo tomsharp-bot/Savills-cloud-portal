@@ -2,6 +2,8 @@
   const rows = Array.isArray(pendingRows) ? pendingRows : [];
   const tableId = typeof pendingTableId === "string" ? pendingTableId : "waiting-table";
   const wrapId = typeof pendingWrapId === "string" ? pendingWrapId : "";
+  const action = typeof pendingAction === "string" ? pendingAction : "review";
+  const foot = typeof pendingFoot === "string" ? pendingFoot : "Newest first";
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
   <table class="landing-table pending-issues-table" id="<%= tableId %>">
@@ -29,7 +31,7 @@
         const ago = formatTimeAgo(row.createdAt);
         const claim = claimView(row);
       %>
-        <tr class="<%= claimRowClass(row) %>" data-claim-status="<%= claim.status %>">
+        <tr class="<%= [claimRowClass(row), row.href ? "find-result" : "", row.rowClass || ""].filter(Boolean).join(" ") %>" data-claim-status="<%= claim.status %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
           <td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
           <td><span class="project-pill"><%= row.projectName %></span></td>
           <td class="addr-cell">
@@ -46,11 +48,15 @@
             <span class="time-ago-abs"><%= ago.absolute %></span>
           </td>
           <td>
-            <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review Case</a>
+            <% if (action === "amend") { %>
+              <a class="btn-review-create" href="<%= row.amendUrl %>">Amend</a>
+            <% } else { %>
+              <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review Case</a>
+            <% } %>
           </td>
         </tr>
       <% }) %>
     </tbody>
   </table>
 </div>
-<div class="table-foot"><span>Newest first</span></div>
+<% if (foot) { %><div class="table-foot"><span><%- foot %></span></div><% } %>

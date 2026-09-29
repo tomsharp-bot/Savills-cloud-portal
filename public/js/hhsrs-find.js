@@ -5,7 +5,7 @@
 
   document.querySelectorAll("tr.find-result").forEach(function (row) {
     row.addEventListener("click", function (event) {
-      if (event.target.closest("a")) return;
+      if (event.target.closest("a, button")) return;
       var href = row.getAttribute("data-href");
       if (href) window.location.href = href;
     });

@@ -282,8 +282,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /id="btn-create-plain-email"/);
     assert.match(review, /Create new email/);
     assert.match(review, /value=""/);
-    assert.match(pending, /photo-att-col/);
-    assert.match(readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8"), /Review Case/);
+    const pendingTable = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    assert.match(pending, /partials\/pending-issues-table/);
+    assert.match(pendingTable, /photo-att-col/);
+    assert.match(pendingTable, /Review Case/);
     assert.match(review, /id="hhsrs-bcc"/);
     assert.match(review, /id="btn-abandon-claim"/);
     assert.match(review, /id="rv-draft-status"/);
@@ -509,6 +511,21 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(table, /ref-chip/);
     assert.match(table, /row\.uprn/);
     assert.match(table, /row\.surveyorName/);
+    assert.match(table, /row\.rating/);
+    assert.match(table, /photo-att-cell/);
+    assert.match(table, /Review Case/);
+    assert.match(table, />Amend</);
+
+    const last = pending.slice(pending.indexOf('id="last-actioned"'));
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    assert.match(last, /partials\/pending-issues-table/);
+    assert.doesNotMatch(last, /<thead>/);
+    assert.match(find, /partials\/pending-issues-table/);
+    assert.match(find, /pendingAction:\s*"amend"/);
+    assert.doesNotMatch(find, /<th>Hazard<\/th>|<th>Status<\/th>/);
+    assert.match(main, /partials\/pending-issues-table/);
+    assert.doesNotMatch(main, /<th>Sent<\/th>|<th>Hazard<\/th>/);
   });
 
   it("turns browser autofill off on email compose fields", () => {
@@ -609,21 +626,14 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.ml-page \.ml-table col\.c-haz \{ width: 120px; \}/);
     assert.match(css, /\.ml-page \.ml-table \{[^}]*font-size:\s*13px/);
     assert.match(css, /\.ml-page \.ml-table thead th \{[^}]*white-space:\s*nowrap/);
-    assert.match(view, /@<wbr>/);
-    assert.match(view, /\.<wbr>/);
     assert.doesNotMatch(css, /\.ml-proj\s*\{[^}]*white-space:\s*nowrap/);
     assert.doesNotMatch(css, /\.ml-by\s*\{[^}]*white-space:\s*nowrap/);
     assert.doesNotMatch(css, /\.ml-to\s*\{[^}]*white-space:\s*nowrap/);
     assert.match(css, /\.ml-page \.ml-table thead th\.ml-ph \{[^}]*white-space:\s*nowrap/);
-    assert.match(view, /class="ml-rate <%= row\.ratingClass %>"/);
+    assert.match(view, /partials\/pending-issues-table/);
+    assert.doesNotMatch(view, /<th>Sent<\/th>|<th>To<\/th>/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: 12%; \}/);
-    for (const cls of ["ml-proj", "ml-by", "ml-to"]) {
-      const cell = view.match(new RegExp(`<td class="${cls}"[^>]*>[\\s\\S]*?</td>`));
-      assert.ok(cell, cls);
-      assert.match(cell[0], /title="/);
-      assert.match(cell[0], /class="ml-clamp"/);
-    }
   });
 
   it("declares review draft storage keys before restore runs", () => {

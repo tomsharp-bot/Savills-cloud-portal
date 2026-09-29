@@ -1,16 +1,19 @@
 <%- include("partials/layout-open") %>
 <%
-  function breakEmail(value) {
-    const text = String(value || "").trim();
-    if (!text) return "—";
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/@/g, "@<wbr>")
-      .replace(/\./g, ".<wbr>");
-  }
+  const logRows = rows.map((row) => ({
+    id: row.submissionId,
+    reference: row.reference,
+    projectName: row.projectName,
+    fullAddress: row.fullAddress,
+    photoPaths: row.photoPaths,
+    uprn: row.uprn,
+    surveyorName: row.surveyorName,
+    category: row.hazard,
+    rating: row.rating,
+    createdAt: row.createdAt,
+    href: row.href,
+    rowClass: row.selected ? "is-sel" : ""
+  }));
 %>
 
 <div class="ml-page">
@@ -85,51 +88,15 @@
         <a class="btn ml-excel" href="<%= exportHref %>"><span class="ml-x" aria-hidden="true">X</span>Export to Excel</a>
       </div>
     </div>
-    <div class="ml-table-wrap">
-      <table class="ml-table">
-        <colgroup>
-          <col class="c-sent" /><col class="c-ref" /><col class="c-proj" /><col class="c-uprn" />
-          <col class="c-addr" /><col class="c-haz" /><col class="c-rate" /><col class="c-by" />
-          <col class="c-to" /><col class="c-ph" /><col class="c-type" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Sent</th><th>Ref</th><th>Project</th><th>UPRN</th><th>Address</th>
-            <th>Hazard</th><th>Rating</th><th>Sent by</th><th>To</th>
-            <th class="ml-ph">Photos</th><th>Type</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% if (!rows.length) { %>
-            <tr><td colspan="11" class="ml-empty">No emails match. Try clearing the filters.</td></tr>
-          <% } %>
-          <% rows.forEach((row) => { %>
-            <tr class="ml-row <%= row.kind === "correction" ? "is-corr" : "" %> <%= row.hasCorrBelow ? "has-corr" : "" %> <%= row.selected ? "sel" : "" %>" data-href="<%= row.href %>">
-              <td class="ml-when"><b><%= row.whenDate %></b><span><%= row.whenTime %></span></td>
-              <td class="ml-ref" title="<%= row.reference %>"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
-              <td class="ml-proj" title="<%= row.projectName %>"><span class="ml-clamp"><%= row.projectName %></span></td>
-              <td class="ml-uprn"><%= row.uprn %></td>
-              <td class="ml-addr"><%= row.lineAddress || "—" %></td>
-              <td class="ml-hazard"><%= row.hazard %></td>
-              <td class="ml-rate <%= row.ratingClass %>"><%= row.rating %></td>
-              <td class="ml-by" title="<%= row.sentBy %>"><span class="ml-clamp"><%= row.sentBy || "—" %></span></td>
-              <td class="ml-to" title="<%= row.to %>"><span class="ml-clamp"><%- breakEmail(row.to) %></span></td>
-              <td class="ml-photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 8"/></svg><%= row.photoCount %></td>
-              <td class="ml-type">
-                <span class="ml-tag <%= row.kind === "correction" ? "c" : (row.kind === "not_sent" ? "n" : "o") %>"><%= row.typeLabel %></span>
-                <% if (row.correctedNote) { %><span class="ml-corr-note">Corrected ↓</span><% } %>
-              </td>
-            </tr>
-            <% if (row.linkLine) { %>
-              <tr class="ml-sub <%= row.selected ? "sel" : "" %>" data-href="<%= row.href %>">
-                <td></td>
-                <td colspan="10"><div class="ml-link"><span class="ml-arr" aria-hidden="true">↳</span><%= row.linkLine %></div></td>
-              </tr>
-            <% } %>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
+    <% if (!rows.length) { %>
+      <p class="empty" style="padding:1rem 1.1rem;">No emails match. Try clearing the filters.</p>
+    <% } else { %>
+      <%- include("partials/pending-issues-table", {
+        pendingRows: logRows,
+        pendingTableId: "ml-table",
+        pendingFoot: "Newest first"
+      }) %>
+    <% } %>
     <% if (pageCount > 1) { %>
       <div class="ml-pager">
         <% if (prevHref) { %><a href="<%= prevHref %>">Previous</a><% } %>
