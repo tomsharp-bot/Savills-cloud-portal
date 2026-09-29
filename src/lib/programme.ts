@@ -18,6 +18,11 @@ export type ProgrammePoolPerson = {
 
 export type SavedProgrammeBoard = {
   version: 1;
+  /**
+   * Monday of cells[name][0], as YYYY-MM-DD.
+   * Older saves omit this and line up with the first week of the programme draft.
+   */
+  weekOrigin?: string;
   ticks: Record<string, boolean>;
   applied: Record<string, boolean>;
   surveyorOrder: string[];
@@ -81,6 +86,11 @@ const MAX_PEOPLE = 400;
 const MAX_NAME = 120;
 const MAX_CELL = 80;
 const MAX_SURVEY_TYPES = 500;
+/** Stored weeks can run back behind the visible grid. The cap stops a bad save from growing without bound. */
+const MAX_STORED_WEEKS = 1200;
+/** Column one becomes this Monday at 04:00 Europe/London. Earlier that morning, last week stays put. */
+const LONDON_WEEK_ROLLOVER_MINUTES = 4 * 60;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function canonName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -113,6 +123,107 @@ function padWeeks(weeks: readonly string[] | undefined): string[] {
   const out = (weeks || []).slice(0, WEEK_COUNT).map((value) => cleanCell(value));
   while (out.length < WEEK_COUNT) out.push("");
   return out;
+}
+
+function parseIsoDay(iso: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date;
+}
+
+function formatIsoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addIsoDays(iso: string, days: number): string {
+  const date = parseIsoDay(iso);
+  if (!date) return iso;
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatIsoDay(date);
+}
+
+function daysBetweenIso(from: string, to: string): number | null {
+  const start = parseIsoDay(from);
+  const end = parseIsoDay(to);
+  if (!start || !end) return null;
+  return Math.round((end.getTime() - start.getTime()) / MS_PER_DAY);
+}
+
+function isMondayIso(iso: string): boolean {
+  const date = parseIsoDay(iso);
+  return date != null && date.getUTCDay() === 1;
+}
+
+function weekIndexFrom(origin: string, week: string): number | null {
+  const days = daysBetweenIso(origin, week);
+  if (days == null || days % 7 !== 0) return null;
+  return days / 7;
+}
+
+function seedWeekOrigin(): string {
+  return programmeSeed.weeks[0];
+}
+
+function canonicalWeekOrigin(value: unknown): string {
+  const iso = String(value ?? "").trim();
+  return isMondayIso(iso) ? iso : seedWeekOrigin();
+}
+
+function londonClock(now: Date): { iso: string; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const bag = new Map(parts.map((part) => [part.type, part.value]));
+  const year = bag.get("year") || "1970";
+  const month = (bag.get("month") || "01").padStart(2, "0");
+  const day = (bag.get("day") || "01").padStart(2, "0");
+  let hour = Number(bag.get("hour"));
+  const minute = Number(bag.get("minute"));
+  if (hour === 24) hour = 0;
+  return { iso: `${year}-${month}-${day}`, minutes: hour * 60 + minute };
+}
+
+/**
+ * Monday that opens the programme grid at `now`.
+ * The first column moves on by itself at Monday 04:00 Europe/London.
+ * Before 04:00 on Monday, the previous week is still column one.
+ */
+export function programmeWeekCommencing(now: Date): string {
+  const clock = londonClock(now);
+  const date = parseIsoDay(clock.iso);
+  const daysSinceMonday = date ? (date.getUTCDay() + 6) % 7 : 0;
+  let monday = addIsoDays(clock.iso, -daysSinceMonday);
+  if (daysSinceMonday === 0 && clock.minutes < LONDON_WEEK_ROLLOVER_MINUTES) {
+    monday = addIsoDays(monday, -7);
+  }
+  return monday;
+}
+
+/** Week headings on the grid. The column count matches the programme draft. */
+export function programmeVisibleWeeks(now: Date = new Date()): string[] {
+  const start = programmeWeekCommencing(now);
+  const weeks: string[] = [];
+  for (let i = 0; i < WEEK_COUNT; i++) weeks.push(addIsoDays(start, i * 7));
+  return weeks;
+}
+
+function projectOntoWeeks(stored: readonly string[], origin: string, visible: readonly string[]): string[] {
+  return visible.map((week) => {
+    const index = weekIndexFrom(origin, week);
+    if (index == null || index < 0 || index >= stored.length) return "";
+    return stored[index] || "";
+  });
 }
 
 function cleanCell(value: unknown): string {
@@ -159,13 +270,13 @@ function hasCanon(names: readonly string[], name: string): boolean {
   return names.some((item) => canonName(item) === key);
 }
 
-function lookupWeeks(name: string, cells: Record<string, string[]>, seedWeeks: Map<string, string[]>): string[] {
-  if (Object.prototype.hasOwnProperty.call(cells, name)) return padWeeks(cells[name]);
+function lookupStoredCells(name: string, cells: Record<string, string[]>): string[] | undefined {
+  if (Object.prototype.hasOwnProperty.call(cells, name)) return cells[name];
   const key = canonName(name);
   for (const [cellName, weeks] of Object.entries(cells)) {
-    if (canonName(cellName) === key) return padWeeks(weeks);
+    if (canonName(cellName) === key) return weeks;
   }
-  return padWeeks(seedWeeks.get(key));
+  return undefined;
 }
 
 function lookupFlag(
@@ -223,6 +334,7 @@ export function parseSavedBoard(data: unknown): SavedProgrammeBoard | null {
   if (!row.flags || typeof row.flags !== "object" || Array.isArray(row.flags)) return null;
   return {
     version: 1,
+    weekOrigin: canonicalWeekOrigin(row.weekOrigin),
     ticks: boolMap(row.ticks),
     applied: boolMap(row.applied),
     surveyorOrder: row.surveyorOrder.map((name) => collapseName(String(name))).filter(Boolean),
@@ -248,7 +360,7 @@ function cellMap(value: unknown): Record<string, string[]> {
   for (const [name, weeks] of Object.entries(value as Record<string, unknown>)) {
     const key = collapseName(name);
     if (!key || !Array.isArray(weeks)) continue;
-    out[key] = padWeeks(weeks.map((week) => String(week ?? "")));
+    out[key] = weeks.slice(0, MAX_STORED_WEEKS).map((week) => cleanCell(week));
   }
   return out;
 }
@@ -267,6 +379,8 @@ export function resolveProgramme(input: {
   saved?: SavedProgrammeBoard | null;
   surveyors?: readonly PersonnelRef[];
   admins?: readonly PersonnelRef[];
+  /** When the grid is being read. Column one is the London week in force at this instant. */
+  now?: Date;
 }): ResolvedProgramme {
   const saved = input.saved ?? null;
   const surveyors = activePersonnel(input.surveyors || []);
@@ -311,15 +425,22 @@ export function resolveProgramme(input: {
 
   const cells = saved?.cells ?? {};
   const flags = saved?.flags ?? {};
+  const visibleWeeks = programmeVisibleWeeks(input.now ?? new Date());
+  const savedOrigin = canonicalWeekOrigin(saved?.weekOrigin);
+  const weeksFor = (name: string): string[] => {
+    const stored = lookupStoredCells(name, cells);
+    if (stored) return projectOntoWeeks(stored, savedOrigin, visibleWeeks);
+    return projectOntoWeeks(seedWeeks.get(canonName(name)) || [], seedWeekOrigin(), visibleWeeks);
+  };
   const rows = surveyorOrder.map((name) => ({
     name,
     flag: lookupFlag(name, flags, seedFlags, surveyorPersonnel),
-    weeks: lookupWeeks(name, cells, seedWeeks),
+    weeks: weeksFor(name),
   }));
   const adminRows = adminOrder.map((name) => ({
     name,
     flag: lookupFlag(name, flags, seedFlags, adminPersonnel),
-    weeks: lookupWeeks(name, cells, seedWeeks),
+    weeks: weeksFor(name),
   }));
   const everyone = [...rows.map((row) => row.name), ...adminRows.map((row) => row.name)];
   const adminNamesForPool = [
@@ -328,7 +449,7 @@ export function resolveProgramme(input: {
   ];
 
   return {
-    weeks: programmeSeed.weeks.slice(),
+    weeks: visibleWeeks,
     rows,
     admins: adminRows,
     pools: {
@@ -352,13 +473,17 @@ export function resolveProgramme(input: {
 
 type ClientPerson = { name?: unknown; flag?: unknown; weeks?: unknown };
 
-export function boardFromClient(body: unknown): SavedProgrammeBoard | null {
+export function boardFromClient(
+  body: unknown,
+  options?: { previous?: SavedProgrammeBoard | null }
+): SavedProgrammeBoard | null {
   if (!body || typeof body !== "object") return null;
   const row = body as {
     ticks?: unknown;
     applied?: unknown;
     surveyors?: unknown;
     admins?: unknown;
+    weeks?: unknown;
   };
   if (!Array.isArray(row.surveyors) || !Array.isArray(row.admins)) return null;
   if (!row.surveyors.length || row.surveyors.length > MAX_PEOPLE || row.admins.length > MAX_PEOPLE) return null;
@@ -367,22 +492,123 @@ export function boardFromClient(body: unknown): SavedProgrammeBoard | null {
   const admins = dedupePeople(row.admins);
   if (!surveyors.length) return null;
 
-  const cells: Record<string, string[]> = {};
+  const people = [...surveyors, ...admins];
   const flags: Record<string, string> = {};
-  for (const person of [...surveyors, ...admins]) {
-    cells[person.name] = person.weeks;
-    flags[person.name] = person.flag;
-  }
-  const names = [...surveyors.map((person) => person.name), ...admins.map((person) => person.name)];
+  for (const person of people) flags[person.name] = person.flag;
+  const stored =
+    row.weeks === undefined ? legacyCells(people) : mergedCells(people, row.weeks, options?.previous ?? null);
+  if (!stored) return null;
+
+  const names = people.map((person) => person.name);
   return {
     version: 1,
+    weekOrigin: stored.origin,
     ticks: remapBools(boolMap(row.ticks), names),
     applied: remapBools(boolMap(row.applied), names),
     surveyorOrder: surveyors.map((person) => person.name),
     adminOrder: admins.map((person) => person.name),
-    cells,
+    cells: stored.values,
     flags,
   };
+}
+
+function legacyCells(people: { name: string; weeks: string[] }[]): { origin: string; values: Record<string, string[]> } {
+  const values: Record<string, string[]> = {};
+  for (const person of people) values[person.name] = padWeeks(person.weeks);
+  return { origin: seedWeekOrigin(), values };
+}
+
+function readClientWeeks(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > WEEK_COUNT) return null;
+  const weeks: string[] = [];
+  for (let i = 0; i < value.length; i++) {
+    const iso = String(value[i] ?? "").trim();
+    if (!isMondayIso(iso)) return null;
+    if (i > 0 && iso !== addIsoDays(weeks[i - 1], 7)) return null;
+    weeks.push(iso);
+  }
+  return weeks;
+}
+
+function valuesForWindow(values: readonly string[], count: number): string[] {
+  const out = values.slice(0, count);
+  while (out.length < count) out.push("");
+  return out;
+}
+
+function retargetCells(cells: readonly string[], fromOrigin: string, toOrigin: string): string[] | null {
+  const shift = weekIndexFrom(toOrigin, fromOrigin);
+  if (shift == null || shift < 0 || shift + cells.length > MAX_STORED_WEEKS) return null;
+  return Array.from({ length: shift }, () => "").concat(cells);
+}
+
+function writeWindow(
+  cells: readonly string[],
+  origin: string,
+  weeks: readonly string[],
+  values: readonly string[]
+): string[] | null {
+  const out = cells.slice();
+  for (let i = 0; i < weeks.length; i++) {
+    const index = weekIndexFrom(origin, weeks[i]);
+    if (index == null || index < 0 || index >= MAX_STORED_WEEKS) return null;
+    while (out.length <= index) {
+      if (out.length >= MAX_STORED_WEEKS) return null;
+      out.push("");
+    }
+    out[index] = values[i] || "";
+  }
+  return out;
+}
+
+function baseTimeline(
+  name: string,
+  previous: SavedProgrammeBoard | null,
+  previousOrigin: string,
+  seeded: Map<string, string[]>
+): { origin: string; cells: string[] } {
+  if (previous) {
+    const stored = lookupStoredCells(name, previous.cells);
+    if (stored) return { origin: previousOrigin, cells: stored };
+  }
+  const fromSeed = seeded.get(canonName(name));
+  if (fromSeed) return { origin: seedWeekOrigin(), cells: fromSeed.slice() };
+  return { origin: previousOrigin, cells: [] };
+}
+
+/**
+ * Keep stamps on the calendar week they were placed on.
+ * The client sends the weeks it is showing; weeks outside that window stay as stored.
+ */
+function mergedCells(
+  people: { name: string; weeks: string[] }[],
+  weeksValue: unknown,
+  previous: SavedProgrammeBoard | null
+): { origin: string; values: Record<string, string[]> } | null {
+  const window = readClientWeeks(weeksValue);
+  if (!window) return null;
+  const previousOrigin = canonicalWeekOrigin(previous?.weekOrigin);
+  const seeded = seedMaps().weeks;
+  const bases = people.map((person) => baseTimeline(person.name, previous, previousOrigin, seeded));
+  let origin = previousOrigin;
+  for (const base of bases) {
+    if (!base.cells.length) continue;
+    const compared = weekIndexFrom(base.origin, origin);
+    if (compared != null && compared > 0) origin = base.origin;
+  }
+  const windowShift = weekIndexFrom(origin, window[0]);
+  if (windowShift == null) return null;
+  if (windowShift < 0) origin = window[0];
+
+  const values: Record<string, string[]> = {};
+  for (let i = 0; i < people.length; i++) {
+    const shifted = retargetCells(bases[i].cells, bases[i].origin, origin);
+    if (!shifted) return null;
+    const written = writeWindow(shifted, origin, window, valuesForWindow(people[i].weeks, window.length));
+    if (!written) return null;
+    values[people[i].name] = written;
+  }
+  return { origin, values };
 }
 
 function dedupePeople(people: unknown[]): { name: string; flag: string; weeks: string[] }[] {
@@ -395,8 +621,10 @@ function dedupePeople(people: unknown[]): { name: string; flag: string; weeks: s
     const key = canonName(name);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const weeks = Array.isArray(person.weeks) ? person.weeks.map((week) => cleanCell(week)) : [];
-    out.push({ name, flag: normalizeFlag(person.flag), weeks: padWeeks(weeks) });
+    const weeks = Array.isArray(person.weeks)
+      ? person.weeks.slice(0, MAX_STORED_WEEKS).map((week) => cleanCell(week))
+      : [];
+    out.push({ name, flag: normalizeFlag(person.flag), weeks });
   }
   return out;
 }

@@ -12,6 +12,7 @@ import {
   approxSurveysOnGrid,
   programmeCellMatchesProject,
   programmeShortLabel,
+  programmeVisibleWeeks,
   projectWeeksOnGrid,
   resolveProgramme,
   seededSurveyTypes,
@@ -19,6 +20,10 @@ import {
   type ProgrammeProjectSource,
   type SavedProgrammeBoard,
 } from "./programme.js";
+import { programmeSeed } from "./programme-seed.js";
+
+/** Tuesday of the week the offline draft was built for, after Monday 04:00 Europe/London. */
+const DRAFT_WEEK = new Date("2026-09-22T11:00:00.000Z");
 
 function project(partial: Partial<ProgrammeProjectSource> & Pick<ProgrammeProjectSource, "id" | "name" | "stage">): ProgrammeProjectSource {
   return {
@@ -51,6 +56,7 @@ describe("programme page controls", () => {
     assert.match(script, /programmeCellMatches/);
     assert.match(script, /fillProjTable\("projUpcoming", P\.upcoming, \{ weeks: true \}\)/);
     assert.match(script, /if \(!canEdit \|\| !DATA\.saveUrl\) return Promise\.resolve\(false\)/);
+    assert.match(script, /weeks: \(DATA\.weeks \|\| \[\]\)\.slice\(\)/);
     const upcoming = page.slice(page.indexOf('id="projUpcoming"'), page.indexOf('id="projCompleted"'));
     assert.match(upcoming, />Nr of Weeks</);
     assert.match(upcoming, />Approx surveys</);
@@ -68,7 +74,7 @@ describe("programme page controls", () => {
 
 describe("resolveProgramme", () => {
   it("starts from the offline draft when nothing is saved and Personnel is empty", () => {
-    const board = resolveProgramme({});
+    const board = resolveProgramme({ now: DRAFT_WEEK });
     assert.equal(board.weeks[0], "2026-09-21");
     assert.equal(board.weeks.at(-1), "2027-12-27");
     assert.equal(board.rows.length, 44);
@@ -92,6 +98,7 @@ describe("resolveProgramme", () => {
 
   it("uses Personnel admins and keeps matching week cells", () => {
     const board = resolveProgramme({
+      now: DRAFT_WEEK,
       admins: [
         { name: "Phil Moon" },
         { name: "Tom Sharp" },
@@ -127,6 +134,7 @@ describe("resolveProgramme", () => {
       flags: { "Peter May": "F" },
     };
     const board = resolveProgramme({
+      now: DRAFT_WEEK,
       saved,
       surveyors: [{ name: "Zoe New" }, { name: "Richard Moreing" }],
       admins: [{ name: "Tom Sharp" }, { name: "Zoe Admin" }],
@@ -151,6 +159,7 @@ describe("resolveProgramme", () => {
 
   it("drops Personnel admins from the team pool without hard-coding names", () => {
     const board = resolveProgramme({
+      now: DRAFT_WEEK,
       admins: [
         { name: "Greg Kowalski" },
         { name: "Tom Sharp" },
@@ -178,6 +187,7 @@ describe("resolveProgramme", () => {
 
   it("skips frozen Personnel when adding people", () => {
     const board = resolveProgramme({
+      now: DRAFT_WEEK,
       surveyors: [{ name: "Frozen Person", frozen: true }],
       admins: [{ name: "Frozen Admin", frozen: true }],
     });
@@ -207,6 +217,7 @@ describe("boardFromClient", () => {
     assert.equal(saved.ticks.Nope, undefined);
     assert.equal(saved.flags["Phil Moon"], "");
     const board = resolveProgramme({
+      now: DRAFT_WEEK,
       saved,
       surveyors: [],
       admins: [{ name: "Phil Moon" }],
@@ -220,6 +231,128 @@ describe("boardFromClient", () => {
     assert.equal(boardFromClient({ surveyors: [], admins: [] }), null);
     assert.equal(boardFromClient(null), null);
     assert.equal(parseSavedBoard({ version: 2 }), null);
+  });
+});
+
+describe("programme week columns", () => {
+  function assertConsecutiveMondays(weeks: string[]) {
+    assert.equal(weeks.length, programmeSeed.weeks.length);
+    for (let i = 1; i < weeks.length; i++) {
+      const prev = Date.parse(`${weeks[i - 1]}T00:00:00Z`);
+      const next = Date.parse(`${weeks[i]}T00:00:00Z`);
+      assert.equal(next - prev, 7 * 24 * 60 * 60 * 1000);
+    }
+  }
+
+  it("keeps the previous week as column one before Monday 04:00 London", () => {
+    // Monday 28 Sep 2026 03:59 Europe/London (BST, UTC+1).
+    const board = resolveProgramme({ now: new Date("2026-09-28T02:59:59.000Z") });
+    assert.equal(board.weeks[0], "2026-09-21");
+    assert.equal(board.weeks[1], "2026-09-28");
+    assert.equal(board.weeks.at(-1), "2027-12-27");
+    assertConsecutiveMondays(board.weeks);
+    assert.deepEqual(board.weeks, programmeSeed.weeks);
+    const paul = board.rows.find((row) => row.name === "Paul Lear");
+    assert.equal(paul?.weeks[0], "Holiday");
+    assert.equal(paul?.weeks[1], "Onward");
+  });
+
+  it("does not keep 21 September as column one once that Monday is before 04:00", () => {
+    // Monday 21 Sep 2026 03:59 Europe/London. The draft's old first week has not opened yet.
+    const board = resolveProgramme({ now: new Date("2026-09-21T02:59:00.000Z") });
+    assert.equal(board.weeks[0], "2026-09-14");
+    assert.equal(board.weeks[1], "2026-09-21");
+    assertConsecutiveMondays(board.weeks);
+    const paul = board.rows.find((row) => row.name === "Paul Lear");
+    assert.equal(paul?.weeks[0], "");
+    assert.equal(paul?.weeks[1], "Holiday");
+  });
+
+  it("uses the new week as column one from Monday 04:00 London", () => {
+    // Monday 28 Sep 2026 04:00 Europe/London (BST, UTC+1).
+    const board = resolveProgramme({ now: new Date("2026-09-28T03:00:00.000Z") });
+    assert.equal(board.weeks[0], "2026-09-28");
+    assert.equal(board.weeks[1], "2026-10-05");
+    assert.equal(board.weeks.at(-1), "2028-01-03");
+    assertConsecutiveMondays(board.weeks);
+    assert.equal(board.weeks.length, programmeVisibleWeeks(DRAFT_WEEK).length);
+    const paul = board.rows.find((row) => row.name === "Paul Lear");
+    assert.equal(paul?.weeks[0], "Onward");
+    const peter = board.rows.find((row) => row.name === "Peter May");
+    assert.equal(peter?.weeks[4], "Holiday");
+  });
+
+  it("rolls forward at 04:00 Europe/London in winter as well as summer", () => {
+    // Monday 4 Jan 2027 is GMT (UTC+0).
+    const before = resolveProgramme({ now: new Date("2027-01-04T03:59:00.000Z") });
+    const after = resolveProgramme({ now: new Date("2027-01-04T04:00:00.000Z") });
+    assert.equal(before.weeks[0], "2026-12-28");
+    assert.equal(after.weeks[0], "2027-01-04");
+    assert.equal(before.weeks[1], after.weeks[0]);
+    assert.equal(before.weeks.length, after.weeks.length);
+    assertConsecutiveMondays(before.weeks);
+    assertConsecutiveMondays(after.weeks);
+    const richardBefore = before.rows.find((row) => row.name === "Richard Moreing");
+    const richardAfter = after.rows.find((row) => row.name === "Richard Moreing");
+    assert.equal(richardBefore?.weeks[0], "Festive Period");
+    assert.equal(richardBefore?.weeks[2], "MTVH");
+    assert.equal(richardAfter?.weeks[0], richardBefore?.weeks[1]);
+    assert.equal(richardAfter?.weeks[1], "MTVH");
+  });
+
+  it("keeps a stamp on its calendar week and stores weeks that scroll off the left", () => {
+    const windowNow = new Date("2026-09-28T03:00:00.000Z");
+    const visible = programmeVisibleWeeks(windowNow);
+    assert.equal(visible[0], "2026-09-28");
+    const shown = resolveProgramme({ now: windowNow });
+    const paulShown = shown.rows.find((row) => row.name === "Paul Lear");
+    assert.ok(paulShown);
+    const edited = paulShown.weeks.slice();
+    edited[0] = "Edited";
+    const saved = boardFromClient({
+      weeks: visible,
+      surveyors: [{ name: "Paul Lear", flag: "", weeks: edited }],
+      admins: [{ name: "Tom Sharp", flag: "", weeks: visible.map(() => "") }],
+    });
+    assert.ok(saved);
+    assert.equal(saved.weekOrigin, "2026-09-21");
+    assert.equal(saved.cells["Paul Lear"][0], "Holiday");
+    assert.equal(saved.cells["Paul Lear"][1], "Edited");
+    const parsed = parseSavedBoard(saved);
+    assert.equal(parsed?.weekOrigin, "2026-09-21");
+    assert.equal(parsed?.cells["Paul Lear"][0], "Holiday");
+
+    const afterSave = resolveProgramme({ saved, now: windowNow });
+    assert.equal(afterSave.weeks[0], "2026-09-28");
+    assert.equal(afterSave.rows.find((row) => row.name === "Paul Lear")?.weeks[0], "Edited");
+
+    const earlier = resolveProgramme({ saved, now: DRAFT_WEEK });
+    assert.equal(earlier.weeks[0], "2026-09-21");
+    assert.equal(earlier.rows.find((row) => row.name === "Paul Lear")?.weeks[0], "Holiday");
+    assert.equal(earlier.rows.find((row) => row.name === "Paul Lear")?.weeks[1], "Edited");
+
+    const laterNow = new Date("2026-10-05T12:00:00.000Z");
+    const laterVisible = programmeVisibleWeeks(laterNow);
+    assert.equal(laterVisible[0], "2026-10-05");
+    const laterShown = resolveProgramme({ saved, now: laterNow });
+    const laterEdited = (laterShown.rows.find((row) => row.name === "Paul Lear")?.weeks || []).slice();
+    laterEdited[0] = "Next";
+    const second = boardFromClient(
+      {
+        weeks: laterVisible,
+        surveyors: [{ name: "Paul Lear", flag: "", weeks: laterEdited }],
+        admins: [{ name: "Tom Sharp", flag: "", weeks: laterVisible.map(() => "") }],
+      },
+      { previous: saved }
+    );
+    assert.ok(second);
+    assert.equal(second.weekOrigin, "2026-09-21");
+    assert.equal(second.cells["Paul Lear"][0], "Holiday");
+    assert.equal(second.cells["Paul Lear"][1], "Edited");
+    assert.equal(second.cells["Paul Lear"][2], "Next");
+    const laterBoard = resolveProgramme({ saved: second, now: laterNow });
+    assert.equal(laterBoard.weeks[0], "2026-10-05");
+    assert.equal(laterBoard.rows.find((row) => row.name === "Paul Lear")?.weeks[0], "Next");
   });
 });
 
