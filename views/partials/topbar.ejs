@@ -1,17 +1,10 @@
 <header class="topbar">
   <a class="brand" href="<%= baseUrl(isAdmin ? '/admin' : (isSurveyor ? '/surveyor' : '/projects')) %>">Savills Cloud Portal</a>
   <div class="right">
-    <a class="linkish" href="<%= baseUrl('/projects') %>">Projects</a>
+    <a class="linkish" href="<%= baseUrl('/projects') %>">Projects Progress</a>
+    <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/projects-programme') %>">Programme</a><% } %>
     <% if (isAdmin || isSurveyor) { %><a class="linkish" href="<%= baseUrl('/reference-documents') %>">Reference Documents</a><% } %>
-    <% if (isAdmin) { %>
-    <details class="nav-menu">
-      <summary>Admin</summary>
-      <div class="nav-menu-panel">
-        <a href="<%= baseUrl('/admin') %>">Admin home</a>
-        <a href="<%= baseUrl('/personnel') %>">Personnel</a>
-      </div>
-    </details>
-    <% } %>
+    <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/personnel') %>">Personnel</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/HHSRSreporter') %>">HHSRS Reporter</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/photos') %>">Photo Storage</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/hhsrs-submissions') %>">HHSRS site reports</a><% } %>
