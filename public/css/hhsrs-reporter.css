@@ -2890,7 +2890,8 @@ tr.is-new-log td { background: #f5f3ff; }
   background: #e7edf3; z-index: 90; overflow: auto; padding: 18px 18px 28px;
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
 }
-.fr-drawer-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.fr-drawer-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.fr-drawer-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .fr-x {
   margin-left: auto; border: none; background: #fff; width: 36px; height: 36px; border-radius: 10px;
   font-size: 22px; line-height: 34px; text-align: center; color: var(--navy); text-decoration: none;

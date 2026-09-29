@@ -88,7 +88,12 @@
 <aside class="fr-drawer" id="fr-drawer" aria-label="Case">
   <div class="fr-drawer-top">
     <% if (selected.reference) { %><span class="ref-chip"><%= selected.reference %></span><% } %>
-    <a class="fr-x" id="fr-close" href="<%= closeUrl %>" aria-label="Close">×</a>
+    <div class="fr-drawer-actions">
+      <% if (selected.sent) { %>
+        <a class="btn btn-primary" href="<%= selected.amendUrl %>">Amend &amp; resend</a>
+      <% } %>
+      <a class="fr-x" id="fr-close" href="<%= closeUrl %>" aria-label="Close">×</a>
+    </div>
   </div>
   <% if (selected.notice) { %>
     <div class="find-ok">
@@ -115,9 +120,6 @@
         photos: selected.sent.photos
       }
     }) %>
-    <div class="fr-foot">
-      <a class="btn btn-primary" href="<%= selected.amendUrl %>">Amend &amp; resend</a>
-    </div>
     <% if (selected.log && selected.log.length) { %>
       <div class="fr-log">
         <div class="fr-log-title">Sends</div>
