@@ -1777,38 +1777,37 @@
       });
       return picked;
     }
+    function cardBodyHtml(text) {
+      var trimmed = String(text || "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
+      if (!trimmed) return "";
+      return esc(trimmed).replace(/\n/g, "<br>\n");
+    }
     function openCheck() {
       if (btn.disabled || sending) return;
       var photos = tickedPhotos();
       var h = "";
       var test = $("ck-test");
       if (test) h += test.outerHTML;
-      h += "<dl class=\"ck-list\">";
-      h += "<dt>From</dt><dd class=\"ck-from\">" + esc(cfg.send && cfg.send.fromLine) + "</dd>";
-      h += "<dt>To</dt><dd>" + esc(val("hhsrs-to")) + "</dd>";
-      if (val("hhsrs-cc")) h += "<dt>Cc</dt><dd>" + esc(val("hhsrs-cc")) + "</dd>";
-      if (val("hhsrs-bcc")) h += "<dt>Bcc</dt><dd>" + esc(val("hhsrs-bcc")) + "</dd>";
-      h += "<dt>Subject</dt><dd>" + (val("hhsrs-subject") ? esc(val("hhsrs-subject")) : "(no subject)") + "</dd>";
-      h += "</dl>";
+      var subject = val("hhsrs-subject");
       var bodyEl = $("hhsrs-body");
       var body = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
-      h += "<div class=\"ck-text\" tabindex=\"0\" aria-label=\"Email text\">" + esc(body || "(empty)") + "</div>";
-      h += "<p class=\"ck-photos-label\">Attached: " + photos.length + (photos.length === 1 ? " photo" : " photos") + "</p>";
-      if (photos.length) {
-        h += "<div class=\"ck-photos\">" + photos.map(function (p) {
-          return "<figure><img src=\"" + esc(p.url || "") + "\" alt=\"" + esc(p.caption || p.name) + "\"><figcaption>" + esc(p.name) + "</figcaption></figure>";
-        }).join("") + "</div>";
-      } else {
-        h += "<p class=\"ck-none\">No photos.</p>";
-      }
+      h += "<div class=\"ck-mail\" style=\"background:#e7edf3\">";
+      h += "<article class=\"sent-card\" aria-label=\"Client email\">";
+      if (subject) h += "<h2>" + esc(subject) + "</h2>";
+      h += "<div class=\"sent-body\"><div class=\"sent-copy\">" + cardBodyHtml(body) + "</div>";
       var sigHtml = cfg.signature && cfg.signature.html;
-      if (sigHtml) {
-        h += "<p class=\"ck-photos-label\">Signature</p>";
-        if (cfg.signature.missing && cfg.signature.warning) {
-          h += "<p class=\"ck-name-warn\">" + esc(cfg.signature.warning) + "</p>";
-        }
-        h += "<div class=\"ck-signature\" aria-readonly=\"true\">" + sigHtml + "</div>";
+      if (sigHtml) h += "<div class=\"sent-sign\">" + sigHtml + "</div>";
+      if (photos.length) {
+        h += "<div class=\"sent-photos\">" + photos.map(function (p) {
+          var name = esc(p.name || "Photo");
+          var alt = esc(p.caption || p.name || "Photo");
+          var img = p.url
+            ? "<img src=\"" + esc(p.url) + "\" alt=\"" + alt + "\" />"
+            : "<div class=\"art-miss\">No file</div>";
+          return "<figure class=\"photo-zoom\"><div class=\"art\">" + img + "</div><figcaption>" + name + "</figcaption></figure>";
+        }).join("") + "</div>";
       }
+      h += "</div></article></div>";
       ckBody.innerHTML = h;
       ckTick.checked = false;
       ckSend.disabled = true;
@@ -1828,7 +1827,7 @@
         if (pane) pane.scrollTop = 0;
         if (root) root.scrollTop = 0;
         ck.scrollTop = 0;
-        var text = ck.querySelector(".ck-text");
+        var text = ck.querySelector(".ck-mail");
         if (text) text.scrollTop = 0;
       }
       pinCheckToTop();

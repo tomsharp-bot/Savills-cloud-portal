@@ -204,16 +204,17 @@ describe("HHSRS email signature", () => {
     assert.match(openCheck, /preventScroll:\s*true/);
     assert.match(openCheck, /ck\.scrollTop = 0/);
     assert.match(openCheck, /pane\.scrollTop = 0/);
-    assert.match(openCheck, /\.ck-text/);
+    assert.match(openCheck, /\.ck-mail/);
+    assert.match(openCheck, /background:#e7edf3/);
+    assert.match(openCheck, /sent-card/);
+    assert.match(openCheck, /sent-body/);
     assert.doesNotMatch(openCheck, /ckTick\.focus|ckSend\.focus/);
     assert.match(openCheck, /cfg\.signature\.html/);
     assert.doesNotMatch(openCheck, /rv-signature-preview/);
-    assert.match(openCheck, /ck-signature/);
-    assert.match(openCheck, /cfg\.signature\.warning/);
-    const bodyInCheck = openCheck.indexOf('aria-label=\\"Email text\\"');
-    const sigInCheck = openCheck.indexOf("ck-signature");
-    const photosInCheck = openCheck.indexOf('ck-photos-label\\">Attached');
-    assert.ok(bodyInCheck >= 0 && photosInCheck > bodyInCheck && sigInCheck > photosInCheck, "check-screen photos sit under the body and above the signature");
+    assert.doesNotMatch(openCheck, /ck-list|ck-photos-label|>Signature</);
+    const sigInCheck = openCheck.indexOf("sent-sign");
+    const photosInCheck = openCheck.indexOf("sent-photos");
+    assert.ok(sigInCheck >= 0 && photosInCheck > sigInCheck, "check-screen photos sit under the signature");
 
     const personnel = readFileSync("views/personnel.ejs", "utf8");
     const admins = personnel.slice(personnel.indexOf("C. Admins"));
