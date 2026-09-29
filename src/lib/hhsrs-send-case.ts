@@ -322,7 +322,7 @@ export async function sendCaseEmail(args: {
   if (!correction && args.row.status === "not_needed") {
     return {
       ok: false,
-      error: "This case is in Duplicates & errors. Move it back to Pending before sending.",
+      error: "This case is in Duplicates & Errors. Move it back to Pending before sending.",
     };
   }
   const to = String(args.body.to ?? "");
@@ -425,7 +425,7 @@ export async function sendCaseEmail(args: {
             if (!locked.length) throw new PortalSendError("Case not found.");
             if (!correction && locked[0].status === "not_needed") {
               throw new PortalSendError(
-                "This case is in Duplicates & errors. Move it back to Pending before sending."
+                "This case is in Duplicates & Errors. Move it back to Pending before sending."
               );
             }
             if (correction) {

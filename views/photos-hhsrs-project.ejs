@@ -21,7 +21,7 @@
       <div>
         <h2><%= projectName %></h2>
         <p class="project-lead">Lead: <strong><%= leadFirst %></strong></p>
-        <p class="intro" style="margin-top:4px">From Project Progress. Properties are listed in numerical UPRN order — open one to see its photos.</p>
+        <p class="intro" style="margin-top:4px">From Project Progress. Properties are listed in numerical UPRN order. The date and time is when the latest photo was stored for that UPRN. Each property's photos are shown under its heading. Click a photo to view it full size.</p>
       </div>
       <div>
         <a class="btn" href="<%= baseUrl('/photos#section-hhsrs') %>">← Back to Photo Storage</a>
@@ -43,6 +43,7 @@
               <th scope="col">UPRN</th>
               <th scope="col">Address</th>
               <th scope="col">Photos</th>
+              <th scope="col">Date / time</th>
             </tr>
           </thead>
           <tbody>
@@ -53,13 +54,42 @@
                 </td>
                 <td><%= row.address %></td>
                 <td><%= row.photoCount %></td>
+                <td class="hhsrs-copied-col"><%= row.latestCopiedAtLabel %></td>
               </tr>
             <% }) %>
           </tbody>
         </table>
       </div>
+      <div class="hhsrs-uprn-list">
+        <% properties.forEach(function (row) { %>
+          <section class="hhsrs-uprn-block">
+            <div class="hhsrs-uprn-head">
+              <h3>UPRN <%= row.uprn %></h3>
+              <p class="hhsrs-uprn-address"><%= row.address || "Address not recorded" %></p>
+            </div>
+            <% if (!row.photos || !row.photos.length) { %>
+              <div class="empty-state">No photos for this UPRN.</div>
+            <% } else { %>
+              <div class="photo-grid" role="list">
+                <% row.photos.forEach(function (photo) {
+                  const sub = ["UPRN " + photo.uprn, photo.address || row.address, projectName].filter(Boolean).join(" · ");
+                %>
+                  <button type="button" class="photo-card" role="listitem" data-photo-open data-src="<%= baseUrl(photo.imageUrl) %>" data-title="<%= photo.fileName %>" data-sub="<%= sub %>" aria-label="<%= photo.fileName %>">
+                    <img class="photo-thumb-img" src="<%= baseUrl(photo.imageUrl) %>" alt="" loading="lazy" decoding="async" />
+                    <div class="photo-name"><%= photo.fileName %></div>
+                    <div class="hhsrs-copied-at"><%= photo.copiedAtLabel %></div>
+                    <div class="photo-meta">UPRN <%= photo.uprn %></div>
+                  </button>
+                <% }) %>
+              </div>
+            <% } %>
+          </section>
+        <% }) %>
+      </div>
     <% } %>
   </main>
+  <%- include("partials/photo-lightbox") %>
 </div>
+<script src="<%= baseUrl('/js/hhsrs-completed-photos.js') %>"></script>
 </body>
 </html>

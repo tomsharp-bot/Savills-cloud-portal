@@ -1031,9 +1031,9 @@
       } else if (perm === "unsupported") {
         hint.textContent = "This browser cannot show desktop alerts. On-screen alerts still show while HHSRS Reporter is open.";
       } else if (alertsSimulatedOff() || desktopAlertsDecision() === "enabled") {
-        hint.textContent = "Alerts were turned off. Enable again — the prompt stays on Pending until you do.";
+        hint.textContent = "Alerts were turned off. Enable them again on this page.";
       } else {
-        hint.textContent = "Desktop alerts are required. Enable here or from the prompt on Pending.";
+        hint.textContent = "Desktop alerts are required. Enable them on this page.";
       }
     }
   }

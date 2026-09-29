@@ -17,13 +17,13 @@
 <div class="find-main">
 <div class="page-header">
   <div>
-    <h2 class="page-section-title">Find and resend</h2>
+    <h2 class="page-section-title">Find &amp; Resend</h2>
     <p class="subtitle">Click a case. The email that was sent opens on the right.</p>
   </div>
 </div>
 
 <section class="panel">
-  <div class="panel-head"><h2>Find a case</h2></div>
+  <div class="panel-head"><h2>Find A Case</h2></div>
   <form class="panel-body find-body" method="get" action="<%= reporterBase %>/find">
     <div class="find-search">
       <div>
@@ -88,10 +88,10 @@
   <% if (!selected.sent) { %>
     <div class="find-info">
       <b>Not sent yet</b>
-      <p><%= selected.address %> · <%= selected.hazard %>. Open it in Review and create.</p>
+      <p><%= selected.address %> · <%= selected.hazard %>. Open it in Review &amp; Create.</p>
     </div>
     <div class="fr-foot">
-      <a class="btn btn-primary" href="<%= selected.reviewUrl %>">Open in Review and create</a>
+      <a class="btn btn-primary" href="<%= selected.reviewUrl %>">Open in Review &amp; Create</a>
     </div>
   <% } else { %>
     <%- include("partials/sent-email-card", {
@@ -124,7 +124,7 @@
 <section class="amend-screen" id="fr-amend">
   <div class="page-header">
     <div>
-      <h2 class="page-section-title">Amend &amp; resend</h2>
+      <h2 class="page-section-title">Amend &amp; Resend</h2>
       <p class="subtitle">Starts from the email that was sent.<% if (selected.reference) { %> <%= selected.reference %>.<% } %></p>
     </div>
   </div>

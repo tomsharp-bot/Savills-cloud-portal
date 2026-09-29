@@ -2,7 +2,7 @@
 
 <div class="page-header">
   <div>
-    <h2 class="page-section-title">Project overview</h2>
+    <h2 class="page-section-title">Project Overview</h2>
     <p class="subtitle">List comes from Project Progress. Current projects here; completed ones under Archived.</p>
   </div>
   <div class="header-meta">
@@ -42,9 +42,9 @@
       <div class="po-stat-card"><span class="po-stat-label">Archived</span><span class="po-stat-value"><%= overview.totals.archived %></span></div>
     </div>
 
-    <section class="panel" aria-label="Active projects">
+    <section class="panel" aria-label="Active Projects">
       <div class="panel-head review-head">
-        <h2>Active projects</h2>
+        <h2>Active Projects</h2>
         <span class="count count-review"><%= overview.active.length %></span>
       </div>
       <% if (!overview.active.length) { %>
@@ -156,11 +156,11 @@
   </div>
 
   <% if (overview.archived.length) { %>
-    <details class="panel po-archived-details" aria-label="Archived projects" id="po-archived-section">
+    <details class="panel po-archived-details" aria-label="Archived Projects" id="po-archived-section">
       <summary class="panel-head archived-head po-archived-summary">
         <span class="po-archived-summary-left">
           <span class="po-archived-chevron" aria-hidden="true"></span>
-          <h2>Archived projects</h2>
+          <h2>Archived Projects</h2>
         </span>
         <span class="count count-archived"><%= overview.archived.length %></span>
       </summary>
@@ -184,6 +184,6 @@
   <% } %>
 </div>
 
-<p class="footer-note">Project overview · Project Progress is the master list</p>
+<p class="footer-note">Project Overview · Project Progress is the master list</p>
 
 <%- include("partials/layout-close") %>

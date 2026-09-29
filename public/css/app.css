@@ -27,6 +27,8 @@ input[type=text],input[type=password],input[type=search],input[type=email],input
 .topbar .brand:hover{text-decoration:underline}
 a.btn{display:inline-block;text-decoration:none}
 .topbar .right{display:flex;align-items:center;gap:12px;font-size:.9rem;flex-wrap:wrap}
+.topbar a.data-checks-nav{font-weight:700;color:#fff;text-decoration:none}
+.topbar a.data-checks-nav:hover{text-decoration:underline}
 .main{flex:1;padding:20px 24px;width:100%;text-align:left}
 .page-title{margin:0 0 6px;font-size:1.5rem;color:var(--navy)}
 .page-sub{margin:0 0 16px;color:var(--muted)}

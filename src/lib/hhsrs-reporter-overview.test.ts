@@ -97,7 +97,7 @@ describe("HHSRS project overview from Project Progress", () => {
     assert.match(overview, />Complete</);
 
     assert.match(sidebar, /Dashboard/);
-    assert.match(sidebar, /Project overview/);
+    assert.match(sidebar, /Project Overview/);
     assert.match(sidebar, /project-overview/);
     assert.doesNotMatch(sidebar, /tab-ico"[^>]*>0[123]</);
     assert.match(sidebar, /<svg/);

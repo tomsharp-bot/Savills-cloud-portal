@@ -5,7 +5,9 @@ import {
   copySpacesObject,
   deleteSpacesObject,
   fetchSpacesObject,
+  listSpacesKeys,
   putSpacesObject,
+  spacesKeyExists,
   spacesObjectKey,
   spacesRequired,
   spacesStatus,
@@ -826,6 +828,10 @@ export type PhotoStorageOps = {
   remove: (key: string) => Promise<boolean>;
   copy: (fromKey: string, toKey: string) => Promise<SpacesCopyResult>;
   put: (key: string, body: Buffer, contentType: string) => Promise<boolean>;
+  /** Keys under a trailing-slash prefix. Null when the list fails. */
+  listPrefix?: (prefix: string) => Promise<string[] | null>;
+  /** True when the key exists, false when it does not, null when the check fails. */
+  exists?: (key: string) => Promise<boolean | null>;
 };
 
 export function defaultPhotoStorageOps(): PhotoStorageOps {
@@ -834,6 +840,8 @@ export function defaultPhotoStorageOps(): PhotoStorageOps {
     remove: (key) => deleteSpacesObject(key),
     copy: (fromKey, toKey) => copySpacesObject(fromKey, toKey),
     put: (key, body, contentType) => putSpacesObject(key, body, contentType),
+    listPrefix: (prefix) => listSpacesKeys(prefix),
+    exists: (key) => spacesKeyExists(key),
   };
 }
 
@@ -894,6 +902,43 @@ export function isProjectPoolKey(projectId: string, key: string): boolean {
   const rest = key.slice(prefix.length);
   if (!rest || rest.includes("/") || rest.includes("\\") || rest.includes("..")) return false;
   return /\.[A-Za-z0-9]{1,8}$/.test(rest);
+}
+
+const FOLDER_STORAGE_PREFIX = /^photos\/[^/]+\/folders\/[^/]+\/$/;
+
+/**
+ * Prefix for objects that belong to one Photo Folder.
+ * Photo codes themselves live in the pool (`photos/{projectId}/pool/…`).
+ * This prefix is only for a folder marker or any leftover objects stored under the folder.
+ */
+export function photoFolderStoragePrefix(projectId: string, folderId: string): string | null {
+  if (!projectId || /[/\\]/.test(projectId) || projectId.includes("..")) return null;
+  if (!folderId || /[/\\]/.test(folderId) || folderId.includes("..")) return null;
+  const prefix = `photos/${projectId}/folders/${folderId}/`;
+  if (!FOLDER_STORAGE_PREFIX.test(prefix)) return null;
+  return prefix;
+}
+
+/**
+ * Keys to delete so a folder prefix actually disappears.
+ * Spaces has no directories. A folder is the objects under the prefix, plus a
+ * zero-byte marker whose key is the prefix or the prefix without the trailing slash.
+ * Anything else in `listed` (pool objects, another folder, HHSRS) is left alone.
+ */
+export function keysUnderFolderPrefix(prefix: string, listed: string[]): string[] {
+  if (!FOLDER_STORAGE_PREFIX.test(prefix)) return [];
+  const marker = prefix.slice(0, -1);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of listed) {
+    const key = String(raw || "");
+    if (!key || seen.has(key)) continue;
+    if (key !== marker && key !== prefix && !key.startsWith(prefix)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  out.sort((a, b) => b.length - a.length || a.localeCompare(b));
+  return out;
 }
 
 export function canonicalCodes(
@@ -1088,6 +1133,76 @@ export async function deleteProjectPhotos(
     };
   }
   return { ok: true, deletedCodes };
+}
+
+async function deleteFolderStoragePrefix(
+  prefix: string,
+  ops: PhotoStorageOps
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!ops.listPrefix || !ops.exists) {
+    return { ok: false, error: "Could not list that folder in storage." };
+  }
+  const listed = await ops.listPrefix(prefix);
+  if (!listed) return { ok: false, error: "Could not list that folder in storage." };
+  const marker = prefix.slice(0, -1);
+  const markerExists = await ops.exists(marker);
+  if (markerExists === null) return { ok: false, error: "Could not list that folder in storage." };
+  const keys = keysUnderFolderPrefix(prefix, markerExists ? listed.concat(marker) : listed);
+  for (const key of keys) {
+    const removed = await ops.remove(key);
+    if (!removed) return { ok: false, error: "Could not delete that folder from storage." };
+  }
+  return { ok: true };
+}
+
+/**
+ * Delete one Photo Folder in this project.
+ * Photos listed on a folder are the same Spaces objects as the Photos Pool, so they
+ * are removed from storage, from the pool, and from every folder that listed them.
+ * A zip pack has no photo list; only the pack row is removed.
+ * Any objects under the folder prefix, including an empty folder-marker key, are
+ * removed as well. The folder row is deleted only after that storage cleanup succeeds.
+ */
+export async function deleteProjectFolder(
+  projectId: string,
+  folderId: string,
+  ops: PhotoStorageOps = defaultPhotoStorageOps()
+): Promise<
+  | { ok: true; folderName: string; deletedCodes: string[] }
+  | { ok: false; error: string; status: number; deletedCodes: string[] }
+> {
+  const folder = await prisma.photoFolder.findFirst({
+    where: { id: folderId, projectId },
+  });
+  if (!folder) return { ok: false, error: "Folder not found.", status: 404, deletedCodes: [] };
+
+  const prefix = photoFolderStoragePrefix(projectId, folder.id);
+  if (!prefix) return { ok: false, error: "Folder not found.", status: 400, deletedCodes: [] };
+
+  const deletedCodes: string[] = [];
+  if (folder.kind !== "zip") {
+    const codes = photoCodesOf(folder)
+      .map((code) => code.trim())
+      .filter(Boolean);
+    for (let i = 0; i < codes.length; i += PHOTO_DELETE_MAX) {
+      const batch = codes.slice(i, i + PHOTO_DELETE_MAX);
+      const result = await deleteProjectPhotos(projectId, batch, { kind: "folder", folderId: folder.id }, ops);
+      deletedCodes.push(...result.deletedCodes);
+      if (!result.ok) {
+        return { ok: false, error: result.error, status: result.status, deletedCodes };
+      }
+    }
+  }
+
+  if (ops.configured()) {
+    const cleaned = await deleteFolderStoragePrefix(prefix, ops);
+    if (!cleaned.ok) {
+      return { ok: false, error: cleaned.error, status: 502, deletedCodes };
+    }
+  }
+
+  await prisma.photoFolder.delete({ where: { id: folder.id } });
+  return { ok: true, folderName: folder.name, deletedCodes };
 }
 
 /**

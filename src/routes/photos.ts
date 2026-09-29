@@ -6,6 +6,8 @@ import {
   buildPlaceholderZip,
   canonicalCodes,
   createPhotosExtract,
+  defaultPhotoStorageOps,
+  deleteProjectFolder,
   deleteProjectPhotos,
   ensureProjectPhotoDemo,
   fileNameForCode,
@@ -28,6 +30,7 @@ import {
   uploadProjectPhoto,
   uprnFromCode,
   type PhotoMutationScope,
+  type PhotoStorageOps,
   type PoolImageResult,
 } from "../lib/photos.js";
 import {
@@ -46,7 +49,7 @@ import {
   hhsrsCompletedProjectPath,
   listFailedHhsrsCopyIds,
   listHhsrsCompletedTiles,
-  listHhsrsProperties,
+  listHhsrsProjectProperties,
   listHhsrsPropertyPhotos,
   readHhsrsCompletedPhoto,
   searchPhotoStorage,
@@ -58,6 +61,15 @@ photosRouter.use(requireAdmin);
 
 /** Tests set this to stub Spaces reads. Production leaves it unset. */
 export const POOL_IMAGE_READER = "poolImageReader";
+
+/** Tests set this to stub folder-prefix listing and deletes. Production leaves it unset. */
+export const PHOTO_STORAGE_OPS = "photoStorageOps";
+
+function photoStorageOps(req: Request): PhotoStorageOps {
+  const custom = req.app.get(PHOTO_STORAGE_OPS);
+  if (custom && typeof custom === "object") return custom as PhotoStorageOps;
+  return defaultPhotoStorageOps();
+}
 
 type PoolObjectReader = (key: string) => Promise<Buffer | null>;
 
@@ -520,6 +532,20 @@ photosRouter.post(
   }
 );
 
+photosRouter.post("/projects/:id/folders/:folderId/delete", async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Project not found." });
+    return;
+  }
+  const result = await deleteProjectFolder(project.id, req.params.folderId, photoStorageOps(req));
+  if (!result.ok) {
+    res.status(result.status).json({ ok: false, error: result.error, deletedCodes: result.deletedCodes });
+    return;
+  }
+  res.json({ ok: true, folderName: result.folderName, deletedCodes: result.deletedCodes });
+});
+
 photosRouter.post("/projects/:id/folders/:folderId/photos/delete", async (req: Request, res: Response) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
   if (!project) {
@@ -709,7 +735,7 @@ photosRouter.get("/hhsrs/:projectName", async (req: Request, res: Response) => {
   });
   const tiles = await listHhsrsCompletedTiles(current);
   const tile = tiles.find((item) => item.projectName === projectName);
-  const properties = await listHhsrsProperties(projectName);
+  const properties = await listHhsrsProjectProperties(projectName);
   res.render("photos-hhsrs-project", {
     title: `${projectName} — HHSRS - Completed`,
     user: req.user,

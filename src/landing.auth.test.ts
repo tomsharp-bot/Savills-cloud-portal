@@ -126,6 +126,8 @@ describe("post-login landing by role", () => {
     assert.match(hub.body, /href="\/projectprogress\/projects-programme"/);
     assert.match(hub.body, /href="\/projectprogress\/reference-documents"/);
     assert.match(hub.body, /Reference Documents/);
+    assert.doesNotMatch(hub.body, /Data Checks/);
+    assert.doesNotMatch(hub.body, /\/data-checks/);
     assert.match(hub.body, /class="brand" href="\/projectprogress\/admin"/);
     assert.match(hub.body, /hhsrs-pending-alerts\.js/);
     assert.match(hub.body, /New HHSRS Hazard/);
@@ -191,5 +193,7 @@ describe("post-login landing by role", () => {
     assert.match(projects.body, /href="\/projectprogress\/reference-documents"/);
     assert.doesNotMatch(projects.body, /href="\/projectprogress\/admin"/);
     assert.doesNotMatch(projects.body, /hhsrs-pending-alerts/);
+    assert.doesNotMatch(projects.body, /Data Checks/);
+    assert.doesNotMatch(projects.body, /\/data-checks/);
   });
 });

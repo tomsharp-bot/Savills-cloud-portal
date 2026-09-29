@@ -701,6 +701,10 @@ describe("Account password and Personnel temp reset", () => {
     assert.equal(programme.status, 302);
     assert.equal(programme.location, "/login");
 
+    const dataChecks = await request(app, "GET", "/data-checks");
+    assert.equal(dataChecks.status, 302);
+    assert.equal(dataChecks.location, "/login");
+
     const adminHub = await request(app, "GET", "/admin");
     assert.equal(adminHub.status, 302);
     assert.equal(adminHub.location, "/login");
@@ -719,6 +723,10 @@ describe("Account password and Personnel temp reset", () => {
     const programme = await request(app, "GET", "/projectprogress/projects-programme");
     assert.equal(programme.status, 302);
     assert.equal(programme.location, "/projectprogress/login");
+
+    const dataChecks = await request(app, "GET", "/projectprogress/data-checks");
+    assert.equal(dataChecks.status, 302);
+    assert.equal(dataChecks.location, "/projectprogress/login");
 
     const adminHub = await request(app, "GET", "/projectprogress/admin");
     assert.equal(adminHub.status, 302);
