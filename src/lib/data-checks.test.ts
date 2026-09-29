@@ -34,6 +34,11 @@ describe("Data Review practice page hosting", () => {
     assert.ok(page.indexOf('<div id="lb">') < page.indexOf('<script id="xlsxlib">'));
     assert.match(page, /id="bSaveMaster"/);
     assert.match(page, /id="mdfDrop"/);
+    assert.match(page, /id="baseDrop"/);
+    assert.match(page, /id="basePreview"/);
+    assert.ok(page.indexOf('id="pCreate"') < page.indexOf('id="baseDrop"'));
+    assert.ok(page.indexOf('id="baseDrop"') < page.indexOf("Import data from an existing MDF"));
+    assert.match(page, /B\.exactColumns/);
     assert.match(page, /Hide HHSRS Section/);
     assert.match(page, /Selected cell/);
     assert.match(page, /Load photo folder/);

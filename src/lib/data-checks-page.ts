@@ -17,6 +17,7 @@ export const DATA_REVIEW_MARKERS = [
   'data-tab="builder"',
   "File builder",
   "Import data from an existing MDF",
+  'id="baseDrop"',
   'data-tab="grid"',
   "Master Data File",
   'id="photoBox"',

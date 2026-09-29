@@ -368,8 +368,10 @@ body:not(.tab-grid) #main{visibility:hidden}
     <div class="cards">
       <div class="card drop" id="cDrop"><div class="big">&#11015; Drag the Vision exports here</div><div class="sub">e.g. <i>15a. Condition Data List Export &hellip;.xlsx</i> (needed) plus <i>15b. Hazard List Export &hellip;</i> and <i>15c. Comments Export &hellip;</i> (optional) &middot; drop one, two or all three together</div><button class="sbtn" id="cPick">Choose files&hellip;</button></div>
       <div class="card drop" id="oDrop"><div class="big">&#128194; &hellip;or open a master you saved earlier</div><div class="sub">&ldquo;&hellip;-Master Data File-V&hellip;.xlsm&rdquo; (or an older &hellip;.xlsx master) &ndash; brings back the grid, yellow edits, standard answers, builder settings, macros, Original Data Imported and Import Log</div><button class="sbtn" id="oPick">Open master&hellip;</button></div>
+      <div class="card drop" id="baseDrop"><div class="big">&#11015; Or start from an existing Master Data File</div><div class="sub">.xlsm or .xlsx &middot; this file&rsquo;s columns, in this order, and its rows become the new master. Headers stay as they are. Columns you left out are not added. Saved as {Project name}-Master Data File-V1.</div><button class="sbtn" id="basePick" type="button">Choose file&hellip;</button></div>
     </div>
     <div id="cPreview"></div>
+    <div id="basePreview"></div>
   </div>
 </div>
 <div class="panel" id="pBuilder"><div class="pin" id="bIn"></div></div>
@@ -452,6 +454,7 @@ body:not(.tab-grid) #main{visibility:hidden}
 </div>
 <input type="file" id="visIn" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
 <input type="file" id="mdfIn" accept=".xlsx,.xlsm,.xls" style="display:none">
+<input type="file" id="baseIn" accept=".xlsx,.xlsm,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">
 <input type="file" id="tplIn" accept=".json,.xlsx,.xlsm" style="display:none">
 <input type="file" id="vbaIn" accept=".xlsm,.xltm,.xlam,.bin" style="display:none">
 <input type="file" id="fileIn" accept=".xlsx,.xlsm,.xls,.csv,.txt" style="display:none">
@@ -760,6 +763,11 @@ function drvCore(scope){
     var buf = await new Response(new Blob([comp]).stream().pipeThrough(ds)).arrayBuffer();
     return new Uint8Array(buf);
   }
+  function hiddenColIndexes(ws){
+    var cols = (ws && ws['!cols']) || [], out = [];
+    for (var i = 0; i < cols.length; i++) if (cols[i] && cols[i].hidden) out.push(i);
+    return out;
+  }
   async function readMdfMessage(m){
     prog(m.id, 'Checking sheet sizes…');
     var u8 = new Uint8Array(m.buf);
@@ -789,13 +797,13 @@ function drvCore(scope){
       else keep.push(name);
     }
     prog(m.id, 'Reading ' + keep.length + ' sheet' + (keep.length === 1 ? '' : 's') + '…');
-    var ab = XLSX.read(u8, {type:'array', dense:true, cellNF:true, cellText:false, cellStyles:false, cellHTML:false, cellFormula:false, bookVBA:false, sheets:keep});
+    var ab = XLSX.read(u8, {type:'array', dense:true, cellNF:true, cellText:false, cellStyles:true, cellHTML:false, cellFormula:false, bookVBA:false, sheets:keep});
     var sheets = [];
     for (var i = 0; i < keep.length; i++) {
       var ws = ab.Sheets[keep[i]];
       if (!ws) continue;
       prog(m.id, 'Preparing ' + keep[i] + '…');
-      sheets.push({name:keep[i], aoa:sheetToAoa(ws)});
+      sheets.push({name:keep[i], aoa:sheetToAoa(ws), hidden:hiddenColIndexes(ws)});
     }
     post({type:'done', id:m.id, sheets:sheets, skipped:skip});
   }
@@ -2620,7 +2628,7 @@ function renderBuilder(){
           <button class="sbtn" id="cShow">Show all listed</button><button class="sbtn" id="cHide">Hide all listed</button></div>
         <div class="hint" id="cCount"></div>
         <div class="scroll colscroll"><table class="ctab" id="colTab"></table></div>
-        <div class="hint">Drag ⋮⋮ to reorder (or use ↑ ↓). Hidden columns stay in the saved master (as hidden Excel columns) and keep their data. A new master starts with <b>Postcode</b> hidden and the 35 HHSRS issue columns shown. Opening a master you already saved does not change those Show ticks. Usual columns: UPRN, Phase Status, Checked?, Surveyor, Date, Address, Postcode, Asset Type, Condition Status, Flag, Issue, Number of Issues, Explanation (validation notes), SAP Required, Property Age.</div>
+        <div class="hint">Drag ⋮⋮ to reorder (or use ↑ ↓). Hidden columns stay in the saved master (as hidden Excel columns) and keep their data. ${B.exactColumns ? 'This master was started from an existing file. The columns and their order are the ones in that file, and columns that were not in it are not added.' : 'A new master starts with <b>Postcode</b> hidden and the 35 HHSRS issue columns shown. Opening a master you already saved does not change those Show ticks. Usual columns: UPRN, Phase Status, Checked?, Surveyor, Date, Address, Postcode, Asset Type, Condition Status, Flag, Issue, Number of Issues, Explanation (validation notes), SAP Required, Property Age.'}</div>
       </div>
     </div>
     <div class="row" style="margin-top:14px"><button class="pbig" id="bApply">Apply and open the validator</button></div>`;
@@ -3894,6 +3902,7 @@ function hhColDefs(){
   return out;
 }
 function ensureHhsrsColumns(B){
+  if (!B || B.exactColumns) return;
   const defs = hhColDefs();
   for (const s of B.sheets) {
     const list = B.columns[s.name]; if (!list || isGarage(B, s.name)) continue;
@@ -4783,7 +4792,7 @@ document.addEventListener('mouseup', () => { if (V4.drag) { V4.drag = null; if (
 function masterToGrid(keepSheet){
   const B = MS.B, old = book && book.master ? book.tables : null;
   ensureV4State(); ensureHhsrsColumns(B);
-  for (const [name, rows] of MS.data) if (B.columns[name] && !isGarage(B, name)) for (const r of rows) hhRecalcVals(r.vals);
+  if (!B.exactColumns) for (const [name, rows] of MS.data) if (B.columns[name] && !isGarage(B, name)) for (const r of rows) hhRecalcVals(r.vals);
   if (T && old) { T.st = els.body.scrollTop; T.sl = els.body.scrollLeft; }
   const cur = keepSheet || (T && old ? T.name : null);
   const tables = new Map();
@@ -5086,9 +5095,14 @@ async function onCreateFiles(files){
   const conds = list.filter(x => x.kind === 'condition'), tabs = list.filter(x => x.kind === 'hazards' || x.kind === 'comments');
   if (!conds.length) {
     if (list.some(x => x.builder)) { openFile(list.find(x => x.builder).file); return; }
+    if (!tabs.length) {
+      const base = files.find(f => BASE_FILE_RE.test(f.name));
+      if (base) { await onBaseFile(base); return; }
+    }
     $('cPreview').innerHTML = `<div class="note">A new master needs the <b>Condition Data List Export</b> (the Hazard List and Comments exports can come with it or later).</div>` + unknownFilesHtml(list) + tabs.map(x => tablePreviewHtml(x.X)).join('');
     return;
   }
+  if (!tabs.length && conds.every(x => looksLikeHorizontalMaster(x.V))) { await onBaseFile(conds[0].file); return; }
   V4.cacheV = {file:conds[0].file, V:conds[0].V};
   await onCreateFile(conds[0].file);
   if (!createPending || createPending.V !== conds[0].V) return;
@@ -5413,7 +5427,146 @@ function applyMdfImport(){
   V4.mdf = null;
 }
 
-Object.assign(DRV, {V4, STD, stdRows, stdPaste, stdTsv, pasteData, rangeTsv, toggleHh, actRemoveIssue, readAnyFile, onImportFiles, onCreateFiles, doImportAll, hhRefreshPhotos, masterSheetsPayload, spellFix, hzGroups, setTab, onMdfFile, applyMdfImport});
+/* ---------- start a new master from an existing Master Data File ---------- */
+const BASE_FILE_RE = /\.(xlsx|xlsm)$/i;
+const BASE_SKIP_SHEETS = new Set(['builder', 'import log', 'original data imported', 'vision raw']);
+function looksLikeHorizontalMaster(V){
+  if (!V || !V.header) return false;
+  const hs = V.header.map(h => mdfNorm(h));
+  if (!hs.includes('uprn') || !hs.includes('address')) return false;
+  const vertical = hs.includes('subsection name') || hs.includes('subsection value') || hs.includes('subsection value / item name');
+  return !vertical;
+}
+function baseProjectFromName(name){
+  const stem = String(name || '').replace(/\.[^.]+$/, '').trim();
+  const m = /^(.*)-Master Data File-V\d+$/i.exec(stem);
+  return ((m ? m[1] : stem) || 'Project').trim() || 'Project';
+}
+function baseSheetTypes(name){
+  if (/garage/i.test(name)) return ['Garage'];
+  if (/block/i.test(name) || /(^|[^a-z])blk([^a-z]|$)/i.test(name)) return ['Block'];
+  return ['*'];
+}
+function baseColumnsFrom(info){
+  const known = new Map();
+  for (const u of USUAL) known.set(mdfNorm(u.header), {key:u.key, kind:'usual'});
+  for (const d of hhColDefs()) if (!known.has(mdfNorm(d.header))) known.set(mdfNorm(d.header), {key:d.key, kind:d.kind || 'hhsrs'});
+  const hidden = new Set(info.hidden || []);
+  const used = new Set(), cols = [];
+  for (const c of info.cols) {
+    const hit = known.get(c.norm);
+    let key, kind;
+    if (hit && !used.has(hit.key)) { key = hit.key; kind = hit.kind; }
+    else { key = 'c|' + c.norm.slice(0, 80) + '|' + c.c; while (used.has(key)) key += 'x'; kind = 'custom'; }
+    used.add(key);
+    const col = {key, header:c.header, kind, visible:true, src:'Copied from the existing Master Data File'};
+    if (hidden.has(c.c)) col.hid = true;
+    cols.push(col);
+  }
+  return cols;
+}
+function baseDataRows(aoa, hrIndex){
+  const rows = [];
+  for (let r = hrIndex + 1; r < aoa.length; r++) {
+    const row = aoa[r] || [];
+    if (!row.some(v => !isBlank(v))) continue;
+    rows.push(row);
+  }
+  return rows;
+}
+function baseSheetPlans(read){
+  const plans = [];
+  for (const s of (read.sheets || [])) {
+    if (BASE_SKIP_SHEETS.has(mdfNorm(s.name))) continue;
+    const info = mdfFindHeader(s.aoa);
+    if (!info) continue;
+    info.hidden = s.hidden || [];
+    plans.push({sheet:s.name, info, rows:baseDataRows(s.aoa, info.hr - 1)});
+  }
+  return plans;
+}
+function renderBasePreview(){
+  const el = $('basePreview'); const P = V4.baseFile; if (!el || !P) return;
+  let html = '<h3>New master from this file</h3>';
+  html += '<div class="row"><label>Project name <input type="text" id="baseProj" value="' + esc(P.project) + '" style="width:240px"></label><span class="hint">Saves as <b id="baseName">' + esc(masterName({project:P.project}, 1)) + '</b></span></div>';
+  if (P.skipped.length) html += '<div class="hint">Skipped, too large to read here: ' + P.skipped.map(s => esc(s.name) + ' (' + Math.round(s.bytes / 1048576) + ' MB)').join(', ') + '</div>';
+  P.plans.forEach(p => {
+    const headers = p.info.cols.map(c => c.header);
+    html += '<h3>' + esc(p.sheet) + '</h3><div class="good">' + nf(headers.length) + ' columns in this order, ' + nf(p.rows.length) + ' rows copied. Nothing else is added, and the headers are not renamed.</div>';
+    html += '<div class="scroll" style="max-height:160px"><div class="hint">' + headers.map(esc).join(' · ') + '</div></div>';
+  });
+  html += '<div class="row"><button class="pbig" id="baseGo" type="button">Create master</button><span class="hint">This starts the file. It does not fill rows into a master that is already built.</span></div>';
+  el.innerHTML = html;
+  $('baseProj').addEventListener('input', () => { const n = $('baseName'); if (n) n.textContent = masterName({project:$('baseProj').value.trim() || 'Project'}, 1); });
+  $('baseGo').onclick = () => createMasterFromBase();
+}
+async function onBaseFile(file){
+  if (!file) return;
+  if (!BASE_FILE_RE.test(file.name)) { toast('Choose a Master Data File (.xlsm or .xlsx).'); return; }
+  showLoading('Reading ' + file.name + '…', 'Columns and rows are copied as they are.');
+  try {
+    const buf = await file.arrayBuffer();
+    const r = await wreq({type:'readMdf', name:file.name, buf}, [buf]);
+    const plans = baseSheetPlans(r);
+    hideLoading();
+    if (!plans.length) {
+      const el = $('basePreview');
+      if (el) el.innerHTML = '<div class="note"><b>' + esc(file.name) + '</b> has no horizontal master sheet (a header row with UPRN and Address). A Vision export is not used to start a master here.</div>';
+      toast('That file is not a horizontal Master Data File.');
+      return;
+    }
+    V4.baseFile = {file:file.name, project:baseProjectFromName(file.name), plans, skipped:r.skipped || []};
+    renderBasePreview();
+    const card = $('baseDrop'); if (card) card.scrollIntoView({block:'nearest'});
+  } catch (e) { hideLoading(); alert('Could not read that file: ' + (e.message || e)); }
+}
+async function createMasterFromBase(){
+  const P = V4.baseFile; if (!P || !P.plans.length) return;
+  const project = ($('baseProj') && $('baseProj').value.trim()) || P.project || 'Project';
+  if (anyDirty() && !confirm('The open file/master has unsaved changes. Create the new master anyway?')) return;
+  const B = newBuilder(project);
+  B.exactColumns = true;
+  B.sheets = P.plans.map(p => ({name:p.sheet, types:baseSheetTypes(p.sheet)}));
+  B.photos = []; B.comps = {}; B.columns = {};
+  B.ui = Object.assign({}, UI);
+  const data = new Map();
+  let nRows = 0;
+  const notes = [];
+  for (const p of P.plans) {
+    const cols = baseColumnsFrom(p.info);
+    B.columns[p.sheet] = cols;
+    const rows = p.rows.map(src => {
+      const vals = {};
+      for (let i = 0; i < cols.length; i++) {
+        const v = src[p.info.cols[i].c];
+        if (v == null || (typeof v === 'string' && v.trim() === '')) continue;
+        vals[cols[i].key] = v;
+      }
+      return {vals, e:new Set(), ins:false};
+    });
+    data.set(p.sheet, rows);
+    nRows += rows.length;
+    notes.push(p.sheet + ': ' + cols.length + ' columns in file order, ' + rows.length + ' rows');
+  }
+  MS = {B, data, raw:{header:[], rows:[]}, log:[], fileName:masterName(B, 1), bDirty:false, version:0, handle:null, fileSavedAt:0, vbaraw:V3.defaultVba ? V3.defaultVba.bin : null};
+  if (MS.vbaraw) B.vba = Object.assign({}, V3.defaultVba.meta, {auto:true});
+  MS.log.push([nowStamp(), P.file, 'File base', '', nRows, nRows, nRows, 0, 0, 0, 0, 0, notes.join(' | ') + '. Headers kept. No columns added.', 'Existing file']);
+  book = null; T = null;
+  await masterToGrid(B.sheets[0].name);
+  setMasterDirty();
+  setTab('grid');
+  toast('Master created – ' + MS.fileName, 5000);
+  const el = $('basePreview'); if (el) el.innerHTML = '<div class="good"><b>Master created</b> for ' + esc(B.project) + '. It is the live master, saved as you go, and Save Master writes <b>' + esc(MS.fileName) + '</b>. Columns and rows were copied from ' + esc(P.file) + '.</div>';
+  V4.baseFile = null;
+}
+multiDrop('baseDrop', fs => { const f = fs.find(x => BASE_FILE_RE.test(x.name)); if (f) onBaseFile(f); else toast('Choose a Master Data File (.xlsm or .xlsx).'); });
+(() => {
+  const inp = $('baseIn'); if (!inp) return;
+  $('basePick').onclick = () => inp.click();
+  inp.addEventListener('change', () => { const f = inp.files && inp.files[0]; inp.value = ''; if (f) onBaseFile(f); });
+})();
+
+Object.assign(DRV, {V4, STD, stdRows, stdPaste, stdTsv, pasteData, rangeTsv, toggleHh, actRemoveIssue, readAnyFile, onImportFiles, onCreateFiles, doImportAll, hhRefreshPhotos, masterSheetsPayload, spellFix, hzGroups, setTab, onMdfFile, applyMdfImport, onBaseFile, createMasterFromBase});
 updateGridBar(); updateMStatus();
 batchFromName = (o => name => /^\s*demo\b/i.test(name || '') ? 'Demo' : o(name))(batchFromName);
 
