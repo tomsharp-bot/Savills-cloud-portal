@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Asset, Project } from "@prisma/client";
 import { fullSurveysRemaining } from "./full-surveys-remaining.js";
+import { buildProjectTileStats } from "./project-tile-stats.js";
 import { buildSummary } from "./summary.js";
 
 function project(partial: Partial<Project> = {}): Project {
@@ -194,5 +195,141 @@ describe("Summary counts and Omit Asset", () => {
     assert.equal(tile("dwellings", "External-only Completed", assets, proj), "1");
     assert.equal(tile("dwellings", "Full Surveys Remaining", assets, proj), "1");
     assert.equal(tile("dwellings", "External-only Remaining", assets, proj), "0");
+  });
+
+  it("shows the progress-card surveys completed count for a validations-only project", () => {
+    const proj = project({
+      typeConditionOnly: false,
+      typeConditionEpc: false,
+      typeValidations: true,
+      typeBlocks: true,
+      typeGarages: false,
+      projectTargetValue: 80,
+      projectTargetUnit: "percent",
+    });
+    const assets = [
+      asset({ uprn: "full-a", assetStatus: "Full Survey" }),
+      asset({ uprn: "full-b", assetStatus: "Full Surveys" }),
+      asset({ uprn: "typed", assetStatus: "No Visit", surveyType: "Full Survey" }),
+      asset({ uprn: "ext", assetStatus: "Ext-Only", external: "Yes" }),
+      asset({ uprn: "open", assetStatus: "No Visit" }),
+      asset({ uprn: "omit", assetStatus: "Full Survey", omitAsset: true }),
+      asset({ uprn: "block-done", kind: "block", assetStatus: "Full Survey" }),
+      asset({ uprn: "block-open", kind: "block", assetStatus: "No Visit" }),
+      asset({ uprn: "block-ext", kind: "block", assetStatus: "Ext-Only" }),
+    ];
+    const summary = buildSummary(proj, assets);
+    const card = buildProjectTileStats(proj, assets);
+    assert.equal(summary.find((stack) => stack.key === "validations")?.hidden, false);
+    assert.equal(summary.find((stack) => stack.key === "dwellings")?.hidden, true);
+    // Five dwellings in the survey set. Done is a full survey, including the
+    // Survey Type fallback. External-only, the open row, and the omitted row are not.
+    assert.equal(card.surveysRelevant, 5);
+    assert.equal(card.surveysFull, 3);
+    assert.equal(tile("validations", "Validations Total", assets, proj), "5");
+    assert.equal(tile("validations", "Validations Completed", assets, proj), "3");
+    // round(5 × 80%) − 3 done.
+    assert.equal(tile("validations", "Validations Remaining", assets, proj), "1");
+    assert.equal(tile("validations", "Validations Completed", assets, proj), String(card.surveysFull));
+    assert.equal(
+      tile("validations", "Validations Remaining", assets, proj),
+      String(fullSurveysRemaining(card.surveysRelevant, card.surveysFull, proj))
+    );
+    assert.equal(tile("all", "Dwellings", assets, proj), "5");
+    assert.equal(tile("blocks", "Total Blocks", assets, proj), "3");
+    assert.equal(tile("blocks", "Blocks Completed", assets, proj), "2");
+    assert.equal(tile("blocks", "Blocks Remaining", assets, proj), "1");
+  });
+
+  it("counts validations done on the same dwellings as the progress card when patches are set", () => {
+    const proj = project({
+      typeConditionOnly: false,
+      typeConditionEpc: false,
+      typeValidations: true,
+      typeBlocks: true,
+      projectTargetValue: 80,
+      projectTargetUnit: "percent",
+    });
+    const assets = [
+      asset({ uprn: "patched-full", patch: "A", assetStatus: "Full Survey" }),
+      asset({ uprn: "patched-typed", patch: "A", assetStatus: "No Visit", surveyType: "Full Survey" }),
+      asset({ uprn: "patched-ext", patch: "A", assetStatus: "Ext-Only", external: "Yes" }),
+      asset({ uprn: "patched-open", patch: "A", assetStatus: "No Visit" }),
+      asset({ uprn: "unpatched-full", assetStatus: "Full Survey" }),
+      asset({ uprn: "omit", patch: "A", assetStatus: "Full Survey", omitAsset: true }),
+      asset({ uprn: "block", kind: "block", assetStatus: "Full Survey" }),
+    ];
+    const card = buildProjectTileStats(proj, assets);
+    assert.equal(card.surveysRelevant, 4);
+    assert.equal(card.surveysFull, 2);
+    assert.equal(tile("validations", "Validations Total", assets, proj), "4");
+    assert.equal(tile("validations", "Validations Completed", assets, proj), String(card.surveysFull));
+    assert.equal(tile("validations", "Validations Remaining", assets, proj), "1");
+    assert.equal(tile("all", "Dwellings", assets, proj), "5");
+    assert.equal(tile("blocks", "Total Blocks", assets, proj), "1");
+    assert.equal(tile("blocks", "Blocks Completed", assets, proj), "1");
+    assert.equal(tile("blocks", "Blocks Remaining", assets, proj), "0");
+    assert.equal(buildSummary(proj, assets).find((stack) => stack.key === "dwellings")?.hidden, true);
+  });
+
+  it("leaves condition-survey completed tiles unchanged", () => {
+    const proj = project({
+      typeConditionOnly: true,
+      typeConditionEpc: false,
+      typeValidations: false,
+      typeBlocks: true,
+      projectTargetValue: 80,
+      projectTargetUnit: "percent",
+    });
+    const assets = [
+      asset({ uprn: "patched-full", patch: "A", assetStatus: "Full Survey" }),
+      asset({ uprn: "patched-typed", patch: "A", assetStatus: "No Visit", surveyType: "Full Survey" }),
+      asset({ uprn: "unpatched-full", assetStatus: "Full Survey" }),
+      asset({ uprn: "unpatched-alias", assetStatus: "Full Surveys" }),
+      asset({ uprn: "ext", assetStatus: "Ext-Only", external: "Yes" }),
+      asset({ uprn: "open-1", assetStatus: "No Visit" }),
+      asset({ uprn: "open-2", assetStatus: "No Visit" }),
+      asset({ uprn: "open-3", assetStatus: "No Visit" }),
+      asset({ uprn: "omit", assetStatus: "Full Survey", omitAsset: true }),
+      asset({ uprn: "block-done", kind: "block", assetStatus: "Full Survey" }),
+      asset({ uprn: "block-open", kind: "block", assetStatus: "No Visit" }),
+    ];
+    const summary = buildSummary(proj, assets);
+    assert.equal(summary.find((stack) => stack.key === "dwellings")?.hidden, false);
+    assert.equal(summary.find((stack) => stack.key === "validations")?.hidden, true);
+    assert.equal(tile("dwellings", "Total Dwellings", assets, proj), "8");
+    assert.equal(tile("dwellings", "Full Surveys Completed", assets, proj), "3");
+    assert.equal(tile("dwellings", "External-only Completed", assets, proj), "1");
+    assert.equal(tile("dwellings", "Full Surveys Completed: Condition Only", assets, proj), "");
+    assert.equal(tile("dwellings", "Full Surveys Completed: Condition + EPC", assets, proj), "");
+    // round(8 × 80%) − 3 full-survey statuses. The Survey Type fallback is not
+    // a condition completed tile.
+    assert.equal(tile("dwellings", "Full Surveys Remaining", assets, proj), "3");
+    assert.equal(tile("validations", "Validations Total", assets, proj), "0");
+    assert.equal(tile("validations", "Validations Completed", assets, proj), "0");
+    assert.equal(tile("validations", "Validations Remaining", assets, proj), "0");
+    assert.equal(tile("blocks", "Total Blocks", assets, proj), "2");
+    assert.equal(tile("blocks", "Blocks Completed", assets, proj), "1");
+    assert.equal(tile("blocks", "Blocks Remaining", assets, proj), "1");
+
+    const both = project({
+      typeConditionOnly: true,
+      typeConditionEpc: false,
+      typeValidations: true,
+      typeBlocks: true,
+      projectTargetValue: 80,
+      projectTargetUnit: "percent",
+    });
+    assert.equal(tile("dwellings", "Full Surveys Completed", assets, both), "3");
+    assert.equal(tile("dwellings", "External-only Completed", assets, both), "1");
+    assert.equal(tile("dwellings", "Full Surveys Remaining", assets, both), "3");
+    assert.equal(tile("blocks", "Blocks Completed", assets, both), "1");
+    assert.equal(tile("blocks", "Blocks Remaining", assets, both), "1");
+    assert.equal(buildSummary(both, assets).find((stack) => stack.key === "validations")?.hidden, false);
+    assert.equal(tile("validations", "Validations Completed", assets, both), "2");
+    assert.notEqual(
+      tile("validations", "Validations Completed", assets, both),
+      tile("dwellings", "Full Surveys Completed", assets, both)
+    );
   });
 });

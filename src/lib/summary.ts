@@ -1,8 +1,9 @@
 import type { Project } from "@prisma/client";
 import { isExtOnlyStatus, isFullSurveyStatus } from "./asset-status.js";
 import { applyEpcSurveyType, isEpcSurveyType } from "./epc-survey.js";
-import { fullSurveysRemainingForAssets } from "./full-surveys-remaining.js";
+import { fullSurveysRemaining, fullSurveysRemainingForAssets } from "./full-surveys-remaining.js";
 import { formatProjectTarget } from "./project-target.js";
+import { buildProjectTileStats } from "./project-tile-stats.js";
 
 export type KpiStack = {
   key: string;
@@ -18,6 +19,8 @@ export type SummaryAsset = {
   surveyType?: string | null;
   external?: string | null;
   epcRequired?: boolean | null;
+  /** Progress-card surveys completed uses patch the same way. */
+  patch?: string | null;
 };
 
 function counted<T extends SummaryAsset>(assets: T[]) {
@@ -26,6 +29,29 @@ function counted<T extends SummaryAsset>(assets: T[]) {
 
 function completed<T extends SummaryAsset>(assets: T[]) {
   return counted(assets).filter((a) => isFullSurveyStatus(a.assetStatus) || isExtOnlyStatus(a.assetStatus));
+}
+
+/**
+ * Validations count dwelling surveys. Done is the Project Progress card's
+ * surveys completed (`surveysFull`): a full survey on the relevant dwellings,
+ * patched dwellings when any patch is set, otherwise every dwelling. Omit
+ * Asset is out. External-only is not done, and there is no separate
+ * validation status.
+ *
+ * Remaining uses that same done count against the project target, the rule
+ * Full Surveys Remaining already uses. Pass the stock rows before the EPC
+ * survey-type rewrite so a No Visit whose Survey Type is Full Survey still
+ * counts, matching the card.
+ */
+function validationCountTiles(project: Project, assets: SummaryAsset[]) {
+  const progress = buildProjectTileStats(project, assets);
+  const total = progress.surveysRelevant;
+  const done = progress.surveysFull;
+  return [
+    { label: "Validations Total", value: String(total) },
+    { label: "Validations Completed", value: String(done) },
+    { label: "Validations Remaining", value: String(fullSurveysRemaining(total, done, project)) },
+  ];
 }
 
 export function buildSummary(project: Project, assets: SummaryAsset[]): KpiStack[] {
@@ -122,11 +148,13 @@ export function buildSummary(project: Project, assets: SummaryAsset[]): KpiStack
     {
       key: "validations",
       hidden: !project.typeValidations,
-      tiles: [
-        { label: "Validations Total", value: "0" },
-        { label: "Validations Completed", value: "0" },
-        { label: "Validations Remaining", value: "0" },
-      ],
+      tiles: project.typeValidations
+        ? validationCountTiles(project, assets)
+        : [
+            { label: "Validations Total", value: "0" },
+            { label: "Validations Completed", value: "0" },
+            { label: "Validations Remaining", value: "0" },
+          ],
     },
   ];
 }
