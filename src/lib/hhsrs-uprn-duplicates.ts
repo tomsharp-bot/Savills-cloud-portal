@@ -1,9 +1,13 @@
 /**
- * Same UPRN means every waiting case in the group is a duplicate, even when the
- * addresses differ. All of them move to Duplicates & errors so the office can
- * compare them. Each one notes the other case references. Nothing is deleted.
- * A case that was already emailed stays in the Main Log. A case is never a
- * duplicate of itself.
+ * Same UPRN is a duplicate even when the addresses differ. Nothing is deleted.
+ * A case is never a duplicate of itself.
+ *
+ * If none of the cases has been emailed, every waiting case moves to
+ * Duplicates & errors and each one notes the other references, so the office
+ * can compare them.
+ *
+ * If one has already been emailed, that case stays in the Main Log. Only a
+ * later waiting case moves, marked as matching that sent case.
  */
 import { prisma } from "./prisma.js";
 import { isWaitingStatus } from "./hhsrs-reporter.js";
@@ -11,6 +15,12 @@ import { normalizeUprn } from "./hhsrs-site-form.js";
 import { moveCaseToNotNeeded } from "./hhsrs-not-needed.js";
 
 export const UPRN_DUPLICATE_MOVED_BY = "HHSRS Reporter";
+
+/** Note on a later case that matches one already emailed. */
+export function uprnSentMatchNote(reference: string): string {
+  const ref = String(reference || "").trim();
+  return `Matches ${ref}. The first case is still in the Main Log.`;
+}
 
 /** Note that names every other case with this UPRN. */
 export function uprnDuplicateNote(otherReferences: string[]): string {
@@ -82,11 +92,15 @@ function otherReferences(group: UprnDuplicateCandidate[], self: UprnDuplicateCan
   return refs;
 }
 
+function wasEmailed(row: UprnDuplicateCandidate): boolean {
+  return Boolean(row.emailSentAt);
+}
+
 /**
- * Every waiting case that shares a UPRN with another case.
- * duplicateOf is one other reference (the existing link). The note names every
- * other reference, including a case that stays in the Main Log because it was
- * already emailed. Address is not read.
+ * Waiting cases that share a UPRN.
+ * When none has been emailed, every waiting case moves and the note names the
+ * other references. When one has been emailed, only a later waiting case
+ * moves, and it is marked as matching that sent case. Address is not read.
  */
 export function planUprnDuplicateMoves(
   cases: UprnDuplicateCandidate[]
@@ -105,6 +119,20 @@ export function planUprnDuplicateMoves(
   const moves: { id: string; duplicateOf: string; note: string }[] = [];
   for (const group of groups.values()) {
     if (group.length < 2) continue;
+    const ordered = [...group].sort(byAge);
+    if (ordered.some(wasEmailed)) {
+      const sent = ordered.find((row) => wasEmailed(row) && referenceOf(row));
+      if (!sent) continue;
+      const sentRef = referenceOf(sent);
+      for (const row of ordered) {
+        if (!canMove(row)) continue;
+        if (byAge(sent, row) >= 0) continue;
+        const self = referenceOf(row).toUpperCase();
+        if (self && self === sentRef.toUpperCase()) continue;
+        moves.push({ id: row.id, duplicateOf: sentRef, note: uprnSentMatchNote(sentRef) });
+      }
+      continue;
+    }
     for (const row of group) {
       if (!canMove(row)) continue;
       const others = otherReferences(group, row);
@@ -156,9 +184,9 @@ async function loadUprnDuplicateCandidates(): Promise<UprnDuplicateCandidate[]> 
 }
 
 /**
- * Move every waiting case that shares a UPRN. Safe to call on submit and
- * again when a reporter page opens: a case already moved, already emailed, or
- * matching only itself is left alone.
+ * File waiting UPRN duplicates. Safe to call on submit and again when a
+ * reporter page opens: a case already moved, already emailed, or matching
+ * only itself is left alone.
  */
 export async function sweepWaitingUprnDuplicates(): Promise<UprnDuplicateMove[]> {
   try {

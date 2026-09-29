@@ -20,6 +20,7 @@ import {
   UPRN_DUPLICATE_MOVED_BY,
   planUprnDuplicateMoves,
   uprnDuplicateNote,
+  uprnSentMatchNote,
   sweepWaitingUprnDuplicates,
   type UprnDuplicateCandidate,
 } from "./hhsrs-uprn-duplicates.js";
@@ -110,7 +111,7 @@ describe("planUprnDuplicateMoves", () => {
     );
   });
 
-  it("leaves an emailed case in the Main Log and still links the waiting cases to it", () => {
+  it("leaves an emailed case in the Main Log and moves only a later case", () => {
     const emailedLater = planUprnDuplicateMoves([
       candidate({ id: "earliest", reference: "MTVH-014" }),
       candidate({
@@ -121,9 +122,7 @@ describe("planUprnDuplicateMoves", () => {
         createdAt: at("2026-09-02T09:00:00.000Z"),
       }),
     ]);
-    assert.deepEqual(emailedLater, [
-      { id: "earliest", duplicateOf: "MTVH-021", note: "Same UPRN as MTVH-021." },
-    ]);
+    assert.deepEqual(emailedLater, []);
 
     const emailedEarliest = planUprnDuplicateMoves([
       candidate({
@@ -145,16 +144,8 @@ describe("planUprnDuplicateMoves", () => {
       }),
     ]);
     assert.deepEqual(emailedEarliest, [
-      {
-        id: "also",
-        duplicateOf: "MTVH-014",
-        note: "Same UPRN as MTVH-014 and MTVH-021.",
-      },
-      {
-        id: "waiting",
-        duplicateOf: "MTVH-014",
-        note: "Same UPRN as MTVH-014 and MTVH-022.",
-      },
+      { id: "also", duplicateOf: "MTVH-014", note: uprnSentMatchNote("MTVH-014") },
+      { id: "waiting", duplicateOf: "MTVH-014", note: uprnSentMatchNote("MTVH-014") },
     ]);
     assert.equal(emailedEarliest.some((move) => move.id === "sent-first"), false);
   });
@@ -521,7 +512,7 @@ describe("UPRN duplicates in the database", () => {
     assert.equal(repeatRow.status, "not_needed");
     assert.equal(repeatRow.notNeededReason, "duplicate");
     assert.equal(repeatRow.notNeededDuplicateOf, logged.reference);
-    assert.equal(repeatRow.notNeededNote, `Same UPRN as ${logged.reference}.`);
+    assert.equal(repeatRow.notNeededNote, uprnSentMatchNote(logged.reference || ""));
     assert.notEqual(repeatRow.fullAddress, loggedRow.fullAddress);
     assert.notEqual(repeatRow.notNeededDuplicateOf, repeatRow.reference);
   });
@@ -622,10 +613,10 @@ describe("UPRN duplicates in the database", () => {
     assert.equal(page.status, 200);
     assert.match(page.body, new RegExp(earliest.reference || "missing-earliest"));
     assert.match(page.body, new RegExp(middle.reference || "missing-middle"));
-    assert.match(page.body, new RegExp(latest.reference || "missing-latest"));
     assert.match(page.body, new RegExp(`12 High Street ${stamp}`));
     assert.match(page.body, new RegExp(`Flat 4, 88 Other Road ${stamp}`));
-    assert.match(page.body, /Same UPRN as /);
+    assert.match(page.body, new RegExp(`1 Quay Lane ${stamp}`));
+    assert.match(page.body, /View duplicate/);
     assert.match(page.body, /tab-link[^"]*needs-attention/);
 
     const [kept, movedMiddle, movedLatest, single] = await Promise.all([
@@ -653,5 +644,139 @@ describe("UPRN duplicates in the database", () => {
       where: { id: { in: [earliest.id, middle.id, latest.id, alone.id] } },
     });
     assert.equal(remaining, 4);
+  });
+
+  it("shows the sent case on the left and Amend and resend on the later case", async (t) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      t.skip("Postgres is not available");
+      return;
+    }
+    const admin = await prisma.user.findFirst({ where: { username: "phil.m", role: "admin" } });
+    if (!admin) {
+      t.skip("Seeded admin is not available");
+      return;
+    }
+    const stamp = randomUUID().slice(0, 8);
+    const uprn = `98756${stamp}`;
+    const project = await prisma.project.create({
+      data: {
+        name: `Uprn Compare ${stamp}`,
+        projectManager: "Test",
+        stage: "current",
+        hhsrsCode: `C${stamp}`.slice(0, 8).toUpperCase(),
+      },
+    });
+    const created: string[] = [];
+    t.after(async () => {
+      if (created.length) {
+        await prisma.hhsrsSentEmail.deleteMany({ where: { submissionId: { in: created } } });
+        await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: { in: created } } });
+      }
+      await prisma.hhsrsReferenceCounter.deleteMany({ where: { key: project.id } });
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
+    });
+
+    const sent = await createSubmissionWithReference(
+      { projectId: project.id, projectName: project.name },
+      (tx, reference) =>
+        tx.hhsrsSiteSubmission.create({
+          data: {
+            projectId: project.id,
+            projectName: project.name,
+            surveyDate: "2026-09-20",
+            uprn,
+            fullAddress: "1 Jenkins House",
+            postcode: "B14 6ES",
+            surveyorName: "Sam Surveyor",
+            category: "Damp & Mould Growth",
+            rating: "Medium",
+            comment: "Mould around window",
+            photoPaths: [],
+            reference,
+            status: "email_sent",
+            emailSentAt: at("2026-09-20T12:00:00.000Z"),
+            createdAt: at("2026-09-20T09:00:00.000Z"),
+          },
+        })
+    );
+    created.push(sent.id);
+    await prisma.hhsrsSentEmail.create({
+      data: {
+        submissionId: sent.id,
+        sentAt: at("2026-09-20T12:00:00.000Z"),
+        sentBy: "Tom Sharp",
+        from: "HHSRS@savillshousing.co.uk",
+        to: "repairs@savillshousing.co.uk",
+        subject: "HHSRS hazard",
+        body: "Mould around window was reported.",
+        photoNames: [],
+      },
+    });
+    const later = await createSubmissionWithReference(
+      { projectId: project.id, projectName: project.name },
+      (tx, reference) =>
+        tx.hhsrsSiteSubmission.create({
+          data: {
+            projectId: project.id,
+            projectName: project.name,
+            surveyDate: "2026-09-28",
+            uprn,
+            fullAddress: "1 Jenkins House",
+            postcode: "B14 6ES",
+            surveyorName: "Sam Surveyor",
+            category: "Damp & Mould Growth",
+            rating: "High",
+            comment: "Visible mould in bathroom",
+            photoPaths: [],
+            reference,
+            status: "new",
+            createdAt: at("2026-09-28T09:00:00.000Z"),
+          },
+        })
+    );
+    created.push(later.id);
+
+    const app = createApp({ basePath: "" });
+    const { server, port } = await listen(app);
+    t.after(() => server.close());
+    const login = await request(port, "POST", "/login", {
+      fields: { username: "phil.m", password: "PhilMoon2468" },
+    });
+    assert.equal(login.status, 302);
+    const cookie = cookieHeader(login.setCookie);
+    const page = await request(port, "GET", `/HHSRSreporter/duplicates?q=${encodeURIComponent(uprn)}`, { cookie });
+    assert.equal(page.status, 200);
+    const sentHeading = page.body.indexOf(`${sent.reference} · already sent`);
+    const laterHeading = page.body.indexOf("Later case · not emailed");
+    const amendAt = page.body.indexOf("Amend and resend");
+    assert.ok(sentHeading > 0 && laterHeading > sentHeading && amendAt > laterHeading);
+    assert.match(page.body, /View duplicate/);
+    assert.match(page.body, /Main Log, emailed 20\/09\/2026/);
+    assert.match(page.body, new RegExp(`Case ${sent.reference}`));
+    assert.match(page.body, /1 Jenkins House, B14 6ES/);
+    assert.match(page.body, /<dd class="diff">High<\/dd>/);
+    assert.match(page.body, /<dd class="diff">Visible mould in bathroom<\/dd>/);
+    assert.match(page.body, /<dd class="diff">28\/09\/2026<\/dd>/);
+    assert.doesNotMatch(page.body, /<dd class="diff">1 Jenkins House, B14 6ES<\/dd>/);
+    assert.match(page.body, new RegExp(`/HHSRSreporter/find\\?case=${sent.id}&amp;view=amend`));
+    assert.match(page.body, /tab-link[^"]*needs-attention/);
+    assert.match(page.body, /class="tool-header"/);
+    assert.doesNotMatch(page.body, /class="step-tabs"/);
+
+    const [sentRow, laterRow] = await Promise.all([
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: sent.id } }),
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: later.id } }),
+    ]);
+    assert.equal(sentRow.status, "email_sent");
+    assert.equal(laterRow.status, "not_needed");
+    assert.equal(laterRow.notNeededDuplicateOf, sent.reference);
+    assert.equal(laterRow.notNeededNote, uprnSentMatchNote(sent.reference || ""));
+
+    const amend = await request(port, "GET", `/HHSRSreporter/find?case=${sent.id}&view=amend`, { cookie });
+    assert.equal(amend.status, 200);
+    assert.match(amend.body, /Amend &amp; resend/);
+    assert.match(amend.body, /Mould around window was reported\./);
   });
 });

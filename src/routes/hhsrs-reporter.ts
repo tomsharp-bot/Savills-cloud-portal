@@ -104,9 +104,9 @@ import {
   showingLabel,
   type MainLogFilters,
 } from "../lib/hhsrs-main-log.js";
+import { loadDuplicateComparisons } from "../lib/hhsrs-duplicate-compare.js";
 import {
   NOT_NEEDED_REASONS,
-  loadDuplicates,
   moveCaseToNotNeeded,
   restoreCaseToPending,
 } from "../lib/hhsrs-not-needed.js";
@@ -1326,16 +1326,6 @@ async function handleNotNeeded(req: Request, res: Response, id: string): Promise
   res.redirect(HHSRS_REPORTER_PATH);
 }
 
-function duplicatesHref(filters: { q?: string; project?: string; reason?: string }, openId = ""): string {
-  const params = new URLSearchParams();
-  if (filters.q) params.set("q", filters.q);
-  if (filters.project) params.set("project", filters.project);
-  if (filters.reason) params.set("reason", filters.reason);
-  if (openId) params.set("open", openId);
-  const query = params.toString();
-  return `${HHSRS_REPORTER_PATH}/duplicates${query ? `?${query}` : ""}`;
-}
-
 async function handleDuplicates(req: Request, res: Response): Promise<void> {
   const filters = {
     q: String(req.query.q || ""),
@@ -1343,12 +1333,10 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
     reason: String(req.query.reason || ""),
   };
   const openId = String(req.query.open || "");
-  const [summary, cases, names] = await Promise.all([
+  const [summary, comparisons] = await Promise.all([
     loadSummary(),
-    loadDuplicates(filters, HHSRS_REPORTER_PATH),
-    loadPortalProjectNames(),
+    loadDuplicateComparisons(filters, HHSRS_REPORTER_PATH, openId),
   ]);
-  if (filters.project && !names.some((name) => name === filters.project)) names.push(filters.project);
   const flash = takeFlash(req);
   const jsUrl =
     typeof res.locals.baseUrl === "function"
@@ -1363,12 +1351,7 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
       flashErr: flash.err,
     }),
     user: req.user,
-    cases,
-    filters,
-    reasons: NOT_NEEDED_REASONS,
-    projectNames: [...names].sort((a, b) => a.localeCompare(b, "en-GB")),
-    openId,
-    closeHref: duplicatesHref(filters),
+    comparisons,
     duplicatesJsUrl: jsUrl,
   });
 }
