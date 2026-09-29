@@ -769,6 +769,10 @@ body.hhsrs-form-page {
   letter-spacing: 0;
   color: var(--muted);
 }
+.hhsrs-form-page #suspected-cause-hint {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+}
 /* Desktop stays open once the visit section is done. Phone and tablet step through. */
 @media (min-width: 1025px) {
   .hhsrs-form-page #issue-details:not([hidden]) .flow-step,

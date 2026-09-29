@@ -115,7 +115,8 @@
     var nodes = document.querySelectorAll("#rv-case-form .project-extra");
     for (var i = 0; i < nodes.length; i++) {
       var key = nodes[i].getAttribute("data-extra");
-      nodes[i].hidden = !extras[key];
+      // Suspected cause is collected on every project. Do not hide it behind extras.cause.
+      nodes[i].hidden = key === "cause" ? false : !extras[key];
     }
     var vulnRule = $("rv-vuln-rule");
     var includeVuln = $("rv-include-vuln");

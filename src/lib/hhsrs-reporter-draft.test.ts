@@ -298,6 +298,36 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.doesNotMatch(mtvh.body, /• Call:/);
   });
 
+  it("adds a suspected cause for MTVH and leaves a blank cause out of the email", () => {
+    const shared = {
+      projectName: "MTVH Pilot 2026",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      category: "Damp & Mould Growth",
+      rating: "High - Emergency Risk",
+      comment: "Damp to the bedroom ceiling.",
+      photoCount: 0,
+    };
+    const filled = draftFromSubmission({
+      ...shared,
+      suspectedCause: "Leaking gutter above the bedroom",
+      includeCause: true,
+    });
+    assert.match(filled.body, /• Cause: leaking gutter above the bedroom/);
+    const blank = draftFromSubmission({ ...shared, suspectedCause: "   ", includeCause: true });
+    assert.doesNotMatch(blank.body, /Cause:/);
+    assert.doesNotMatch(blank.body, /Suspected cause/i);
+    const omitted = draftFromSubmission({
+      ...shared,
+      suspectedCause: "Leaking gutter above the bedroom",
+      includeCause: false,
+    });
+    assert.doesNotMatch(omitted.body, /Cause:/);
+    assert.doesNotMatch(omitted.body, /gutter/);
+  });
+
   it("uses an office-edited client description verbatim when supplied", () => {
     const draft = draftFromSubmission({
       projectName: "Demo Housing",
