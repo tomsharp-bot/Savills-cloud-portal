@@ -507,7 +507,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(also, /partials\/pending-issues-table/);
     assert.doesNotMatch(waiting, /<thead>/);
     assert.doesNotMatch(also, /<thead>/);
-    const head = table.slice(table.indexOf("<thead>"), table.indexOf("</thead>"));
+    const head = table.slice(table.indexOf("<th>Reference</th>"), table.indexOf("</thead>"));
     const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
     assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
     assert.match(table, /row\.reference/);

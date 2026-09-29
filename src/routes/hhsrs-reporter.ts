@@ -99,9 +99,11 @@ import {
   filtersActive,
   loadMainLog,
   loadMainLogExport,
+  MAIN_LOG_COLUMNS,
   mainLogTypeLabel,
   showingLabel,
   type MainLogFilters,
+  type MainLogSortKey,
 } from "../lib/hhsrs-main-log.js";
 import {
   NOT_NEEDED_REASONS,
@@ -785,10 +787,38 @@ function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {
   if (next.type) params.set("type", next.type);
   if (next.from) params.set("from", next.from);
   if (next.to) params.set("to", next.to);
+  if (next.sort) {
+    params.set("sort", next.sort);
+    params.set("dir", next.dir === "desc" ? "desc" : "asc");
+  }
   if (next.page > 1) params.set("page", String(next.page));
   if (next.open) params.set("open", next.open);
   const qs = params.toString();
   return `${HHSRS_REPORTER_PATH}/main-log${qs ? `?${qs}` : ""}`;
+}
+
+function mainLogSortTitle(key: MainLogSortKey, label: string, active: boolean, dir: MainLogFilters["dir"]): string {
+  if (!active) return `Sort by ${label}`;
+  if (key === "sent" || key === "received") return dir === "desc" ? "Sorted newest first. Click to reverse." : "Sorted oldest first. Click to reverse.";
+  if (key === "photos") return dir === "desc" ? "Sorted most first. Click to reverse." : "Sorted fewest first. Click to reverse.";
+  return dir === "desc" ? "Sorted Z to A. Click to reverse." : "Sorted A to Z. Click to reverse.";
+}
+
+function mainLogSortColumns(filters: MainLogFilters) {
+  return MAIN_LOG_COLUMNS.map((col) => {
+    const active = filters.sort === col.key;
+    const dir = active && filters.dir === "desc" ? "desc" : "asc";
+    const nextDir = active && dir === "asc" ? "desc" : "asc";
+    return {
+      key: col.key,
+      label: col.label,
+      className: col.className,
+      active,
+      dir: active ? dir : "",
+      title: mainLogSortTitle(col.key, col.label, active, dir),
+      href: mainLogHref(filters, { sort: col.key, dir: nextDir, page: 1, open: "" }),
+    };
+  });
 }
 
 function mainLogExportHref(filters: MainLogFilters): string {
@@ -799,6 +829,10 @@ function mainLogExportHref(filters: MainLogFilters): string {
   if (filters.type) params.set("type", filters.type);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
+  if (filters.sort) {
+    params.set("sort", filters.sort);
+    params.set("dir", filters.dir === "desc" ? "desc" : "asc");
+  }
   const qs = params.toString();
   return `${HHSRS_REPORTER_PATH}/main-log/export.xlsx${qs ? `?${qs}` : ""}`;
 }
@@ -880,6 +914,7 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
     nextHref: loaded.page < loaded.pageCount ? mainLogHref(filters, { page: loaded.page + 1 }) : "",
     page: loaded.page,
     pageCount: loaded.pageCount,
+    sortColumns: mainLogSortColumns(filters),
     mainLogJsUrl: typeof res.locals.baseUrl === "function" ? res.locals.baseUrl("/js/hhsrs-main-log.js") : "/js/hhsrs-main-log.js",
     ...signature,
   });

@@ -51,6 +51,7 @@ import {
   safeStoredName,
 } from "../lib/hhsrs-site-form.js";
 import { createSubmissionWithReference } from "../lib/hhsrs-reference.js";
+import { siteFormProjectWhere } from "../lib/hhsrs-site-form-projects.js";
 import {
   PHOTOS_NOT_STORED,
   SitePhotoError,
@@ -104,11 +105,12 @@ function withDevDemo(projects: { id: string; name: string }[]): { id: string; na
   return [DEV_DEMO_PROJECT];
 }
 
+/** Current projects, and projects archived less than 14 days ago. */
 async function loadActiveProjects(): Promise<{ id: string; name: string; manualAddress: boolean }[]> {
   let projects: { id: string; name: string }[];
   try {
     const rows = await prisma.project.findMany({
-      where: { stage: "current" },
+      where: siteFormProjectWhere(),
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     });
@@ -161,7 +163,7 @@ async function findActiveProject(projectId: string): Promise<{ id: string; name:
   if (!isProduction && projectId === DEV_DEMO_PROJECT.id) return DEV_DEMO_PROJECT;
   try {
     return await prisma.project.findFirst({
-      where: { id: projectId, stage: "current" },
+      where: { id: projectId, AND: [siteFormProjectWhere()] },
       select: { id: true, name: true },
     });
   } catch {

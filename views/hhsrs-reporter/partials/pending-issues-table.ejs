@@ -5,6 +5,7 @@
   const action = typeof pendingAction === "string" ? pendingAction : "review";
   const foot = typeof pendingFoot === "string" ? pendingFoot : "Newest first";
   const showPhotoCount = typeof pendingShowPhotoCount !== "undefined" && pendingShowPhotoCount === true;
+  const sortColumns = Array.isArray(pendingSortColumns) ? pendingSortColumns : [];
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
   <table class="landing-table pending-issues-table" id="<%= tableId %>">
@@ -15,16 +16,27 @@
     </colgroup>
     <thead>
       <tr>
-        <th>Reference</th>
-        <th>Project</th>
-        <th>Address</th>
-        <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
-        <th>UPRN</th>
-        <th>Surveyor</th>
-        <th>Category</th>
-        <th>Rating</th>
-        <th>Received</th>
-        <th></th>
+        <% if (sortColumns.length) { %>
+          <% sortColumns.forEach((col) => {
+            const thClass = [col.className, col.active ? "is-sorted" : ""].filter(Boolean).join(" ");
+          %>
+            <th class="<%= thClass %>"<% if (col.className === "photo-att-col") { %> scope="col"<% } %> aria-sort="<%= col.active ? (col.dir === "desc" ? "descending" : "ascending") : "none" %>">
+              <a class="ml-sort" href="<%= col.href %>" title="<%= col.title %>"><%= col.label %><% if (col.active) { %><span class="ml-sort-ind" aria-hidden="true"><%= col.dir === "desc" ? "▼" : "▲" %></span><% } %></a>
+            </th>
+          <% }) %>
+          <th></th>
+        <% } else { %>
+          <th>Reference</th>
+          <th>Project</th>
+          <th>Address</th>
+          <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
+          <th>UPRN</th>
+          <th>Surveyor</th>
+          <th>Category</th>
+          <th>Rating</th>
+          <th>Received</th>
+          <th></th>
+        <% } %>
       </tr>
     </thead>
     <tbody>

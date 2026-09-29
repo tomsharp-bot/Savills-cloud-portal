@@ -29,6 +29,10 @@
   <div class="ml-card">
     <form class="ml-filters" id="ml-filters" method="get" action="<%= reporterBase %>/main-log">
       <input type="hidden" name="type" value="<%= filters.type %>" />
+      <% if (filters.sort) { %>
+        <input type="hidden" name="sort" value="<%= filters.sort %>" />
+        <input type="hidden" name="dir" value="<%= filters.dir === "desc" ? "desc" : "asc" %>" />
+      <% } %>
       <div class="ml-f ml-search">
         <label for="ml-q">Search</label>
         <input id="ml-q" name="q" type="search" value="<%= filters.q %>" placeholder="Reference, UPRN or address" autocomplete="off" />
@@ -68,6 +72,10 @@
             if (item.value) params.set("type", item.value);
             if (filters.from) params.set("from", filters.from);
             if (filters.to) params.set("to", filters.to);
+            if (filters.sort) {
+              params.set("sort", filters.sort);
+              params.set("dir", filters.dir === "desc" ? "desc" : "asc");
+            }
             const href = reporterBase + "/main-log" + (params.toString() ? "?" + params.toString() : "");
             const on = filters.type === item.value;
           %>
@@ -105,8 +113,9 @@
       <%- include("partials/pending-issues-table", {
         pendingRows: logRows,
         pendingTableId: "main-log-table",
-        pendingFoot: "Newest first",
-        pendingShowPhotoCount: true
+        pendingFoot: filters.sort ? "" : "Newest first",
+        pendingShowPhotoCount: true,
+        pendingSortColumns: sortColumns
       }) %>
     <% } %>
     <% if (pageCount > 1) { %>
