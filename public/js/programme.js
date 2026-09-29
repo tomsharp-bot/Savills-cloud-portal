@@ -264,6 +264,7 @@
 
   function boardBody() {
     return {
+      weeks: (DATA.weeks || []).slice(),
       ticks: tickMap,
       applied: appliedMap,
       surveyors: (DATA.rows || []).map(function (r) {
