@@ -28,6 +28,7 @@ import {
   type SentEmailRecord,
 } from "./hhsrs-send.js";
 import { appendToSentFolder, sendMailboxMessage } from "./hhsrs-send-transport.js";
+import { prepareCorrectionEmail } from "./hhsrs-correction-email.js";
 import { correctionSubject, validateCorrection } from "./hhsrs-find.js";
 
 export function contentTypeFor(filename: string): string {
@@ -318,9 +319,13 @@ export async function sendCaseEmail(args: {
     };
   }
   const to = String(args.body.to ?? "");
+  let correctionReason = "";
+  let correctionNote = "";
   if (correction) {
     const checked = validateCorrection({ reason: correction.reason, note: correction.note, to });
     if (!checked.ok) return checked;
+    correctionReason = checked.reason;
+    correctionNote = checked.note;
   }
 
   const known = casePhotoFileNames(args.row.photoPaths);
@@ -338,6 +343,23 @@ export async function sendCaseEmail(args: {
 
   const submissionId = args.row.id;
   const subject = correction ? correctionSubject(String(args.body.subject ?? "")) : String(args.body.subject ?? "");
+  let body = String(args.body.body ?? "");
+  let messageHtml: string | undefined;
+  if (correction) {
+    const previous = await latestSentEmail(submissionId);
+    const prepared = prepareCorrectionEmail({
+      previousBody: previous?.body ?? "",
+      nextBody: body,
+      previousTo: previous?.to ?? "",
+      nextTo: to,
+      previousPhotos: previous?.photoNames ?? [],
+      nextPhotos: picked.names,
+      reason: correctionReason,
+      note: correctionNote,
+    });
+    body = prepared.text;
+    messageHtml = prepared.messageHtml;
+  }
   const transport = args.transport || { sendMail: sendMailboxMessage, appendToSent: appendToSentFolder };
   return deliverPortalEmail(
     {
@@ -351,7 +373,8 @@ export async function sendCaseEmail(args: {
       cc: String(args.body.cc ?? ""),
       bcc: String(args.body.bcc ?? ""),
       subject,
-      body: String(args.body.body ?? ""),
+      body,
+      messageHtml,
       senderFirstName: args.senderFirstName,
       senderFullName: args.senderFullName,
       photoNames: picked.names,
