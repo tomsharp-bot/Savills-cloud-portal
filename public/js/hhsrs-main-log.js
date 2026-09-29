@@ -18,7 +18,7 @@
 
   document.querySelectorAll("tr[data-href]").forEach(function (row) {
     row.addEventListener("click", function (event) {
-      if (event.target && event.target.closest && event.target.closest("a")) return;
+      if (event.target && event.target.closest && event.target.closest("a, button")) return;
       var href = row.getAttribute("data-href");
       if (href) window.location.href = href;
     });

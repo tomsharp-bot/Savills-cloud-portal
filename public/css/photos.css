@@ -420,6 +420,7 @@
 }
 .photos-page .folder-name-btn:hover { color: var(--blue); text-decoration: underline; }
 .photos-page .zip-name { font-weight: 600; color: var(--navy); }
+.photos-page .folder-name-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .photos-page .zip-size { color: var(--muted); white-space: nowrap; }
 .photos-page .client-access { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-size: 0.82rem; }
 .photos-page .client-access input { width: 16px; height: 16px; accent-color: var(--navy); cursor: pointer; margin: 0; }
@@ -981,6 +982,46 @@
   object-fit: cover;
   display: block;
   background: #eef2f6;
+}
+.photos-page .hhsrs-uprn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+}
+.photos-page .hhsrs-uprn-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+}
+.photos-page .hhsrs-uprn-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 0 12px;
+}
+.photos-page .hhsrs-uprn-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--navy);
+}
+.photos-page .hhsrs-uprn-address {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.photos-page .hhsrs-copied-at {
+  padding: 0 8px 2px;
+  font-size: 0.78rem;
+  color: var(--navy);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.photos-page .folders-table td.hhsrs-copied-col {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .photos-page .modal-close {
   border: none;

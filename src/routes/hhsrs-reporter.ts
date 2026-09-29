@@ -73,13 +73,12 @@ import {
   sentBannerText,
 } from "../lib/hhsrs-send.js";
 import { listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import { buildAmendmentEmail, parseSentEmail } from "../lib/hhsrs-correction-email.js";
+import { emailBodyToHtml } from "../lib/hhsrs-signature.js";
 import {
-  CORRECTION_REASONS,
   MISSING_EMAIL_BODY,
-  correctionSubject,
   findCaseWhere,
   findStatusLabel,
-  formatLondonDate,
   formatLondonDateTime,
   latestSentLog,
   mainLogCardRows,
@@ -100,9 +99,11 @@ import {
   filtersActive,
   loadMainLog,
   loadMainLogExport,
+  MAIN_LOG_COLUMNS,
   mainLogTypeLabel,
   showingLabel,
   type MainLogFilters,
+  type MainLogSortKey,
 } from "../lib/hhsrs-main-log.js";
 import { loadDuplicateComparisons } from "../lib/hhsrs-duplicate-compare.js";
 import {
@@ -410,7 +411,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     ...shellLocals({
       activeNav: "review",
       summary,
-      title: "Review and create — HHSRS Reporter",
+      title: "Review & Create — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
@@ -491,7 +492,7 @@ async function renderReview(
     ...shellLocals({
       activeNav: "review",
       summary: opts.summary,
-      title: "Review and create — " + row.projectName,
+      title: "Review & Create — " + row.projectName,
       flashOk: opts.flashOk || flash.ok,
       flashErr: opts.flashErr || flash.err,
     }),
@@ -628,20 +629,12 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     }),
   ]);
 
-  const rows = matches.map((row) => {
-    const label = findStatusLabel(row.status);
-    return {
-      id: row.id,
-      reference: row.reference || "",
-      submitted: formatLondonDate(row.createdAt),
-      uprn: row.uprn,
-      address: row.fullAddress,
-      hazard: row.category,
-      statusLabel: label,
-      statusClass: label.replace(/\s+/g, "-"),
-      href: findUrl({ q, date, project, caseId: row.id }),
-    };
-  });
+  const rows = matches.map((row) => ({
+    ...row,
+    href: findUrl({ q, date, project, caseId: row.id }),
+    amendUrl: findUrl({ q, date, project, caseId: row.id, view: "amend" }),
+    rowClass: caseId === row.id ? "is-sel" : "",
+  }));
 
   const picked = caseId ? matches.find((row) => row.id === caseId) || (await loadCase(caseId)) : null;
   let found: Record<string, unknown> | null = null;
@@ -667,6 +660,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
           bcc: latest.bcc,
           subject: latest.subject,
           body: latest.body,
+          bodyHtml: emailBodyToHtml(latest.body) || `<p>${MISSING_EMAIL_BODY}</p>`,
           bodyMissing: !String(latest.body || "").trim(),
           missingText: MISSING_EMAIL_BODY,
           correction: latest.kind === "correction",
@@ -697,19 +691,35 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     };
     if (view === "amend" && latest) {
       const included = new Set(latest.photoNames);
-      photos = casePhotos;
+      const sentPhotos = latest.photoNames.map((name, index) => {
+        const known = casePhotos.find((photo) => photo.name === name);
+        return known || { id: name, name, caption: `Photo ${index + 1}`, url: "" };
+      });
+      const parsed = parseSentEmail(latest.body);
+      const preview = buildAmendmentEmail({
+        previousBody: latest.body,
+        previousSubject: latest.subject,
+        next: parsed.fields,
+        amendment: "",
+      });
+      photos = sentPhotos;
+      const withCurrent = (list: readonly string[], current: string) =>
+        current && !list.includes(current) ? [current, ...list] : [...list];
       amend = {
         to: latest.to,
         cc: latest.cc,
         bcc: latest.bcc,
-        subject: correctionSubject(latest.subject),
-        body: latest.body,
-        reasons: CORRECTION_REASONS,
-        note: "",
-        includedCount: casePhotos.filter((photo) => included.has(photo.name)).length,
-        photos: casePhotos.map((photo, index) => ({
+        subject: preview.subject,
+        previewHtml: preview.messageHtml,
+        fields: parsed.fields,
+        extras: parsed.extras,
+        prose: parsed.prose,
+        previousSubject: latest.subject,
+        categories: withCurrent(HHSRS_CATEGORIES, parsed.fields.hazard),
+        ratings: withCurrent(HHSRS_SITE_FORM_RATINGS, parsed.fields.rating),
+        photos: sentPhotos.map((photo, index) => ({
           ...photo,
-          caption: photo.caption || `Photo ${index + 1}`,
+          caption: photo.caption || photo.name || `Photo ${index + 1}`,
           included: included.has(photo.name),
         })),
         action: `${HHSRS_REPORTER_PATH}/find/${picked.id}/resend`,
@@ -723,7 +733,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     ...shellLocals({
       activeNav: "find",
       summary,
-      title: "Find & resend — HHSRS Reporter",
+      title: "Find & Resend — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
@@ -780,10 +790,38 @@ function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {
   if (next.type) params.set("type", next.type);
   if (next.from) params.set("from", next.from);
   if (next.to) params.set("to", next.to);
+  if (next.sort) {
+    params.set("sort", next.sort);
+    params.set("dir", next.dir === "desc" ? "desc" : "asc");
+  }
   if (next.page > 1) params.set("page", String(next.page));
   if (next.open) params.set("open", next.open);
   const qs = params.toString();
   return `${HHSRS_REPORTER_PATH}/main-log${qs ? `?${qs}` : ""}`;
+}
+
+function mainLogSortTitle(key: MainLogSortKey, label: string, active: boolean, dir: MainLogFilters["dir"]): string {
+  if (!active) return `Sort by ${label}`;
+  if (key === "sent" || key === "received") return dir === "desc" ? "Sorted newest first. Click to reverse." : "Sorted oldest first. Click to reverse.";
+  if (key === "photos") return dir === "desc" ? "Sorted most first. Click to reverse." : "Sorted fewest first. Click to reverse.";
+  return dir === "desc" ? "Sorted Z to A. Click to reverse." : "Sorted A to Z. Click to reverse.";
+}
+
+function mainLogSortColumns(filters: MainLogFilters) {
+  return MAIN_LOG_COLUMNS.map((col) => {
+    const active = filters.sort === col.key;
+    const dir = active && filters.dir === "desc" ? "desc" : "asc";
+    const nextDir = active && dir === "asc" ? "desc" : "asc";
+    return {
+      key: col.key,
+      label: col.label,
+      className: col.className,
+      active,
+      dir: active ? dir : "",
+      title: mainLogSortTitle(col.key, col.label, active, dir),
+      href: mainLogHref(filters, { sort: col.key, dir: nextDir, page: 1, open: "" }),
+    };
+  });
 }
 
 function mainLogExportHref(filters: MainLogFilters): string {
@@ -794,6 +832,10 @@ function mainLogExportHref(filters: MainLogFilters): string {
   if (filters.type) params.set("type", filters.type);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
+  if (filters.sort) {
+    params.set("sort", filters.sort);
+    params.set("dir", filters.dir === "desc" ? "desc" : "asc");
+  }
   const qs = params.toString();
   return `${HHSRS_REPORTER_PATH}/main-log/export.xlsx${qs ? `?${qs}` : ""}`;
 }
@@ -844,8 +886,12 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
           : panelEntry.kind === "not_sent"
             ? ""
             : MISSING_EMAIL_BODY,
+        bodyHtml: emailBodyToHtml(panelEntry.body) || (panelEntry.kind === "not_sent"
+          ? "<p>Not sent from the portal.</p>"
+          : `<p>${MISSING_EMAIL_BODY}</p>`),
       }
     : null;
+  const signature = signatureLocals(res, await senderSignatureFor(req.user));
   res.render("hhsrs-reporter/main-log", {
     ...shellLocals({
       activeNav: "main-log",
@@ -871,7 +917,9 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
     nextHref: loaded.page < loaded.pageCount ? mainLogHref(filters, { page: loaded.page + 1 }) : "",
     page: loaded.page,
     pageCount: loaded.pageCount,
+    sortColumns: mainLogSortColumns(filters),
     mainLogJsUrl: typeof res.locals.baseUrl === "function" ? res.locals.baseUrl("/js/hhsrs-main-log.js") : "/js/hhsrs-main-log.js",
+    ...signature,
   });
 });
 
@@ -939,7 +987,7 @@ hhsrsReporterRouter.get("/project-overview", async (req: Request, res: Response)
     ...shellLocals({
       activeNav: "project-overview",
       summary,
-      title: "Project overview — HHSRS Reporter",
+      title: "Project Overview — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
@@ -1322,7 +1370,7 @@ async function handleNotNeeded(req: Request, res: Response, id: string): Promise
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${id}`);
     return;
   }
-  flashOk(req, "Moved to Duplicates & errors.");
+  flashOk(req, "Moved to Duplicates & Errors.");
   res.redirect(HHSRS_REPORTER_PATH);
 }
 
@@ -1346,7 +1394,7 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
     ...shellLocals({
       activeNav: "duplicates",
       summary,
-      title: "Duplicates & errors — HHSRS Reporter",
+      title: "Duplicates & Errors — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),

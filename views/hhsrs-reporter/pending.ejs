@@ -6,13 +6,12 @@
   <a class="linkish dark" href="#last-actioned" style="margin-left:auto;font-size:0.75rem;">Jump to last 20 actioned</a>
 </div>
 
-<section class="panel waiting-urgent" id="not-actioned" aria-label="Pending issues">
+<section class="panel waiting-urgent<%= waitingRows.length ? '' : ' is-clear' %>" id="not-actioned" aria-label="Pending Issues">
   <div class="panel-head received-head">
-    <h2><span class="urgent-icon" aria-hidden="true">!</span> Pending issues</h2>
-    <span class="count count-received"><%= waitingRows.length %> need action</span>
-  </div>
-  <div class="panel-body-alerts">
-    <%- include("partials/desktop-alerts-control") %>
+    <h2><span class="urgent-icon" aria-hidden="true">!</span> Pending Issues</h2>
+    <% if (waitingRows.length) { %>
+      <span class="count count-received"><%= waitingRows.length %> need action</span>
+    <% } %>
   </div>
   <div class="waiting-banner">
     <span class="badge-need">Urgent</span>
@@ -25,53 +24,19 @@
   <% } %>
 </section>
 
-<section class="panel" id="last-actioned" aria-label="Last 20 issues that have been actioned" style="margin-top:1.25rem;">
+<section class="panel" id="last-actioned" aria-label="Last 20 Issues That Have Been Actioned" style="margin-top:1.25rem;">
   <div class="panel-head dealt-head">
-    <h2>Last 20 issues that have been actioned</h2>
+    <h2>Last 20 Issues That Have Been Actioned</h2>
     <span class="count count-dealt"><%= actionedRows.length %> shown</span>
   </div>
   <% if (!actionedRows.length) { %>
     <p class="empty" style="padding:1rem 1.1rem;">Nothing actioned yet. Cases move to Main Log when you press Send and log.</p>
   <% } else { %>
-    <div class="table-wrap">
-      <table class="landing-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Project</th>
-            <th>Address</th>
-            <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
-            <th>UPRN</th>
-            <th>Surveyor</th>
-            <th>Category</th>
-            <th>Rating</th>
-            <th>Actioned</th>
-            <th>By</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% actionedRows.forEach((row, i) => {
-            const when = row.emailSentAt || row.updatedAt;
-          %>
-            <tr>
-              <td><%= i + 1 %></td>
-              <td><span class="project-pill"><%= row.projectName %></span></td>
-              <td><strong><%= row.fullAddress %></strong></td>
-              <%- include("partials/photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase) }) %>
-              <td><%= row.uprn %></td>
-              <td><%= row.surveyorName %></td>
-              <td><%= row.category %></td>
-              <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
-              <td><%= formatDocDate(when) %></td>
-              <td><%= row.emailSentBy || row.lastEditedBy || "—" %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-    <div class="table-foot">
-      <span>Most recently actioned first · Full history in <a class="linkish dark" href="<%= reporterBase %>/main-log">Main Log</a></span>
-    </div>
+    <%- include("partials/pending-issues-table", {
+      pendingRows: actionedRows,
+      pendingTableId: "last-actioned-table",
+      pendingFoot: 'Most recently actioned first · Full history in <a class="linkish dark" href="' + reporterBase + '/main-log">Main Log</a>'
+    }) %>
   <% } %>
 </section>
 

@@ -42,6 +42,44 @@ const EXCEL_WIDTHS = [14, 12, 14, 22, 22, 18, 28, 18, 16, 36, 12, 28, 22, 18, 32
 
 export type MainLogType = "" | "original" | "correction" | "not_sent";
 
+/** Columns shown on the Main Log table, in display order. */
+export const MAIN_LOG_SORT_KEYS = [
+  "sent",
+  "ref",
+  "project",
+  "uprn",
+  "address",
+  "hazard",
+  "rating",
+  "by",
+  "to",
+  "photos",
+  "type",
+  "surveyor",
+  "received",
+] as const;
+
+export type MainLogSortKey = (typeof MAIN_LOG_SORT_KEYS)[number];
+export type MainLogSortDir = "asc" | "desc";
+
+export type MainLogSort = {
+  key: MainLogSortKey;
+  dir: MainLogSortDir;
+};
+
+/** Headings on the shared case list. Sent, recipient, and type stay sortable by URL. */
+export const MAIN_LOG_COLUMNS: ReadonlyArray<{ key: MainLogSortKey; label: string; className: string }> = [
+  { key: "ref", label: "Reference", className: "" },
+  { key: "project", label: "Project", className: "" },
+  { key: "address", label: "Address", className: "" },
+  { key: "photos", label: "Photos", className: "photo-att-col" },
+  { key: "uprn", label: "UPRN", className: "" },
+  { key: "surveyor", label: "Surveyor", className: "" },
+  { key: "hazard", label: "Category", className: "" },
+  { key: "rating", label: "Rating", className: "" },
+  { key: "received", label: "Received", className: "" },
+];
+
 export type MainLogFilters = {
   q: string;
   project: string;
@@ -49,6 +87,9 @@ export type MainLogFilters = {
   type: MainLogType;
   from: string;
   to: string;
+  /** Empty until the office clicks a column. */
+  sort: MainLogSortKey | "";
+  dir: MainLogSortDir;
   page: number;
   open: string;
   pageGiven: boolean;
@@ -70,6 +111,8 @@ export type MainLogEntry = {
   postcode: string;
   hazard: string;
   rating: string;
+  surveyorName: string;
+  createdAt: Date;
   sentBy: string;
   to: string;
   cc: string;
@@ -93,6 +136,18 @@ type SortItem = {
   kind: MainLogKind;
   at: number;
   correctsKey: string | null;
+  ref?: string;
+  project?: string;
+  uprn?: string;
+  address?: string;
+  hazard?: string;
+  rating?: string;
+  by?: string;
+  to?: string;
+  photos?: number;
+  typeLabel?: string;
+  surveyor?: string;
+  receivedAt?: number;
 };
 
 export type ArrangedLog = {
@@ -110,6 +165,9 @@ export function parseMainLogFilters(query: Record<string, unknown>): MainLogFilt
     typeRaw === "original" || typeRaw === "correction" || typeRaw === "not_sent" ? typeRaw : "";
   const pageRaw = String(query.page ?? "").trim();
   const pageNum = Number(pageRaw);
+  const sortRaw = String(query.sort || "").trim();
+  const sort = (MAIN_LOG_SORT_KEYS as readonly string[]).includes(sortRaw) ? (sortRaw as MainLogSortKey) : "";
+  const dir: MainLogSortDir = String(query.dir || "").trim().toLowerCase() === "desc" ? "desc" : "asc";
   return {
     q: String(query.q || "").trim(),
     project: String(query.project || "").trim(),
@@ -117,6 +175,8 @@ export function parseMainLogFilters(query: Record<string, unknown>): MainLogFilt
     type,
     from: validDay(String(query.from || "").trim()),
     to: validDay(String(query.to || "").trim()),
+    sort,
+    dir,
     page: Number.isFinite(pageNum) && pageNum > 0 ? Math.floor(pageNum) : 1,
     open: String(query.open || "").trim(),
     pageGiven: pageRaw !== "",
@@ -261,35 +321,95 @@ export function mainLogNotSentWhere(filters: MainLogFilters): Prisma.HhsrsSiteSu
   return { AND: and };
 }
 
-/** Groups, newest activity first. A correction stays under its original when both match. */
+function sortText(item: SortItem, key: MainLogSortKey): string {
+  switch (key) {
+    case "ref":
+      return item.ref || "";
+    case "project":
+      return item.project || "";
+    case "uprn":
+      return item.uprn || "";
+    case "address":
+      return item.address || "";
+    case "hazard":
+      return item.hazard || "";
+    case "rating":
+      return item.rating || "";
+    case "by":
+      return item.by || "";
+    case "to":
+      return item.to || "";
+    case "type":
+      return item.typeLabel || "";
+    case "surveyor":
+      return item.surveyor || "";
+    default:
+      return "";
+  }
+}
+
+/** Blank text sorts after real values. The other direction is a full reverse, so blanks come first. */
+function compareSortItems(a: SortItem, b: SortItem, sort: MainLogSort): number {
+  let cmp = 0;
+  if (sort.key === "sent") {
+    cmp = a.at - b.at;
+  } else if (sort.key === "received") {
+    cmp = (a.receivedAt ?? 0) - (b.receivedAt ?? 0);
+  } else if (sort.key === "photos") {
+    cmp = (a.photos ?? 0) - (b.photos ?? 0);
+  } else {
+    const left = sortText(a, sort.key).trim();
+    const right = sortText(b, sort.key).trim();
+    if (!left && !right) cmp = 0;
+    else if (!left) cmp = 1;
+    else if (!right) cmp = -1;
+    else cmp = left.localeCompare(right, "en-GB", { numeric: true, sensitivity: "base" });
+  }
+  if (cmp) return sort.dir === "asc" ? cmp : -cmp;
+  return b.at - a.at || a.key.localeCompare(b.key);
+}
+
+/**
+ * Default: groups, newest activity first. A correction stays under its original when both match.
+ * A column sort orders each visible row by that column and does not keep the group glued together.
+ */
 export function arrangeMainLog(
   items: SortItem[],
   correctedKeys: ReadonlySet<string>,
   page: number,
-  pageSize: number
+  pageSize: number,
+  sort?: MainLogSort | null
 ): ArrangedLog {
   const byKey = new Map(items.map((item) => [item.key, item]));
-  const groups = new Map<string, SortItem[]>();
-  const bucket = (root: string) => {
-    let rows = groups.get(root);
-    if (!rows) {
-      rows = [];
-      groups.set(root, rows);
+  let ordered: Array<{ seq: SortItem[] }>;
+  if (sort) {
+    ordered = items
+      .slice()
+      .sort((a, b) => compareSortItems(a, b, sort))
+      .map((item) => ({ seq: [item] }));
+  } else {
+    const groups = new Map<string, SortItem[]>();
+    const bucket = (root: string) => {
+      let rows = groups.get(root);
+      if (!rows) {
+        rows = [];
+        groups.set(root, rows);
+      }
+      return rows;
+    };
+    for (const item of items) {
+      if (item.kind === "correction" && item.correctsKey && byKey.has(item.correctsKey)) bucket(item.correctsKey).push(item);
+      else bucket(item.key).push(item);
     }
-    return rows;
-  };
-  for (const item of items) {
-    if (item.kind === "correction" && item.correctsKey && byKey.has(item.correctsKey)) bucket(item.correctsKey).push(item);
-    else bucket(item.key).push(item);
+    ordered = [...groups.values()]
+      .map((rows) => {
+        const head = rows.filter((row) => row.kind !== "correction").sort((a, b) => a.at - b.at);
+        const tail = rows.filter((row) => row.kind === "correction").sort((a, b) => a.at - b.at);
+        const seq = [...head, ...tail];
+        return { seq, latest: Math.max(...seq.map((row) => row.at)) };
+      })
+      .sort((a, b) => b.latest - a.latest || a.seq[0].key.localeCompare(b.seq[0].key));
   }
-  const ordered = [...groups.values()]
-    .map((rows) => {
-      const head = rows.filter((row) => row.kind !== "correction").sort((a, b) => a.at - b.at);
-      const tail = rows.filter((row) => row.kind === "correction").sort((a, b) => a.at - b.at);
-      const seq = [...head, ...tail];
-      return { seq, latest: Math.max(...seq.map((row) => row.at)) };
-    })
-    .sort((a, b) => b.latest - a.latest || a.seq[0].key.localeCompare(b.seq[0].key));
 
   const pages: string[][] = [];
   let current: string[] = [];
@@ -310,9 +430,12 @@ export function arrangeMainLog(
   pageKeys.forEach((key, index) => {
     const item = byKey.get(key);
     const next = byKey.get(pageKeys[index + 1] || "");
+    const hasCorrBelow = Boolean(next && next.kind === "correction" && next.correctsKey === key);
     flags.set(key, {
-      showCorrectedNote: Boolean(item && item.kind === "original" && correctedKeys.has(key)),
-      hasCorrBelow: Boolean(next && next.kind === "correction" && next.correctsKey === key),
+      showCorrectedNote: sort
+        ? hasCorrBelow
+        : Boolean(item && item.kind === "original" && correctedKeys.has(key)),
+      hasCorrBelow,
     });
   });
   return { pageKeys, pages, page: safePage, pageCount, total: items.length, flags };
@@ -350,6 +473,8 @@ type EmailRow = {
     category: string;
     rating: string;
     photoPaths: unknown;
+    surveyorName: string;
+    createdAt: Date;
   };
 };
 
@@ -363,6 +488,8 @@ type CaseRow = {
   category: string;
   rating: string;
   photoPaths: unknown;
+  surveyorName: string;
+  createdAt: Date;
   emailSentAt: Date | null;
   emailSentBy: string;
   lastEditedBy: string;
@@ -391,6 +518,8 @@ function emailEntry(row: EmailRow): MainLogEntry {
     postcode: address.postcode,
     hazard: row.submission.category,
     rating: row.submission.rating,
+    surveyorName: row.submission.surveyorName,
+    createdAt: row.submission.createdAt,
     sentBy: row.sentBy,
     to: row.to,
     cc: row.cc,
@@ -432,6 +561,8 @@ function caseEntry(row: CaseRow): MainLogEntry {
     postcode: address.postcode,
     hazard: row.category,
     rating: row.rating,
+    surveyorName: row.surveyorName,
+    createdAt: row.createdAt,
     sentBy: row.emailSentBy || row.lastEditedBy || "",
     to: "",
     cc: "",
@@ -467,9 +598,70 @@ async function correctedKeySet(originalIds: string[]): Promise<Set<string>> {
   return new Set(rows.map((row) => `email:${row.correctsEmailId}`));
 }
 
+function columnValues(input: {
+  reference: string | null;
+  projectName: string;
+  uprn: string;
+  fullAddress: string;
+  postcode: string;
+  category: string;
+  rating: string;
+  sentBy: string;
+  to: string;
+  photos: unknown;
+  kind: MainLogKind;
+  surveyorName: string;
+  createdAt: Date | null;
+}): Pick<SortItem, "ref" | "project" | "uprn" | "address" | "hazard" | "rating" | "by" | "to" | "photos" | "typeLabel" | "surveyor" | "receivedAt"> {
+  return {
+    ref: input.reference || "",
+    project: input.projectName || "",
+    uprn: input.uprn || "",
+    address: splitAddress(input.fullAddress, input.postcode).line,
+    hazard: input.category || "",
+    rating: input.rating || "",
+    by: input.sentBy || "",
+    to: input.to || "",
+    photos: namesOf(input.photos).length,
+    typeLabel: mainLogTypeLabel(input.kind),
+    surveyor: input.surveyorName || "",
+    receivedAt: input.createdAt ? input.createdAt.getTime() : 0,
+  };
+}
+
 async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
   const emailWhere = mainLogEmailWhere(filters);
   const caseWhere = mainLogNotSentWhere(filters);
+  if (!filters.sort) {
+    const [emails, cases] = await Promise.all([
+      emailWhere
+        ? prisma.hhsrsSentEmail.findMany({
+            where: emailWhere,
+            select: { id: true, sentAt: true, kind: true, correctsEmailId: true },
+          })
+        : Promise.resolve([]),
+      caseWhere
+        ? prisma.hhsrsSiteSubmission.findMany({
+            where: caseWhere,
+            select: { id: true, emailSentAt: true, updatedAt: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    return [
+      ...emails.map((row) => ({
+        key: `email:${row.id}`,
+        kind: (row.kind === "correction" ? "correction" : "original") as MainLogKind,
+        at: row.sentAt.getTime(),
+        correctsKey: row.kind === "correction" && row.correctsEmailId ? `email:${row.correctsEmailId}` : null,
+      })),
+      ...cases.map((row) => ({
+        key: `case:${row.id}`,
+        kind: "not_sent" as const,
+        at: (row.emailSentAt || row.updatedAt).getTime(),
+        correctsKey: null,
+      })),
+    ];
+  }
   const [emails, cases] = await Promise.all([
     emailWhere
       ? prisma.hhsrsSentEmail.findMany({
@@ -479,28 +671,93 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
             sentAt: true,
             kind: true,
             correctsEmailId: true,
+            sentBy: true,
+            to: true,
+            photoNames: true,
+            submission: {
+              select: {
+                reference: true,
+                projectName: true,
+                uprn: true,
+                fullAddress: true,
+                postcode: true,
+                category: true,
+                rating: true,
+                surveyorName: true,
+                createdAt: true,
+              },
+            },
           },
         })
       : Promise.resolve([]),
     caseWhere
       ? prisma.hhsrsSiteSubmission.findMany({
           where: caseWhere,
-          select: { id: true, emailSentAt: true, updatedAt: true },
+          select: {
+            id: true,
+            emailSentAt: true,
+            updatedAt: true,
+            reference: true,
+            projectName: true,
+            uprn: true,
+            fullAddress: true,
+            postcode: true,
+            category: true,
+            rating: true,
+            surveyorName: true,
+            createdAt: true,
+            emailSentBy: true,
+            lastEditedBy: true,
+            photoPaths: true,
+          },
         })
       : Promise.resolve([]),
   ]);
   return [
-    ...emails.map((row) => ({
-      key: `email:${row.id}`,
-      kind: (row.kind === "correction" ? "correction" : "original") as MainLogKind,
-      at: row.sentAt.getTime(),
-      correctsKey: row.kind === "correction" && row.correctsEmailId ? `email:${row.correctsEmailId}` : null,
-    })),
+    ...emails.map((row) => {
+      const kind = (row.kind === "correction" ? "correction" : "original") as MainLogKind;
+      return {
+        key: `email:${row.id}`,
+        kind,
+        at: row.sentAt.getTime(),
+        correctsKey: row.kind === "correction" && row.correctsEmailId ? `email:${row.correctsEmailId}` : null,
+        ...columnValues({
+          reference: row.submission.reference,
+          projectName: row.submission.projectName,
+          uprn: row.submission.uprn,
+          fullAddress: row.submission.fullAddress,
+          postcode: row.submission.postcode,
+          category: row.submission.category,
+          rating: row.submission.rating,
+          sentBy: row.sentBy,
+          to: row.to,
+          photos: row.photoNames,
+          kind,
+          surveyorName: row.submission.surveyorName,
+          createdAt: row.submission.createdAt,
+        }),
+      };
+    }),
     ...cases.map((row) => ({
       key: `case:${row.id}`,
       kind: "not_sent" as const,
       at: (row.emailSentAt || row.updatedAt).getTime(),
       correctsKey: null,
+      ...columnValues({
+        reference: row.reference,
+        projectName: row.projectName,
+        uprn: row.uprn,
+        fullAddress: row.fullAddress,
+        postcode: row.postcode,
+        category: row.category,
+        rating: row.rating,
+        sentBy: row.emailSentBy || row.lastEditedBy || "",
+        to: "",
+        photos: row.photoPaths,
+        kind: "not_sent",
+        surveyorName: row.surveyorName,
+        createdAt: row.createdAt,
+      }),
     })),
   ];
 }
@@ -547,10 +804,11 @@ export async function loadMainLog(query: Record<string, unknown>): Promise<Loade
   const items = await listSortItems(filters);
   const originalIds = items.filter((item) => item.kind === "original").map((item) => item.key.slice(6));
   const corrected = await correctedKeySet(originalIds);
-  let arranged = arrangeMainLog(items, corrected, filters.page, MAIN_LOG_PAGE_SIZE);
+  const sort = filters.sort ? { key: filters.sort, dir: filters.dir } : null;
+  let arranged = arrangeMainLog(items, corrected, filters.page, MAIN_LOG_PAGE_SIZE, sort);
   if (filters.open && !filters.pageGiven) {
     const jump = pageForKey(arranged.pages, filters.open);
-    if (jump !== arranged.page) arranged = arrangeMainLog(items, corrected, jump, MAIN_LOG_PAGE_SIZE);
+    if (jump !== arranged.page) arranged = arrangeMainLog(items, corrected, jump, MAIN_LOG_PAGE_SIZE, sort);
   }
   const hydrated = await hydrate(arranged.pageKeys);
   const entries = arranged.pageKeys.map((key) => hydrated.get(key)).filter((row): row is MainLogEntry => Boolean(row));
@@ -629,7 +887,8 @@ async function unfilteredCount(): Promise<number> {
 export async function loadMainLogExport(query: Record<string, unknown>): Promise<{ filters: MainLogFilters; entries: MainLogEntry[] }> {
   const filters = await withPortalProjectMatch(parseMainLogFilters(query));
   const items = await listSortItems(filters);
-  const arranged = arrangeMainLog(items, new Set(), 1, Math.max(items.length, 1));
+  const sort = filters.sort ? { key: filters.sort, dir: filters.dir } : null;
+  const arranged = arrangeMainLog(items, new Set(), 1, Math.max(items.length, 1), sort);
   const hydrated = await hydrate(arranged.pages.flat());
   const entries = arranged.pages.flat().map((key) => hydrated.get(key)).filter((row): row is MainLogEntry => Boolean(row));
   return { filters, entries };

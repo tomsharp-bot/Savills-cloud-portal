@@ -111,17 +111,19 @@ export function canSeeProgramme(user: AuthedUser | null | undefined): boolean {
 }
 
 /**
- * Tom Sharp’s admin login, and only that account, may change the programme.
+ * Tom Sharp’s admin login.
  *
  * Personnel logins are `username` (unique) and an optional email. Sign-in
  * accepts either, so both fields are checked. The allowlist is the real admin
  * identity used in this portal: username `tsharp` and email
  * `tsharp@savillshousing.co.uk`. Display name "Tom Sharp" is not enough —
- * another Tom, or a surveyor with a similar login, cannot edit.
+ * another Tom, or a surveyor with a similar login, does not match.
+ *
+ * Programme editing and Data Checks share this check. It is not a separate role.
  */
 export const PROGRAMME_EDITOR_IDS = ["tsharp", "tsharp@savillshousing.co.uk"] as const;
 
-export function canEditProgramme(user: AuthedUser | null | undefined): boolean {
+export function isTomSharpAdmin(user: AuthedUser | null | undefined): boolean {
   if (!user || !isAdmin(user)) return false;
   const ids = new Set(
     [user.username, user.email]
@@ -129,6 +131,20 @@ export function canEditProgramme(user: AuthedUser | null | undefined): boolean {
       .filter(Boolean)
   );
   return PROGRAMME_EDITOR_IDS.some((allowed) => ids.has(allowed));
+}
+
+/** Only Tom Sharp’s admin login may change the programme. */
+export function canEditProgramme(user: AuthedUser | null | undefined): boolean {
+  return isTomSharpAdmin(user);
+}
+
+/**
+ * Data Checks hosts the Data Review practice page. Only Tom Sharp’s admin
+ * login can see the nav title or open the page. Same account as
+ * {@link canEditProgramme}.
+ */
+export function canSeeDataChecks(user: AuthedUser | null | undefined): boolean {
+  return isTomSharpAdmin(user);
 }
 
 export function clientForcedTab(user: AuthedUser, tab: string): string {

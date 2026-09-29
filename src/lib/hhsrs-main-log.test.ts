@@ -12,6 +12,7 @@ import {
   loadMainLog,
   mainLogEmailWhere,
   mainLogNotSentWhere,
+  parseMainLogFilters,
   splitAddress,
   type MainLogEntry,
   type MainLogFilters,
@@ -27,14 +28,22 @@ const blankFilters = (patch: Partial<MainLogFilters> = {}): MainLogFilters => ({
   type: "",
   from: "",
   to: "",
+  sort: "" as const,
+  dir: "asc" as const,
   page: 1,
   open: "",
   pageGiven: false,
   ...patch,
 });
 
-function sortItem(key: string, kind: "original" | "correction" | "not_sent", at: string, correctsKey: string | null = null) {
-  return { key, kind, at: new Date(at).getTime(), correctsKey };
+function sortItem(
+  key: string,
+  kind: "original" | "correction" | "not_sent",
+  at: string,
+  correctsKey: string | null = null,
+  extra: Record<string, string | number> = {}
+) {
+  return { key, kind, at: new Date(at).getTime(), correctsKey, ...extra };
 }
 
 describe("HHSRS main log arrangement", () => {
@@ -77,6 +86,91 @@ describe("HHSRS main log arrangement", () => {
     assert.match(JSON.stringify(cases), /Alex Surveyor/);
   });
 
+  it("keeps the default order until a column is chosen", () => {
+    const filters = parseMainLogFilters({ sort: "postcode", dir: "desc" });
+    assert.equal(filters.sort, "");
+    assert.equal(parseMainLogFilters({ sort: "project", dir: "DESC" }).dir, "desc");
+    assert.equal(parseMainLogFilters({ sort: "sent" }).dir, "asc");
+    const items = [
+      sortItem("email:orig", "original", "2026-09-28T08:00:00.000Z", null, { project: "Zebra", by: "Zoe" }),
+      sortItem("email:corr", "correction", "2026-09-24T08:00:00.000Z", "email:orig", { project: "Zebra", by: "Amy" }),
+      sortItem("email:other", "original", "2026-09-25T08:00:00.000Z", null, { project: "Alpha", by: "Sam" }),
+    ];
+    const arranged = arrangeMainLog(items, new Set(["email:orig"]), 1, 50);
+    assert.deepEqual(arranged.pageKeys, ["email:orig", "email:corr", "email:other"]);
+    assert.equal(arranged.flags.get("email:orig")?.showCorrectedNote, true);
+  });
+
+  it("sorts sent as a real date, not as dd/mm text, and reverses on the other direction", () => {
+    const items = [
+      sortItem("email:oct", "original", "2026-10-01T08:00:00.000Z"),
+      sortItem("email:sep", "original", "2026-09-28T08:00:00.000Z"),
+    ];
+    const asc = arrangeMainLog(items, new Set(), 1, 50, { key: "sent", dir: "asc" });
+    const desc = arrangeMainLog(items, new Set(), 1, 50, { key: "sent", dir: "desc" });
+    assert.deepEqual(asc.pageKeys, ["email:sep", "email:oct"]);
+    assert.deepEqual(desc.pageKeys, ["email:oct", "email:sep"]);
+  });
+
+  it("sorts each visible column and keeps blanks and larger numbers in the right place", () => {
+    const items = [
+      sortItem("email:a", "original", "2026-09-28T08:00:00.000Z", null, {
+        project: "Zebra",
+        ref: "MTVH-10",
+        uprn: "200",
+        address: "Zebra Road",
+        hazard: "Falls",
+        rating: "Moderate",
+        by: "Zoe",
+        to: "z@example.com",
+        photos: 10,
+        typeLabel: "Original",
+      }),
+      sortItem("email:b", "original", "2026-09-24T08:00:00.000Z", null, {
+        project: "Alpha",
+        ref: "MTVH-2",
+        uprn: "20",
+        address: "Alpha Road",
+        hazard: "Damp",
+        rating: "High",
+        by: "Amy",
+        to: "",
+        photos: 2,
+        typeLabel: "Correction",
+      }),
+      sortItem("case:c", "not_sent", "2026-09-26T08:00:00.000Z", null, {
+        project: "",
+        ref: "",
+        uprn: "",
+        address: "",
+        hazard: "",
+        rating: "",
+        by: "",
+        to: "m@example.com",
+        photos: 0,
+        typeLabel: "Not sent from portal",
+      }),
+    ];
+    const project = arrangeMainLog(items, new Set(), 1, 50, { key: "project", dir: "asc" });
+    assert.deepEqual(project.pageKeys, ["email:b", "email:a", "case:c"]);
+    const projectDesc = arrangeMainLog(items, new Set(), 1, 50, { key: "project", dir: "desc" });
+    assert.deepEqual(projectDesc.pageKeys, ["case:c", "email:a", "email:b"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "by", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "by", dir: "desc" }).pageKeys, ["case:c", "email:a", "email:b"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "ref", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "uprn", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "address", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "hazard", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "rating", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "to", dir: "asc" }).pageKeys, ["case:c", "email:a", "email:b"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "to", dir: "desc" }).pageKeys, ["email:b", "email:a", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "photos", dir: "asc" }).pageKeys, ["case:c", "email:b", "email:a"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "type", dir: "asc" }).pageKeys, ["email:b", "case:c", "email:a"]);
+    const page = arrangeMainLog(items, new Set(), 2, 1, { key: "project", dir: "asc" });
+    assert.deepEqual(page.pageKeys, ["email:a"]);
+    assert.equal(page.pageCount, 3);
+  });
+
   it("keeps the postcode out of the table line and in the full address", () => {
     const split = splitAddress("Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH", "ZZ1 3GH");
     assert.equal(split.line, "Flat 5, 40 Fictional Way, Sampleton");
@@ -97,6 +191,8 @@ function excelEntry(patch: Partial<MainLogEntry> & Pick<MainLogEntry, "key" | "k
     postcode: "ZZ1 3GH",
     hazard: "Falling On Stairs Etc.",
     rating: "High - Emergency Risk",
+    surveyorName: "Jane Example",
+    createdAt: new Date("2026-09-20T09:00:00.000Z"),
     sentBy: "Carly Farrell",
     to: "repairs@savillshousing.co.uk",
     cc: "",
@@ -345,6 +441,15 @@ describe("HHSRS main log filters", () => {
     const day = await loadMainLog({ q: stamp, from: "2026-09-25", to: "2026-09-25" });
     assert.deepEqual(day.entries.map((row) => row.key), [`email:${correction.id}`]);
 
+    const byName = await loadMainLog({ q: stamp, sort: "by", dir: "asc" });
+    assert.deepEqual(byName.entries.map((row) => row.sentBy), ["Alex Surveyor", "Carly Farrell", "Tom Sharp"]);
+    const byNameDesc = await loadMainLog({ q: stamp, sort: "by", dir: "desc" });
+    assert.deepEqual(byNameDesc.entries.map((row) => row.sentBy), ["Tom Sharp", "Carly Farrell", "Alex Surveyor"]);
+    const oldest = await loadMainLog({ q: stamp, sort: "sent", dir: "asc" });
+    assert.deepEqual(oldest.entries.map((row) => row.key), [`case:${quiet.id}`, `email:${original.id}`, `email:${correction.id}`]);
+    const newest = await loadMainLog({ q: stamp, sort: "sent", dir: "desc" });
+    assert.deepEqual(newest.entries.map((row) => row.key), [`email:${correction.id}`, `email:${original.id}`, `case:${quiet.id}`]);
+
     const app = createApp({ basePath: "" });
     const login = await request(app, "POST", "/login", {
       body: "username=phil.m&password=PhilMoon2468",
@@ -355,7 +460,6 @@ describe("HHSRS main log filters", () => {
     const html = page.body.toString("utf8");
     assert.equal(page.status, 200);
     assert.match(html, /Not sent from portal/);
-    assert.match(html, /Corrected ↓/);
     assert.match(html, /Correction of email sent 24\/09\/2026 14:32/);
     assert.match(html, /Reason: Wrong address/);
     assert.match(html, /View original email/);
@@ -366,6 +470,32 @@ describe("HHSRS main log filters", () => {
     assert.match(html, /Export to Excel/);
     assert.doesNotMatch(html, /Export CSV/);
     assert.doesNotMatch(html, /Mock/);
+    assert.doesNotMatch(html, /is-sorted/);
+    assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=project&amp;dir=asc"`));
+    assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=received&amp;dir=asc"`));
+    assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=surveyor&amp;dir=asc"`));
+    assert.match(html, />Reference</);
+    assert.doesNotMatch(html, /<th>Sent<\/th>|<th>Hazard<\/th>/);
+
+    const sorted = await request(app, "GET", `/HHSRSreporter/main-log?q=${stamp}&sort=project&dir=asc`, { cookie });
+    const sortedHtml = sorted.body.toString("utf8");
+    assert.equal(sorted.status, 200);
+    assert.match(sortedHtml, /aria-sort="ascending"/);
+    assert.match(sortedHtml, /class="is-sorted"/);
+    assert.match(sortedHtml, /Sorted A to Z\. Click to reverse\./);
+    assert.match(sortedHtml, /▲/);
+    assert.match(sortedHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=project&amp;dir=desc"`));
+    assert.match(sortedHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=received&amp;dir=asc"`));
+    const projectTh = sortedHtml.match(/<th class="is-sorted"[\s\S]*?<\/th>/);
+    assert.ok(projectTh);
+    assert.match(projectTh[0], />Project<span class="ml-sort-ind"/);
+
+    const newestPage = await request(app, "GET", `/HHSRSreporter/main-log?q=${stamp}&sort=received&dir=desc`, { cookie });
+    const newestHtml = newestPage.body.toString("utf8");
+    assert.match(newestHtml, /aria-sort="descending"/);
+    assert.match(newestHtml, /Sorted newest first\. Click to reverse\./);
+    assert.match(newestHtml, /▼/);
+    assert.match(newestHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=received&amp;dir=asc"`));
 
     const file = await request(app, "GET", `/HHSRSreporter/main-log/export.xlsx?q=${stamp}&type=correction`, { cookie });
     assert.equal(file.status, 200);

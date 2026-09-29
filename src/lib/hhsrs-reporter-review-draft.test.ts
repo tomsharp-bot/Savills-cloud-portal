@@ -139,7 +139,19 @@ function bootReview(opts: {
       listeners.push({ type, fn, target: "document" });
     },
     removeEventListener() {},
-    body: { appendChild() {}, removeChild() {} },
+    body: {
+      dataset: {} as Record<string, string>,
+      appendChild() {},
+      removeChild() {},
+      addEventListener() {},
+      removeEventListener() {},
+      contains() {
+        return false;
+      },
+      querySelector() {
+        return null;
+      },
+    },
     visibilityState: "visible",
   };
 

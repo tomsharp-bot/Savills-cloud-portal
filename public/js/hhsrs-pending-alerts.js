@@ -577,8 +577,15 @@
     badge.textContent = String(count);
   }
 
+  function markClear(el, clear) {
+    if (!el || !el.classList) return;
+    if (clear) el.classList.add("is-clear");
+    else el.classList.remove("is-clear");
+  }
+
   function applyWaitingCount(count) {
     if (typeof count !== "number" || !isFinite(count) || count < 0) return;
+    var clear = count === 0;
     var rows = document.querySelectorAll(".side-summary-row");
     var i;
     for (i = 0; i < rows.length; i++) {
@@ -588,17 +595,33 @@
       if (label.textContent.replace(/\s+/g, " ").trim() !== "Waiting") continue;
       strong.textContent = String(count);
     }
-    setCountBadge(document.querySelector('#side-tabs a.tab-link[title="Dashboard"]'), "tab-badge", count);
+    var dashboard = document.querySelector('#side-tabs a.tab-link[title="Dashboard"]');
+    setCountBadge(dashboard, "tab-badge", count);
+    markClear(dashboard, clear);
     var steps = document.querySelectorAll(".step-tabs a");
     for (i = 0; i < steps.length; i++) {
       if ((steps[i].textContent || "").indexOf("Pending Issues") !== -1) {
         setCountBadge(steps[i], "step-badge", count);
+        markClear(steps[i], clear);
       }
     }
     var pendingPanel = document.getElementById("not-actioned");
     if (pendingPanel) {
+      markClear(pendingPanel, clear);
       var panelBadge = pendingPanel.querySelector(".count-received");
-      if (panelBadge) panelBadge.textContent = String(count) + " need action";
+      if (clear) {
+        if (panelBadge && panelBadge.parentNode) panelBadge.parentNode.removeChild(panelBadge);
+      } else if (panelBadge) {
+        panelBadge.textContent = String(count) + " need action";
+      } else {
+        var head = pendingPanel.querySelector(".panel-head");
+        if (head) {
+          panelBadge = document.createElement("span");
+          panelBadge.className = "count count-received";
+          panelBadge.textContent = String(count) + " need action";
+          head.appendChild(panelBadge);
+        }
+      }
     }
   }
 
@@ -660,17 +683,12 @@
   function swapPendingList(live, fresh) {
     var liveWrap = live.querySelector(".table-wrap");
     var top = liveWrap ? liveWrap.scrollTop : 0;
-    var liveSlot = live.id === "not-actioned" ? live.querySelector(".panel-body-alerts") : null;
     if (live.id === "rv-also-waiting") {
       var details = live.querySelector("details");
       var freshDetails = fresh.querySelector("details");
       if (details && details.open && freshDetails) freshDetails.open = true;
     }
     live.replaceWith(fresh);
-    if (liveSlot) {
-      var freshSlot = fresh.querySelector(".panel-body-alerts");
-      if (freshSlot && freshSlot.parentNode) freshSlot.replaceWith(liveSlot);
-    }
     var freshWrap = fresh.querySelector(".table-wrap");
     if (freshWrap && top) freshWrap.scrollTop = top;
   }

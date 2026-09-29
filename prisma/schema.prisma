@@ -57,6 +57,9 @@ model Project {
   name                 String            @unique
   projectManager       String
   stage                ProjectStage      @default(upcoming)
+  /// Moment stage became archive. Cleared when the project leaves archive.
+  /// The HHSRS site form keeps this project for 14 days from this time.
+  archivedAt           DateTime?
   typeConditionOnly    Boolean           @default(true)
   typeConditionEpc     Boolean           @default(false)
   typeBlocks           Boolean           @default(true)

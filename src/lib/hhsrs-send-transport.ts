@@ -59,6 +59,14 @@ async function compileRaw(mail: OutboundEmail, keepBcc: boolean): Promise<Buffer
       })),
       // Inline signature logo. Not one of the case photos.
       signatureLogoAttachment(),
+      // The same case photos, as pictures under the signature. The file attachments stay as well.
+      ...(mail.inlinePhotos || []).map((file) => ({
+        filename: file.filename,
+        content: file.content,
+        contentType: file.contentType,
+        cid: file.cid,
+        contentDisposition: "inline" as const,
+      })),
     ],
   });
   return composer.compile().build();

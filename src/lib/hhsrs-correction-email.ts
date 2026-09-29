@@ -4,7 +4,9 @@
  * The reason code stays on the Main Log and is not copied into the email.
  * Bold is HTML <b>, applied to the new value in the opening and on its bullet.
  */
-import { escapeHtml } from "./hhsrs-signature.js";
+import { correctionSubject, type CorrectionReason } from "./hhsrs-find.js";
+import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
+import { escapeHtml, stripTrailingSignature } from "./hhsrs-signature.js";
 
 /** Spoken name for a bullet label. Address uses the approved "property address". */
 const FIELD_PHRASES: Record<string, string> = {
@@ -229,4 +231,194 @@ export function prepareCorrectionEmail(input: CorrectionCopyInput): PreparedCorr
     .replace(/\s+$/, "");
   const messageHtml = lines.map((line) => renderRuns(line.runs)).join("<br>\n");
   return { text, messageHtml };
+}
+
+/** Fields the Amend screen can change. Hazard and rating stay on the set lists. */
+export type AmendmentFields = {
+  address: string;
+  uprn: string;
+  hazard: string;
+  rating: string;
+  notes: string;
+  surveyDate: string;
+};
+
+export type AmendmentExtra = { label: string; value: string };
+
+export type ParsedSentEmail = {
+  fields: AmendmentFields;
+  extras: AmendmentExtra[];
+  prose: string[];
+};
+
+const FIELD_KEYS: Record<string, keyof AmendmentFields> = {
+  address: "address",
+  uprn: "uprn",
+  hazard: "hazard",
+  rating: "rating",
+  "site notes": "notes",
+  "survey date": "surveyDate",
+};
+
+const FIELD_LABELS: { key: keyof AmendmentFields; label: string }[] = [
+  { key: "address", label: "Address" },
+  { key: "uprn", label: "UPRN" },
+  { key: "hazard", label: "Hazard" },
+  { key: "rating", label: "Rating" },
+  { key: "notes", label: "Site notes" },
+  { key: "surveyDate", label: "Survey date" },
+];
+
+function emptyFields(): AmendmentFields {
+  return { address: "", uprn: "", hazard: "", rating: "", notes: "", surveyDate: "" };
+}
+
+function tidy(value: string): string {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+/** Read the newest sent email. A previous correction opening is ignored. */
+export function parseSentEmail(body: string): ParsedSentEmail {
+  const stripped = stripTrailingSignature(stripCorrectionIntro(body));
+  const fields = emptyFields();
+  const extras: AmendmentExtra[] = [];
+  const prose: string[] = [];
+  const seen = new Set<string>();
+  for (const line of stripped.split("\n")) {
+    const match = line.match(/^•\s*([^:]+):\s*(.*)$/);
+    if (!match) {
+      const plain = line.trim();
+      if (!plain || /^hi all,$/i.test(plain) || /^please disregard our previous email\./i.test(plain)) continue;
+      prose.push(plain);
+      continue;
+    }
+    const label = match[1].trim();
+    const value = match[2].trim();
+    const key = label.toLowerCase();
+    const fieldKey = FIELD_KEYS[key];
+    if (fieldKey && !seen.has(key)) {
+      seen.add(key);
+      fields[fieldKey] = value;
+      continue;
+    }
+    extras.push({ label, value });
+  }
+  return { fields, extras, prose };
+}
+
+export function readAmendmentFields(body: Record<string, unknown>): AmendmentFields {
+  return {
+    address: tidy(String(body.address ?? "")),
+    uprn: tidy(String(body.uprn ?? "")),
+    hazard: tidy(String(body.hazard ?? "")),
+    rating: tidy(String(body.rating ?? "")),
+    notes: tidy(String(body.notes ?? "")),
+    surveyDate: tidy(String(body.surveyDate ?? "")),
+  };
+}
+
+/** Keep a legacy value that is already on the sent email. New picks must be from the set lists. */
+export function amendmentListError(previous: AmendmentFields, next: AmendmentFields): string {
+  if (next.hazard !== previous.hazard && !isHhsrsCategory(next.hazard)) {
+    return "Choose a hazard from the list.";
+  }
+  if (next.rating !== previous.rating && !isHhsrsSiteFormRating(next.rating)) {
+    return "Choose a rating from the list.";
+  }
+  return "";
+}
+
+export function amendmentChangeNote(previous: AmendmentFields, next: AmendmentFields, amendment: string): string {
+  const typed = tidy(amendment);
+  const parts = FIELD_LABELS.filter(({ key }) => previous[key] !== next[key]).map(
+    ({ key, label }) => `${label}: ${previous[key] || "—"} → ${next[key] || "—"}`
+  );
+  const summary = parts.join("; ");
+  if (typed && summary) return `${typed} — ${summary}`;
+  return typed || summary;
+}
+
+function correctionSubjectForAddress(previousSubject: string, previousAddress: string, nextAddress: string): string {
+  let subject = correctionSubject(previousSubject);
+  const oldHead = previousAddress.split(",")[0].trim();
+  const newHead = nextAddress.split(",")[0].trim();
+  if (oldHead && newHead && oldHead !== newHead && subject.includes(oldHead)) {
+    subject = subject.replace(oldHead, newHead);
+  }
+  return subject;
+}
+
+function includeField(previous: string, next: string): boolean {
+  return Boolean(previous.trim() || next.trim());
+}
+
+export type BuiltAmendmentEmail = {
+  subject: string;
+  text: string;
+  messageHtml: string;
+  reason: CorrectionReason;
+  note: string;
+  next: AmendmentFields;
+};
+
+/**
+ * Correction email for Amend & resend.
+ * Subject starts with CORRECTION. The body asks the client to disregard the previous email,
+ * then shows the updated lines. Values that differ from the email we started from are bold.
+ */
+export function buildAmendmentEmail(input: {
+  previousBody: string;
+  previousSubject: string;
+  next: AmendmentFields;
+  amendment: string;
+}): BuiltAmendmentEmail {
+  const parsed = parseSentEmail(input.previousBody);
+  const previous = parsed.fields;
+  const next = {
+    address: tidy(input.next.address),
+    uprn: tidy(input.next.uprn),
+    hazard: tidy(input.next.hazard),
+    rating: tidy(input.next.rating),
+    notes: tidy(input.next.notes),
+    surveyDate: tidy(input.next.surveyDate),
+  };
+  const amendment = tidy(input.amendment);
+  const intro = amendment
+    ? `Please disregard our previous email. ${amendment}`
+    : "Please disregard our previous email.";
+  const textLines = ["Hi all,", "", intro, ""];
+  for (const line of parsed.prose) textLines.push(line, "");
+  const htmlBits = [`<p>Hi all,</p>`, `<p>${escapeHtml(intro)}</p>`];
+  for (const line of parsed.prose) htmlBits.push(`<p>${escapeHtml(line)}</p>`);
+  const bullets: string[] = [];
+  const htmlItems: string[] = [];
+  for (const { key, label } of FIELD_LABELS) {
+    if (!includeField(previous[key], next[key])) continue;
+    const value = next[key];
+    bullets.push(`• ${label}: ${value}`);
+    const shown = previous[key] === value ? escapeHtml(value) : `<b>${escapeHtml(value)}</b>`;
+    htmlItems.push(`<li>${escapeHtml(label)}: ${shown}</li>`);
+  }
+  for (const extra of parsed.extras) {
+    bullets.push(`• ${extra.label}: ${extra.value}`);
+    htmlItems.push(`<li>${escapeHtml(extra.label)}: ${escapeHtml(extra.value)}</li>`);
+  }
+  if (bullets.length) {
+    textLines.push(...bullets);
+    htmlBits.push(`<ul>${htmlItems.join("")}</ul>`);
+  }
+  const addressChanged = previous.address !== next.address;
+  const otherChanged = FIELD_LABELS.some(({ key }) => key !== "address" && previous[key] !== next[key]);
+  let reason: CorrectionReason = "Other";
+  if (addressChanged && !otherChanged) reason = "Wrong address";
+  else if (addressChanged || otherChanged) reason = "Wrong details";
+  const note = amendmentChangeNote(previous, next, amendment) || "Correction";
+  return {
+    subject: correctionSubjectForAddress(input.previousSubject, previous.address, next.address),
+    text: textLines.join("\n").replace(/\s+$/, ""),
+    messageHtml: htmlBits.join(""),
+    reason,
+    note,
+    next,
+  };
 }

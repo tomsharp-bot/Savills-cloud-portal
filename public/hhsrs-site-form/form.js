@@ -615,9 +615,23 @@
   var photosAtLoad = $("step-photos");
   if (photosAtLoad && !photosAtLoad.hidden) extrasPassed = true;
 
-  // Phone keyboard Next moves one optional box at a time: Extra details, then suspected cause, then on.
-  // A blank value never makes either box required, and never keeps Hazard as the current step.
+  // Phone keyboard Next on Comment moves one step, into Extra details.
+  // From there it moves one optional box at a time: Extra details, then suspected cause, then on.
+  // A blank value never makes either optional box required, and never keeps Hazard as the current step.
   function stepKeyboardNext(from) {
+    if (from && from.id === "comment") {
+      if (!hazardDone()) return;
+      var focusId = $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
+      var nextId = callsRequired() ? focusId : "otherDetails";
+      var next = $(nextId);
+      if (lastFocusedStep === "extras") lastFocusedStep = "comment";
+      if (from.blur) from.blur();
+      updateFlow({ announce: true });
+      if (next && !next.disabled) {
+        try { next.focus({ preventScroll: true }); } catch (err) { next.focus(); }
+      }
+      return;
+    }
     if (from && from.id === "otherDetails") {
       var cause = $("suspectedCause");
       if (cause && !cause.disabled) {
@@ -642,7 +656,7 @@
   document.body.appendChild(keyNext);
 
   function optionalKeyboardField(el) {
-    return !!(progressive() && el && (el.id === "otherDetails" || el.id === "suspectedCause"));
+    return !!(progressive() && el && (el.id === "comment" || el.id === "otherDetails" || el.id === "suspectedCause"));
   }
   function placeKeyNext() {
     var vv = window.visualViewport;
@@ -669,6 +683,8 @@
     form.addEventListener("keydown", function (e) {
       if (!optionalKeyboardField(e.target)) return;
       if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+      // Comment stays multi-line until the hazard step can advance. Extra details is unchanged.
+      if (e.target.id === "comment" && !hazardDone()) return;
       e.preventDefault();
       stepKeyboardNext(e.target);
     });

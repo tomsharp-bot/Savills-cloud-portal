@@ -2,6 +2,8 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -327,6 +329,67 @@ export async function deleteSpacesObject(key: string): Promise<boolean> {
   } catch (err) {
     spacesError("delete", err);
     return false;
+  }
+}
+
+const LIST_PAGE_LIMIT = 200;
+
+/**
+ * Object keys under prefix. Null when Spaces is unset, the prefix is not a
+ * trailing-slash folder prefix, or the list fails. Does not treat a prefix as
+ * a directory: a zero-byte folder marker is just another key, when it exists.
+ */
+export async function listSpacesKeys(prefix: string): Promise<string[] | null> {
+  const s3 = spacesClient();
+  if (!s3) return null;
+  const clean = String(prefix || "");
+  if (!clean || clean.length < 8 || clean.includes("..") || clean.startsWith("/") || !clean.endsWith("/")) {
+    return null;
+  }
+  const keys: string[] = [];
+  let token: string | undefined;
+  try {
+    for (let page = 0; page < LIST_PAGE_LIMIT; page++) {
+      const out = await s3.send(
+        new ListObjectsV2Command({
+          Bucket: spacesStatus().bucket,
+          Prefix: clean,
+          ContinuationToken: token,
+          MaxKeys: 1000,
+        })
+      );
+      for (const item of out.Contents || []) {
+        if (item.Key) keys.push(item.Key);
+      }
+      if (!out.IsTruncated) return keys;
+      token = out.NextContinuationToken;
+      if (!token) return null;
+    }
+    return null;
+  } catch (err) {
+    spacesError("list", err);
+    return null;
+  }
+}
+
+/** True when the key exists, false when it does not, null when the check fails. */
+export async function spacesKeyExists(key: string): Promise<boolean | null> {
+  const s3 = spacesClient();
+  if (!s3) return null;
+  const clean = String(key || "");
+  if (!clean || clean.includes("..")) return null;
+  try {
+    await s3.send(
+      new HeadObjectCommand({
+        Bucket: spacesStatus().bucket,
+        Key: clean,
+      })
+    );
+    return true;
+  } catch (err) {
+    if (spacesObjectMissing(err)) return false;
+    spacesError("head", err);
+    return null;
   }
 }
 

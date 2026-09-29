@@ -103,13 +103,15 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.equal(admin.status, 200);
     assert.match(admin.body, /HHSRS Reporter/);
     assert.match(admin.body, /Pending Issues/);
-    assert.match(admin.body, /Pending issues/);
+    assert.match(admin.body, /Last 20 Issues That Have Been Actioned/);
     assert.match(admin.body, /side-tabs/);
     assert.match(admin.body, /HOUSING · SURVEY REPORTING/);
     assert.match(admin.body, /id="hhsrs-alert-toast"/);
     assert.match(admin.body, /class="alert-toast"/);
-    assert.match(admin.body, /Enable desktop alerts/);
-    assert.match(admin.body, /Turn on desktop alerts/);
+    assert.doesNotMatch(admin.body, /Enable desktop alerts/);
+    assert.doesNotMatch(admin.body, /Turn on desktop alerts/);
+    assert.doesNotMatch(admin.body, /desktop-alerts-banner/);
+    assert.doesNotMatch(admin.body, /desktop-alerts-control/);
     assert.doesNotMatch(admin.body, /Not now/);
     assert.doesNotMatch(admin.body, /Desktop alerts ready/);
     assert.match(admin.body, /initialPendingIds/);
@@ -135,7 +137,7 @@ describe("HHSRS Reporter auth and queue", () => {
 
     const blank = await request(app, "GET", "/HHSRSreporter/review", { cookie });
     assert.equal(blank.status, 200);
-    assert.match(blank.body, /Review and create/);
+    assert.match(blank.body, /Review &amp; Create/);
     assert.match(blank.body, /Select a project/);
     assert.match(blank.body, /Send and log/);
     assert.doesNotMatch(blank.body, /Mark as actioned/);
@@ -159,19 +161,19 @@ describe("HHSRS Reporter auth and queue", () => {
 
     const overview = await request(app, "GET", "/HHSRSreporter/project-overview", { cookie });
     assert.equal(overview.status, 200);
-    assert.match(overview.body, /Project overview/);
+    assert.match(overview.body, /Project Overview/);
     assert.match(overview.body, /Total overview/);
     assert.match(overview.body, /By project/);
     assert.match(overview.body, /List comes from Project Progress/);
     assert.doesNotMatch(overview.body, /id="po-archive-confirm"/);
     assert.match(overview.body, /tab-label">Dashboard/);
-    assert.match(overview.body, /tab-label">Project overview/);
+    assert.match(overview.body, /tab-label">Project Overview/);
     assert.doesNotMatch(overview.body, /po-by-hint/);
     assert.doesNotMatch(overview.body, /class="tab-ico"[^>]*>0[123]</);
 
     const adminPage = await request(app, "GET", "/HHSRSreporter/admin", { cookie });
     assert.equal(adminPage.status, 200);
-    assert.match(adminPage.body, /Surveyor site form link/);
+    assert.match(adminPage.body, /Surveyor Site Form Link/);
     assert.doesNotMatch(adminPage.body, /Site form access code/);
     assert.doesNotMatch(adminPage.body, /site-access/);
     assert.doesNotMatch(adminPage.body, /access code/i);
@@ -297,7 +299,7 @@ describe("HHSRS Reporter auth and queue", () => {
 
       const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
-      assert.match(page.body, /Client email draft/);
+      assert.match(page.body, /Client Email Draft/);
       assert.match(page.body, /• Site notes: Damaged light fitting in lounge/);
       assert.doesNotMatch(page.body, /The light fitting in the lounge is damaged/);
       assert.match(page.body, /Demo Housing - HHSRS/);

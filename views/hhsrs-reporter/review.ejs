@@ -15,7 +15,7 @@
 
 <div class="page-header">
   <div>
-    <h2 class="page-section-title">Review and create<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
+    <h2 class="page-section-title">Review &amp; Create<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
     <% if (isFilled) { %>
       <p class="subtitle" id="review-subtitle">Review the site submission for <%= row.projectName %>, then send the client email.</p>
     <% } else { %>
@@ -37,12 +37,12 @@
 </section>
 
 <div id="review-workspace">
-  <section class="panel waiting-urgent rv-pending-strip <%= alsoWaiting.length ? '' : 'is-clear' %>" id="rv-also-waiting" aria-label="Other pending issues">
+  <section class="panel waiting-urgent rv-pending-strip <%= alsoWaiting.length ? '' : 'is-clear' %>" id="rv-also-waiting" aria-label="Other Pending Issues">
     <details id="rv-also-details">
       <summary class="panel-head received-head rv-pending-summary">
         <div class="rv-pending-summary-left">
           <span class="rv-pending-chevron" aria-hidden="true">▶</span>
-          <h2><span class="urgent-icon" aria-hidden="true">!</span> Other pending issues</h2>
+          <h2><span class="urgent-icon" aria-hidden="true">!</span> Other Pending Issues</h2>
         </div>
         <span class="count count-received"><%= alsoWaiting.length %> <%= alsoWaiting.length === 1 ? "waiting" : "waiting" %></span>
       </summary>
@@ -71,14 +71,14 @@
   </section>
 
   <div class="review-grid">
-    <section class="panel panel-overflow-visible<%= sentEmail ? ' is-sent-case' : '' %>" id="rv-case-panel" aria-label="Case details">
+    <section class="panel panel-overflow-visible<%= sentEmail ? ' is-sent-case' : '' %>" id="rv-case-panel" aria-label="Case Details">
       <% if (isFilled) { %>
       <form method="post" action="<%= reporterBase %>/review/<%= row.id %>" id="rv-save-form">
         <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
         <input type="hidden" name="status" value="<%= row.status === 'new' ? 'in_review' : row.status %>" />
       <% } %>
       <div class="panel-head review-head">
-        <h2 id="rv-case-heading">Case details<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
+        <h2 id="rv-case-heading">Case Details<% if (isFilled && row.reference) { %> <span class="ref-chip"><%= row.reference %></span><% } %></h2>
         <span class="count count-review" id="rv-case-badge"><%= isFilled ? "Case" : "Blank" %></span>
       </div>
       <div class="blank-case-form" id="rv-case-form">
@@ -197,11 +197,6 @@
             </div>
           </div>
 
-          <div class="project-extra" data-extra="escalation" hidden>
-            <label for="rv-escalation">Escalation category · if reported</label>
-            <input id="rv-escalation" name="escalation" type="text" value="<%= isFilled ? row.escalation : '' %>" placeholder="e.g. Significant Severe" autocomplete="off" />
-          </div>
-
           <div class="project-extra" data-extra="work_order" hidden>
             <label for="rv-work-order">Work order number</label>
             <input id="rv-work-order" name="workOrder" type="text" value="<%= isFilled ? row.workOrder : '' %>" placeholder="e.g. WO 0309445" autocomplete="off" />
@@ -227,7 +222,7 @@
             </div>
             <div class="photo-thumbs case-photo-thumbs" id="rv-photo-thumbs" aria-label="Case photos">
               <% casePhotos.forEach((p) => { %>
-                <div class="photo-thumb case-photo-thumb" data-photo-id="<%= p.id %>">
+                <div class="photo-thumb photo-zoom case-photo-thumb" data-photo-id="<%= p.id %>">
                   <img src="<%= p.url %>" alt="<%= p.caption %>" draggable="false" />
                   <span class="photo-caption"><%= p.caption %></span>
                 </div>
@@ -254,9 +249,9 @@
       <% if (isFilled) { %></form><% } %>
     </section>
 
-    <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : '' %>" aria-label="Client email draft">
+    <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : '' %>" aria-label="Client Email Draft">
       <div class="panel-head neutral">
-        <h2>Client email draft</h2>
+        <h2>Client Email Draft</h2>
         <span class="count <%= sentEmail ? 'count-dealt' : 'count-review' %>" id="rv-email-badge"><%= sentEmail ? "Sent" : "Draft" %></span>
       </div>
       <p class="review-draft-status" id="rv-draft-status" hidden></p>
@@ -354,13 +349,13 @@
   </section>
 </div>
 
-<p class="footer-note">Review and create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
+<p class="footer-note">Review &amp; Create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
 
 <% if (!sentEmail && !caseNotNeeded) { %>
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
     <form id="rv-send-form" autocomplete="off" method="post" action="<%= isFilled ? reporterBase + '/review/' + row.id + '/send' : reporterBase + '/review/office-send' %>">
-      <div class="ck-head"><h2 id="ck-title" tabindex="-1">Check before sending</h2></div>
+      <div class="ck-head"><h2 id="ck-title" tabindex="-1">Check Before Sending</h2></div>
       <div class="ck-body" id="ck-body">
         <% if (sendConfig.testMode) { %>
           <p class="ck-test" id="ck-test"><%= sendConfig.testBanner %></p>
@@ -392,7 +387,7 @@
 <div class="nn-overlay" id="nn-overlay" hidden>
   <div class="nn-dialog" role="dialog" aria-modal="true" aria-labelledby="nn-title">
     <form id="nn-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/not-needed" data-ref="<%= row.reference || '' %>">
-      <h2 id="nn-title">Move to Duplicates &amp; errors?</h2>
+      <h2 id="nn-title">Move to Duplicates &amp; Errors?</h2>
       <p class="nn-case">
         <% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } %>
         <%= row.fullAddress %><% if (row.postcode) { %>, <%= row.postcode %><% } %> · <%= row.category %>

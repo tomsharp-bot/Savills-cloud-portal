@@ -1,11 +1,12 @@
 /**
- * The surveyor site form and the Reporter share one project list:
- * current rows in the portal Project table, by Project.name.
+ * Reporter project names come from current rows in the portal Project table.
+ * The public site form uses the same current projects, and also keeps a project
+ * for 14 days after it is archived (see siteFormProjectWhere).
  */
 import { prisma } from "./prisma.js";
 import { portalProjectMatchNames } from "./hhsrs-reporter-projects.js";
 
-/** Same names the site form dropdown offers, A to Z. */
+/** Current portal project names, A to Z. The site form adds the 2-week archive window. */
 export async function loadPortalProjectNames(): Promise<string[]> {
   const rows = await prisma.project.findMany({
     where: { stage: "current" },

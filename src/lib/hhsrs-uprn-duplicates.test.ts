@@ -776,7 +776,8 @@ describe("UPRN duplicates in the database", () => {
 
     const amend = await request(port, "GET", `/HHSRSreporter/find?case=${sent.id}&view=amend`, { cookie });
     assert.equal(amend.status, 200);
-    assert.match(amend.body, /Amend &amp; resend/);
+    assert.match(amend.body, /Amend &amp; Resend/);
+    assert.match(amend.body, /Starts from the email that was sent/);
     assert.match(amend.body, /Mould around window was reported\./);
   });
 });

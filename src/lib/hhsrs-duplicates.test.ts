@@ -94,8 +94,9 @@ describe("not needed checks", () => {
     assert.match(page, /already sent/);
     assert.match(page, /Where the first is/);
     assert.doesNotMatch(page, /delete/i);
-    assert.match(side, /Duplicates &amp; errors/);
+    assert.match(side, /Duplicates &amp; Errors/);
     assert.match(side, /summary\.duplicates > 0 \? 'needs-attention'/);
+    assert.match(side, /summary\.waiting > 0 \? '' : ' is-clear'/);
     assert.match(
       readFileSync("public/css/hhsrs-reporter.css", "utf8"),
       /\.side-tabs \.tab-link\.needs-attention\s*\{[\s\S]*?background:\s*var\(--savills-red\)/
@@ -335,7 +336,7 @@ describe("duplicates and office emails with the database", () => {
       assert.equal(moved.location, "/HHSRSreporter");
       cookie = cookieHeader(moved.setCookie, cookie);
       const pending = await request(port, "GET", moved.location, { cookie });
-      assert.match(pending.body, /Moved to Duplicates &amp; errors\./);
+      assert.match(pending.body, /Moved to Duplicates &amp; Errors\./);
       assert.doesNotMatch(pending.body, new RegExp(duplicate.reference || "no-ref"));
 
       const stored = await prisma.hhsrsSiteSubmission.findUnique({ where: { id: duplicate.id } });
@@ -349,7 +350,7 @@ describe("duplicates and office emails with the database", () => {
       assert.equal(tab.status, 200);
       assert.match(tab.body, /tab-link[^"]*needs-attention/);
       assert.match(tab.body, /Click the later case to compare it with the one already sent\./);
-      assert.match(tab.body, /Duplicates &amp; errors/);
+      assert.match(tab.body, /Duplicates &amp; Errors/);
       assert.match(tab.body, /View duplicate/);
       assert.match(tab.body, new RegExp(`9 Duplicate Street ${stamp}`));
       assert.match(tab.body, new RegExp(`Case ${original.reference}`));

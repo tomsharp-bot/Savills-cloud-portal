@@ -884,7 +884,6 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
   if (includeVulnerabilities(data) && (data.vulnerabilities || "").trim()) {
     lines.push(bullet("Vulnerabilities", sentence(data.vulnerabilities || "").replace(/\.$/, "")));
   }
-  if ((data.escalation || "").trim()) lines.push(bullet("Escalation", data.escalation!.trim()));
   if ((data.workOrder || "").trim()) lines.push(bullet("Work order", data.workOrder!.trim()));
 
   if (needsCall && !reference) {
