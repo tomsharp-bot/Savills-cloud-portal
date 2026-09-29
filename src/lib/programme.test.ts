@@ -245,20 +245,40 @@ describe("resolveProgramme", () => {
 
   it("does not list one person in both the agency section and the normal surveyor section", () => {
     const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
-    const lists = new Map<string, { children: { className: string; textContent: string; children: { className: string; textContent: string }[] }[] }>();
-    function fakeEl(id?: string) {
-      const node = {
+    type FakeEl = {
+      id: string;
+      textContent: string;
+      innerHTML: string;
+      className: string;
+      title: string;
+      draggable: boolean;
+      dataset: Record<string, string>;
+      style: Record<string, string>;
+      children: FakeEl[];
+      classList: { add: () => void; remove: () => void; contains: () => boolean };
+      appendChild: (child: FakeEl) => FakeEl;
+      setAttribute: () => void;
+      getAttribute: () => null;
+      addEventListener: () => void;
+      querySelector: () => null;
+      querySelectorAll: () => never[];
+      remove: () => void;
+      closest: () => null;
+    };
+    const lists = new Map<string, FakeEl>();
+    function fakeEl(id?: string): FakeEl {
+      const node: FakeEl = {
         id: id || "",
         textContent: "",
         innerHTML: "",
         className: "",
         title: "",
         draggable: false,
-        dataset: {} as Record<string, string>,
-        style: {} as Record<string, string>,
-        children: [] as { className: string; textContent: string; children: { className: string; textContent: string }[] }[],
+        dataset: {},
+        style: {},
+        children: [],
         classList: { add() {}, remove() {}, contains: () => false },
-        appendChild(child: typeof node) {
+        appendChild(child: FakeEl) {
           node.children.push(child);
           return child;
         },
@@ -341,9 +361,9 @@ describe("resolveProgramme", () => {
       });
     }
     const onBoard = tbody.children
-      .flatMap((row) => row.children)
-      .filter((cell) => cell.className === "surveyor")
-      .map((cell) => cell.textContent);
+      .flatMap((row: FakeEl) => row.children)
+      .filter((cell: FakeEl) => cell.className === "surveyor")
+      .map((cell: FakeEl) => cell.textContent);
     assert.deepEqual(poolNames("agencyPool"), ["Bardya Amin", "Nia Cole", "Jeremy Hughes"]);
     assert.deepEqual(poolNames("teamPool"), ["Alan Henderson", "Clive Gray", "Alex Surveyor"]);
     assert.deepEqual(onBoard, ["Sam Blank", "Richard Moreing"]);
