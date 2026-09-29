@@ -68,6 +68,7 @@ import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
   fromAddressFromEnv,
   publicSendSettings,
+  REVIEW_SENT_CONFIRMATION,
   senderNamesFromLogin,
   sentBannerText,
 } from "../lib/hhsrs-send.js";
@@ -1226,7 +1227,7 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
     return;
   }
-  flashOk(req, "Sent and logged.");
+  flashOk(req, REVIEW_SENT_CONFIRMATION);
   // The email is already sent. Copy must not undo that, and a slow or failed
   // Spaces upload must not hold the redirect open.
   await archiveLoggedPhotos(req, row.id);
@@ -1279,7 +1280,7 @@ async function handleOfficeSend(req: Request, res: Response): Promise<void> {
     send: (row, sendBody) => deliverCaseEmail(req, row, sendBody),
   });
   if (result.ok) {
-    flashOk(req, "Sent and logged.");
+    flashOk(req, REVIEW_SENT_CONFIRMATION);
     await archiveLoggedPhotos(req, result.id);
     finishOfficeSend(req, res, `${HHSRS_REPORTER_PATH}/review/${result.id}`);
     return;
