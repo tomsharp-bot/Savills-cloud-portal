@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { prepareCorrectionEmail, stripCorrectionIntro } from "./hhsrs-correction-email.js";
+import {
+  amendmentListError,
+  buildAmendmentEmail,
+  parseSentEmail,
+  prepareCorrectionEmail,
+  stripCorrectionIntro,
+} from "./hhsrs-correction-email.js";
 import { correctionSubject } from "./hhsrs-find.js";
 import { deliverPortalEmail, type OutboundEmail, type SendCommit, type SentEmailRecord } from "./hhsrs-send.js";
 import { SIGNATURE_LOGO_CID, composeEmailHtml, composeEmailText } from "./hhsrs-signature.js";
@@ -360,8 +366,15 @@ describe("HHSRS correction send", () => {
       assert.equal(item.mail.text, composeEmailText(item.prepared.text, names));
       assert.equal(
         item.mail.html,
-        composeEmailHtml(item.prepared.text, names, `cid:${SIGNATURE_LOGO_CID}`, item.prepared.messageHtml)
+        composeEmailHtml(item.prepared.text, names, `cid:${SIGNATURE_LOGO_CID}`, item.prepared.messageHtml, {
+          subject: item.mail.subject,
+          photos: (item.mail.inlinePhotos || []).map((photo) => ({ src: `cid:${photo.cid}`, name: photo.filename })),
+        })
       );
+      const printAt = item.mail.html.indexOf("Before printing, think about the environment");
+      const photoAt = item.mail.html.indexOf("cid:hhsrs-photo-0@savillshousing.co.uk");
+      assert.ok(printAt >= 0 && photoAt > printAt, "case photos sit under the signature");
+      assert.match(item.mail.html, /background:#e7edf3/);
       assert.match(item.mail.html, /HHSRS Reporting Team/);
       assert.match(item.mail.html, /HHSRS@savillshousing\.co\.uk/);
       assert.match(item.mail.html, /www\.savills\.co\.uk/);
@@ -378,5 +391,58 @@ describe("HHSRS correction send", () => {
     assert.match(hazard.mail.html, /<b>Excess Cold<\/b>/);
     assert.match(hazard.mail.text, /• Address: 14 Example Street, London/);
     assert.equal(bulletLine(hazard.prepared.messageHtml, "Address").includes("<b>"), false);
+  });
+});
+
+describe("HHSRS amend and resend", () => {
+  const previous = parseSentEmail(ORIGINAL).fields;
+
+  it("bolds only the lines that differ and keeps the short correction opening", () => {
+    const built = buildAmendmentEmail({
+      previousBody: ORIGINAL,
+      previousSubject: PREVIOUS_SUBJECT,
+      next: { ...previous, hazard: "Excess Cold", rating: "Low" },
+      amendment: "Wrong hazard. It is Excess Cold.",
+    });
+    assert.match(built.subject, /^CORRECTION: /);
+    assert.match(built.text, /^Hi all,\n\nPlease disregard our previous email\. Wrong hazard\. It is Excess Cold\./);
+    assert.match(built.messageHtml, /<li>Hazard: <b>Excess Cold<\/b><\/li>/);
+    assert.match(built.messageHtml, /<li>Rating: <b>Low<\/b><\/li>/);
+    assert.match(built.messageHtml, /<li>Address: 14 Example Street, London<\/li>/);
+    assert.equal(built.messageHtml.includes("<li>Address: <b>"), false);
+    assert.doesNotMatch(built.text, /NOTICE:|Tom Sharp/);
+    assert.match(built.note, /Hazard: Damp and Mould Growth → Excess Cold/);
+    assert.match(built.note, /Rating: High - Emergency Risk → Low/);
+    assert.equal(built.reason, "Wrong details");
+  });
+
+  it("starts the next amendment from the newest email", () => {
+    const first = buildAmendmentEmail({
+      previousBody: ORIGINAL,
+      previousSubject: PREVIOUS_SUBJECT,
+      next: { ...previous, hazard: "Excess Cold" },
+      amendment: "Wrong hazard.",
+    });
+    const again = parseSentEmail(first.text).fields;
+    assert.equal(again.hazard, "Excess Cold");
+    assert.equal(again.address, previous.address);
+    const second = buildAmendmentEmail({
+      previousBody: first.text,
+      previousSubject: first.subject,
+      next: { ...again, rating: "Moderate" },
+      amendment: "Rating was low.",
+    });
+    assert.equal(second.subject.startsWith("CORRECTION: CORRECTION:"), false);
+    assert.match(second.subject, /^CORRECTION: /);
+    assert.match(second.messageHtml, /<li>Hazard: Excess Cold<\/li>/);
+    assert.match(second.messageHtml, /<li>Rating: <b>Moderate<\/b><\/li>/);
+    assert.equal((second.text.match(/Please disregard our previous email/g) || []).length, 1);
+  });
+
+  it("rejects a hazard or rating that is not on the set list", () => {
+    assert.equal(amendmentListError(previous, { ...previous, hazard: "Something else" }), "Choose a hazard from the list.");
+    assert.equal(amendmentListError(previous, { ...previous, rating: "Extreme" }), "Choose a rating from the list.");
+    assert.equal(amendmentListError(previous, { ...previous, hazard: "Excess Cold", rating: "Low" }), "");
+    assert.equal(amendmentListError(previous, previous), "");
   });
 });

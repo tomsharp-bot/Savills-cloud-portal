@@ -287,7 +287,7 @@
 
   function appendThumb(grid, photo, opts) {
     var card = document.createElement("div");
-    card.className = "photo-thumb " + (opts.email ? "email-photo-thumb" : "case-photo-thumb");
+    card.className = "photo-thumb photo-zoom " + (opts.email ? "email-photo-thumb" : "case-photo-thumb");
     card.setAttribute("data-photo-id", photo.id);
     if (opts.email) {
       card.draggable = true;
@@ -326,6 +326,8 @@
     var img = document.createElement("img");
     img.alt = "";
     preview.appendChild(img);
+    var cap = document.createElement("figcaption");
+    preview.appendChild(cap);
     document.body.appendChild(preview);
     return preview;
   }
@@ -345,14 +347,25 @@
     var preview = photoPreviewEl();
     var img = preview.querySelector("img");
     if (img.getAttribute("src") !== source.src) img.src = source.src;
+    var cap = preview.querySelector("figcaption");
+    var sourceCap = card.querySelector("figcaption, .photo-caption");
+    if (cap) cap.textContent = sourceCap ? sourceCap.textContent : "";
     var rect = card.getBoundingClientRect();
+    var width = 340;
+    var x = rect.right + 12;
+    var y = rect.top;
+    if (x + width + 16 > window.innerWidth) x = Math.max(8, rect.left - width - 12);
     preview.hidden = false;
-    preview.style.left = Math.round(rect.right + 8) + "px";
-    preview.style.top = Math.round(rect.top) + "px";
+    preview.style.left = Math.round(x) + "px";
+    preview.style.top = Math.round(Math.max(8, y)) + "px";
+    var height = preview.offsetHeight || 280;
+    if (y + height > window.innerHeight) {
+      preview.style.top = Math.round(Math.max(8, window.innerHeight - height - 8)) + "px";
+    }
   }
 
   function thumbFromEvent(target) {
-    return target && target.closest ? target.closest(".case-photo-thumb, .email-photo-thumb") : null;
+    return target && target.closest ? target.closest(".photo-zoom, .case-photo-thumb, .email-photo-thumb") : null;
   }
 
   function wirePhotoPreview(root) {
@@ -835,6 +848,7 @@
     hazardEl.addEventListener("input", refreshExtras);
   }
 
+  wirePhotoPreview(document.body);
   if ($("rv-photo-thumbs") || $("rv-email-photos")) {
     wirePhotoInteractions();
     resetCasePhotos(Array.isArray(cfg.casePhotos) ? cfg.casePhotos : []);

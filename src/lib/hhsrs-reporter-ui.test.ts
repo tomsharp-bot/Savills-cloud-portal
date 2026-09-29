@@ -517,27 +517,27 @@ describe("HHSRS Reporter UI helpers", () => {
       return match[0];
     }
     for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"]) {
-      for (const html of [review, find]) {
-        const tag = tagWithId(html, id);
-        assert.match(tag, /autocomplete="off"/, id);
-        assert.match(tag, new RegExp(`name="${id}"`), id);
-        assert.doesNotMatch(tag, /type="email"/, id);
-      }
+      const tag = tagWithId(review, id);
+      assert.match(tag, /autocomplete="off"/, id);
+      assert.match(tag, new RegExp(`name="${id}"`), id);
+      assert.doesNotMatch(tag, /type="email"/, id);
     }
     for (const id of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {
-      for (const html of [review, find]) {
-        const tag = tagWithId(html, id);
-        assert.match(tag, /type="text"/, id);
-        assert.match(tag, /inputmode="email"/, id);
-      }
+      const tag = tagWithId(review, id);
+      assert.match(tag, /type="text"/, id);
+      assert.match(tag, /inputmode="email"/, id);
     }
     assert.match(review, /id="rv-email-form"[^>]*autocomplete="off"/);
     assert.match(review, /id="rv-send-form"[^>]*autocomplete="off"/);
-    assert.match(find, /class="find-compose"[^>]*autocomplete="off"/);
     assert.match(find, /id="rv-send-form"[^>]*autocomplete="off"/);
+    assert.doesNotMatch(find, /type="email"/);
+    for (const id of ["f-address", "f-uprn", "f-notes", "f-date", "f-amendment", "f-hazard", "f-rating"]) {
+      const tag = find.match(new RegExp(`<(?:input|select)\\b[^>]*\\bid="${id}"[^>]*>`));
+      assert.ok(tag, id);
+      assert.match(tag[0], /autocomplete="off"/, id);
+    }
     for (const id of ["rv-send-to", "rv-send-cc", "rv-send-bcc", "rv-send-subject", "rv-send-body"]) {
       assert.match(tagWithId(review, id), /autocomplete="off"/, id);
-      assert.match(tagWithId(find, id), /autocomplete="off"/, id);
     }
     assert.match(card, /class="client-email-row"[^>]*autocomplete="off"/);
     for (const name of ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc"]) {

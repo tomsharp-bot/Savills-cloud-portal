@@ -169,22 +169,100 @@ function plainToHtml(text: string): string {
   return escapeHtml(text).replace(/\r\n/g, "\n").replace(/\n/g, "<br>\n");
 }
 
+export type EmailCardPhoto = {
+  src: string;
+  name: string;
+};
+
+/** Content-ID for a case photo shown in the email body. Not the signature logo. */
+export function inlinePhotoCid(index: number): string {
+  return `hhsrs-photo-${index}@savillshousing.co.uk`;
+}
+
+/**
+ * Drop a signature that was stored on an older send, so the card can add
+ * the short live signature once, under the message.
+ */
+export function stripTrailingSignature(body: string): string {
+  const text = String(body || "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
+  const marker = "\n\nRegards\n\nHHSRS Reporting Team\n";
+  const at = text.lastIndexOf(marker);
+  if (at < 0) return text;
+  const tail = text.slice(at);
+  if (!tail.includes("Before printing, think about the environment")) return text;
+  return text.slice(0, at).replace(/\s+$/, "");
+}
+
+/** Plain stored email text as paragraphs and bullets for the grey card. */
+export function emailBodyToHtml(body: string): string {
+  const text = stripTrailingSignature(body);
+  if (!text.trim()) return "";
+  const parts: string[] = [];
+  let list: string[] = [];
+  const flush = () => {
+    if (!list.length) return;
+    parts.push(`<ul>${list.join("")}</ul>`);
+    list = [];
+  };
+  for (const line of text.split("\n")) {
+    const bullet = line.match(/^•\s*([^:]+):\s*(.*)$/);
+    if (bullet) {
+      list.push(`<li>${escapeHtml(bullet[1].trim())}: ${escapeHtml(bullet[2].trim())}</li>`);
+      continue;
+    }
+    flush();
+    if (!line.trim()) continue;
+    parts.push(`<p>${escapeHtml(line)}</p>`);
+  }
+  flush();
+  return parts.join("");
+}
+
+function emailPhotoTable(photos: readonly EmailCardPhoto[]): string {
+  if (!photos.length) return "";
+  const cells = photos
+    .map((photo) => {
+      const name = escapeHtml(photo.name || "Photo");
+      const src = escapeHtml(photo.src);
+      return `<td style="padding:0 10px 0 0;vertical-align:top;"><img src="${src}" alt="${name}" width="96" height="72" style="width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #d5dee8;display:block;" /><div style="margin:4px 0 0;font-size:11px;line-height:1.3;color:#5c6b7a;">${name}</div></td>`;
+    })
+    .join("");
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px;border-collapse:collapse;"><tr>${cells}</tr></table>`;
+}
+
 export function composeEmailText(body: string, names: Pick<SenderSignature, "firstName" | "fullName">): string {
   const typed = String(body || "").replace(/\s+$/, "");
   const signature = renderSignatureText(names);
   return typed ? `${typed}\n\n${signature}` : signature;
 }
 
+/**
+ * Client email: the same grey card as Find and resend.
+ * Photos are pictures under the signature. The short signature has no personal name and no NOTICE.
+ */
 export function composeEmailHtml(
   body: string,
   names: Pick<SenderSignature, "firstName" | "fullName">,
   logoSrc: string,
-  messageHtml?: string
+  messageHtml?: string,
+  options?: { subject?: string; photos?: readonly EmailCardPhoto[] }
 ): string {
   const typed = String(body || "").replace(/\s+$/, "");
   const inner = messageHtml !== undefined ? messageHtml : typed ? plainToHtml(typed) : "";
   const message = inner
     ? `<div style="font-family:Calibri,Aptos,Arial,sans-serif;font-size:14.5px;line-height:1.45;color:#111111;">${inner}</div>`
     : "";
-  return `<!DOCTYPE html><html lang="en-GB"><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">${message}${renderSignatureHtml(names, logoSrc)}</body></html>`;
+  const subject = String(options?.subject || "").trim();
+  const heading = subject
+    ? `<h2 style="display:inline-block;margin:14px 16px;padding:8px 14px;border-radius:10px;font-size:16px;font-weight:800;letter-spacing:-0.02em;color:#0b1f33;background:#d0d8e6;border-bottom:1px solid #b8c2d4;border-left:5px solid #0b1f33;">${escapeHtml(subject)}</h2>`
+    : "";
+  const photos = emailPhotoTable(options?.photos || []);
+  const card =
+    `<div style="background:#e7edf3;padding:18px;">` +
+    `<div style="background:#ffffff;border:1px solid #0b1f33;border-radius:12px;overflow:hidden;">` +
+    heading +
+    `<div style="margin:0 16px 16px;background:#f7f9fb;border:1px solid #d5dee8;border-radius:10px;padding:14px 16px;font-family:Calibri,Aptos,Arial,sans-serif;font-size:14px;line-height:1.5;color:#0b1f33;">` +
+    `${message}${renderSignatureHtml(names, logoSrc)}${photos}` +
+    `</div></div></div>`;
+  return `<!DOCTYPE html><html lang="en-GB"><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">${card}</body></html>`;
 }

@@ -72,10 +72,10 @@ import {
   sentBannerText,
 } from "../lib/hhsrs-send.js";
 import { listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import { buildAmendmentEmail, parseSentEmail } from "../lib/hhsrs-correction-email.js";
+import { emailBodyToHtml } from "../lib/hhsrs-signature.js";
 import {
-  CORRECTION_REASONS,
   MISSING_EMAIL_BODY,
-  correctionSubject,
   findCaseWhere,
   findStatusLabel,
   formatLondonDate,
@@ -663,6 +663,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
           bcc: latest.bcc,
           subject: latest.subject,
           body: latest.body,
+          bodyHtml: emailBodyToHtml(latest.body) || `<p>${MISSING_EMAIL_BODY}</p>`,
           bodyMissing: !String(latest.body || "").trim(),
           missingText: MISSING_EMAIL_BODY,
           correction: latest.kind === "correction",
@@ -693,19 +694,35 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     };
     if (view === "amend" && latest) {
       const included = new Set(latest.photoNames);
-      photos = casePhotos;
+      const sentPhotos = latest.photoNames.map((name, index) => {
+        const known = casePhotos.find((photo) => photo.name === name);
+        return known || { id: name, name, caption: `Photo ${index + 1}`, url: "" };
+      });
+      const parsed = parseSentEmail(latest.body);
+      const preview = buildAmendmentEmail({
+        previousBody: latest.body,
+        previousSubject: latest.subject,
+        next: parsed.fields,
+        amendment: "",
+      });
+      photos = sentPhotos;
+      const withCurrent = (list: readonly string[], current: string) =>
+        current && !list.includes(current) ? [current, ...list] : [...list];
       amend = {
         to: latest.to,
         cc: latest.cc,
         bcc: latest.bcc,
-        subject: correctionSubject(latest.subject),
-        body: latest.body,
-        reasons: CORRECTION_REASONS,
-        note: "",
-        includedCount: casePhotos.filter((photo) => included.has(photo.name)).length,
-        photos: casePhotos.map((photo, index) => ({
+        subject: preview.subject,
+        previewHtml: preview.messageHtml,
+        fields: parsed.fields,
+        extras: parsed.extras,
+        prose: parsed.prose,
+        previousSubject: latest.subject,
+        categories: withCurrent(HHSRS_CATEGORIES, parsed.fields.hazard),
+        ratings: withCurrent(HHSRS_SITE_FORM_RATINGS, parsed.fields.rating),
+        photos: sentPhotos.map((photo, index) => ({
           ...photo,
-          caption: photo.caption || `Photo ${index + 1}`,
+          caption: photo.caption || photo.name || `Photo ${index + 1}`,
           included: included.has(photo.name),
         })),
         action: `${HHSRS_REPORTER_PATH}/find/${picked.id}/resend`,
@@ -840,8 +857,12 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
           : panelEntry.kind === "not_sent"
             ? ""
             : MISSING_EMAIL_BODY,
+        bodyHtml: emailBodyToHtml(panelEntry.body) || (panelEntry.kind === "not_sent"
+          ? "<p>Not sent from the portal.</p>"
+          : `<p>${MISSING_EMAIL_BODY}</p>`),
       }
     : null;
+  const signature = signatureLocals(res, await senderSignatureFor(req.user));
   res.render("hhsrs-reporter/main-log", {
     ...shellLocals({
       activeNav: "main-log",
@@ -868,6 +889,7 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
     page: loaded.page,
     pageCount: loaded.pageCount,
     mainLogJsUrl: typeof res.locals.baseUrl === "function" ? res.locals.baseUrl("/js/hhsrs-main-log.js") : "/js/hhsrs-main-log.js",
+    ...signature,
   });
 });
 

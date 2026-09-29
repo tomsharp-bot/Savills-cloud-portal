@@ -321,6 +321,12 @@ describe("HHSRS portal send and Main Log record", () => {
     assert.match(mail.text, /Hi all,\n\n• Address: 1 jenkins house, B14 6ES\n\nRegards\n\nHHSRS Reporting Team\n\nSavills, 33 Margaret Street, London, W1G 0JD\n/);
     assert.doesNotMatch(mail.text, /Tom Sharp/);
     assert.match(mail.html, /cid:savills-logo@savillshousing\.co\.uk/);
+    assert.match(mail.html, /background:#e7edf3/);
+    assert.match(mail.html, /background:#f7f9fb/);
+    const printAt = mail.html.indexOf("Before printing, think about the environment");
+    const photoAt = mail.html.indexOf("cid:hhsrs-photo-0@savillshousing.co.uk");
+    assert.ok(printAt >= 0 && photoAt > printAt, "photos are pictures under the signature");
+    assert.ok(mail.html.indexOf("cid:hhsrs-photo-1@savillshousing.co.uk") > photoAt);
     assert.match(mail.html, /width:53px;height:53px;object-fit:contain/);
     assert.doesNotMatch(mail.html, />Tom Sharp</);
     assert.doesNotMatch(mail.html, /dbeafe/);

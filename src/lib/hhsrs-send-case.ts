@@ -28,7 +28,13 @@ import {
   type SentEmailRecord,
 } from "./hhsrs-send.js";
 import { appendToSentFolder, sendMailboxMessage } from "./hhsrs-send-transport.js";
-import { prepareCorrectionEmail } from "./hhsrs-correction-email.js";
+import {
+  amendmentListError,
+  buildAmendmentEmail,
+  parseSentEmail,
+  prepareCorrectionEmail,
+  readAmendmentFields,
+} from "./hhsrs-correction-email.js";
 import { correctionSubject, validateCorrection } from "./hhsrs-find.js";
 
 export function contentTypeFor(filename: string): string {
@@ -321,7 +327,26 @@ export async function sendCaseEmail(args: {
   const to = String(args.body.to ?? "");
   let correctionReason = "";
   let correctionNote = "";
-  if (correction) {
+  const amendmentPost = Boolean(correction) && String(args.body.amendmentFields || "") === "1";
+  const previousEmail = correction ? await latestSentEmail(args.row.id) : null;
+  let amendmentMail: ReturnType<typeof buildAmendmentEmail> | null = null;
+  if (amendmentPost) {
+    if (!previousEmail) return { ok: false, error: "Not sent yet." };
+    const previousFields = parseSentEmail(previousEmail.body).fields;
+    const nextFields = readAmendmentFields(args.body);
+    const listError = amendmentListError(previousFields, nextFields);
+    if (listError) return { ok: false, error: listError };
+    amendmentMail = buildAmendmentEmail({
+      previousBody: previousEmail.body,
+      previousSubject: previousEmail.subject,
+      next: nextFields,
+      amendment: String(args.body.amendment || ""),
+    });
+    const checked = validateCorrection({ reason: amendmentMail.reason, note: amendmentMail.note, to });
+    if (!checked.ok) return checked;
+    correctionReason = checked.reason;
+    correctionNote = checked.note;
+  } else if (correction) {
     const checked = validateCorrection({ reason: correction.reason, note: correction.note, to });
     if (!checked.ok) return checked;
     correctionReason = checked.reason;
@@ -329,7 +354,9 @@ export async function sendCaseEmail(args: {
   }
 
   const known = casePhotoFileNames(args.row.photoPaths);
-  const requested = postedValues(args.body.photo);
+  const postedPhotos = postedValues(args.body.photo);
+  const requested =
+    amendmentPost && !postedPhotos.length && previousEmail ? previousEmail.photoNames : postedPhotos;
   const sizes = new Map<string, number | null>();
   for (const name of known) {
     sizes.set(name, await photoByteSize(args.row.id, name, args.storage));
@@ -342,17 +369,20 @@ export async function sendCaseEmail(args: {
   const attachments = built.attachments;
 
   const submissionId = args.row.id;
-  const subject = correction ? correctionSubject(String(args.body.subject ?? "")) : String(args.body.subject ?? "");
+  let subject = correction ? correctionSubject(String(args.body.subject ?? "")) : String(args.body.subject ?? "");
   let body = String(args.body.body ?? "");
   let messageHtml: string | undefined;
-  if (correction) {
-    const previous = await latestSentEmail(submissionId);
+  if (amendmentMail) {
+    subject = amendmentMail.subject;
+    body = amendmentMail.text;
+    messageHtml = amendmentMail.messageHtml;
+  } else if (correction) {
     const prepared = prepareCorrectionEmail({
-      previousBody: previous?.body ?? "",
+      previousBody: previousEmail?.body ?? "",
       nextBody: body,
-      previousTo: previous?.to ?? "",
+      previousTo: previousEmail?.to ?? "",
       nextTo: to,
-      previousPhotos: previous?.photoNames ?? [],
+      previousPhotos: previousEmail?.photoNames ?? [],
       nextPhotos: picked.names,
       reason: correctionReason,
       note: correctionNote,
@@ -401,7 +431,10 @@ export async function sendCaseEmail(args: {
               const anchor = await earliestSentEmail(tx, submissionId);
               if (!anchor) throw new PortalSendError("Not sent yet.");
               const commit: SendCommit = await run();
-              return insertCorrectionAndClose(tx, submissionId, commit, anchor, correction);
+              return insertCorrectionAndClose(tx, submissionId, commit, anchor, {
+                reason: correctionReason,
+                note: correctionNote,
+              });
             }
             if (locked[0].emailSentAt) throw new PortalSendError("Already sent. Can't be sent again.");
             const existing = await earliestSentEmail(tx, submissionId);

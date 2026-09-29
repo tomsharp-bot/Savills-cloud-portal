@@ -11,118 +11,99 @@
     });
   });
 
-  var amend = $("fr-amend");
-  if (!amend) return;
-
-  var reason = "";
-  var error = $("fr-error");
-  var note = $("fr-note");
-  var subject = $("hhsrs-subject");
-
-  function showError(message) {
-    if (!error) return;
-    if (!message) {
-      error.hidden = true;
-      error.textContent = "";
-      return;
-    }
-    error.hidden = false;
-    error.textContent = message;
-  }
-
-  function includedNames() {
-    var names = [];
-    document.querySelectorAll("#rv-attach-list input[data-attach-name]").forEach(function (box) {
-      if (box.checked) names.push(box.getAttribute("data-attach-name"));
-    });
-    return names;
-  }
-
-  function syncPhotos() {
-    var names = includedNames();
-    document.querySelectorAll("#fr-thumbs .find-thumb[data-photo]").forEach(function (thumb) {
-      thumb.classList.toggle("is-off", names.indexOf(thumb.getAttribute("data-photo")) === -1);
-    });
-    document.querySelectorAll("#fr-picker [data-add-photo]").forEach(function (btn) {
-      btn.classList.toggle("is-off", names.indexOf(btn.getAttribute("data-add-photo")) !== -1);
-    });
-    var count = $("fr-photo-count");
-    if (count) count.textContent = "Photos (" + names.length + ")";
-  }
-
-  function boxFor(name) {
-    var found = null;
-    document.querySelectorAll("#rv-attach-list input[data-attach-name]").forEach(function (box) {
-      if (box.getAttribute("data-attach-name") === name) found = box;
-    });
-    return found;
-  }
-
-  document.querySelectorAll("[data-remove-photo]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var box = boxFor(btn.getAttribute("data-remove-photo"));
-      if (box) box.checked = false;
-      syncPhotos();
-    });
+  var close = $("fr-close");
+  var shade = $("fr-shade");
+  if (shade && close) shade.addEventListener("click", function () { window.location.href = close.href; });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && close && $("fr-drawer")) window.location.href = close.href;
   });
 
-  document.querySelectorAll("[data-add-photo]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var box = boxFor(btn.getAttribute("data-add-photo"));
-      if (box) box.checked = true;
-      syncPhotos();
-    });
-  });
+  var dataEl = $("fr-amend-data");
+  if (!dataEl) return;
+  var data = {};
+  try { data = JSON.parse(dataEl.textContent || "{}"); } catch (err) { data = {}; }
+  var previous = data.previous || {};
+  var extras = Array.isArray(data.extras) ? data.extras : [];
+  var prose = Array.isArray(data.prose) ? data.prose : [];
+  var previousSubject = data.previousSubject || "";
 
-  var add = $("fr-add-photo");
-  var picker = $("fr-picker");
-  if (add && picker) {
-    add.addEventListener("click", function () {
-      picker.hidden = !picker.hidden;
-    });
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
-  document.querySelectorAll("#fr-reasons .find-pick").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      reason = btn.getAttribute("data-reason") || "";
-      document.querySelectorAll("#fr-reasons .find-pick").forEach(function (other) {
-        other.classList.toggle("is-on", other === btn);
-      });
-      showError("");
-      var hidden = $("fr-send-reason");
-      if (hidden) hidden.value = reason;
-    });
-  });
+  function val(id) {
+    var el = $(id);
+    return el ? String(el.value || "").replace(/\s+/g, " ").trim() : "";
+  }
 
-  function prefixSubject(value) {
-    var rest = String(value || "").replace(/^(?:correction:\s*)+/i, "").trim();
+  function correctionSubject(subject) {
+    var rest = String(subject || "").replace(/^(?:correction:\s*)+/i, "").trim();
     return rest ? "CORRECTION: " + rest : "CORRECTION:";
   }
 
-  var sendBtn = $("btn-send-email");
-  if (sendBtn) {
-    sendBtn.addEventListener("click", function (event) {
-      var to = $("hhsrs-to");
-      var toValue = to ? String(to.value || "").trim() : "";
-      var noteValue = note ? String(note.value || "").trim() : "";
-      var message = "";
-      if (!reason) message = "Pick a reason.";
-      else if (reason === "Other" && !noteValue) message = "Add a short note.";
-      else if (!toValue) message = "Add a To address.";
-      if (message) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        showError(message);
-        return;
-      }
-      showError("");
-      if (subject) subject.value = prefixSubject(subject.value);
-      var reasonField = $("fr-send-reason");
-      var noteField = $("fr-send-note");
-      if (reasonField) reasonField.value = reason;
-      if (noteField) noteField.value = noteValue;
-    }, true);
+  var fields = [
+    ["f-address", "address", "Address"],
+    ["f-uprn", "uprn", "UPRN"],
+    ["f-hazard", "hazard", "Hazard"],
+    ["f-rating", "rating", "Rating"],
+    ["f-notes", "notes", "Site notes"],
+    ["f-date", "surveyDate", "Survey date"]
+  ];
+
+  function paint() {
+    var subject = correctionSubject(previousSubject);
+    var oldHead = String(previous.address || "").split(",")[0].trim();
+    var newHead = val("f-address").split(",")[0].trim();
+    if (oldHead && newHead && oldHead !== newHead && subject.indexOf(oldHead) !== -1) {
+      subject = subject.replace(oldHead, newHead);
+    }
+    var title = $("fr-preview-subject");
+    if (title) title.textContent = subject;
+    var amendment = val("f-amendment");
+    var intro = amendment
+      ? "Please disregard our previous email. " + amendment
+      : "Please disregard our previous email.";
+    var html = "<p>Hi all,</p><p>" + esc(intro) + "</p>";
+    prose.forEach(function (line) { html += "<p>" + esc(line) + "</p>"; });
+    var items = "";
+    fields.forEach(function (field) {
+      var value = val(field[0]);
+      var before = String(previous[field[1]] || "");
+      if (!before && !value) return;
+      var shown = value === before ? esc(value) : "<b>" + esc(value) + "</b>";
+      items += "<li>" + esc(field[2]) + ": " + shown + "</li>";
+    });
+    extras.forEach(function (extra) {
+      items += "<li>" + esc(extra.label) + ": " + esc(extra.value) + "</li>";
+    });
+    if (items) html += "<ul>" + items + "</ul>";
+    var copy = $("fr-preview-copy");
+    if (copy) copy.innerHTML = html;
   }
 
-  syncPhotos();
+  var checked = $("fr-checked");
+  var send = $("btn-send-correction");
+  function syncSend() {
+    if (send) send.disabled = !(checked && checked.checked);
+  }
+  if (checked) checked.addEventListener("change", syncSend);
+  document.querySelectorAll("#fr-amend input, #fr-amend select").forEach(function (el) {
+    if (el.id === "fr-checked") return;
+    el.addEventListener("input", paint);
+    el.addEventListener("change", paint);
+  });
+  var form = $("rv-send-form");
+  if (form) {
+    form.addEventListener("submit", function (event) {
+      if (!checked || !checked.checked) {
+        event.preventDefault();
+        syncSend();
+      }
+    });
+  }
+  syncSend();
+  paint();
 })();

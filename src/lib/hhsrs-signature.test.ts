@@ -88,8 +88,14 @@ describe("HHSRS email signature", () => {
     const generated = composeEmailText("Dear Sir/Madam,\n\nPlease find details.", names);
     assert.match(generated, new RegExp(`${printLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
     assert.doesNotMatch(generated, /NOTICE:|Savills plc|Scottish Letting Agent Register/);
-    const generatedHtml = composeEmailHtml("Dear Sir/Madam,\n\nPlease find details.", names, `cid:${SIGNATURE_LOGO_CID}`);
-    assert.match(generatedHtml, /Before printing, think about the environment<\/p><\/div><\/body><\/html>$/);
+    const generatedHtml = composeEmailHtml("Dear Sir/Madam,\n\nPlease find details.", names, `cid:${SIGNATURE_LOGO_CID}`, undefined, {
+      subject: "HHSRS – 1 Test Street",
+    });
+    assert.match(generatedHtml, /Before printing, think about the environment<\/p><\/div>/);
+    assert.match(generatedHtml, /background:#e7edf3/);
+    assert.match(generatedHtml, /background:#f7f9fb/);
+    assert.match(generatedHtml, /HHSRS – 1 Test Street/);
+    assert.match(generatedHtml, /<\/body><\/html>$/);
     assert.doesNotMatch(generatedHtml, /NOTICE:|Savills plc|Scottish Letting Agent Register/);
   });
 

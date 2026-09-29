@@ -227,7 +227,7 @@
             </div>
             <div class="photo-thumbs case-photo-thumbs" id="rv-photo-thumbs" aria-label="Case photos">
               <% casePhotos.forEach((p) => { %>
-                <div class="photo-thumb case-photo-thumb" data-photo-id="<%= p.id %>">
+                <div class="photo-thumb photo-zoom case-photo-thumb" data-photo-id="<%= p.id %>">
                   <img src="<%= p.url %>" alt="<%= p.caption %>" draggable="false" />
                   <span class="photo-caption"><%= p.caption %></span>
                 </div>
