@@ -217,6 +217,27 @@
     return f === "F" || f === "E";
   }
 
+  function listedIn(people, name) {
+    var key = canon(name);
+    if (!key) return false;
+    for (var i = 0; i < people.length; i++) {
+      if (canon(people[i].name) === key) return true;
+    }
+    return false;
+  }
+
+  function dedupePeople(people) {
+    var seen = {};
+    var out = [];
+    (people || []).forEach(function (person) {
+      var key = canon(person && person.name);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      out.push(person);
+    });
+    return out;
+  }
+
   var tickMap = Object.assign({}, DATA.ticks || {});
   var appliedMap = Object.assign({}, DATA.applied || {});
   var dirty = false;
@@ -399,22 +420,34 @@
     var admins = adminCanonSet();
     var agency = seedAgency.map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
     var team = seedTeam
-      .filter(function (p) { return !isAdminName(p.name, admins); })
+      .filter(function (p) { return !isAdminName(p.name, admins) && !listedIn(agency, p.name); })
       .map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
-    var seenA = new Set(agency.map(function (p) { return p.name; }));
-    var seenT = new Set(team.map(function (p) { return p.name; }));
+    agency = dedupePeople(agency);
+    team = dedupePeople(team);
+    var seenA = {};
+    var seenT = {};
+    agency.forEach(function (p) { seenA[canon(p.name)] = true; });
+    team.forEach(function (p) { seenT[canon(p.name)] = true; });
     function pushInactive(person) {
       if (isApplied(person.name)) return;
+      var key = canon(person.name);
+      if (!key || seenA[key] || seenT[key]) return;
       var entry = { flag: person.flag || "", name: person.name, fromGrid: true };
       if (isAgencyFlag(person.flag)) {
-        if (!seenA.has(person.name)) { agency.push(entry); seenA.add(person.name); }
-      } else if (!isAdminName(person.name, admins) && !seenT.has(person.name)) {
+        agency.push(entry);
+        seenA[key] = true;
+      } else if (!isAdminName(person.name, admins)) {
         team.push(entry);
-        seenT.add(person.name);
+        seenT[key] = true;
       }
     }
     (DATA.rows || []).forEach(pushInactive);
     (DATA.admins || []).forEach(pushInactive);
+    team = team.filter(function (p) {
+      return !listedIn(agency, p.name) && !(isApplied(p.name) && listedIn(DATA.rows || [], p.name));
+    });
+    agency = dedupePeople(agency);
+    team = dedupePeople(team);
     fillPool("agencyPool", agency);
     fillPool("teamPool", team);
     return { agency: agency, team: team };
@@ -532,7 +565,11 @@
   }
 
   function refreshMeta(poolState) {
-    var activeSurveyors = (DATA.rows || []).filter(function (r) { return isApplied(r.name); }).length;
+    var agencyKeys = {};
+    ((poolState && poolState.agency) || []).forEach(function (person) { agencyKeys[canon(person.name)] = true; });
+    var activeSurveyors = (DATA.rows || []).filter(function (r) {
+      return isApplied(r.name) && !agencyKeys[canon(r.name)];
+    }).length;
     var activeAdmins = (DATA.admins || []).filter(function (a) { return isApplied(a.name); }).length;
     var agencyN = poolState ? poolState.agency.length : 0;
     var teamN = poolState ? poolState.team.length : 0;
@@ -546,14 +583,18 @@
     readTicksFromDomIntoMap();
     tbody.innerHTML = "";
     rowStore = [];
+    var poolState = rebuildPools();
+    var agencyOnBoard = {};
+    (poolState.agency || []).forEach(function (person) { agencyOnBoard[canon(person.name)] = true; });
     (DATA.rows || []).forEach(function (row, i) {
+      if (agencyOnBoard[canon(row.name)]) return;
       if (isApplied(row.name)) appendPersonRow(row, { rowIndex: i });
     });
     appendAdminHeader();
     (DATA.admins || []).forEach(function (a, i) {
       if (isApplied(a.name)) appendPersonRow(a, { admin: true, adminIndex: i });
     });
-    refreshMeta(rebuildPools());
+    refreshMeta(poolState);
     refreshWeekCounts();
   }
 

@@ -96,7 +96,7 @@ describe("resolveProgramme", () => {
         { name: "Phil Moon" },
         { name: "Tom Sharp" },
       ],
-      surveyors: [{ name: "Alex Surveyor", agency: "Savills" }, { name: "peter may", agency: "E" }],
+      surveyors: [{ name: "Alex Surveyor" }, { name: "peter may", agency: "E" }],
     });
     assert.equal(board.usingPersonnelAdmins, true);
     assert.deepEqual(
@@ -106,11 +106,11 @@ describe("resolveProgramme", () => {
     assert.equal(board.admins.find((row) => row.name === "Tom Sharp")?.weeks.length, board.weeks.length);
     assert.ok(!board.admins.some((row) => row.name.startsWith("Admin ")));
     assert.equal(board.rows.at(-1)?.name, "Alex Surveyor");
-    const peter = board.rows.find((row) => canonName(row.name) === "peter may");
-    assert.equal(peter?.name, "peter may");
-    assert.equal(peter?.weeks[5], "Holiday");
-    assert.equal(peter?.flag, "E");
-    assert.equal(board.rows.filter((row) => canonName(row.name) === "peter may").length, 1);
+    assert.equal(board.rows.some((row) => canonName(row.name) === "peter may"), false);
+    const peter = board.pools.agency_not_on_project.filter((person) => canonName(person.name) === "peter may");
+    assert.equal(peter.length, 1);
+    assert.equal(peter[0].flag, "E");
+    assert.equal(board.pools.team_not_live.some((person) => canonName(person.name) === "peter may"), false);
   });
 
   it("keeps a saved layout and appends new Personnel surveyors", () => {
@@ -174,6 +174,179 @@ describe("resolveProgramme", () => {
       ).map((person) => person.name),
       ["Tom Purnell", "Alan Henderson"]
     );
+  });
+
+  it("puts each person in one section from their Personnel agency letter", () => {
+    const board = resolveProgramme({
+      surveyors: [
+        { name: "Bardya Amin", agency: "Ele" },
+        { name: "Nia Cole", agency: "Ele" },
+        { name: "Alex Surveyor", agency: "Savills" },
+        { name: "peter may", agency: "E" },
+        { name: "Jeremy Hughes", agency: "F" },
+        { name: "Sam Blank", agency: "  " },
+        { name: "Alan Henderson", agency: "" },
+      ],
+    });
+    function namesIn(list: { name: string }[], name: string) {
+      return list.filter((person) => canonName(person.name) === canonName(name)).map((person) => person.name);
+    }
+    function places(name: string) {
+      return {
+        rows: namesIn(board.rows, name).length,
+        agency: namesIn(board.pools.agency_not_on_project, name).length,
+        team: namesIn(board.pools.team_not_live, name).length,
+      };
+    }
+    assert.deepEqual(places("Bardya Amin"), { rows: 0, agency: 1, team: 0 });
+    assert.equal(board.pools.agency_not_on_project.find((person) => person.name === "Bardya Amin")?.flag, "F");
+    assert.deepEqual(places("Nia Cole"), { rows: 0, agency: 1, team: 0 });
+    assert.equal(board.pools.agency_not_on_project.find((person) => person.name === "Nia Cole")?.flag, "Ele");
+    assert.deepEqual(places("Alex Surveyor"), { rows: 0, agency: 1, team: 0 });
+    assert.deepEqual(places("peter may"), { rows: 0, agency: 1, team: 0 });
+    assert.deepEqual(places("Jeremy Hughes"), { rows: 0, agency: 1, team: 0 });
+    assert.equal(board.pools.agency_not_on_project.find((person) => person.name === "Jeremy Hughes")?.flag, "F");
+    assert.deepEqual(places("Sam Blank"), { rows: 1, agency: 0, team: 0 });
+    assert.deepEqual(places("Alan Henderson"), { rows: 1, agency: 0, team: 0 });
+    assert.deepEqual(places("Richard Moreing"), { rows: 1, agency: 0, team: 0 });
+    assert.deepEqual(places("Clive Gray"), { rows: 0, agency: 0, team: 1 });
+    const seen = new Set<string>();
+    for (const person of [...board.rows, ...board.pools.agency_not_on_project, ...board.pools.team_not_live]) {
+      const key = canonName(person.name);
+      assert.equal(seen.has(key), false, key);
+      seen.add(key);
+    }
+
+    const saved = resolveProgramme({
+      saved: {
+        version: 1,
+        ticks: { "Bardya Amin": false, "Richard Moreing": true, "Sam Blank": true },
+        applied: { "Bardya Amin": false, "Richard Moreing": true, "Sam Blank": true },
+        surveyorOrder: ["Richard Moreing", "Bardya Amin", "Peter May", "Sam Blank"],
+        adminOrder: [],
+        cells: { "Bardya Amin": ["Onward"], "Richard Moreing": ["LFHA 2026"] },
+        flags: { "Bardya Amin": "", "Peter May": "F" },
+      },
+      surveyors: [
+        { name: "Bardya Amin", agency: " ele " },
+        { name: "Sam Blank" },
+      ],
+    });
+    assert.equal(saved.rows.some((row) => row.name === "Bardya Amin"), false);
+    assert.equal(saved.rows[0].name, "Richard Moreing");
+    assert.equal(saved.rows[0].weeks[0], "LFHA 2026");
+    assert.ok(saved.rows.some((row) => row.name === "Peter May"));
+    assert.ok(saved.rows.some((row) => row.name === "Sam Blank"));
+    assert.equal(saved.pools.agency_not_on_project.some((person) => canonName(person.name) === "peter may"), false);
+    assert.equal(saved.pools.agency_not_on_project.some((person) => canonName(person.name) === "sam blank"), false);
+    assert.equal(saved.pools.team_not_live.some((person) => person.name === "Bardya Amin"), false);
+    assert.equal(saved.pools.agency_not_on_project.filter((person) => canonName(person.name) === "bardya amin").length, 1);
+  });
+
+  it("does not list one person in both the agency section and the normal surveyor section", () => {
+    const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
+    const lists = new Map<string, { children: { className: string; textContent: string; children: { className: string; textContent: string }[] }[] }>();
+    function fakeEl(id?: string) {
+      const node = {
+        id: id || "",
+        textContent: "",
+        innerHTML: "",
+        className: "",
+        title: "",
+        draggable: false,
+        dataset: {} as Record<string, string>,
+        style: {} as Record<string, string>,
+        children: [] as { className: string; textContent: string; children: { className: string; textContent: string }[] }[],
+        classList: { add() {}, remove() {}, contains: () => false },
+        appendChild(child: typeof node) {
+          node.children.push(child);
+          return child;
+        },
+        setAttribute() {},
+        getAttribute: () => null,
+        addEventListener() {},
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        remove() {},
+        closest: () => null,
+      };
+      if (id) lists.set(id, node);
+      return node;
+    }
+    const dataEl = fakeEl("programme-data");
+    dataEl.textContent = JSON.stringify({
+      canEdit: false,
+      weeks: ["2026-09-21"],
+      rows: [
+        { name: "Bardya Amin", flag: "", weeks: [""] },
+        { name: "Nia Cole", flag: "Ele", weeks: [""] },
+        { name: "Alex Surveyor", flag: "", weeks: [""] },
+        { name: "Jeremy Hughes", flag: "F", weeks: [""] },
+        { name: "Sam Blank", flag: "", weeks: [""] },
+        { name: "Richard Moreing", flag: "", weeks: ["LFHA 2026"] },
+      ],
+      admins: [],
+      pools: {
+        agency_not_on_project: [
+          { flag: "F", name: "Bardya Amin" },
+          { flag: "Ele", name: "Nia Cole" },
+          { flag: "F", name: "Jeremy Hughes" },
+        ],
+        team_not_live: [
+          { flag: "", name: "Alan Henderson" },
+          { flag: "", name: "Clive Gray" },
+        ],
+      },
+      ticks: {
+        "Bardya Amin": true,
+        "Nia Cole": true,
+        "Alex Surveyor": false,
+        "Jeremy Hughes": true,
+        "Sam Blank": true,
+        "Richard Moreing": true,
+      },
+      applied: {
+        "Bardya Amin": true,
+        "Nia Cole": true,
+        "Alex Surveyor": false,
+        "Jeremy Hughes": true,
+        "Sam Blank": true,
+        "Richard Moreing": true,
+      },
+      projects: { current: [], upcoming: [], completed: [] },
+      notes: {},
+      adminNames: [],
+    });
+    const thead = fakeEl();
+    const tbody = fakeEl();
+    const document = {
+      getElementById(id: string) {
+        if (id === "programme-data") return dataEl;
+        return lists.get(id) || fakeEl(id);
+      },
+      querySelector(sel: string) {
+        if (sel === "#matrix thead") return thead;
+        if (sel === "#matrix tbody") return tbody;
+        return null;
+      },
+      querySelectorAll: () => [],
+      createElement: () => fakeEl(),
+      addEventListener() {},
+    };
+    vm.runInNewContext(script, { document, window: { addEventListener() {} } });
+    function poolNames(id: string) {
+      return (lists.get(id)?.children || []).map((li) => {
+        const name = li.children.find((child) => child.className === "name");
+        return name?.textContent || "";
+      });
+    }
+    const onBoard = tbody.children
+      .flatMap((row) => row.children)
+      .filter((cell) => cell.className === "surveyor")
+      .map((cell) => cell.textContent);
+    assert.deepEqual(poolNames("agencyPool"), ["Bardya Amin", "Nia Cole", "Jeremy Hughes"]);
+    assert.deepEqual(poolNames("teamPool"), ["Alan Henderson", "Clive Gray", "Alex Surveyor"]);
+    assert.deepEqual(onBoard, ["Sam Blank", "Richard Moreing"]);
   });
 
   it("skips frozen Personnel when adding people", () => {

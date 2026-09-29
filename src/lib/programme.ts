@@ -202,6 +202,34 @@ function activePersonnel(people: readonly PersonnelRef[]): PersonnelRef[] {
   return people.filter((person) => !person.frozen && canonName(person.name));
 }
 
+/** Personnel Agency value. Blank means a normal surveyor; any letter, including Ele, means agency. */
+export function personnelAgencyLetter(agency: string | null | undefined): string {
+  return String(agency ?? "").replace(/\s+/g, " ").trim();
+}
+
+export function hasAgencyLetter(agency: string | null | undefined): boolean {
+  return personnelAgencyLetter(agency).length > 0;
+}
+
+function agencyPoolFlag(agency: string | null | undefined): string {
+  const letter = personnelAgencyLetter(agency);
+  const upper = letter.toUpperCase();
+  if (upper === "F" || upper === "E") return upper;
+  return letter;
+}
+
+function dedupePool(people: readonly ProgrammePoolPerson[]): ProgrammePoolPerson[] {
+  const seen = new Set<string>();
+  const out: ProgrammePoolPerson[] = [];
+  for (const person of people) {
+    const key = canonName(person.name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ flag: person.flag, name: collapseName(person.name) });
+  }
+  return out;
+}
+
 function seedMaps(): { weeks: Map<string, string[]>; flags: Map<string, string> } {
   const weeks = new Map<string, string[]>();
   const flags = new Map<string, string>();
@@ -285,6 +313,7 @@ export function resolveProgramme(input: {
     collapseName(a.name).localeCompare(collapseName(b.name), "en-GB")
   );
   for (const person of extraSurveyors) {
+    if (hasAgencyLetter(person.agency)) continue;
     if (!hasCanon(surveyorOrder, person.name)) surveyorOrder.push(collapseName(person.name));
   }
 
@@ -311,37 +340,65 @@ export function resolveProgramme(input: {
 
   const cells = saved?.cells ?? {};
   const flags = saved?.flags ?? {};
-  const rows = surveyorOrder.map((name) => ({
-    name,
-    flag: lookupFlag(name, flags, seedFlags, surveyorPersonnel),
-    weeks: lookupWeeks(name, cells, seedWeeks),
-  }));
   const adminRows = adminOrder.map((name) => ({
     name,
     flag: lookupFlag(name, flags, seedFlags, adminPersonnel),
     weeks: lookupWeeks(name, cells, seedWeeks),
   }));
-  const everyone = [...rows.map((row) => row.name), ...adminRows.map((row) => row.name)];
   const adminNamesForPool = [
     ...(input.admins || []).map((person) => person.name),
     ...adminRows.map((person) => person.name),
   ];
+  const normalOnly = new Set(
+    surveyors.filter((person) => !hasAgencyLetter(person.agency)).map((person) => canonName(person.name))
+  );
+  const agencyOnly = new Set(
+    surveyors.filter((person) => hasAgencyLetter(person.agency)).map((person) => canonName(person.name))
+  );
+  let agencyPool = programmeSeed.pools.agency_not_on_project
+    .map((person) => ({
+      flag: normalizeFlag(person.flag) || personnelAgencyLetter(person.flag),
+      name: collapseName(person.name),
+    }))
+    .filter((person) => !normalOnly.has(canonName(person.name)));
+  for (const person of surveyors) {
+    if (!agencyOnly.has(canonName(person.name))) continue;
+    if (agencyPool.some((row) => canonName(row.name) === canonName(person.name))) continue;
+    agencyPool.push({ flag: agencyPoolFlag(person.agency), name: collapseName(person.name) });
+  }
+  agencyPool = dedupePool(agencyPool);
+  const agencyNames = new Set(agencyPool.map((person) => canonName(person.name)));
+  const normalOrder = surveyorOrder.filter((name) => {
+    const key = canonName(name);
+    if (agencyOnly.has(key)) return false;
+    if (agencyNames.has(key)) return false;
+    return true;
+  });
+  const normalRows = normalOrder.map((name) => ({
+    name,
+    flag: lookupFlag(name, flags, seedFlags, surveyorPersonnel),
+    weeks: lookupWeeks(name, cells, seedWeeks),
+  }));
+  const normalNames = new Set(normalRows.map((row) => canonName(row.name)));
+  const everyone = [...normalRows.map((row) => row.name), ...adminRows.map((row) => row.name)];
 
   return {
     weeks: programmeSeed.weeks.slice(),
-    rows,
+    rows: normalRows,
     admins: adminRows,
     pools: {
-      agency_not_on_project: programmeSeed.pools.agency_not_on_project.map((person) => ({
-        flag: normalizeFlag(person.flag),
-        name: collapseName(person.name),
-      })),
-      team_not_live: teamPoolExcludingAdmins(
-        programmeSeed.pools.team_not_live.map((person) => ({
-          flag: normalizeFlag(person.flag),
-          name: collapseName(person.name),
-        })),
-        adminNamesForPool
+      agency_not_on_project: agencyPool,
+      team_not_live: dedupePool(
+        teamPoolExcludingAdmins(
+          programmeSeed.pools.team_not_live.map((person) => ({
+            flag: normalizeFlag(person.flag),
+            name: collapseName(person.name),
+          })),
+          adminNamesForPool
+        ).filter((person) => {
+          const key = canonName(person.name);
+          return !agencyNames.has(key) && !normalNames.has(key) && !agencyOnly.has(key);
+        })
       ),
     },
     ticks: remapBools(saved?.ticks, everyone),
