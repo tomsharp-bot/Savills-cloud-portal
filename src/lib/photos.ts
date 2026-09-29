@@ -197,6 +197,24 @@ export function buildFolderName(seq: number, nameRest: string): string | null {
   return `${seq}. ${rest}`;
 }
 
+/** Computer folder names used by Import Photo Folder. Longer than a photo code, still bounded. */
+export const IMPORTED_FOLDER_NAME_MAX = 200;
+
+/**
+ * The Photo Folder name is the chosen computer folder's name.
+ * Path pieces are rejected so a client cannot smuggle a storage key.
+ */
+export function parseImportedFolderName(raw: string): { ok: true; name: string } | { ok: false; error: string } {
+  const name = String(raw || "").trim();
+  if (!name || name === "." || name === "..") return { ok: false, error: "That folder needs a name." };
+  if (name.length > IMPORTED_FOLDER_NAME_MAX) return { ok: false, error: "Folder name is too long." };
+  if (/[\u0000-\u001f]/.test(name)) return { ok: false, error: "Folder name cannot include control characters." };
+  if (/[/\\]/.test(name) || name.includes("..")) {
+    return { ok: false, error: "Folder name cannot include a path." };
+  }
+  return { ok: true, name };
+}
+
 export function photoCodesOf(folder: Pick<PhotoFolder, "photoCodes">): string[] {
   const raw = folder.photoCodes;
   if (Array.isArray(raw)) return raw.map(String);
@@ -686,6 +704,37 @@ export async function createPhotosExtract(
       folder: toFolderView(folder),
     },
   };
+}
+
+/**
+ * Create an empty Photo Folder named after a folder on the admin's computer.
+ * Does not read, copy, or delete pool rows, existing folders, or zip packs.
+ * Photos are added afterwards through the normal folder upload.
+ */
+export async function createImportedPhotoFolder(
+  projectId: string,
+  rawName: string
+): Promise<{ ok: true; folder: PhotoFolderView } | { ok: false; error: string; status: number }> {
+  const parsed = parseImportedFolderName(rawName);
+  if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
+
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+  if (!project) return { ok: false, error: "Project not found.", status: 404 };
+
+  const folder = await prisma.photoFolder.create({
+    data: {
+      projectId,
+      name: parsed.name,
+      kind: "folder",
+      clientAccess: false,
+      photoCodes: [],
+      activities: {
+        create: [{ who: "Client portal · (no clients yet)", downloaded: false }],
+      },
+    },
+    include: { activities: true },
+  });
+  return { ok: true, folder: toFolderView(folder) };
 }
 
 export async function setFolderClientAccess(folderId: string, projectId: string, clientAccess: boolean) {

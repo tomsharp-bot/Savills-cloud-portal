@@ -120,7 +120,9 @@
 
     <div id="panel-folders" class="panel" role="tabpanel" aria-labelledby="tab-folders">
       <div class="folders-toolbar">
-        <p class="hint-muted" style="margin:0">Batch folders (and zip packs). Tick <strong>Client Access</strong> to show on Client · Completions. Click a folder name to expand its photos, then drop images into that folder or select them to download, rename, or delete. <strong>Delete folder</strong> removes that folder. You will be asked to confirm, and it cannot be undone.</p>
+        <p class="hint-muted" style="margin:0">Batch folders (and zip packs). Tick <strong>Client Access</strong> to show on Client · Completions. Click a folder name to expand its photos, then drop images into that folder or select them to download, rename, or delete. <strong>Delete folder</strong> removes that folder. You will be asked to confirm, and it cannot be undone. <strong>Import Photo Folder</strong> adds a folder from your computer, using that folder's name. Import does not delete anything.</p>
+        <button type="button" class="btn btn-primary" id="btnImportPhotoFolder">Import Photo Folder</button>
+        <input type="file" id="importPhotoFolderInput" class="import-folder-input visually-hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" webkitdirectory directory multiple />
       </div>
       <div class="table-wrap">
         <table class="folders-table" aria-label="Photo Folders">

@@ -2006,6 +2006,116 @@
     startUpload(files, uploadScopeFromZone(zone));
   });
 
+  function chosenFolderName(files) {
+    for (let i = 0; i < files.length; i++) {
+      const rel = String((files[i] && files[i].webkitRelativePath) || "");
+      const parts = rel.split(/[/\\]/).filter(Boolean);
+      if (parts.length) return parts[0];
+    }
+    return "";
+  }
+
+  function splitImportFiles(files) {
+    const images = [];
+    let skipped = 0;
+    files.forEach((file) => {
+      const parsed = parseClientPhotoName(file && file.name);
+      if (!parsed.ok) {
+        skipped += 1;
+        return;
+      }
+      images.push(file);
+    });
+    return { images: images, skipped: skipped };
+  }
+
+  let importBusy = false;
+
+  async function importChosenFolder(files) {
+    if (importBusy) return;
+    if (!files.length) return;
+    const name = chosenFolderName(files);
+    if (!name) {
+      alert("Choose a folder of photos. The folder name is used for the Photo Folder.");
+      return;
+    }
+    const split = splitImportFiles(files);
+    if (!split.images.length) {
+      alert("That folder has no JPEG, PNG, WebP, or HEIC photos. Nothing was added or deleted.");
+      return;
+    }
+    if (uploadSession && uploadSession.running) {
+      uploadSession.notice = "Finish or stop the current upload before importing a folder.";
+      renderUploadStatus();
+      return;
+    }
+    if (!data.importFolderApi) return;
+    importBusy = true;
+    const btn = document.getElementById("btnImportPhotoFolder");
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch(url(data.importFolderApi), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ name: name }),
+      });
+      let json = {};
+      try {
+        json = await res.json();
+      } catch (err) {
+        json = {};
+      }
+      if (!res.ok || !json.ok || !json.folder) {
+        const fallback = res.status === 403 ? "Admin only." : "Could not import that folder.";
+        throw new Error(json.error || fallback);
+      }
+      folders.push(json.folder);
+      highlightFolderId = json.folder.id;
+      expandedFolderId = json.folder.id;
+      if (folderSelectId && folderSelectId !== expandedFolderId) {
+        folderSelectId = null;
+        selectedFolderCodes.clear();
+      }
+      setTab("folders");
+      renderFolders();
+      renderCompletions();
+      startUpload(split.images, { kind: "folder", folderId: json.folder.id });
+      if (
+        split.skipped &&
+        uploadSession &&
+        uploadSession.scope &&
+        uploadSession.scope.folderId === json.folder.id
+      ) {
+        const noun = split.skipped === 1 ? "file was" : "files were";
+        const extra = split.skipped + " " + noun + " left out because they are not photos. Nothing was deleted.";
+        uploadSession.notice = uploadSession.notice ? uploadSession.notice + " " + extra : extra;
+        renderUploadStatus();
+      }
+      setTimeout(() => {
+        const row = document.querySelector('tr[data-zip-id="' + CSS.escape(json.folder.id) + '"]');
+        if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+    } catch (err) {
+      alert(err.message || "Could not import that folder.");
+    } finally {
+      importBusy = false;
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  const importFolderBtn = document.getElementById("btnImportPhotoFolder");
+  const importFolderInput = document.getElementById("importPhotoFolderInput");
+  if (importFolderBtn && importFolderInput) {
+    importFolderBtn.addEventListener("click", () => {
+      importFolderInput.click();
+    });
+    importFolderInput.addEventListener("change", () => {
+      const chosen = Array.from(importFolderInput.files || []);
+      importFolderInput.value = "";
+      importChosenFolder(chosen);
+    });
+  }
+
   document.getElementById("btnUploadStop").addEventListener("click", () => {
     if (!uploadSession || !uploadSession.running) return;
     uploadSession.stopped = true;
