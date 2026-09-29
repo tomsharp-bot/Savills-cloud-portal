@@ -298,7 +298,7 @@ describe("duplicates and office emails with the database", () => {
       assert.match(panel.body, /Yes, move back/);
       assert.match(panel.body, /Black mould on the bedroom ceiling/);
       assert.match(panel.body, new RegExp(`/HHSRSreporter/review/${original.id}`));
-      assert.match(panel.body, /Original submission/);
+      assert.match(panel.body, /Original Submission/);
 
       const back = await request(port, "POST", `/HHSRSreporter/duplicates/${duplicate.id}/restore`, { cookie });
       assert.equal(back.status, 302);

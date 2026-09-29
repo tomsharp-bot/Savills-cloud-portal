@@ -936,7 +936,7 @@ hhsrsReporterRouter.get("/project-overview", async (req: Request, res: Response)
     ...shellLocals({
       activeNav: "project-overview",
       summary,
-      title: "Project overview — HHSRS Reporter",
+      title: "Project Overview — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),

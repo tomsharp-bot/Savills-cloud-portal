@@ -384,7 +384,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(workspace, /id="abandon-claim-form"/);
     assert.match(workspace, /btn-copy/);
     assert.match(workspace, /Download photos/);
-    assert.match(review, /Check before sending/);
+    assert.match(review, /Check Before Sending/);
     assert.match(review, /I've checked the details/);
     assert.match(review, /id="ck-send"[^>]*>Send and log</);
     assert.match(review, /Nothing is sent until you press Send and log\./);
