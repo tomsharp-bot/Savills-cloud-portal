@@ -368,7 +368,7 @@ body:not(.tab-grid) #main{visibility:hidden}
     <div class="cards">
       <div class="card drop" id="cDrop"><div class="big">&#11015; Drag the Vision exports here</div><div class="sub">e.g. <i>15a. Condition Data List Export &hellip;.xlsx</i> (needed) plus <i>15b. Hazard List Export &hellip;</i> and <i>15c. Comments Export &hellip;</i> (optional) &middot; drop one, two or all three together</div><button class="sbtn" id="cPick">Choose files&hellip;</button></div>
       <div class="card drop" id="oDrop"><div class="big">&#128194; &hellip;or open a master you saved earlier</div><div class="sub">&ldquo;&hellip;-Master Data File-V&hellip;.xlsm&rdquo; (or an older &hellip;.xlsx master) &ndash; brings back the grid, yellow edits, standard answers, builder settings, macros, Original Data Imported and Import Log</div><button class="sbtn" id="oPick">Open master&hellip;</button></div>
-      <div class="card drop" id="baseDrop"><div class="big">&#11015; Or start from an existing Master Data File</div><div class="sub">.xlsm or .xlsx &middot; this file&rsquo;s columns, in this order, and its rows become the new master. Headers stay as they are. Columns you left out are not added. Saved as {Project name}-Master Data File-V1.</div><button class="sbtn" id="basePick" type="button">Choose file&hellip;</button></div>
+      <div class="card drop" id="baseDrop"><div class="big">&#11015; Or start from an existing Master Data File</div><div class="sub">.xlsm or .xlsx &middot; this file&rsquo;s columns, in this order, and its rows become the new master. All columns start selected. Select all, then untick any you do not want. Unticked columns stay out. Headers stay as they are. Saved as {Project name}-Master Data File-V1.</div><button class="sbtn" id="basePick" type="button">Choose file&hellip;</button></div>
     </div>
     <div id="cPreview"></div>
     <div id="basePreview"></div>
@@ -384,7 +384,7 @@ body:not(.tab-grid) #main{visibility:hidden}
     <div id="iSummary"></div>
     <div id="iConf"></div>
     <h3 style="margin-top:22px">Import data from an existing MDF</h3>
-    <p class="lead">Drop a master that is already in the horizontal layout (one row per property), such as the checked pilot workbook. Columns are matched on the header name, ignoring capital letters and extra spaces. Nothing is guessed. Columns that do not match are listed so you can tick the ones you want, or leave them out. Rows are matched on UPRN: values from this file replace the master, and properties that are not already there are added. A sheet that does not have a saved column order yet keeps the workbook&rsquo;s own header order.</p>
+    <p class="lead">Drop a master that is already in the horizontal layout (one row per property), such as the checked pilot workbook. Columns are matched on the header name, ignoring capital letters and extra spaces. Nothing is guessed. Columns that do not match are listed in the order they have in this file. Select all, then untick any you do not want. Ticked columns are added in that same order. Unticked columns stay out, and headers are not renamed. Rows are matched on UPRN: values from this file replace the master, and properties that are not already there are added. A sheet that does not have a saved column order yet keeps the workbook&rsquo;s own header order.</p>
     <div class="card drop" id="mdfDrop"><div class="big">&#11015; Drag an existing master here</div><div class="sub">.xlsx or .xlsm &middot; a sheet bigger than 40 MB uncompressed (for example a raw RDSAP dump) is skipped</div><button class="sbtn" id="mdfPick" type="button">Choose file&hellip;</button></div>
     <div id="mdfPreview"></div>
   </div>
@@ -5335,18 +5335,55 @@ function renderMdfPreview(){
     html += '<table class="kv"><tr><th>Matched columns</th><td>' + nf(p.matched.length) + '</td></tr>'
       + '<tr><th>Properties</th><td>' + nf(p.over) + ' already in the master (those cells overwritten), ' + nf(p.neu) + ' new, ' + nf(p.info.skipped) + ' rows skipped (no UPRN)</td></tr>'
       + '<tr><th>v4 columns with no source header</th><td>' + nf(p.v4missing.length) + (p.v4missing.length ? ' — left as they are' : '') + '</td></tr></table>';
-    html += '<h4>Not matched — tick to include, or leave out</h4>';
-    if (!p.unmatched.length) html += '<div class="hint">Every source column matched a v4 header.</div>';
+    html += '<h4>Not already in this master</h4>';
+    if (!p.unmatched.length) html += '<div class="hint">Every source column matched a header already in this master.</div>';
     else {
-      html += '<div class="hint">' + nf(p.unmatched.length) + ' source columns. None are imported unless you tick them.</div>';
-      html += '<div style="max-height:240px;overflow:auto;border:1px solid #ddd;padding:6px">';
-      p.unmatched.forEach((c, ci) => { html += '<label style="display:block"><input type="checkbox" data-mdf-pick="' + pi + ':' + ci + '"> ' + esc(c.header) + '</label>'; });
-      html += '</div>';
+      html += '<div class="hint">' + nf(p.unmatched.length) + ' columns are in this file and not already in the master. They are listed in the file’s order. Select all, then untick any you do not want. Unticked columns stay out. Headers are not renamed.</div>';
+      html += pickListHtml('mdf', pi, p.unmatched.map(c => c.header), false);
     }
   });
   if (P.plans.length) html += '<p><button class="btn pri" id="mdfApply" type="button">Import into the master</button></p>';
   el.innerHTML = html;
+  wirePickList('mdf');
   const b = $('mdfApply'); if (b) b.onclick = applyMdfImport;
+}
+function pickListHtml(prefix, pi, headers, checked){
+  let html = '<div class="row" style="margin-top:6px"><button type="button" class="sbtn" data-' + prefix + '-all="' + pi + '">Select all</button><button type="button" class="sbtn" data-' + prefix + '-none="' + pi + '">Clear</button><span class="hint" data-' + prefix + '-count="' + pi + '"></span></div>';
+  html += '<input type="text" data-' + prefix + '-find="' + pi + '" placeholder="Find a column…" style="width:100%;max-width:420px;margin:6px 0">';
+  html += '<div style="max-height:360px;overflow:auto;border:1px solid #ddd;padding:6px" data-' + prefix + '-list="' + pi + '">';
+  headers.forEach((h, ci) => { html += '<label style="display:block"><input type="checkbox" data-' + prefix + '-pick="' + pi + ':' + ci + '"' + (checked ? ' checked' : '') + '> ' + esc(h) + '</label>'; });
+  html += '</div>';
+  return html;
+}
+function wirePickList(prefix){
+  const attr = name => 'data-' + prefix + '-' + name;
+  const boxes = () => [...document.querySelectorAll('[' + attr('pick') + ']')];
+  const ofSheet = pi => boxes().filter(b => { const id = b.getAttribute(attr('pick')); return id === pi || id.startsWith(pi + ':'); });
+  const count = pi => {
+    const list = ofSheet(pi);
+    const n = list.filter(b => b.checked).length;
+    const el = document.querySelector('[' + attr('count') + '="' + pi + '"]');
+    if (el) el.textContent = nf(n) + ' of ' + nf(list.length) + ' selected. Ticked columns stay in the order they have in this file.';
+  };
+  document.querySelectorAll('[' + attr('all') + ']').forEach(btn => {
+    btn.onclick = () => { const pi = btn.getAttribute(attr('all')); ofSheet(pi).forEach(b => { b.checked = true; }); count(pi); };
+  });
+  document.querySelectorAll('[' + attr('none') + ']').forEach(btn => {
+    btn.onclick = () => { const pi = btn.getAttribute(attr('none')); ofSheet(pi).forEach(b => { b.checked = false; }); count(pi); };
+  });
+  document.querySelectorAll('[' + attr('find') + ']').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const pi = inp.getAttribute(attr('find'));
+      const q = inp.value.trim().toLowerCase();
+      const list = document.querySelector('[' + attr('list') + '="' + pi + '"]');
+      if (!list) return;
+      list.querySelectorAll('label').forEach(lab => { lab.style.display = !q || lab.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+    });
+  });
+  boxes().forEach(b => b.addEventListener('change', () => count(b.getAttribute(attr('pick')).split(':')[0])));
+  const seen = new Set();
+  boxes().forEach(b => seen.add(b.getAttribute(attr('pick')).split(':')[0]));
+  seen.forEach(count);
 }
 function mdfMakeCols(info){
   const known = mdfKnownKeys(), used = new Set(), cols = [];
@@ -5383,15 +5420,28 @@ function applyMdfImport(){
     if (p.mode === 'match') {
       for (const m of p.matched) byKey.set(m.key, m.src);
       const usedK = new Set(cols.map(c => c.key));
-      let picked = 0;
-      p.unmatched.forEach((c, ci) => {
-        if (!picks.has(pi + ':' + ci)) return;
-        let k = 'c|' + c.norm.slice(0, 80) + '|' + c.c;
+      const srcToKey = new Map();
+      for (const m of p.matched) if (!srcToKey.has(m.src)) srcToKey.set(m.src, m.key);
+      const pickedSrc = new Set();
+      p.unmatched.forEach((c, ci) => { if (picks.has(pi + ':' + ci)) pickedSrc.add(c.c); });
+      const out = cols.slice();
+      let lastKey = null, picked = 0;
+      for (const src of p.info.cols) {
+        const mk = srcToKey.get(src.c);
+        if (mk) { lastKey = mk; continue; }
+        if (!pickedSrc.has(src.c)) continue;
+        let k = 'c|' + src.norm.slice(0, 80) + '|' + src.c;
         while (usedK.has(k)) k += 'x';
-        usedK.add(k); picked++;
-        cols.push({key:k, header:c.header, kind:'custom', visible:true, src:'Ticked in when importing an existing MDF'});
-        byKey.set(k, c.c);
-      });
+        usedK.add(k);
+        const col = {key:k, header:src.header, kind:'custom', visible:true, src:'Ticked in when importing an existing MDF'};
+        const i = lastKey ? out.findIndex(x => x.key === lastKey) : -1;
+        const at = i < 0 ? (lastKey ? out.length : 0) : i + 1;
+        out.splice(at, 0, col);
+        byKey.set(k, src.c);
+        lastKey = k;
+        picked++;
+      }
+      cols.splice(0, cols.length, ...out);
       p._picked = picked;
     } else {
       cols.forEach((col, idx) => { const src = p.info.cols[idx]; if (src) byKey.set(col.key, src.c); });
@@ -5490,13 +5540,14 @@ function renderBasePreview(){
   let html = '<h3>New master from this file</h3>';
   html += '<div class="row"><label>Project name <input type="text" id="baseProj" value="' + esc(P.project) + '" style="width:240px"></label><span class="hint">Saves as <b id="baseName">' + esc(masterName({project:P.project}, 1)) + '</b></span></div>';
   if (P.skipped.length) html += '<div class="hint">Skipped, too large to read here: ' + P.skipped.map(s => esc(s.name) + ' (' + Math.round(s.bytes / 1048576) + ' MB)').join(', ') + '</div>';
-  P.plans.forEach(p => {
+  P.plans.forEach((p, pi) => {
     const headers = p.info.cols.map(c => c.header);
-    html += '<h3>' + esc(p.sheet) + '</h3><div class="good">' + nf(headers.length) + ' columns in this order, ' + nf(p.rows.length) + ' rows copied. Nothing else is added, and the headers are not renamed.</div>';
-    html += '<div class="scroll" style="max-height:160px"><div class="hint">' + headers.map(esc).join(' · ') + '</div></div>';
+    html += '<h3>' + esc(p.sheet) + '</h3><div class="good">' + nf(headers.length) + ' columns, in the order they have in this file, and ' + nf(p.rows.length) + ' rows. All start selected. Select all, then untick any you do not want. Unticked columns stay out. Headers are not renamed.</div>';
+    html += pickListHtml('base', pi, headers, true);
   });
   html += '<div class="row"><button class="pbig" id="baseGo" type="button">Create master</button><span class="hint">This starts the file. It does not fill rows into a master that is already built.</span></div>';
   el.innerHTML = html;
+  wirePickList('base');
   $('baseProj').addEventListener('input', () => { const n = $('baseName'); if (n) n.textContent = masterName({project:$('baseProj').value.trim() || 'Project'}, 1); });
   $('baseGo').onclick = () => createMasterFromBase();
 }
@@ -5522,23 +5573,34 @@ async function onBaseFile(file){
 }
 async function createMasterFromBase(){
   const P = V4.baseFile; if (!P || !P.plans.length) return;
+  const chosen = [];
+  P.plans.forEach((p, pi) => {
+    const cols = p.info.cols.filter((c, ci) => {
+      const box = document.querySelector('[data-base-pick="' + pi + ':' + ci + '"]');
+      return box ? box.checked : true;
+    });
+    if (cols.length) chosen.push({p, cols});
+  });
+  if (!chosen.length) { toast('Tick at least one column.'); return; }
   const project = ($('baseProj') && $('baseProj').value.trim()) || P.project || 'Project';
   if (anyDirty() && !confirm('The open file/master has unsaved changes. Create the new master anyway?')) return;
   const B = newBuilder(project);
   B.exactColumns = true;
-  B.sheets = P.plans.map(p => ({name:p.sheet, types:baseSheetTypes(p.sheet)}));
+  B.sheets = chosen.map(x => ({name:x.p.sheet, types:baseSheetTypes(x.p.sheet)}));
   B.photos = []; B.comps = {}; B.columns = {};
   B.ui = Object.assign({}, UI);
   const data = new Map();
   let nRows = 0;
   const notes = [];
-  for (const p of P.plans) {
-    const cols = baseColumnsFrom(p.info);
+  for (const x of chosen) {
+    const p = x.p;
+    const info = {cols:x.cols, hidden:p.info.hidden || []};
+    const cols = baseColumnsFrom(info);
     B.columns[p.sheet] = cols;
     const rows = p.rows.map(src => {
       const vals = {};
       for (let i = 0; i < cols.length; i++) {
-        const v = src[p.info.cols[i].c];
+        const v = src[info.cols[i].c];
         if (v == null || (typeof v === 'string' && v.trim() === '')) continue;
         vals[cols[i].key] = v;
       }

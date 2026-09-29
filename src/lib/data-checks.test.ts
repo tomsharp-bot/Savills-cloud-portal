@@ -39,6 +39,14 @@ describe("Data Review practice page hosting", () => {
     assert.ok(page.indexOf('id="pCreate"') < page.indexOf('id="baseDrop"'));
     assert.ok(page.indexOf('id="baseDrop"') < page.indexOf("Import data from an existing MDF"));
     assert.match(page, /B\.exactColumns/);
+    assert.match(page, /function pickListHtml/);
+    assert.match(page, /pickListHtml\('mdf'/);
+    assert.match(page, /pickListHtml\('base'/);
+    assert.match(page, /wirePickList\('mdf'\)/);
+    assert.match(page, /wirePickList\('base'\)/);
+    assert.match(page, /Not already in this master/);
+    assert.match(page, /Tick at least one column\./);
+    assert.match(page, /cols\.splice\(0, cols\.length, \.\.\.out\)/);
     assert.match(page, /Hide HHSRS Section/);
     assert.match(page, /Selected cell/);
     assert.match(page, /Load photo folder/);
