@@ -1,5 +1,5 @@
 <nav class="step-tabs" aria-label="HHSRS Reporter steps">
-  <a href="<%= reporterBase %>" class="<%= activeNav === 'pending' ? 'active' : '' %>">
+  <a href="<%= reporterBase %>" class="<%= activeNav === 'pending' ? 'active' : '' %><%= summary.waiting > 0 ? '' : ' is-clear' %>">
     <span class="step" aria-hidden="true">01</span> Pending Issues
     <% if (summary.waiting > 0) { %><span class="step-badge"><%= summary.waiting %></span><% } %>
   </a>

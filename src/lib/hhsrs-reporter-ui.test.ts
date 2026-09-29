@@ -510,6 +510,32 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(table, /row\.surveyorName/);
   });
 
+  it("turns Pending Issues green when the waiting list is empty", () => {
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const steps = readFileSync("views/hhsrs-reporter/partials/step-tabs.ejs", "utf8");
+    const sidebar = readFileSync("views/hhsrs-reporter/partials/sidebar.ejs", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const alerts = readFileSync("public/js/hhsrs-pending-alerts.js", "utf8");
+    const waiting = pending.slice(pending.indexOf('id="not-actioned"'), pending.indexOf('id="last-actioned"'));
+    assert.match(pending, /class="panel waiting-urgent<%= waitingRows\.length \? '' : ' is-clear' %>" id="not-actioned"/);
+    assert.match(waiting, /<% if \(waitingRows\.length\) \{ %>\s*<span class="count count-received">/);
+    assert.match(review, /alsoWaiting\.length \? '' : 'is-clear'/);
+    assert.match(steps, /summary\.waiting > 0 \? '' : ' is-clear'/);
+    assert.match(sidebar, /title="Dashboard"/);
+    assert.match(sidebar, /summary\.waiting > 0 \? '' : ' is-clear'/);
+    const clear = css.slice(css.indexOf(".panel.waiting-urgent.is-clear {"), css.indexOf(".sum-card.accent-red {"));
+    assert.match(clear, /border-color:\s*#1b7a4e/);
+    assert.match(clear, /background:\s*#f3faf6/);
+    assert.match(clear, /\.count-received \{ display: none/);
+    assert.match(clear, /\.waiting-banner \{ display: none/);
+    assert.match(css, /\.step-tabs a\.is-clear\.active \{[^}]*background:\s*#e7f6ee/);
+    assert.match(css, /\.side-tabs \.tab-link\.is-clear\.active \{[^}]*background:\s*#1b7a4e/);
+    assert.match(alerts, /function markClear\(el, clear\)/);
+    assert.match(alerts, /markClear\(pendingPanel, clear\)/);
+    assert.match(alerts, /markClear\(dashboard, clear\)/);
+  });
+
   it("turns browser autofill off on email compose fields", () => {
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
     const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");

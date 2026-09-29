@@ -426,6 +426,8 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(also, /partials\/pending-issues-table/);
     assert.match(sharedJs, /waitingCount/);
     assert.match(sharedJs, /#side-tabs a\.tab-link\[title="Dashboard"\]/);
+    assert.match(sharedJs, /markClear\(dashboard, clear\)/);
+    assert.match(sharedJs, /markClear\(pendingPanel, clear\)/);
     assert.match(sharedJs, /side-summary-row/);
     assert.doesNotMatch(sharedJs, /location\.reload/);
     assert.doesNotMatch(sharedJs, /review-workspace\.innerHTML/);
