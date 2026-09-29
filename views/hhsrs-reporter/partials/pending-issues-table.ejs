@@ -4,6 +4,7 @@
   const wrapId = typeof pendingWrapId === "string" ? pendingWrapId : "";
   const action = typeof pendingAction === "string" ? pendingAction : "review";
   const foot = typeof pendingFoot === "string" ? pendingFoot : "Newest first";
+  const showPhotoCount = typeof pendingShowPhotoCount !== "undefined" && pendingShowPhotoCount === true;
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
   <table class="landing-table pending-issues-table" id="<%= tableId %>">
@@ -38,7 +39,7 @@
             <strong><%= row.fullAddress %></strong>
             <%- include("claim-chip", { claimRow: claim }) %>
           </td>
-          <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase) }) %>
+          <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase), showPhotoCount }) %>
           <td><span style="color:var(--muted)"><%= row.uprn %></span></td>
           <td><%= row.surveyorName %></td>
           <td><%= row.category %></td>

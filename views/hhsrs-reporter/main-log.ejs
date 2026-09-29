@@ -1,19 +1,23 @@
 <%- include("partials/layout-open") %>
 <%
-  const logRows = rows.map((row) => ({
-    id: row.submissionId,
-    reference: row.reference,
-    projectName: row.projectName,
-    fullAddress: row.fullAddress,
-    photoPaths: (Array.isArray(row.photoPaths) && row.photoPaths.length) ? row.photoPaths : (row.photoNames || []),
-    uprn: row.uprn,
-    surveyorName: row.surveyorName,
-    category: row.hazard,
-    rating: row.rating,
-    createdAt: row.createdAt,
-    href: row.href,
-    rowClass: row.selected ? "is-sel" : ""
-  }));
+  const logRows = rows.map((row) => {
+    const emailed = Array.isArray(row.photoNames) ? row.photoNames.filter((name) => String(name || "").trim()) : [];
+    const stored = Array.isArray(row.photoPaths) ? row.photoPaths : [];
+    return {
+      id: row.submissionId,
+      reference: row.reference,
+      projectName: row.projectName,
+      fullAddress: row.fullAddress,
+      photoPaths: emailed.length ? emailed : stored,
+      uprn: row.uprn,
+      surveyorName: row.surveyorName,
+      category: row.hazard,
+      rating: row.rating,
+      createdAt: row.createdAt,
+      href: row.href,
+      rowClass: row.selected ? "is-sel" : ""
+    };
+  });
 %>
 
 <div class="ml-page">
@@ -101,7 +105,8 @@
       <%- include("partials/pending-issues-table", {
         pendingRows: logRows,
         pendingTableId: "main-log-table",
-        pendingFoot: "Newest first"
+        pendingFoot: "Newest first",
+        pendingShowPhotoCount: true
       }) %>
     <% } %>
     <% if (pageCount > 1) { %>

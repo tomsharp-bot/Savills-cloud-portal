@@ -632,8 +632,16 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.ml-page \.ml-table thead th\.ml-ph \{[^}]*white-space:\s*nowrap/);
     assert.match(view, /partials\/pending-issues-table/);
     assert.match(view, /photoNames/);
+    assert.match(view, /pendingShowPhotoCount:\s*true/);
+    assert.match(view, /id="ml-drawer"/);
+    assert.match(view, /partials\/sent-email-card/);
+    assert.match(view, /panel\.photoCount/);
     assert.match(view, /class="panel"/);
     assert.doesNotMatch(view, /<th>Sent<\/th>|<th>To<\/th>/);
+    assert.match(css, /\.ml-page \.pending-issues-table \.photo-att-count\.is-shown \{[^}]*font-size:\s*0\.8125rem/);
+    const photoCell = readFileSync("views/hhsrs-reporter/partials/photo-att-cell.ejs", "utf8");
+    assert.match(photoCell, /showPhotoCount/);
+    assert.match(photoCell, /photo-att-count is-shown/);
     assert.match(css, /\.ml-page \.pending-issues-table \{[^}]*font-size:\s*0\.8125rem/);
     assert.match(css, /\.ml-page \.pending-issues-table thead th \{[^}]*font-size:\s*0\.6875rem/);
     assert.match(css, /\.ml-page \.pending-issues-table \.ref-chip \{[^}]*font-size:\s*12\.5px/);

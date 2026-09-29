@@ -2638,7 +2638,28 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-page .pending-issues-table .project-pill { font-size: 0.75rem; font-weight: 600; }
 .ml-page .pending-issues-table .btn-review-create { font-size: 0.75rem; font-weight: 700; }
 .ml-page .pending-issues-table td.photo-att-cell,
-.ml-page .pending-issues-table th.photo-att-col { overflow: visible; }
+.ml-page .pending-issues-table th.photo-att-col { overflow: visible; white-space: nowrap; }
+.ml-page .pending-issues-table .photo-att-counted .photo-att-icon {
+  width: auto;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem 0 0.28rem;
+  gap: 0.2rem;
+}
+.ml-page .pending-issues-table .photo-att-count.is-shown {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #44546a;
+  font-family: var(--font);
+}
 .ml-page .ml-table {
   width: 100%;
   border-collapse: collapse;
