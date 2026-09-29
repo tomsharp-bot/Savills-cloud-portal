@@ -585,6 +585,13 @@
     });
   }
 
+  var causeInput = $("suspectedCause");
+  if (causeInput) {
+    causeInput.addEventListener("blur", function () {
+      updateFlow({ announce: true });
+    });
+  }
+
   var narrowMedia = window.matchMedia("(max-width: 1024px)");
   if (narrowMedia.addEventListener) {
     narrowMedia.addEventListener("change", function () {
@@ -898,6 +905,15 @@
   var mqTouch = window.matchMedia("(max-width: 1024px), (pointer: coarse)");
   var mqReduce = window.matchMedia("(prefers-reduced-motion: reduce)");
   function touchUi() { return mqTouch.matches; }
+  var causeField = document.getElementById("suspectedCause");
+  function syncOptionalTab() {
+    if (!causeField) return;
+    // On a phone, keyboard Next must not stop on this optional box. A tap still focuses it.
+    if (touchUi()) causeField.tabIndex = -1;
+    else causeField.tabIndex = 0;
+  }
+  syncOptionalTab();
+  if (mqTouch.addEventListener) mqTouch.addEventListener("change", syncOptionalTab);
   function behavior() { return mqReduce.matches ? "auto" : "smooth"; }
 
   var userMovedAt = 0;
@@ -953,6 +969,11 @@
   form.addEventListener("focusin", function (e) {
     var el = e.target;
     if (!touchUi() || !isTextField(el) || el.readOnly || el.disabled) return;
+    // An optional field in a section that has already advanced must not pull the screen back.
+    if (el.hasAttribute("data-optional")) {
+      var doneStep = el.closest && el.closest(".flow-step");
+      if (doneStep && !doneStep.classList.contains("is-current")) return;
+    }
     var started = Date.now();
     kb = { el: el, started: started };
     window.setTimeout(function () {
@@ -982,6 +1003,7 @@
     for (var j = list.indexOf(from) + 1; j < list.length; j++) {
       var f = list[j];
       if (f.disabled || f.readOnly || /^(hidden|file|checkbox|button|submit)$/i.test(f.type || "")) continue;
+      if (f.hasAttribute("data-optional")) continue;
       if ((f.closest && f.closest("[hidden]")) || !f.getClientRects().length) continue;
       if (String(f.value || "").trim()) continue;
       return f;
