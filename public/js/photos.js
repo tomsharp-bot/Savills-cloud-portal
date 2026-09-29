@@ -209,6 +209,27 @@
     return "Delete " + n + " " + noun + "? This cannot be undone.";
   }
 
+  function folderDeleteConfirmMessage(folder) {
+    const name = String((folder && folder.name) || "this folder");
+    if (!folder || folder.kind !== "folder") {
+      return 'Delete "' + name + '"? This cannot be undone.';
+    }
+    const codes = Array.isArray(folder.photoCodes) ? folder.photoCodes.length : 0;
+    if (codes > 0) {
+      const noun = codes === 1 ? "photo" : "photos";
+      return (
+        'Delete folder "' +
+        name +
+        '" and the ' +
+        codes +
+        " " +
+        noun +
+        " inside it? This cannot be undone. Those photos are also removed from the Photos Pool."
+      );
+    }
+    return 'Delete folder "' + name + '"? This cannot be undone.';
+  }
+
   function normCode(code) {
     return String(code || "").trim().toUpperCase();
   }
@@ -358,8 +379,19 @@
   function openDelete(codes, scope) {
     const list = (codes || []).filter(Boolean);
     if (!list.length) return;
-    deleteTarget = { codes: list.slice(), scope: scope || { kind: "pool" } };
+    deleteTarget = { mode: "photos", codes: list.slice(), scope: scope || { kind: "pool" } };
+    document.getElementById("deleteModalTitle").textContent = "Delete photos";
     document.getElementById("deleteConfirmText").textContent = deleteConfirmMessage(list.length);
+    document.getElementById("deleteErr").classList.remove("show");
+    openModal("deleteModal");
+  }
+
+  function openDeleteFolder(folderId) {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    deleteTarget = { mode: "folder", folderId: folder.id, codes: [] };
+    document.getElementById("deleteModalTitle").textContent = "Delete folder";
+    document.getElementById("deleteConfirmText").textContent = folderDeleteConfirmMessage(folder);
     document.getElementById("deleteErr").classList.remove("show");
     openModal("deleteModal");
   }
@@ -737,6 +769,7 @@
           : '<span class="zip-name">' + escapeHtml(f.name) + "</span>";
         const hl = highlightFolderId === f.id ? " folder-highlight" : "";
         const sel = expandedFolderId === f.id ? " folder-selected" : "";
+        const deleteLabel = isFolder ? "Delete folder" : "Delete zip";
         return (
           '<tr class="' +
           hl +
@@ -744,9 +777,15 @@
           '" data-zip-id="' +
           escapeHtml(f.id) +
           '">' +
-          "<td>" +
+          '<td><div class="folder-name-row">' +
           nameCell +
-          "</td>" +
+          '<button type="button" class="btn btn-sm btn-danger" data-delete-folder="' +
+          escapeHtml(f.id) +
+          '" aria-label="' +
+          escapeHtml(deleteLabel + " " + f.name) +
+          '">' +
+          escapeHtml(deleteLabel) +
+          "</button></div></td>" +
           '<td class="zip-size">' +
           escapeHtml(f.contentsLabel) +
           "</td>" +
@@ -792,6 +831,12 @@
           cb.checked = !clientAccess;
           alert(err.message || "Could not update Client Access");
         }
+      });
+    });
+
+    body.querySelectorAll("[data-delete-folder]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        openDeleteFolder(btn.getAttribute("data-delete-folder"));
       });
     });
 
@@ -1184,6 +1229,46 @@
     errEl.classList.remove("show");
     mutateBusy = true;
     const target = deleteTarget;
+    if (target.mode === "folder") {
+      try {
+        const json = await postJson(
+          data.clientAccessApiBase + "/" + encodeURIComponent(target.folderId) + "/delete",
+          {}
+        );
+        const id = target.folderId;
+        folders = folders.filter((f) => f.id !== id);
+        if (expandedFolderId === id) expandedFolderId = null;
+        if (folderSelectId === id) {
+          folderSelectId = null;
+          selectedFolderCodes.clear();
+        }
+        if (highlightFolderId === id) highlightFolderId = null;
+        removeCodesEverywhere(json.deletedCodes || []);
+        deleteTarget = null;
+        closeModal("deleteModal");
+        renderPhotoPool();
+        renderFolders();
+        renderCompletions();
+      } catch (err) {
+        const partial =
+          err.payload && Array.isArray(err.payload.deletedCodes) ? err.payload.deletedCodes : [];
+        if (partial.length) {
+          removeCodesEverywhere(partial);
+          renderPhotoPool();
+          renderFolders();
+          renderCompletions();
+          const folder = folders.find((f) => f.id === target.folderId);
+          if (folder) {
+            document.getElementById("deleteConfirmText").textContent = folderDeleteConfirmMessage(folder);
+          }
+        }
+        errEl.textContent = err.message || "Could not delete that folder.";
+        errEl.classList.add("show");
+      } finally {
+        mutateBusy = false;
+      }
+      return;
+    }
     try {
       const json = await postJson(mutationApi(target.scope, "delete"), { codes: target.codes });
       removeCodesEverywhere(json.deletedCodes || []);

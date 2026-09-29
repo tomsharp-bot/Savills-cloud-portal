@@ -4,9 +4,15 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../app.js";
 import { prisma } from "./prisma.js";
-import { photoObjectKey, poolPhotoImagePath, uploadProjectPhoto, type PhotoStorageOps } from "./photos.js";
+import {
+  photoFolderStoragePrefix,
+  photoObjectKey,
+  poolPhotoImagePath,
+  uploadProjectPhoto,
+  type PhotoStorageOps,
+} from "./photos.js";
 import { hashPhotoShareSecret } from "./photo-share.js";
-import { POOL_IMAGE_READER } from "../routes/photos.js";
+import { PHOTO_STORAGE_OPS, POOL_IMAGE_READER } from "../routes/photos.js";
 import { spacesStatus } from "./spaces.js";
 
 async function listen(app: ReturnType<typeof createApp>): Promise<{ server: http.Server; port: number }> {
@@ -979,5 +985,234 @@ describe("Photo Storage routes", () => {
     assert.equal(String(liveView.thumbUrl).includes("digitaloceanspaces.com"), false);
     assert.ok(bareView);
     assert.match(bareView.thumbUrl, /^data:image\/svg\+xml/);
+  });
+
+  it("admins can delete a folder, its photos, and a leftover prefix; others cannot", async (t) => {
+    let projectCount = 0;
+    try {
+      projectCount = await prisma.project.count();
+    } catch {
+      t.skip("Postgres not available");
+      return;
+    }
+    if (!projectCount) {
+      t.skip("No seeded projects");
+      return;
+    }
+
+    const removed: string[] = [];
+    const listed: string[] = [];
+    const storage: PhotoStorageOps = {
+      configured: () => true,
+      remove: async (key) => {
+        removed.push(key);
+        return key !== "photos/block-delete/marker";
+      },
+      copy: async () => "copied",
+      put: async () => true,
+      listPrefix: async (prefix) => {
+        listed.push(prefix);
+        if (prefix.endsWith("/blocked/")) return null;
+        return [
+          prefix,
+          `${prefix}note.txt`,
+          "photos/proj/pool/decoy.jpg",
+          "HHSRS - Completed/MTVH/1/a.jpg",
+          `${prefix.slice(0, -1)}-other/file.jpg`,
+        ];
+      },
+      exists: async (key) => key.endsWith("/blocked") ? null : !key.includes("no-marker"),
+    };
+
+    const app = createApp({ basePath: "/projectprogress" });
+    app.set(PHOTO_STORAGE_OPS, storage);
+    const { server, port } = await listen(app);
+    t.after(() => server.close());
+
+    const login = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "phil.m", password: "PhilMoon2468" },
+    });
+    assert.equal(login.status, 302);
+    const cookie = cookieHeader(login.setCookie);
+    const surveyorLogin = await request(port, "POST", "/projectprogress/login", {
+      form: { username: "peter.m", password: "PeterMay2468" },
+    });
+    const surveyorCookie = cookieHeader(surveyorLogin.setCookie);
+
+    const landing = await request(port, "GET", "/projectprogress/photos", { cookie });
+    const ids = [...landing.body.matchAll(/href="\/projectprogress\/photos\/projects\/([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(ids.length, "expected a project tile link");
+    const projectId = ids[0];
+    const otherId = ids.find((id) => id !== projectId) || "";
+    const stamp = Date.now().toString(36);
+    const keepCode = `zz-foldel-keep-${stamp}`;
+    const goneCode = `zz-foldel-gone-${stamp}`;
+    const poolOnly = `zz-foldel-pool-${stamp}`;
+    const goneKey = photoObjectKey(projectId, goneCode, ".jpg");
+    assert.ok(goneKey);
+
+    const keep = await prisma.photoPoolItem.create({
+      data: { projectId, code: keepCode, fileName: `${keepCode}.jpg`, spacesKey: "" },
+    });
+    const gone = await prisma.photoPoolItem.create({
+      data: { projectId, code: goneCode, fileName: `${goneCode}.jpg`, spacesKey: goneKey! },
+    });
+    const only = await prisma.photoPoolItem.create({
+      data: { projectId, code: poolOnly, fileName: `${poolOnly}.jpg`, spacesKey: "" },
+    });
+    const folder = await prisma.photoFolder.create({
+      data: {
+        projectId,
+        name: `9. Leftover ${stamp}`,
+        kind: "folder",
+        clientAccess: true,
+        photoCodes: [keepCode, goneCode],
+      },
+    });
+    const otherFolder = await prisma.photoFolder.create({
+      data: {
+        projectId,
+        name: `9. Also lists ${stamp}`,
+        kind: "folder",
+        photoCodes: [keepCode, poolOnly],
+      },
+    });
+    const empty = await prisma.photoFolder.create({
+      data: { projectId, name: `9. Empty ${stamp}`, kind: "folder", photoCodes: [] },
+    });
+    const zip = await prisma.photoFolder.create({
+      data: { projectId, name: `Pack-${stamp}.zip`, kind: "zip", sizeLabel: "1 MB", photoCodes: [poolOnly] },
+    });
+    const blocked = await prisma.photoFolder.create({
+      data: { projectId, name: `9. Blocked ${stamp}`, kind: "folder", photoCodes: [] },
+    });
+    let foreignId = "";
+    if (otherId) {
+      const foreign = await prisma.photoFolder.create({
+        data: { projectId: otherId, name: `9. Other project ${stamp}`, kind: "folder", photoCodes: [] },
+      });
+      foreignId = foreign.id;
+    }
+    const createdFolders = [folder.id, otherFolder.id, empty.id, zip.id, blocked.id, foreignId].filter(Boolean);
+    t.after(async () => {
+      await prisma.photoPoolItem.deleteMany({ where: { id: { in: [keep.id, gone.id, only.id] } } });
+      await prisma.photoFolder.deleteMany({ where: { id: { in: createdFolders } } });
+    });
+
+    const page = await request(port, "GET", `/projectprogress/photos/projects/${projectId}`, { cookie });
+    assert.match(page.body, /<strong>Delete folder<\/strong> removes that folder/);
+
+    const surveyor = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/${projectId}/folders/${folder.id}/delete`,
+      { cookie: surveyorCookie, body: {} }
+    );
+    assert.equal(surveyor.status, 403);
+    assert.ok(await prisma.photoFolder.findUnique({ where: { id: folder.id } }));
+
+    const missingProject = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/not-a-project/folders/${folder.id}/delete`,
+      { cookie, body: {} }
+    );
+    assert.equal(missingProject.status, 404);
+
+    if (foreignId) {
+      const wrongProject = await request(
+        port,
+        "POST",
+        `/projectprogress/photos/projects/${projectId}/folders/${foreignId}/delete`,
+        { cookie, body: {} }
+      );
+      assert.equal(wrongProject.status, 404);
+      assert.ok(await prisma.photoFolder.findUnique({ where: { id: foreignId } }));
+    }
+
+    const blockedPrefix = photoFolderStoragePrefix(projectId, blocked.id);
+    assert.ok(blockedPrefix);
+    storage.listPrefix = async (prefix) => {
+      listed.push(prefix);
+      if (prefix === blockedPrefix) return null;
+      return [prefix, `${prefix}note.txt`];
+    };
+    const blockedRes = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/${projectId}/folders/${blocked.id}/delete`,
+      { cookie, body: {} }
+    );
+    assert.equal(blockedRes.status, 502);
+    assert.ok(await prisma.photoFolder.findUnique({ where: { id: blocked.id } }));
+
+    removed.length = 0;
+    listed.length = 0;
+    const prefix = photoFolderStoragePrefix(projectId, folder.id);
+    assert.ok(prefix);
+    storage.listPrefix = async (prefixArg) => {
+      listed.push(prefixArg);
+      return [
+        prefixArg,
+        `${prefixArg}note.txt`,
+        `photos/${projectId}/pool/decoy.jpg`,
+        "HHSRS - Completed/MTVH/1/a.jpg",
+        `${prefixArg.slice(0, -1)}-other/file.jpg`,
+      ];
+    };
+    storage.exists = async (key) => key === prefix!.slice(0, -1);
+
+    const deleted = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/${projectId}/folders/${folder.id}/delete`,
+      { cookie, body: {} }
+    );
+    assert.equal(deleted.status, 200);
+    const deletedJson = JSON.parse(deleted.body);
+    assert.equal(deletedJson.ok, true);
+    assert.equal(deletedJson.folderName, `9. Leftover ${stamp}`);
+    assert.equal(deletedJson.deletedCodes.length, 2);
+    assert.equal(await prisma.photoFolder.findUnique({ where: { id: folder.id } }), null);
+    assert.equal(await prisma.photoPoolItem.findUnique({ where: { id: keep.id } }), null);
+    assert.equal(await prisma.photoPoolItem.findUnique({ where: { id: gone.id } }), null);
+    assert.ok(await prisma.photoPoolItem.findUnique({ where: { id: only.id } }));
+    const still = await prisma.photoFolder.findUnique({ where: { id: otherFolder.id } });
+    const stillCodes = Array.isArray(still?.photoCodes) ? still.photoCodes.map(String) : [];
+    assert.equal(stillCodes.includes(keepCode), false);
+    assert.equal(stillCodes.includes(poolOnly), true);
+    assert.deepEqual(listed, [prefix]);
+    assert.ok(removed.includes(goneKey!));
+    assert.ok(removed.includes(`${prefix}note.txt`));
+    assert.ok(removed.includes(prefix!));
+    assert.ok(removed.includes(prefix!.slice(0, -1)));
+    assert.equal(removed.includes(`photos/${projectId}/pool/decoy.jpg`), false);
+    assert.equal(removed.some((key) => key.startsWith("HHSRS")), false);
+    assert.equal(removed.some((key) => key.includes("-other/")), false);
+
+    const emptyPrefix = photoFolderStoragePrefix(projectId, empty.id);
+    removed.length = 0;
+    listed.length = 0;
+    storage.exists = async () => false;
+    const emptyRes = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/${projectId}/folders/${empty.id}/delete`,
+      { cookie, body: {} }
+    );
+    assert.equal(emptyRes.status, 200);
+    assert.equal(await prisma.photoFolder.findUnique({ where: { id: empty.id } }), null);
+    assert.deepEqual(listed, [emptyPrefix]);
+    assert.deepEqual(removed, [`${emptyPrefix}note.txt`, emptyPrefix]);
+
+    const zipRes = await request(
+      port,
+      "POST",
+      `/projectprogress/photos/projects/${projectId}/folders/${zip.id}/delete`,
+      { cookie, body: {} }
+    );
+    assert.equal(zipRes.status, 200);
+    assert.equal(await prisma.photoFolder.findUnique({ where: { id: zip.id } }), null);
+    assert.ok(await prisma.photoPoolItem.findUnique({ where: { id: only.id } }));
   });
 });
