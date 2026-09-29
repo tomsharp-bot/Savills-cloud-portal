@@ -116,6 +116,8 @@ export type HhsrsPropertyRow = {
 /** One UPRN on the HHSRS - Completed project page, with its photos in copy order. */
 export type HhsrsProjectProperty = HhsrsPropertyRow & {
   photos: HhsrsCompletedPhotoView[];
+  /** UK time of the most recently copied photo for this UPRN. */
+  latestCopiedAtLabel: string;
 };
 
 export type HhsrsCompletedPhotoView = {
@@ -700,6 +702,7 @@ export async function listHhsrsProjectProperties(projectName: string): Promise<H
       address: displayAddress(group.latest.fullAddress, group.latest.postcode),
       photoCount: group.photos.length,
       photos: group.photos,
+      latestCopiedAtLabel: formatHhsrsCopiedAt(group.latest.copiedAt),
     }))
     .sort((a, b) => compareUprn(a.uprn, b.uprn) || a.address.localeCompare(b.address, "en-GB"));
 }

@@ -21,7 +21,7 @@
       <div>
         <h2><%= projectName %></h2>
         <p class="project-lead">Lead: <strong><%= leadFirst %></strong></p>
-        <p class="intro" style="margin-top:4px">From Project Progress. Properties are listed in numerical UPRN order, with each property's photos shown under its heading. Click a photo to view it full size.</p>
+        <p class="intro" style="margin-top:4px">From Project Progress. Properties are listed in numerical UPRN order. The date and time is when the latest photo was stored for that UPRN. Each property's photos are shown under its heading. Click a photo to view it full size.</p>
       </div>
       <div>
         <a class="btn" href="<%= baseUrl('/photos#section-hhsrs') %>">← Back to Photo Storage</a>
@@ -36,6 +36,30 @@
     <% if (!properties.length) { %>
       <div class="empty-state">No properties copied for this project yet.</div>
     <% } else { %>
+      <div class="table-wrap">
+        <table class="folders-table" aria-label="Properties">
+          <thead>
+            <tr>
+              <th scope="col">UPRN</th>
+              <th scope="col">Address</th>
+              <th scope="col">Photos</th>
+              <th scope="col">Date / time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% properties.forEach(function (row) { %>
+              <tr>
+                <td>
+                  <a href="<%= baseUrl('/photos/hhsrs/' + encodeURIComponent(projectName) + '/' + encodeURIComponent(row.uprn)) %>"><%= row.uprn %></a>
+                </td>
+                <td><%= row.address %></td>
+                <td><%= row.photoCount %></td>
+                <td class="hhsrs-copied-col"><%= row.latestCopiedAtLabel %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
       <div class="hhsrs-uprn-list">
         <% properties.forEach(function (row) { %>
           <section class="hhsrs-uprn-block">

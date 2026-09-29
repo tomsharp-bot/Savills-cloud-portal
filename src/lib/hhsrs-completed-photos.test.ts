@@ -289,6 +289,16 @@ describe("HHSRS copied-at label", () => {
     assert.equal(formatHhsrsCopiedAt(new Date("2026-09-29T23:05:00.000Z")), "30/09/2026 00:05");
     assert.equal(formatHhsrsCopiedAt(new Date(Number.NaN)), "");
   });
+
+  it("keeps the later copy when a UPRN has several photos", () => {
+    const times = [
+      new Date("2026-09-29T08:05:00.000Z"),
+      new Date("2026-09-29T13:51:00.000Z"),
+      new Date("2026-09-28T18:00:00.000Z"),
+    ];
+    const latest = times.reduce((best, time) => (time >= best ? time : best));
+    assert.equal(formatHhsrsCopiedAt(latest), "29/09/2026 14:51");
+  });
 });
 
 describe("HHSRS completed photo pages", () => {
@@ -314,7 +324,10 @@ describe("HHSRS completed photo pages", () => {
     const nameAt = project.indexOf('class="photo-name"');
     const copiedAt = project.indexOf("hhsrs-copied-at");
     assert.ok(nameAt > 0 && copiedAt > nameAt);
-    assert.doesNotMatch(project, /folders-table/);
+    assert.match(project, /folders-table/);
+    assert.match(project, />Date \/ time</);
+    assert.match(project, /row\.latestCopiedAtLabel/);
+    assert.match(project, />Photos</);
     assert.doesNotMatch(project, /open one to see its photos/);
     const property = readFileSync(path.join(root, "views/photos-hhsrs-property.ejs"), "utf8");
     assert.match(property, /data-photo-open/);
@@ -537,7 +550,8 @@ describe("HHSRS completed photos with the database", () => {
       assert.match(properties.body, /\/photos\/hhsrs-photo\//);
       assert.match(properties.body, /hhsrs-copied-at/);
       assert.match(properties.body, /\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/);
-      assert.doesNotMatch(properties.body, /folders-table/);
+      assert.match(properties.body, /folders-table/);
+      assert.match(properties.body, /Date \/ time/);
 
       const property = await request(
         port,
