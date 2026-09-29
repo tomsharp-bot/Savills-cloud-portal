@@ -176,6 +176,154 @@ describe("resolveProgramme", () => {
     );
   });
 
+  it("lists Bardya Amin only in the agency section when Personnel agency is Ele", () => {
+    const board = resolveProgramme({
+      surveyors: [
+        { name: "Bardya Amin", agency: "Ele" },
+        { name: "Alex Surveyor", agency: "Savills" },
+        { name: "Jeremy Hughes", agency: "F" },
+        { name: "Alan Henderson", agency: "" },
+      ],
+    });
+    assert.equal(
+      board.pools.agency_not_on_project.filter((person) => person.name === "Bardya Amin").length,
+      1
+    );
+    assert.equal(board.pools.agency_not_on_project[0].flag, "F");
+    assert.equal(board.rows.some((row) => row.name === "Bardya Amin"), false);
+    assert.equal(board.pools.team_not_live.some((person) => person.name === "Bardya Amin"), false);
+    assert.ok(board.rows.some((row) => row.name === "Alex Surveyor"));
+    assert.ok(board.rows.some((row) => row.name === "Jeremy Hughes"));
+    assert.equal(board.rows.find((row) => row.name === "Jeremy Hughes")?.flag, "F");
+    assert.deepEqual(
+      board.pools.agency_not_on_project.map((person) => person.name),
+      ["Bardya Amin", "Jeremy Hughes", "Atty Junaid", "Layo Ogunleye"]
+    );
+    assert.ok(board.rows.some((row) => row.name === "Alan Henderson"));
+    assert.deepEqual(
+      board.pools.team_not_live.map((person) => person.name),
+      ["Greg Kowalski", "Hazel Wilson", "Alan Henderson", "Clive Gray"]
+    );
+
+    const saved = resolveProgramme({
+      saved: {
+        version: 1,
+        ticks: { "Bardya Amin": false, "Richard Moreing": true },
+        applied: { "Bardya Amin": false, "Richard Moreing": true },
+        surveyorOrder: ["Richard Moreing", "Bardya Amin", "Peter May"],
+        adminOrder: [],
+        cells: { "Bardya Amin": ["Onward"], "Richard Moreing": ["LFHA 2026"] },
+        flags: { "Bardya Amin": "" },
+      },
+      surveyors: [{ name: "Bardya Amin", agency: " ele " }],
+    });
+    assert.equal(saved.rows.some((row) => row.name === "Bardya Amin"), false);
+    assert.equal(saved.rows[0].name, "Richard Moreing");
+    assert.equal(saved.rows[0].weeks[0], "LFHA 2026");
+    assert.ok(saved.rows.some((row) => row.name === "Peter May"));
+    assert.equal(saved.pools.team_not_live.some((person) => person.name === "Bardya Amin"), false);
+    assert.equal(saved.pools.agency_not_on_project[0].name, "Bardya Amin");
+  });
+
+  it("keeps an inactive Bardya Amin out of the team pool on the programme page", () => {
+    const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
+    const lists = new Map<string, { children: { className: string; textContent: string; children: { className: string; textContent: string }[] }[] }>();
+    function fakeEl(id?: string) {
+      const node = {
+        id: id || "",
+        textContent: "",
+        innerHTML: "",
+        className: "",
+        title: "",
+        draggable: false,
+        dataset: {} as Record<string, string>,
+        style: {} as Record<string, string>,
+        children: [] as { className: string; textContent: string; children: { className: string; textContent: string }[] }[],
+        classList: { add() {}, remove() {}, contains: () => false },
+        appendChild(child: typeof node) {
+          node.children.push(child);
+          return child;
+        },
+        setAttribute() {},
+        getAttribute: () => null,
+        addEventListener() {},
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        remove() {},
+        closest: () => null,
+      };
+      if (id) lists.set(id, node);
+      return node;
+    }
+    const dataEl = fakeEl("programme-data");
+    dataEl.textContent = JSON.stringify({
+      canEdit: false,
+      weeks: ["2026-09-21"],
+      rows: [
+        { name: "Bardya Amin", flag: "", weeks: [""] },
+        { name: "Alex Surveyor", flag: "", weeks: [""] },
+        { name: "Jeremy Hughes", flag: "F", weeks: [""] },
+        { name: "Richard Moreing", flag: "", weeks: ["LFHA 2026"] },
+      ],
+      admins: [],
+      pools: {
+        agency_not_on_project: [
+          { flag: "F", name: "Bardya Amin" },
+          { flag: "F", name: "Jeremy Hughes" },
+        ],
+        team_not_live: [
+          { flag: "", name: "Alan Henderson" },
+          { flag: "", name: "Clive Gray" },
+        ],
+      },
+      ticks: {
+        "Bardya Amin": false,
+        "Alex Surveyor": false,
+        "Jeremy Hughes": false,
+        "Richard Moreing": true,
+      },
+      applied: {
+        "Bardya Amin": false,
+        "Alex Surveyor": false,
+        "Jeremy Hughes": false,
+        "Richard Moreing": true,
+      },
+      projects: { current: [], upcoming: [], completed: [] },
+      notes: {},
+      adminNames: [],
+    });
+    const thead = fakeEl();
+    const tbody = fakeEl();
+    const document = {
+      getElementById(id: string) {
+        if (id === "programme-data") return dataEl;
+        return lists.get(id) || fakeEl(id);
+      },
+      querySelector(sel: string) {
+        if (sel === "#matrix thead") return thead;
+        if (sel === "#matrix tbody") return tbody;
+        return null;
+      },
+      querySelectorAll: () => [],
+      createElement: () => fakeEl(),
+      addEventListener() {},
+    };
+    vm.runInNewContext(script, { document, window: { addEventListener() {} } });
+    function poolNames(id: string) {
+      return (lists.get(id)?.children || []).map((li) => {
+        const name = li.children.find((child) => child.className === "name");
+        return name?.textContent || "";
+      });
+    }
+    const onBoard = tbody.children
+      .flatMap((row) => row.children)
+      .filter((cell) => cell.className === "surveyor")
+      .map((cell) => cell.textContent);
+    assert.deepEqual(poolNames("agencyPool"), ["Bardya Amin", "Jeremy Hughes"]);
+    assert.deepEqual(poolNames("teamPool"), ["Alan Henderson", "Clive Gray", "Alex Surveyor"]);
+    assert.deepEqual(onBoard, ["Richard Moreing"]);
+  });
+
   it("skips frozen Personnel when adding people", () => {
     const board = resolveProgramme({
       surveyors: [{ name: "Frozen Person", frozen: true }],

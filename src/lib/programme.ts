@@ -202,6 +202,15 @@ function activePersonnel(people: readonly PersonnelRef[]): PersonnelRef[] {
   return people.filter((person) => !person.frozen && canonName(person.name));
 }
 
+/**
+ * Personnel agency letter kept as typed. "Ele" is an agency marker on Programme,
+ * distinct from the single letters F and E, so that person stays in the agency
+ * section and is not also listed with the normal team.
+ */
+export function isEleAgency(agency: string | null | undefined): boolean {
+  return String(agency ?? "").trim().toLowerCase() === "ele";
+}
+
 function seedMaps(): { weeks: Map<string, string[]>; flags: Map<string, string> } {
   const weeks = new Map<string, string[]>();
   const flags = new Map<string, string>();
@@ -285,8 +294,10 @@ export function resolveProgramme(input: {
     collapseName(a.name).localeCompare(collapseName(b.name), "en-GB")
   );
   for (const person of extraSurveyors) {
+    if (isEleAgency(person.agency)) continue;
     if (!hasCanon(surveyorOrder, person.name)) surveyorOrder.push(collapseName(person.name));
   }
+  surveyorOrder = surveyorOrder.filter((name) => !isEleAgency(surveyorPersonnel.get(canonName(name))?.agency));
 
   let adminOrder: string[];
   const usingPersonnelAdmins = admins.length > 0;
@@ -326,23 +337,29 @@ export function resolveProgramme(input: {
     ...(input.admins || []).map((person) => person.name),
     ...adminRows.map((person) => person.name),
   ];
+  const agencyPool = programmeSeed.pools.agency_not_on_project.map((person) => ({
+    flag: normalizeFlag(person.flag),
+    name: collapseName(person.name),
+  }));
+  for (const person of surveyors) {
+    if (!isEleAgency(person.agency) || hasCanon(agencyPool.map((row) => row.name), person.name)) continue;
+    agencyPool.push({ flag: "", name: collapseName(person.name) });
+  }
+  const agencyKeys = new Set(agencyPool.map((person) => canonName(person.name)));
 
   return {
     weeks: programmeSeed.weeks.slice(),
     rows,
     admins: adminRows,
     pools: {
-      agency_not_on_project: programmeSeed.pools.agency_not_on_project.map((person) => ({
-        flag: normalizeFlag(person.flag),
-        name: collapseName(person.name),
-      })),
+      agency_not_on_project: agencyPool,
       team_not_live: teamPoolExcludingAdmins(
         programmeSeed.pools.team_not_live.map((person) => ({
           flag: normalizeFlag(person.flag),
           name: collapseName(person.name),
         })),
         adminNamesForPool
-      ),
+      ).filter((person) => !agencyKeys.has(canonName(person.name))),
     },
     ticks: remapBools(saved?.ticks, everyone),
     applied: remapBools(saved?.applied, everyone),
