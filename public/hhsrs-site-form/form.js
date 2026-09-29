@@ -20,6 +20,9 @@
   var chosen = [];
   var lastProject = "";
   var lastFocusedStep = "";
+  // Phone flow stops on Extra details after Comment. Optional boxes there (including a blank
+  // suspected cause) must not count as finished, and must not keep Hazard as the current step.
+  var extrasPassed = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -93,7 +96,9 @@
     }, 40);
     var field = fieldId ? $(fieldId) : null;
     var noKeyboard = field && (field.tagName === "SELECT" || /^(date|checkbox|radio)$/i.test(field.type || ""));
-    if (field && noKeyboard && !field.disabled && !field.readOnly) {
+    // Extra details is optional, but the phone keyboard Next has to be on that box when the section opens.
+    var openOptional = field && field.id === "otherDetails";
+    if (field && (noKeyboard || openOptional) && !field.disabled && !field.readOnly) {
       window.setTimeout(function () {
         try {
           field.focus({ preventScroll: true });
@@ -529,7 +534,9 @@
     }
 
     showStep(stepEx, announce);
-    if (!extrasDone()) {
+    // Stay on Extra details until the surveyor leaves that section. A blank suspected cause
+    // is not part of hazardDone(), so Hazard still opens Extra details.
+    if (!extrasDone() || !extrasPassed) {
       hideStep(stepPh);
       if (actions) actions.hidden = true;
       setCurrent(stepEx);
@@ -590,6 +597,85 @@
     causeInput.addEventListener("blur", function () {
       updateFlow({ announce: true });
     });
+  }
+
+  var extraStepEl = $("extra-box");
+  if (extraStepEl) {
+    extraStepEl.addEventListener("focusout", function () {
+      window.setTimeout(function () {
+        if (extraStepEl.contains(document.activeElement)) return;
+        if (!extrasDone()) return;
+        if (extrasPassed) return;
+        extrasPassed = true;
+        updateFlow({ announce: true });
+      }, 0);
+    });
+  }
+
+  var photosAtLoad = $("step-photos");
+  if (photosAtLoad && !photosAtLoad.hidden) extrasPassed = true;
+
+  // Phone keyboard Next moves one optional box at a time: Extra details, then suspected cause, then on.
+  // A blank value never makes either box required, and never keeps Hazard as the current step.
+  function stepKeyboardNext(from) {
+    if (from && from.id === "otherDetails") {
+      var cause = $("suspectedCause");
+      if (cause && !cause.disabled) {
+        try { cause.focus({ preventScroll: true }); } catch (err) { cause.focus(); }
+        return;
+      }
+    }
+    if (!extrasDone()) return;
+    extrasPassed = true;
+    if (from && from.blur) from.blur();
+    updateFlow({ announce: true });
+  }
+
+  var keyNext = document.createElement("div");
+  keyNext.id = "hhsrs-key-next";
+  keyNext.className = "hhsrs-key-next";
+  keyNext.hidden = true;
+  var keyNextBtn = document.createElement("button");
+  keyNextBtn.type = "button";
+  keyNextBtn.textContent = "Next";
+  keyNext.appendChild(keyNextBtn);
+  document.body.appendChild(keyNext);
+
+  function optionalKeyboardField(el) {
+    return !!(progressive() && el && (el.id === "otherDetails" || el.id === "suspectedCause"));
+  }
+  function placeKeyNext() {
+    var vv = window.visualViewport;
+    var keyboard = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    keyNext.style.bottom = keyboard + "px";
+  }
+  function syncKeyNext() {
+    var show = optionalKeyboardField(document.activeElement);
+    keyNext.hidden = !show;
+    if (show) placeKeyNext();
+  }
+  keyNextBtn.addEventListener("mousedown", function (e) {
+    e.preventDefault();
+  });
+  keyNextBtn.addEventListener("click", function () {
+    stepKeyboardNext(document.activeElement);
+    syncKeyNext();
+  });
+  if (form) {
+    form.addEventListener("focusin", syncKeyNext);
+    form.addEventListener("focusout", function () {
+      window.setTimeout(syncKeyNext, 0);
+    });
+    form.addEventListener("keydown", function (e) {
+      if (!optionalKeyboardField(e.target)) return;
+      if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      stepKeyboardNext(e.target);
+    });
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", placeKeyNext);
+    window.visualViewport.addEventListener("scroll", placeKeyNext);
   }
 
   var narrowMedia = window.matchMedia("(max-width: 1024px)");
@@ -865,6 +951,7 @@
     missedUprn = false;
     lastProject = "";
     lastFocusedStep = "";
+    extrasPassed = false;
     var callUnreached = $("callUnreached");
     if (callUnreached) callUnreached.checked = false;
     updateFlow({ announce: false });
@@ -905,15 +992,6 @@
   var mqTouch = window.matchMedia("(max-width: 1024px), (pointer: coarse)");
   var mqReduce = window.matchMedia("(prefers-reduced-motion: reduce)");
   function touchUi() { return mqTouch.matches; }
-  var causeField = document.getElementById("suspectedCause");
-  function syncOptionalTab() {
-    if (!causeField) return;
-    // On a phone, keyboard Next must not stop on this optional box. A tap still focuses it.
-    if (touchUi()) causeField.tabIndex = -1;
-    else causeField.tabIndex = 0;
-  }
-  syncOptionalTab();
-  if (mqTouch.addEventListener) mqTouch.addEventListener("change", syncOptionalTab);
   function behavior() { return mqReduce.matches ? "auto" : "smooth"; }
 
   var userMovedAt = 0;
