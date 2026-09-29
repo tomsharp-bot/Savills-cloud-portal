@@ -773,7 +773,7 @@ body.hhsrs-form-page {
   margin: 6px 0 0;
   font-size: 0.85rem;
 }
-/* Phone keyboard toolbar. Sits on top of the on-screen keyboard for the two optional boxes. */
+/* Phone keyboard toolbar. Sits on top of the on-screen keyboard for Comment and the two optional boxes. */
 .hhsrs-key-next {
   position: fixed;
   left: 0;
