@@ -368,8 +368,22 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(layout, /id="hhsrs-alert-toast"/);
     assert.match(layout, /class="alert-toast"/);
     assert.match(layout, /initialPendingIds/);
-    assert.match(pending, /desktop-alerts-control/);
+    assert.doesNotMatch(pending, /desktop-alerts-control/);
+    assert.doesNotMatch(pending, /Enable desktop alerts/);
+    assert.doesNotMatch(pending, /Turn on desktop alerts/);
+    assert.doesNotMatch(pending, /desktop-alerts-banner/);
+    assert.doesNotMatch(pending, /panel-body-alerts/);
+    const reporterPages = fs.readdirSync(path.join(root, "views/hhsrs-reporter"));
+    for (const name of reporterPages) {
+      if (!name.endsWith(".ejs") || name === "admin.ejs") continue;
+      const source = fs.readFileSync(path.join(root, "views/hhsrs-reporter", name), "utf8");
+      assert.doesNotMatch(source, /desktop-alerts-control/, name);
+      assert.doesNotMatch(source, /Enable desktop alerts/, name);
+      assert.doesNotMatch(source, /id="desktop-alerts-banner"/, name);
+    }
     assert.doesNotMatch(admin, /desktop-alerts-control/);
+    assert.doesNotMatch(admin, /prompt on Pending/);
+    assert.match(admin, /Enable them on this page/);
     assert.match(admin, /id="admin-alerts-status-text"/);
     assert.match(admin, /Desktop alerts are off/);
     assert.match(admin, /id="btn-admin-enable-desktop-alerts"/);

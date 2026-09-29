@@ -108,8 +108,10 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(admin.body, /HOUSING · SURVEY REPORTING/);
     assert.match(admin.body, /id="hhsrs-alert-toast"/);
     assert.match(admin.body, /class="alert-toast"/);
-    assert.match(admin.body, /Enable desktop alerts/);
-    assert.match(admin.body, /Turn on desktop alerts/);
+    assert.doesNotMatch(admin.body, /Enable desktop alerts/);
+    assert.doesNotMatch(admin.body, /Turn on desktop alerts/);
+    assert.doesNotMatch(admin.body, /desktop-alerts-banner/);
+    assert.doesNotMatch(admin.body, /desktop-alerts-control/);
     assert.doesNotMatch(admin.body, /Not now/);
     assert.doesNotMatch(admin.body, /Desktop alerts ready/);
     assert.match(admin.body, /initialPendingIds/);

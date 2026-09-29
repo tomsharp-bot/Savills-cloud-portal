@@ -683,17 +683,12 @@
   function swapPendingList(live, fresh) {
     var liveWrap = live.querySelector(".table-wrap");
     var top = liveWrap ? liveWrap.scrollTop : 0;
-    var liveSlot = live.id === "not-actioned" ? live.querySelector(".panel-body-alerts") : null;
     if (live.id === "rv-also-waiting") {
       var details = live.querySelector("details");
       var freshDetails = fresh.querySelector("details");
       if (details && details.open && freshDetails) freshDetails.open = true;
     }
     live.replaceWith(fresh);
-    if (liveSlot) {
-      var freshSlot = fresh.querySelector(".panel-body-alerts");
-      if (freshSlot && freshSlot.parentNode) freshSlot.replaceWith(liveSlot);
-    }
     var freshWrap = fresh.querySelector(".table-wrap");
     if (freshWrap && top) freshWrap.scrollTop = top;
   }
