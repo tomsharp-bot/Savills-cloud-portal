@@ -6,8 +6,6 @@ declare module "cookie-session" {
     flashOk?: string;
     flashErr?: string;
     flashPo?: string;
-    flashAccessCode?: string;
-    flashAccessCodeErr?: string;
     flashClientEmail?: {
       projectName: string;
       saved: boolean;

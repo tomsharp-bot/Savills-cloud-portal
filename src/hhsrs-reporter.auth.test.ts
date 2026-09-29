@@ -172,6 +172,12 @@ describe("HHSRS Reporter auth and queue", () => {
     const adminPage = await request(app, "GET", "/HHSRSreporter/admin", { cookie });
     assert.equal(adminPage.status, 200);
     assert.match(adminPage.body, /Surveyor site form link/);
+    assert.doesNotMatch(adminPage.body, /Site form access code/);
+    assert.doesNotMatch(adminPage.body, /site-access/);
+    assert.doesNotMatch(adminPage.body, /access code/i);
+    assert.doesNotMatch(adminPage.body, /Surveyors enter this once/);
+    assert.doesNotMatch(adminPage.body, /Change code/);
+    assert.doesNotMatch(adminPage.body, /All phones will need the new code/);
     assert.match(adminPage.body, /https:\/\/savillscloudportal\.co\.uk\/HHSRS-site-form/);
     assert.match(adminPage.body, /Copy link/);
     assert.match(adminPage.body, /Enable desktop alerts/);

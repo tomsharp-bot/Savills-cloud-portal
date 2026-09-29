@@ -19,7 +19,6 @@ type Hit = {
 };
 
 let createApp: CreateApp;
-let hhsrsGateCookie = "";
 
 function request(
   app: Express,
@@ -37,7 +36,6 @@ function request(
           : Buffer.byteLength(payload)
         : 0;
       const headers: Record<string, string | number> = {};
-      if (hhsrsGateCookie && url.startsWith("/HHSRS-site-form")) headers.cookie = hhsrsGateCookie;
       if (payload) {
         headers["content-type"] = opts.contentType || "application/x-www-form-urlencoded";
         headers["content-length"] = contentLength;
@@ -140,9 +138,6 @@ function fakeJpeg(bytes: number): Buffer {
 
 before(async () => {
   ({ createApp } = await import("./app.js"));
-  const access = await import("./lib/hhsrs-site-access.js");
-  access.useMemorySiteFormAccess({ code: "135790" });
-  hhsrsGateCookie = access.siteFormAccessCookieHeader();
 });
 
 describe("createApp without BASE_PATH (local default)", () => {
@@ -261,6 +256,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(res.body, /Housing · Survey reporting/);
     assert.match(res.body, /Raise a new site issue from your phone\. No login required\./);
     assert.match(res.body, /Report new issue/);
+    assert.doesNotMatch(res.body, /Enter access code/);
+    assert.doesNotMatch(res.body, /access code/i);
     assert.doesNotMatch(res.body, /Click Here For New Issue Form/);
     assert.match(res.body, /href="\/HHSRS-site-form\/new"/);
     assert.match(res.body, /href="\/HHSRS-site-form\/assets\/form.css"/);
@@ -283,6 +280,7 @@ describe("HHSRS site form at domain-root paths", () => {
 
     const form = await request(app, "GET", "/HHSRS-site-form/new");
     assert.equal(form.status, 200);
+    assert.doesNotMatch(form.body, /Enter access code/);
     assert.match(form.body, /name="projectId"/);
     await assertProjectChoices(form.body);
     assert.match(form.body, /name="surveyDate"/);
