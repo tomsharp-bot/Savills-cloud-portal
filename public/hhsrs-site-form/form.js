@@ -824,6 +824,7 @@
     "category",
     "rating",
     "comment",
+    "suspectedCause",
     "clientCallReference",
     "otherDetails",
     "callUnreachedNote",

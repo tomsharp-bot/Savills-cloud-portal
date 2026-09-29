@@ -226,6 +226,25 @@ describe("HHSRS thanks summary", () => {
     assert.equal(summary.photos[0].label, "Photo 1");
     assert.equal(summary.photos[0].url, "/photo/photo-1.jpg");
     assert.equal(summary.notes.some((note) => note.label === "Call reference"), true);
+    assert.equal(summary.notes.some((note) => note.label === "Suspected cause"), false);
+    const withCause = buildThanksSummary(
+      {
+        reference: "MTVH-014",
+        projectName: "MTVH Pilot 2026",
+        fullAddress: "Flat 3, 12 Moor Cross, Bude",
+        postcode: "EX23 8AB",
+        uprn: "10010120",
+        surveyorName: "Jane Example",
+        surveyDate: "2026-09-28",
+        category: "Damp & Mould Growth",
+        rating: "Category 1",
+        comment: "Black mould on the ceiling.",
+        suspectedCause: "Leaking gutter above the bedroom",
+        photoPaths: [],
+      },
+      (name) => `/photo/${name}`
+    );
+    assert.equal(withCause.notes.find((note) => note.label === "Suspected cause")?.value, "Leaking gutter above the bedroom");
 
     const thanks = readFileSync("views/hhsrs-site-form/thanks.ejs", "utf8");
     const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");

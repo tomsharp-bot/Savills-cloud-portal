@@ -529,6 +529,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
             category: checked.data.category,
             rating: checked.data.rating,
             comment: checked.data.comment,
+            suspectedCause: checked.data.suspectedCause,
             clientCallReference: call.clientCallReference,
             callOutcome: call.callOutcome,
             callNotes: call.callNotes,

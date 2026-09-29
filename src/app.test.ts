@@ -94,6 +94,7 @@ function hhsrsReviewFields(): Record<string, string> {
     rating: "Severe",
     addressConfirmed: "true",
     comment: "Visible mould in bathroom.",
+    suspectedCause: "Leaking gutter above the bedroom",
     clientCallReference: "",
     otherDetails: "No access issues.",
   };
@@ -285,6 +286,12 @@ describe("HHSRS site form at domain-root paths", () => {
     await assertProjectChoices(form.body);
     assert.match(form.body, /name="surveyDate"/);
     assert.match(form.body, /HHSRS category/);
+    const hazard = form.body.slice(form.body.indexOf('id="step-hazard"'), form.body.indexOf('id="extra-box"'));
+    assert.ok(hazard.indexOf('id="comment"') < hazard.indexOf('id="suspectedCause"'), "Suspected cause sits under Comment");
+    assert.match(hazard, /Suspected cause <span class="optional">\(optional\)<\/span>/);
+    assert.match(hazard, /Only if you know a likely cause\. Leave it blank if not\./);
+    assert.doesNotMatch(hazard, /id="suspectedCause"[^>]*\brequired\b/);
+    assert.doesNotMatch(hazard, /data-extra=/);
     assert.match(form.body, /Client call reference \*/);
     assert.match(form.body, /Couldn't get through/);
     assert.match(form.body, /No answer/);
@@ -488,6 +495,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.doesNotMatch(review.body, /2026-09-20/);
     assert.match(review.body, /Damp &amp; Mould Growth/);
     assert.match(review.body, /Visible mould in bathroom/);
+    assert.match(review.body, /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/);
     assert.match(review.body, /No access issues/);
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);

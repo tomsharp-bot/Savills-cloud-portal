@@ -149,6 +149,9 @@ describe("validateHhsrsForm", () => {
     assert.equal(values.uprn, "1001");
     assert.equal(values.surveyDate, todayLondonDate());
     assert.equal(values.cat1Confirmed, false);
+    assert.equal(values.suspectedCause, "");
+    assert.equal(readHhsrsValues({ suspectedCause: "  Leaking gutter  " }).suspectedCause, "Leaking gutter");
+    assert.equal(emptyHhsrsValues().suspectedCause, "");
     assert.equal(values.addressConfirmed, false);
     assert.equal(values.callUnreached, false);
     assert.match(todayLondonDate(), /^\d{4}-\d{2}-\d{2}$/);
@@ -196,6 +199,24 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormProjectFlags("MTVH Phase 1 2026").calls, false);
     assert.equal(siteFormProjectFlags("A2D 2026 Phase 4").calls, true);
     assert.equal(siteFormProjectFlags("Vico 2026 8k").calls, true);
+  });
+
+  it("keeps an optional suspected cause on a project with no extra flags", () => {
+    const mtvh = { id: "proj-1", name: "MTVH Pilot 2026" };
+    const blank = validateHhsrsForm(valid, mtvh);
+    assert.equal(blank.ok, true);
+    if (blank.ok) {
+      assert.equal(blank.data.suspectedCause, "");
+      assert.equal(blank.data.projectName, "MTVH Pilot 2026");
+    }
+    const filled = validateHhsrsForm(
+      { ...valid, suspectedCause: "  Leaking gutter above the bedroom  " },
+      mtvh
+    );
+    assert.equal(filled.ok, true);
+    if (filled.ok) assert.equal(filled.data.suspectedCause, "Leaking gutter above the bedroom");
+    assert.equal(siteFormSectionState({ ...valid, suspectedCause: "" }, mtvh.name).hazard, true);
+    assert.equal(siteFormSectionState({ ...valid, suspectedCause: "A leak" }, mtvh.name).extras, true);
   });
 
   it("accepts a blank other details field, and skips call reference unless the project needs it", () => {
@@ -565,6 +586,15 @@ describe("HHSRS site form project option flags", () => {
     assert.match(html, /Back to UPRN search/);
     assert.match(readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8"), /UPRN not found\./);
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
+    const hazard = html.slice(html.indexOf('id="step-hazard"'), html.indexOf('id="extra-box"'));
+    assert.ok(hazard.indexOf('id="comment"') < hazard.indexOf('id="suspectedCause"'));
+    assert.match(hazard, /Suspected cause <span class="optional">\(optional\)<\/span>/);
+    assert.match(hazard, /Only if you know a likely cause\. Leave it blank if not\./);
+    assert.doesNotMatch(hazard, /id="suspectedCause"[^>]*\brequired\b/);
+    assert.doesNotMatch(hazard, /data-extra=/);
+    const review = readFileSync(join(process.cwd(), "views/hhsrs-site-form/review.ejs"), "utf8");
+    const reviewHazard = review.slice(review.indexOf("Hazard"), review.indexOf("Extra details"));
+    assert.match(reviewHazard, /<dt>Suspected cause<\/dt>/);
     assert.match(html, /data-jump=""/);
     assert.match(html, /viewport-fit=cover/);
   });

@@ -56,6 +56,7 @@
                 <div><dt>HHSRS category</dt><dd><%= draft.category %></dd></div>
                 <div><dt>Rating</dt><dd><span class="hhsrs-rv-pill <%= tone %>"><%= draft.rating %></span></dd></div>
                 <div><dt>Comment</dt><dd class="prewrap"><%= draft.comment %></dd></div>
+                <div><dt>Suspected cause</dt><dd class="prewrap"><%= draft.suspectedCause || "—" %></dd></div>
                 <% if (draft.cat1Confirmed) { %><div><dt>Category 1 confirmed</dt><dd>Yes</dd></div><% } %>
               </dl>
             </section>

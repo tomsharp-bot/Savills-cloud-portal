@@ -216,6 +216,7 @@ export type HhsrsFormValues = {
   category: string;
   rating: string;
   comment: string;
+  suspectedCause: string;
   clientCallReference: string;
   otherDetails: string;
   /**
@@ -320,6 +321,7 @@ export function buildThanksSummary(
     category: string;
     rating: string;
     comment: string;
+    suspectedCause?: string | null;
     otherDetails?: string | null;
     clientCallReference?: string | null;
     callOutcome?: string | null;
@@ -346,6 +348,8 @@ export function buildThanksSummary(
     { label: "Rating", value: row.rating },
   ];
   const notes: ThanksField[] = [];
+  const cause = String(row.suspectedCause || "").trim();
+  if (cause) notes.push({ label: "Suspected cause", value: cause });
   const other = String(row.otherDetails || "").trim();
   if (other) notes.push({ label: "Other details", value: other });
   const flags = siteFormProjectFlags(row.projectName);
@@ -398,6 +402,7 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     category: "",
     rating: "",
     comment: "",
+    suspectedCause: "",
     clientCallReference: "",
     otherDetails: "",
     cat1Confirmed: false,
@@ -430,6 +435,7 @@ export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues 
     category: field("category"),
     rating: field("rating"),
     comment: field("comment"),
+    suspectedCause: field("suspectedCause"),
     clientCallReference: field("clientCallReference"),
     otherDetails: field("otherDetails"),
     cat1Confirmed: false,
@@ -573,6 +579,7 @@ export function validateHhsrsForm(
           ? composeManualFullAddress(values.addressLine1, values.addressLine2, values.town)
           : values.fullAddress,
       clientCallReference: skippedCall ? "" : String(values.clientCallReference || "").trim(),
+      suspectedCause: String(values.suspectedCause || "").trim(),
       otherDetails: String(values.otherDetails || "").trim(),
       callUnreached: skippedCall,
       callRefBlankReason: skippedCall ? callReason : "",
