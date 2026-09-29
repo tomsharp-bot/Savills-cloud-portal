@@ -219,6 +219,17 @@ a.linkish.active, .linkish.active {
   background: var(--navy);
   color: var(--savills-yellow);
 }
+.side-tabs .tab-link.is-clear .tab-badge { display: none; }
+.side-tabs .tab-link.is-clear.active {
+  background: #1b7a4e;
+  color: #fff;
+  border-color: #14643e;
+  box-shadow: 0 0 0 1px rgba(27, 122, 78, 0.45);
+}
+.side-tabs .tab-link.is-clear.active .tab-ico { color: #fff; }
+.side-tabs .tab-link.is-clear.active .tab-ico svg { stroke: #fff; }
+.side-tabs .tab-link.is-clear.active .tab-ico svg [fill="currentColor"] { fill: #fff; }
+.side-tabs .tab-link.is-clear:not(.active) .tab-ico svg { stroke: #3dbe7a; }
 .side-footnote {
   margin-top: auto;
   padding: 0.75rem 0.7rem 0.25rem;
@@ -637,6 +648,29 @@ a.linkish.active, .linkish.active {
   color: #8e0f14;
   font-weight: 600;
 }
+/* Nothing waiting: the earlier clear (green) treatment, shared with Review. */
+.panel.waiting-urgent.is-clear {
+  border-color: #1b7a4e;
+  box-shadow: 0 0 0 4px rgba(27, 122, 78, 0.14), var(--shadow);
+  background: #f3faf6;
+}
+.panel.waiting-urgent.is-clear .panel-head.received-head {
+  background: linear-gradient(180deg, #1f8a58 0%, #14643e 100%);
+  border-bottom-color: #0e4d30;
+}
+.panel.waiting-urgent.is-clear .panel-head.received-head h2 .urgent-icon {
+  background: #e8f6ee;
+  color: #14643e;
+  font-size: 0;
+}
+.panel.waiting-urgent.is-clear .panel-head.received-head h2 .urgent-icon::before {
+  content: "✓";
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.panel.waiting-urgent.is-clear .count-received { display: none; animation: none; }
+.panel.waiting-urgent.is-clear .waiting-banner { display: none; }
+.panel.waiting-urgent.is-clear .empty { color: #1a6b3c; font-weight: 600; }
 .sum-card.accent-red {
   background: #fff5f5;
   border-color: #f0b4b4;
@@ -823,6 +857,21 @@ a.linkish.active, .linkish.active {
   font-size: 0.6875rem; font-weight: 800;
   padding: 0.15rem 0.5rem; border-radius: 999px;
   background: var(--savills-yellow); color: #8e0f14;
+}
+.step-tabs a.is-clear .step-badge { display: none; }
+.step-tabs a.is-clear .step,
+.step-tabs a.is-clear.active .step {
+  background: #1b7a4e;
+  color: #fff;
+}
+.step-tabs a.is-clear.active {
+  background: #e7f6ee;
+  color: #145c3a;
+  border-color: #b7dcc6;
+}
+.step-tabs a.is-clear:hover {
+  background: #f3faf6;
+  color: #145c3a;
 }
 
 /* Admin sits just after the divider; shared yellow-outline look is on all .tab-link */

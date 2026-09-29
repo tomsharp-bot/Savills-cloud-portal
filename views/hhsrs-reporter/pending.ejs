@@ -6,13 +6,12 @@
   <a class="linkish dark" href="#last-actioned" style="margin-left:auto;font-size:0.75rem;">Jump to last 20 actioned</a>
 </div>
 
-<section class="panel waiting-urgent" id="not-actioned" aria-label="Pending Issues">
+<section class="panel waiting-urgent<%= waitingRows.length ? '' : ' is-clear' %>" id="not-actioned" aria-label="Pending Issues">
   <div class="panel-head received-head">
     <h2><span class="urgent-icon" aria-hidden="true">!</span> Pending Issues</h2>
-    <span class="count count-received"><%= waitingRows.length %> need action</span>
-  </div>
-  <div class="panel-body-alerts">
-    <%- include("partials/desktop-alerts-control") %>
+    <% if (waitingRows.length) { %>
+      <span class="count count-received"><%= waitingRows.length %> need action</span>
+    <% } %>
   </div>
   <div class="waiting-banner">
     <span class="badge-need">Urgent</span>
