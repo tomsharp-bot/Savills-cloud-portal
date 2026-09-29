@@ -12,6 +12,9 @@
 %>
 
 <% if (!amending) { %>
+<div class="find-page<%= selected ? " has-case" : "" %>">
+<div class="find-split<%= selected ? " has-case" : "" %>">
+<div class="find-main">
 <div class="page-header">
   <div>
     <h2 class="page-section-title">Find and resend</h2>
@@ -82,9 +85,9 @@
     </table>
   </div>
 </section>
+</div>
 
 <% if (selected) { %>
-<div class="fr-shade" id="fr-shade"></div>
 <aside class="fr-drawer" id="fr-drawer" aria-label="Case">
   <div class="fr-drawer-top">
     <% if (selected.reference) { %><span class="ref-chip"><%= selected.reference %></span><% } %>
@@ -134,6 +137,8 @@
   <% } %>
 </aside>
 <% } %>
+</div>
+</div>
 <% } else { %>
 <section class="amend-screen" id="fr-amend">
   <div class="page-header">

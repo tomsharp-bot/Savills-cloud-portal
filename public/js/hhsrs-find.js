@@ -12,8 +12,6 @@
   });
 
   var close = $("fr-close");
-  var shade = $("fr-shade");
-  if (shade && close) shade.addEventListener("click", function () { window.location.href = close.href; });
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && close && $("fr-drawer")) window.location.href = close.href;
   });

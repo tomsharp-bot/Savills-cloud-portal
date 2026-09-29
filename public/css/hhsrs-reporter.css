@@ -2883,12 +2883,69 @@ tr.is-new-log td { background: #f5f3ff; }
   .dup-d-foot .ml-close-link { margin-left: 0; }
 }
 
-/* Find and resend: grey drawer, white email card, pale body. */
-.fr-shade { position: fixed; inset: 0; background: rgba(11, 31, 51, 0.28); z-index: 80; }
+/* Find and resend: the sent email is a right-hand column beside the results.
+   The page stays within the screen so the card cannot continue underneath. */
+html:has(.find-split.has-case),
+body.hhsrs-reporter:has(.find-split.has-case) {
+  height: 100%;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) #screen-app {
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) .stage,
+body.hhsrs-reporter:has(.find-split.has-case) .app-shell,
+body.hhsrs-reporter:has(.find-split.has-case) .work-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) .app-shell { height: auto; }
+body.hhsrs-reporter:has(.find-split.has-case) .content-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+body.hhsrs-reporter:has(.find-split.has-case) .content-pane > :not(.find-page) { flex-shrink: 0; }
+body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.find-split:not(.has-case) { display: block; }
+.find-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.find-split.has-case {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.find-split.has-case > .find-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.find-split.has-case > .find-main > .page-header,
+.find-split.has-case > .find-main > .panel { flex-shrink: 0; }
+.find-split.has-case .find-table { min-width: 0; }
+.find-split.has-case .find-table thead th { white-space: normal; }
 .fr-drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%);
-  background: #e7edf3; z-index: 90; overflow: auto; padding: 18px 18px 28px;
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
+  flex: 0 0 420px;
+  width: 420px;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  background: #e7edf3;
+  border-radius: 12px;
+  overflow: auto;
+  padding: 14px 14px 18px;
 }
 .fr-drawer-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .fr-drawer-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
