@@ -519,7 +519,7 @@ export function validateHhsrsForm(
 ): { ok: true; data: HhsrsFormData } | { ok: false; errors: HhsrsFieldErrors } {
   const errors: HhsrsFieldErrors = {};
   if (!values.projectId) errors.projectId = "Select a project.";
-  else if (!activeProject) errors.projectId = "Select an active (Current) project.";
+  else if (!activeProject) errors.projectId = "Select a current project, or one archived in the last 2 weeks.";
   if (!values.surveyDate) errors.surveyDate = "Enter the survey date.";
   else if (!/^\d{4}-\d{2}-\d{2}$/.test(values.surveyDate)) {
     errors.surveyDate = "Use a valid date.";

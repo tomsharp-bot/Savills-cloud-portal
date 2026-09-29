@@ -118,7 +118,9 @@ describe("validateHhsrsForm", () => {
     }
     const archived = validateHhsrsForm(valid, null);
     assert.equal(archived.ok, false);
-    if (!archived.ok) assert.equal(archived.errors.projectId, "Select an active (Current) project.");
+    if (!archived.ok) {
+      assert.equal(archived.errors.projectId, "Select a current project, or one archived in the last 2 weeks.");
+    }
   });
 
   it("rejects invalid dates, categories and ratings", () => {

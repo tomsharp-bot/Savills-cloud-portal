@@ -20,6 +20,7 @@ import { reapplyExternalLink } from "../lib/external.js";
 import { parseProjectTarget } from "../lib/project-target.js";
 import { hhsrsCodeForSave, hhsrsCodeFromProjectName } from "../lib/hhsrs-reference.js";
 import { ARCHIVE_BOARD_LIMIT, recentArchived, sortArchived } from "../lib/archive.js";
+import { archivedAtForStageChange } from "../lib/hhsrs-site-form-projects.js";
 import { assetStatusFilterOptions } from "../lib/asset-status.js";
 import { buildSampleAnalysis } from "../lib/sample-analysis.js";
 import {
@@ -195,12 +196,14 @@ projectsRouter.post("/:id/edit", async (req: Request, res: Response) => {
     res.redirect("/projects?error=" + encodeURIComponent("Name already used"));
     return;
   }
+  const archivedAt = archivedAtForStageChange(existing.stage, stage);
   await prisma.project.update({
     where: { id: req.params.id },
     data: {
       name,
       projectManager,
       stage,
+      ...(archivedAt === undefined ? {} : { archivedAt }),
       ...types,
       ...target,
       hhsrsCode: hhsrsCodeForSave({
@@ -275,7 +278,19 @@ projectsRouter.post("/:id/stage", async (req: Request, res: Response) => {
     res.redirect("/projects?error=" + encodeURIComponent("Invalid stage"));
     return;
   }
-  await prisma.project.update({ where: { id: req.params.id }, data: { stage } });
+  const existing = await prisma.project.findUnique({
+    where: { id: req.params.id },
+    select: { stage: true },
+  });
+  if (!existing) {
+    res.redirect("/projects?error=" + encodeURIComponent("Select a project first"));
+    return;
+  }
+  const archivedAt = archivedAtForStageChange(existing.stage, stage);
+  await prisma.project.update({
+    where: { id: req.params.id },
+    data: archivedAt === undefined ? { stage } : { stage, archivedAt },
+  });
   res.redirect("/projects");
 });
 
