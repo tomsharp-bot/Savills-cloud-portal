@@ -117,7 +117,7 @@ import {
   type SitePhotoStorage,
 } from "../lib/hhsrs-site-photos.js";
 import {
-  MISSING_SENDER_NAME_WARNING,
+  SIGNATURE_LOGO_PUBLIC_PATH,
   renderSignatureHtml,
   resolveSenderSignature,
   signatureFromLoggedSender,
@@ -126,9 +126,9 @@ import {
 
 function signatureLogoUrl(res: Response): string {
   if (typeof res.locals.baseUrl === "function") {
-    return res.locals.baseUrl("/img/savills-hhsrs-signature.png");
+    return res.locals.baseUrl(SIGNATURE_LOGO_PUBLIC_PATH);
   }
-  return "/img/savills-hhsrs-signature.png";
+  return SIGNATURE_LOGO_PUBLIC_PATH;
 }
 
 /** Login first name and surname. Personnel (surveyors) only if the login has neither. */
@@ -153,8 +153,8 @@ function signatureLocals(res: Response, names: SenderSignature) {
   return {
     signatureHtml: html,
     emailSignature: {
-      missing: names.missing,
-      warning: names.missing ? MISSING_SENDER_NAME_WARNING : "",
+      missing: false,
+      warning: "",
       html,
     },
   };
@@ -178,10 +178,10 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
   res.locals.claimRowClass = (row: { claimedBy?: string | null; claimedAt?: Date | string | null }) =>
     claimRowClass(claimView(row).status);
   res.locals.siteFormPublicUrl = SITE_FORM_PUBLIC_URL;
-  res.locals.logoUrl = "/hhsrs-reporter/savills-logo.svg";
+  res.locals.logoUrl = SIGNATURE_LOGO_PUBLIC_PATH;
   // Logo is served from portal static; prefer baseUrl when available.
   if (typeof res.locals.baseUrl === "function") {
-    res.locals.logoUrl = res.locals.baseUrl("/hhsrs-reporter/savills-logo.svg");
+    res.locals.logoUrl = res.locals.baseUrl(SIGNATURE_LOGO_PUBLIC_PATH);
     res.locals.reporterCssUrl = res.locals.baseUrl("/css/hhsrs-reporter.css");
     res.locals.reporterJsUrl = res.locals.baseUrl("/js/hhsrs-reporter.js");
     res.locals.portalHomeUrl = res.locals.baseUrl("/admin");
