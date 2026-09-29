@@ -2651,7 +2651,8 @@ tr.is-new-log td { background: #f5f3ff; }
 }
 .ml-page .ml-table thead th.is-sorted a.ml-sort { color: var(--navy); }
 .ml-page .ml-table thead th .ml-sort-ind {
-  font-size: 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: 0;
 }

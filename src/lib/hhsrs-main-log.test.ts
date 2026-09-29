@@ -154,15 +154,16 @@ describe("HHSRS main log arrangement", () => {
     const project = arrangeMainLog(items, new Set(), 1, 50, { key: "project", dir: "asc" });
     assert.deepEqual(project.pageKeys, ["email:b", "email:a", "case:c"]);
     const projectDesc = arrangeMainLog(items, new Set(), 1, 50, { key: "project", dir: "desc" });
-    assert.deepEqual(projectDesc.pageKeys, ["email:a", "email:b", "case:c"]);
+    assert.deepEqual(projectDesc.pageKeys, ["case:c", "email:a", "email:b"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "by", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
-    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "by", dir: "desc" }).pageKeys, ["email:a", "email:b", "case:c"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "by", dir: "desc" }).pageKeys, ["case:c", "email:a", "email:b"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "ref", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "uprn", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "address", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "hazard", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "rating", dir: "asc" }).pageKeys, ["email:b", "email:a", "case:c"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "to", dir: "asc" }).pageKeys, ["case:c", "email:a", "email:b"]);
+    assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "to", dir: "desc" }).pageKeys, ["email:b", "email:a", "case:c"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "photos", dir: "asc" }).pageKeys, ["case:c", "email:b", "email:a"]);
     assert.deepEqual(arrangeMainLog(items, new Set(), 1, 50, { key: "type", dir: "asc" }).pageKeys, ["email:b", "case:c", "email:a"]);
     const page = arrangeMainLog(items, new Set(), 2, 1, { key: "project", dir: "asc" });

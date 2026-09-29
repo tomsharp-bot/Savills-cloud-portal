@@ -341,7 +341,7 @@ function sortText(item: SortItem, key: MainLogSortKey): string {
   }
 }
 
-/** Blank text stays at the bottom in both directions. Dates and counts use their real values. */
+/** Blank text sorts after real values. The other direction is a full reverse, so blanks come first. */
 function compareSortItems(a: SortItem, b: SortItem, sort: MainLogSort): number {
   let cmp = 0;
   if (sort.key === "sent") {
@@ -352,8 +352,8 @@ function compareSortItems(a: SortItem, b: SortItem, sort: MainLogSort): number {
     const left = sortText(a, sort.key).trim();
     const right = sortText(b, sort.key).trim();
     if (!left && !right) cmp = 0;
-    else if (!left) return 1;
-    else if (!right) return -1;
+    else if (!left) cmp = 1;
+    else if (!right) cmp = -1;
     else cmp = left.localeCompare(right, "en-GB", { numeric: true, sensitivity: "base" });
   }
   if (cmp) return sort.dir === "asc" ? cmp : -cmp;
