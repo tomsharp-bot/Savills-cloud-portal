@@ -105,6 +105,7 @@ function draftFor(id: string, photos: HhsrsPhoto[]): HhsrsDraft {
     category: "Damp & Mould Growth",
     rating: "Severe",
     comment: "Visible mould in bathroom.",
+    suspectedCause: "",
     clientCallReference: "",
     otherDetails: "",
     cat1Confirmed: false,
