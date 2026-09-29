@@ -18,7 +18,8 @@ import { hhsrsReporterRouter } from "./routes/hhsrs-reporter.js";
 import { HHSRS_REPORTER_ALIAS, HHSRS_REPORTER_PATH } from "./lib/hhsrs-reporter.js";
 import { adminRouter } from "./routes/admin.js";
 import { programmeRouter } from "./routes/programme.js";
-import { isAdmin, roleLabel } from "./lib/access.js";
+import { dataChecksRouter } from "./routes/data-checks.js";
+import { canSeeDataChecks, isAdmin, roleLabel } from "./lib/access.js";
 import { postLoginPath } from "./lib/landing.js";
 import { photosRouter } from "./routes/photos.js";
 import { photoShareRouter } from "./routes/photo-share.js";
@@ -121,6 +122,8 @@ export function createApp(options: CreateAppOptions = {}) {
     res.locals.isAdmin = isAdmin(req.user);
     res.locals.isClient = req.user?.role === "client";
     res.locals.isSurveyor = req.user?.role === "surveyor";
+    res.locals.canSeeDataChecks = canSeeDataChecks(req.user);
+    res.locals.dataChecksActive = false;
     res.locals.basePath = basePath;
     res.locals.baseUrl = url;
     wrapRedirect(res, basePath);
@@ -177,6 +180,7 @@ export function createApp(options: CreateAppOptions = {}) {
   portal.use("/surveyor", surveyorRouter);
   portal.use("/reference-documents", referenceDocumentsRouter);
   portal.use("/projects-programme", programmeRouter);
+  portal.use("/data-checks", dataChecksRouter);
   portal.use("/personnel", personnelRouter);
   portal.use("/photos", photosRouter);
   portal.use(stockRouter);

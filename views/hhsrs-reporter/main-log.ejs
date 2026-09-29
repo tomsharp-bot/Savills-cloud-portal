@@ -181,10 +181,10 @@
       <dt>Bcc</dt><dd class="<%= panel.bcc ? "" : "none" %>"><%= panel.bcc || "—" %></dd>
       <dt>Subject</dt><dd class="<%= panel.subject ? "" : "none" %>"><% if (panel.subject) { %><b><%= panel.subject %></b><% } else { %>—<% } %></dd>
     </dl>
-    <div class="ml-sec">Email text</div>
+    <div class="ml-sec">Email Text</div>
     <% if (panel.bodyMissing) { %><p class="ml-missing">Full text not stored for this email</p><% } %>
     <pre class="ml-body"><%= panel.bodyText || (panel.kind === "not_sent" ? "Not sent from the portal." : "") %></pre>
-    <div class="ml-sec">Photos attached (<%= panel.photos.length %>)</div>
+    <div class="ml-sec">Photos Attached (<%= panel.photos.length %>)</div>
     <% if (panel.photos.length) { %>
       <div class="ml-thumbs">
         <% panel.photos.forEach((photo) => { %>

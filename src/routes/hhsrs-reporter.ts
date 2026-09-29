@@ -407,7 +407,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     ...shellLocals({
       activeNav: "review",
       summary,
-      title: "Review and create — HHSRS Reporter",
+      title: "Review & Create — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
@@ -488,7 +488,7 @@ async function renderReview(
     ...shellLocals({
       activeNav: "review",
       summary: opts.summary,
-      title: "Review and create — " + row.projectName,
+      title: "Review & Create — " + row.projectName,
       flashOk: opts.flashOk || flash.ok,
       flashErr: opts.flashErr || flash.err,
     }),
@@ -720,7 +720,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     ...shellLocals({
       activeNav: "find",
       summary,
-      title: "Find & resend — HHSRS Reporter",
+      title: "Find & Resend — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
@@ -936,7 +936,7 @@ hhsrsReporterRouter.get("/project-overview", async (req: Request, res: Response)
     ...shellLocals({
       activeNav: "project-overview",
       summary,
-      title: "Project overview — HHSRS Reporter",
+      title: "Project Overview — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
@@ -1312,7 +1312,7 @@ async function handleNotNeeded(req: Request, res: Response, id: string): Promise
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${id}`);
     return;
   }
-  flashOk(req, "Moved to Duplicates & errors.");
+  flashOk(req, "Moved to Duplicates & Errors.");
   res.redirect(HHSRS_REPORTER_PATH);
 }
 
@@ -1348,7 +1348,7 @@ async function handleDuplicates(req: Request, res: Response): Promise<void> {
     ...shellLocals({
       activeNav: "duplicates",
       summary,
-      title: "Duplicates & errors — HHSRS Reporter",
+      title: "Duplicates & Errors — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),

@@ -8,7 +8,7 @@
 <div class="dup-page">
   <div class="ml-headbar">
     <div>
-      <h1>Duplicates &amp; errors</h1>
+      <h1>Duplicates &amp; Errors</h1>
       <p class="dup-lead">Cases here were not sent. They are not in the Main Log.</p>
     </div>
   </div>
@@ -105,7 +105,7 @@
       <div>Reason: <%= openCase.reasonLabel || dash %><% if (openCase.duplicateOf) { %> · Duplicate of <% if (openCase.duplicateOfId) { %><a class="ref-chip" href="<%= reporterBase %>/review/<%= openCase.duplicateOfId %>"><%= openCase.duplicateOf %></a><% } else { %><span class="ref-chip"><%= openCase.duplicateOf %></span><% } %><% } %></div>
       <div>Note: <%= openCase.note || dash %></div>
     </div>
-    <div class="ml-sec">Original submission</div>
+    <div class="ml-sec">Original Submission</div>
     <dl class="ml-meta">
       <dt>Received</dt><dd><%= openCase.received || dash %></dd>
       <dt>Survey date</dt><dd><%= openCase.surveyDate || dash %></dd>

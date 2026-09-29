@@ -373,7 +373,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(finish, /Sent and logged in the Main Log\. Can't be sent again\./);
     assert.doesNotMatch(finish, /✓ Sent</);
     assert.doesNotMatch(finish, /id="btn-abandon-claim"/);
-    assert.match(review, /Move to Duplicates &amp; errors\?/);
+    assert.match(review, /Move to Duplicates &amp; Errors\?/);
     assert.match(review, /Nothing is deleted\. You can move it back\./);
     assert.match(review, /showNotNeeded/);
     assert.doesNotMatch(workspace, /id="mark-actioned-form"/);
@@ -384,7 +384,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(workspace, /id="abandon-claim-form"/);
     assert.match(workspace, /btn-copy/);
     assert.match(workspace, /Download photos/);
-    assert.match(review, /Check before sending/);
+    assert.match(review, /Check Before Sending/);
     assert.match(review, /I've checked the details/);
     assert.match(review, /id="ck-send"[^>]*>Send and log</);
     assert.match(review, /Nothing is sent until you press Send and log\./);
@@ -518,8 +518,13 @@ describe("HHSRS Reporter UI helpers", () => {
     const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
     const alerts = readFileSync("public/js/hhsrs-pending-alerts.js", "utf8");
     const waiting = pending.slice(pending.indexOf('id="not-actioned"'), pending.indexOf('id="last-actioned"'));
-    assert.match(pending, /class="panel waiting-urgent<%= waitingRows\.length \? '' : ' is-clear' %>" id="not-actioned"/);
+    assert.match(pending, /class="panel waiting-urgent<%= waitingRows\.length \? '' : ' is-clear' %>" id="not-actioned" aria-label="Pending Issues"/);
+    assert.match(pending, /<h2 class="page-section-title">Pending Issues<\/h2>/);
+    assert.match(waiting, /> Pending Issues</);
     assert.match(waiting, /<% if \(waitingRows\.length\) \{ %>\s*<span class="count count-received">/);
+    assert.match(pending, /Last 20 Issues That Have Been Actioned/);
+    assert.doesNotMatch(pending, /desktop-alerts-control/);
+    assert.doesNotMatch(pending, /Pending issues/);
     assert.match(review, /alsoWaiting\.length \? '' : 'is-clear'/);
     assert.match(steps, /summary\.waiting > 0 \? '' : ' is-clear'/);
     assert.match(sidebar, /title="Dashboard"/);

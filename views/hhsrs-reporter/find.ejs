@@ -7,7 +7,7 @@
 
 <div class="page-header">
   <div>
-    <h2 class="page-section-title">Find &amp; resend</h2>
+    <h2 class="page-section-title">Find &amp; Resend</h2>
     <p class="subtitle">Search a case, read the email that went, and send a correction if something was wrong.</p>
   </div>
 </div>
@@ -15,7 +15,7 @@
 <% if (amending) { %>
 <section class="panel find-mini">
   <div class="panel-head">
-    <h2>Find a case <span class="find-dot">·</span> <span class="ref-chip"><%= selected.reference || "—" %></span>
+    <h2>Find A Case <span class="find-dot">·</span> <span class="ref-chip"><%= selected.reference || "—" %></span>
       <span class="find-mini-meta"><%= selected.address %> · <%= selected.hazard %></span>
     </h2>
     <a class="btn btn-ghost btn-sm" href="<%= selected.backUrl %>">← Back to results</a>
@@ -24,7 +24,7 @@
 
 <section class="panel" id="fr-amend">
   <div class="panel-head">
-    <h2>Amend &amp; resend <span class="ref-chip ref-chip-lg"><%= selected.reference || "—" %></span></h2>
+    <h2>Amend &amp; Resend <span class="ref-chip ref-chip-lg"><%= selected.reference || "—" %></span></h2>
     <span class="find-status st-<%= selected.statusClass %>"><%= selected.statusLabel %></span>
   </div>
   <div class="panel-body find-body">
@@ -109,7 +109,7 @@
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
     <form id="rv-send-form" autocomplete="off" method="post" action="<%= amend.action %>">
-      <div class="ck-head"><h2 id="ck-title">Check before sending</h2></div>
+      <div class="ck-head"><h2 id="ck-title">Check Before Sending</h2></div>
       <div class="ck-body" id="ck-body">
         <% if (sendConfig.testMode) { %>
           <p class="ck-test" id="ck-test"><%= sendConfig.testBanner %></p>
@@ -143,7 +143,7 @@
 <% } else { %>
 
 <section class="panel">
-  <div class="panel-head"><h2>Find a case</h2></div>
+  <div class="panel-head"><h2>Find A Case</h2></div>
   <form class="panel-body find-body" method="get" action="<%= reporterBase %>/find">
     <div class="find-search">
       <div>
@@ -209,7 +209,7 @@
 <% if (selected) { %>
 <section class="panel" id="fr-email">
   <div class="panel-head">
-    <h2>Email that was sent
+    <h2>Email That Was Sent
       <% if (selected.reference) { %><span class="ref-chip ref-chip-lg"><%= selected.reference %></span><% } %>
     </h2>
     <span class="find-head-actions">
@@ -230,11 +230,11 @@
       </div>
     <% } else if (!selected.sent) { %>
       <div class="find-info">
-        <b>Not sent yet – open it in Review and create</b>
+        <b>Not sent yet – open it in Review &amp; Create</b>
         <p><%= selected.address %> · <%= selected.hazard %></p>
       </div>
       <div class="find-actions">
-        <a class="btn btn-primary" href="<%= selected.reviewUrl %>">Open in Review and create</a>
+        <a class="btn btn-primary" href="<%= selected.reviewUrl %>">Open in Review &amp; Create</a>
       </div>
     <% } else { %>
       <dl class="find-meta">

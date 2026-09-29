@@ -339,6 +339,25 @@ a.linkish.active, .linkish.active {
 .panel-head h2 {
   font-size: 0.9375rem; font-weight: 700; color: var(--navy); margin: 0;
 }
+/* Section headers on Reporter cards use the Pending Issues bar.
+   Urgent waiting and actioned strips keep their own colours. */
+.hhsrs-reporter .panel > .panel-head:not(.received-head):not(.dealt-head),
+.hhsrs-reporter details.panel > summary.panel-head:not(.received-head):not(.dealt-head) {
+  margin: 12px 12px 0;
+  padding: 0.75rem 1.05rem 0.75rem 1rem;
+  background: linear-gradient(180deg, #DDE3EE 0%, #D0D8E6 100%);
+  border: 1px solid #B8C2D4;
+  border-left: 5px solid var(--navy);
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(24,26,44,0.06), inset 0 1px 0 rgba(255,255,255,0.55);
+}
+.hhsrs-reporter .panel > .panel-head:not(.received-head):not(.dealt-head) h2,
+.hhsrs-reporter details.panel > summary.panel-head:not(.received-head):not(.dealt-head) h2 {
+  font-size: 1.18rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
 .panel-head .count {
   font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 999px; font-weight: 700;
 }
@@ -740,7 +759,13 @@ a.linkish.active, .linkish.active {
 .tool-header .tool-meta strong {
   display: block; color: var(--text); font-size: 0.8125rem;
 }
+/* Pending Issues section bar: full-width rounded pale-grey bar, navy left edge.
+   Page titles and Admin section headers share this. It must stay a bar, not a
+   shrink-wrapped button and not a strip flush to a card edge. */
 .page-section-title {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0 0 1rem;
   padding: 0.75rem 1.05rem 0.75rem 1rem;
   font-size: 1.18rem;
@@ -753,11 +778,32 @@ a.linkish.active, .linkish.active {
   border-radius: 10px;
   box-shadow: 0 1px 0 rgba(24,26,44,0.06), inset 0 1px 0 rgba(255,255,255,0.55);
 }
+.page-section-title.section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.page-section-title .section-bar-label {
+  min-width: 0;
+}
 .page-header .page-section-title {
   margin-bottom: 0.35rem;
 }
 .page-header {
   align-items: flex-start;
+}
+.page-header > :first-child {
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+}
+.hhsrs-reporter .section-bar + .panel {
+  margin-bottom: 1.15rem;
+}
+.hhsrs-reporter .section-bar + .client-email-panel {
+  margin-top: 0;
 }
 
 /* === Original-style horizontal step tabs (pale bar + 01 pills) === */
@@ -1612,15 +1658,17 @@ body.hhsrs-reporter {
   list-style: none;
   cursor: pointer;
   user-select: none;
-  background: #eceff3;
-  border-bottom: 1px solid transparent;
+  background: linear-gradient(180deg, #DDE3EE 0%, #D0D8E6 100%);
+  border: 1px solid #B8C2D4;
+  border-left: 5px solid var(--navy);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }
 #po-archived-section.po-archived-details > .po-archived-summary::-webkit-details-marker { display: none; }
-#po-archived-section.po-archived-details[open] > .po-archived-summary { border-bottom-color: #d5dbe3; }
+#po-archived-section.po-archived-details[open] > .po-archived-summary { border-bottom-color: #B8C2D4; }
 .po-archived-summary-left {
   display: inline-flex;
   align-items: center;
@@ -1642,8 +1690,10 @@ body.hhsrs-reporter {
   margin-top: -0.15rem;
 }
 #po-archived-section .panel-head.archived-head h2 {
-  color: #6b7585;
-  font-weight: 650;
+  color: var(--navy);
+  font-size: 1.18rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 #po-archived-section .count-archived {
   background: #e2e6ec;
@@ -2591,11 +2641,15 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-page { display: flex; flex-direction: column; gap: 14px; }
 .ml-headbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin: -4px 0 0; padding: 0.7rem 1.05rem 0.7rem 1rem;
-  background: linear-gradient(180deg, #dde3ee 0%, #d0d8e6 100%);
-  border: 1px solid #b8c2d4; border-left: 5px solid var(--navy); border-radius: 10px;
+  margin: 0;
+  padding: 0.75rem 1.05rem 0.75rem 1rem;
+  background: linear-gradient(180deg, #DDE3EE 0%, #D0D8E6 100%);
+  border: 1px solid #B8C2D4;
+  border-left: 5px solid var(--navy);
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(24,26,44,0.06), inset 0 1px 0 rgba(255,255,255,0.55);
 }
-.ml-headbar h1 { margin: 0; font-size: 1.3rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.ml-headbar h1 { margin: 0; font-size: 1.18rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
 .ml-headbar p { margin: 0; color: #44546a; font-size: 0.9rem; }
 .ml-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
 .ml-filters {

@@ -982,6 +982,46 @@
   display: block;
   background: #eef2f6;
 }
+.photos-page .hhsrs-uprn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+}
+.photos-page .hhsrs-uprn-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+}
+.photos-page .hhsrs-uprn-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 0 12px;
+}
+.photos-page .hhsrs-uprn-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--navy);
+}
+.photos-page .hhsrs-uprn-address {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.photos-page .hhsrs-copied-at {
+  padding: 0 8px 2px;
+  font-size: 0.78rem;
+  color: var(--navy);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.photos-page .folders-table td.hhsrs-copied-col {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .photos-page .modal-close {
   border: none;
   background: transparent;
