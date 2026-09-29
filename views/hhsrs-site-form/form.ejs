@@ -155,7 +155,7 @@
                 <% if (errors.comment) { %><p class="field-error"><%= errors.comment %></p><% } %>
 
                 <label for="suspectedCause">Suspected cause <span class="optional">(optional)</span></label>
-                <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || '' %>" autocomplete="off" />
+                <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || '' %>" autocomplete="off" data-optional="true" />
                 <p class="hhsrs-hint" id="suspected-cause-hint">Only if you know a likely cause. Leave it blank if not.</p>
               </div>
 

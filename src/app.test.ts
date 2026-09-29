@@ -291,6 +291,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(hazard, /Suspected cause <span class="optional">\(optional\)<\/span>/);
     assert.match(hazard, /Only if you know a likely cause\. Leave it blank if not\./);
     assert.doesNotMatch(hazard, /id="suspectedCause"[^>]*\brequired\b/);
+    assert.match(hazard, /id="suspectedCause"[^>]*data-optional="true"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     assert.match(form.body, /Client call reference \*/);
     assert.match(form.body, /Couldn't get through/);
@@ -407,6 +408,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /prefers-reduced-motion/);
     assert.match(js.body, /data-jump/);
     assert.match(js.body, /step-visit\|step-property\|step-hazard\|extra-box\|step-photos/);
+    assert.match(js.body, /f\.hasAttribute\("data-optional"\)\) continue/);
+    assert.match(js.body, /causeField\.tabIndex = -1/);
   });
 
   it("keeps 14px between a field box and the next field label", async () => {

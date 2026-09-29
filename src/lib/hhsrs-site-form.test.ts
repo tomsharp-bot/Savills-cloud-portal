@@ -591,6 +591,7 @@ describe("HHSRS site form project option flags", () => {
     assert.match(hazard, /Suspected cause <span class="optional">\(optional\)<\/span>/);
     assert.match(hazard, /Only if you know a likely cause\. Leave it blank if not\./);
     assert.doesNotMatch(hazard, /id="suspectedCause"[^>]*\brequired\b/);
+    assert.match(hazard, /id="suspectedCause"[^>]*data-optional="true"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     const review = readFileSync(join(process.cwd(), "views/hhsrs-site-form/review.ejs"), "utf8");
     const reviewHazard = review.slice(review.indexOf("Hazard"), review.indexOf("Extra details"));
