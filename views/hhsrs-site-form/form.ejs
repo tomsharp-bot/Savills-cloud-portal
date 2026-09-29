@@ -153,10 +153,6 @@
                 <label for="comment">Comment *</label>
                 <textarea id="comment" name="comment" required rows="5" placeholder="Describe the hazard in plain facts…" class="<%= errors.comment ? 'is-invalid' : '' %>"><%= values.comment %></textarea>
                 <% if (errors.comment) { %><p class="field-error"><%= errors.comment %></p><% } %>
-
-                <label for="suspectedCause">Suspected cause <span class="optional">(optional)</span></label>
-                <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || '' %>" autocomplete="off" data-optional="true" />
-                <p class="hhsrs-hint" id="suspected-cause-hint">Only if you know a likely cause. Leave it blank if not.</p>
               </div>
 
               <div class="info-box flow-step" id="extra-box" data-flow="extras" <%= steps.hazard ? "" : "hidden" %>>
@@ -194,6 +190,10 @@
                 <label for="otherDetails">Any other details <span class="optional">(optional)</span></label>
                 <textarea id="otherDetails" name="otherDetails" rows="4" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
                 <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
+
+                <label for="suspectedCause">Suspected cause <span class="optional">(optional)</span></label>
+                <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || '' %>" autocomplete="off" data-optional="true" />
+                <p class="hhsrs-hint" id="suspected-cause-hint">Only if you know a likely cause. Leave it blank if not.</p>
               </div>
 
               <div class="info-box flow-step" id="step-photos" data-flow="photos" <%= steps.extras ? "" : "hidden" %>>

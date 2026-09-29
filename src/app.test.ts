@@ -287,11 +287,13 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /name="surveyDate"/);
     assert.match(form.body, /HHSRS category/);
     const hazard = form.body.slice(form.body.indexOf('id="step-hazard"'), form.body.indexOf('id="extra-box"'));
-    assert.ok(hazard.indexOf('id="comment"') < hazard.indexOf('id="suspectedCause"'), "Suspected cause sits under Comment");
-    assert.match(hazard, /Suspected cause <span class="optional">\(optional\)<\/span>/);
-    assert.match(hazard, /Only if you know a likely cause\. Leave it blank if not\./);
-    assert.doesNotMatch(hazard, /id="suspectedCause"[^>]*\brequired\b/);
-    assert.match(hazard, /id="suspectedCause"[^>]*data-optional="true"/);
+    assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
+    const extras = form.body.slice(form.body.indexOf('id="extra-box"'), form.body.indexOf('id="step-photos"'));
+    assert.ok(extras.indexOf('id="otherDetails"') < extras.indexOf('id="suspectedCause"'), "Suspected cause comes after Extra details");
+    assert.match(extras, /Suspected cause <span class="optional">\(optional\)<\/span>/);
+    assert.match(extras, /Only if you know a likely cause\. Leave it blank if not\./);
+    assert.doesNotMatch(extras, /id="suspectedCause"[^>]*\brequired\b/);
+    assert.match(extras, /id="suspectedCause"[^>]*data-optional="true"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     assert.match(form.body, /Client call reference \*/);
     assert.match(form.body, /Couldn't get through/);

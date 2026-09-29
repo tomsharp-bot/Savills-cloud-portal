@@ -20,6 +20,9 @@
   var chosen = [];
   var lastProject = "";
   var lastFocusedStep = "";
+  // Phone flow stops on Extra details after Comment. Optional boxes there (including a blank
+  // suspected cause) must not count as finished, and must not keep Hazard as the current step.
+  var extrasPassed = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -529,7 +532,9 @@
     }
 
     showStep(stepEx, announce);
-    if (!extrasDone()) {
+    // Stay on Extra details until the surveyor leaves that section. A blank suspected cause
+    // is not part of hazardDone(), so Hazard still opens Extra details.
+    if (!extrasDone() || !extrasPassed) {
       hideStep(stepPh);
       if (actions) actions.hidden = true;
       setCurrent(stepEx);
@@ -591,6 +596,22 @@
       updateFlow({ announce: true });
     });
   }
+
+  var extraStepEl = $("extra-box");
+  if (extraStepEl) {
+    extraStepEl.addEventListener("focusout", function () {
+      window.setTimeout(function () {
+        if (extraStepEl.contains(document.activeElement)) return;
+        if (!extrasDone()) return;
+        if (extrasPassed) return;
+        extrasPassed = true;
+        updateFlow({ announce: true });
+      }, 0);
+    });
+  }
+
+  var photosAtLoad = $("step-photos");
+  if (photosAtLoad && !photosAtLoad.hidden) extrasPassed = true;
 
   var narrowMedia = window.matchMedia("(max-width: 1024px)");
   if (narrowMedia.addEventListener) {
@@ -865,6 +886,7 @@
     missedUprn = false;
     lastProject = "";
     lastFocusedStep = "";
+    extrasPassed = false;
     var callUnreached = $("callUnreached");
     if (callUnreached) callUnreached.checked = false;
     updateFlow({ announce: false });
