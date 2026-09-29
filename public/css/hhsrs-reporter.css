@@ -2609,6 +2609,36 @@ tr.is-new-log td { background: #f5f3ff; }
   font-size: 12px; font-weight: 800; align-items: center; justify-content: center;
 }
 .ml-table-wrap { overflow-x: auto; max-width: 100%; }
+/* The Main Log list is the Pending table. These rules are only for a leftover .ml-table. */
+.ml-page .pending-issues-table {
+  font-size: 0.8125rem;
+  font-family: var(--font);
+}
+.ml-page .pending-issues-table thead th,
+.ml-page .pending-issues-table tbody td {
+  font-size: 0.8125rem;
+  font-family: var(--font);
+  letter-spacing: normal;
+  padding: 0.45rem 0.32rem;
+  vertical-align: middle;
+}
+.ml-page .pending-issues-table thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: #fafbfc;
+}
+.ml-page .pending-issues-table .ref-chip {
+  font-size: 12.5px;
+  padding: 2px 7px;
+  letter-spacing: normal;
+}
+.ml-page .pending-issues-table .project-pill { font-size: 0.75rem; font-weight: 600; }
+.ml-page .pending-issues-table .btn-review-create { font-size: 0.75rem; font-weight: 700; }
+.ml-page .pending-issues-table td.photo-att-cell,
+.ml-page .pending-issues-table th.photo-att-col { overflow: visible; }
 .ml-page .ml-table {
   width: 100%;
   border-collapse: collapse;

@@ -631,7 +631,12 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(css, /\.ml-to\s*\{[^}]*white-space:\s*nowrap/);
     assert.match(css, /\.ml-page \.ml-table thead th\.ml-ph \{[^}]*white-space:\s*nowrap/);
     assert.match(view, /partials\/pending-issues-table/);
+    assert.match(view, /photoNames/);
+    assert.match(view, /class="panel"/);
     assert.doesNotMatch(view, /<th>Sent<\/th>|<th>To<\/th>/);
+    assert.match(css, /\.ml-page \.pending-issues-table \{[^}]*font-size:\s*0\.8125rem/);
+    assert.match(css, /\.ml-page \.pending-issues-table thead th \{[^}]*font-size:\s*0\.6875rem/);
+    assert.match(css, /\.ml-page \.pending-issues-table \.ref-chip \{[^}]*font-size:\s*12\.5px/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: 12%; \}/);
   });

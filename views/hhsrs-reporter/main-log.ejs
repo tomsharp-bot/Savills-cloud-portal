@@ -5,7 +5,7 @@
     reference: row.reference,
     projectName: row.projectName,
     fullAddress: row.fullAddress,
-    photoPaths: row.photoPaths,
+    photoPaths: (Array.isArray(row.photoPaths) && row.photoPaths.length) ? row.photoPaths : (row.photoNames || []),
     uprn: row.uprn,
     surveyorName: row.surveyorName,
     category: row.hazard,
@@ -88,12 +88,19 @@
         <a class="btn ml-excel" href="<%= exportHref %>"><span class="ml-x" aria-hidden="true">X</span>Export to Excel</a>
       </div>
     </div>
+  </div>
+
+  <section class="panel" aria-label="Main Log">
+    <div class="panel-head">
+      <h2>Main Log</h2>
+      <span class="count"><%= showing %><% if (ofTotal) { %> of <%= ofTotal %><% } %></span>
+    </div>
     <% if (!rows.length) { %>
       <p class="empty" style="padding:1rem 1.1rem;">No emails match. Try clearing the filters.</p>
     <% } else { %>
       <%- include("partials/pending-issues-table", {
         pendingRows: logRows,
-        pendingTableId: "ml-table",
+        pendingTableId: "main-log-table",
         pendingFoot: "Newest first"
       }) %>
     <% } %>
@@ -104,7 +111,7 @@
         <% if (nextHref) { %><a href="<%= nextHref %>">Next</a><% } %>
       </div>
     <% } %>
-  </div>
+  </section>
 </div>
 
 <% if (panel) { %>
