@@ -1,6 +1,7 @@
 /**
  * Savills HHSRS email signature.
  * The wording is fixed and has no personal name.
+ * It ends at the print line. There is no NOTICE and no company-registration footer.
  * The logo is an inline image, not a case photo.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -21,22 +22,7 @@ export const SIGNATURE_LOGO_PUBLIC_PATH = "/img/savills-logo.png";
 export const MISSING_SENDER_NAME_WARNING = "No name found for the signature.";
 
 const LEAF = "\u{1F33F}";
-
-/** Verbatim from the approved signature. Do not reword. */
-export const SIGNATURE_LEGAL_PARAGRAPHS = [
-  "NOTICE: This email is intended for the named recipient only. It may contain privileged and confidential information. If you are not the intended recipient, notify the sender immediately and destroy this email. You must not copy, distribute or take action in reliance upon it. Whilst all efforts are made to safeguard emails, the Savills Group cannot guarantee that attachments are virus free or compatible with your systems and does not accept liability in respect of viruses or computer problems experienced. The Savills Group reserves the right to monitor all email communications through its internal and external networks.",
-  "For information on how Savills processes your personal data please see our privacy policy",
-  "Savills plc. Registered in England No 2122174. Registered office: 33 Margaret Street, London, W1G 0JD.",
-  "Savills plc is a holding company, subsidiaries of which are authorised and regulated by the Financial Conduct Authority (FCA)",
-  "Savills (UK) Limited. A subsidiary of Savills plc. Registered in England No 2605138. Regulated by RICS. Registered office: 33 Margaret Street, London, W1G 0JD.",
-  "Savills Advisory Services Limited. A subsidiary of Savills plc. Registered in England No 06215875. Regulated by RICS. Registered office: 33 Margaret Street, London, W1G 0JD.",
-  "Savills Commercial Limited. A subsidiary of Savills plc. Registered in England No 2605125. Registered office: 33 Margaret Street, London, W1G 0JD.",
-  "Savills Channel Islands Limited. A subsidiary of Savills plc. Registered in Guernsey No. 29285. Registered office: Royal Terrace, Glategny Esplanade, St Peter Port, Guernsey, GY1 2HN. Registered with the Guernsey Financial Services Commission. No. 86723.",
-  "Martel Maides Limited (trading as Savills). A subsidiary of Savills plc. Registered in Guernsey No. 18682. Registered office: Royal Terrace, Glategny Esplanade, St Peter Port, Guernsey, GY1 2HN . Registered with the Guernsey Financial Services Commission. No. 57114.",
-  "We are registered with the Scottish Letting Agent Register, our registration number is LARN1902057.",
-  "Please note any advice contained or attached in this email is informal and given purely as guidance unless otherwise explicitly stated. Our views on price are not intended as a formal valuation and should not be relied upon as such. They are given in the course of our estate agency role. No liability is given to any third party and the figures suggested are in accordance with Professional Standards PS1 and PS2 of the RICS Valuation –Global Standards (incorporating the IVSC International Valuation Standards) effective from 31 January 2022 together, the ''Red Book'. Any advice attached is not a formal (\"Red Book\") valuation, and neither Savills nor the author can accept any responsibility to any third party who may seek to rely upon it, as a whole or any part as such. If formal advice is required this will be explicitly stated along with our understanding of limitations and purpose.",
-  "BEWARE OF CYBER-CRIME: Our banking details will not change during the course of a transaction. Should you receive a notification which advises a change in our bank account details, it may be fraudulent and you should notify Savills who will advise you accordingly.",
-] as const;
+const PRINT_LINE = `${LEAF} Before printing, think about the environment`;
 
 export type PersonnelName = {
   name?: string | null;
@@ -146,9 +132,7 @@ export function renderSignatureText(_names: Pick<SenderSignature, "firstName" | 
     `Email: ${SIGNATURE_EMAIL}`,
     `Website: ${SIGNATURE_WEB}`,
     "",
-    `${LEAF} Before printing, think about the environment`,
-    "",
-    SIGNATURE_LEGAL_PARAGRAPHS.join("\n\n"),
+    PRINT_LINE,
   ];
   return lines.join("\n");
 }
@@ -175,10 +159,7 @@ export function renderSignatureHtml(
     `<p style="margin:0 0 16px;">Website: <a href="${SIGNATURE_WEB_URL}" style="color:#2563eb;text-decoration:underline;">${SIGNATURE_WEB}</a></p>`
   );
   parts.push(
-    `<p style="margin:0 0 16px;"><span style="color:#16a34a;font-size:14px;">${LEAF}</span> Before printing, think about the environment</p>`
-  );
-  parts.push(
-    `<div style="font-size:12px;line-height:1.5;color:#222222;">${SIGNATURE_LEGAL_PARAGRAPHS.map((paragraph) => escapeHtml(paragraph)).join("<br>")}</div>`
+    `<p style="margin:0;"><span style="color:#16a34a;font-size:14px;">${LEAF}</span> Before printing, think about the environment</p>`
   );
   parts.push(`</div>`);
   return parts.join("");
