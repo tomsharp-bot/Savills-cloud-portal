@@ -212,8 +212,11 @@ export function formatSentDay(date: Date): string {
   return `${DAYS[date.getDay()]} ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+/** Shown once, at the top of Review and create, after a send. */
+export const REVIEW_SENT_CONFIRMATION = "Sent and logged in the Main Log.";
+
 export function sentBannerText(sentBy: string, sentAt: Date): string {
-  return `✓ Sent by ${sentBy} · ${formatSentClock(sentAt)} · from HHSRS`;
+  return `✓ Sent and logged in the Main Log by ${sentBy} · ${formatSentClock(sentAt)} · from HHSRS`;
 }
 
 export type SendCommit = {

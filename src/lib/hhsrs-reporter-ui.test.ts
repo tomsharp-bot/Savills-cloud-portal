@@ -364,6 +364,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(finish, /Not needed/);
     assert.match(finish, /Duplicate, error or test/);
     assert.match(finish, /Sends the email and adds it to the Main Log/);
+    assert.match(finish, /✓ Sent and logged/);
+    assert.match(finish, /Sent and logged in the Main Log\. Can't be sent again\./);
+    assert.doesNotMatch(finish, /✓ Sent</);
     assert.doesNotMatch(finish, /id="btn-abandon-claim"/);
     assert.match(review, /Move to Duplicates &amp; errors\?/);
     assert.match(review, /Nothing is deleted\. You can move it back\./);

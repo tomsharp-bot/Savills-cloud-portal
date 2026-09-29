@@ -347,8 +347,8 @@
     </div>
     <div class="finish-bar-right">
       <div class="send-block" id="rv-send-block">
-        <p class="finish-hint send-line" id="rv-send-line"><% if (sentEmail) { %>Sent. Can't be sent again.<% } else if (caseNotNeeded) { %>Move it back to Pending before sending.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Sends the email and adds it to the Main Log.<% } %></p>
-        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" <%= (sentEmail || caseNotNeeded) ? "disabled" : "" %> data-not-needed="<%= caseNotNeeded ? "1" : "" %>" aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent" : "Send and log" %></button>
+        <p class="finish-hint send-line" id="rv-send-line"><% if (sentEmail) { %>Sent and logged in the Main Log. Can't be sent again.<% } else if (caseNotNeeded) { %>Move it back to Pending before sending.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Sends the email and adds it to the Main Log.<% } %></p>
+        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" <%= (sentEmail || caseNotNeeded) ? "disabled" : "" %> data-not-needed="<%= caseNotNeeded ? "1" : "" %>" aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent and logged" : "Send and log" %></button>
       </div>
     </div>
   </section>
