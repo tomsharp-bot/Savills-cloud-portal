@@ -180,6 +180,7 @@ describe("resolveProgramme", () => {
     const board = resolveProgramme({
       surveyors: [
         { name: "Bardya Amin", agency: "Ele" },
+        { name: "Nia Cole", agency: "Ele" },
         { name: "Alex Surveyor", agency: "Savills" },
         { name: "Jeremy Hughes", agency: "F" },
         { name: "Alan Henderson", agency: "" },
@@ -192,6 +193,9 @@ describe("resolveProgramme", () => {
     assert.equal(board.pools.agency_not_on_project[0].flag, "F");
     assert.equal(board.rows.some((row) => row.name === "Bardya Amin"), false);
     assert.equal(board.pools.team_not_live.some((person) => person.name === "Bardya Amin"), false);
+    assert.ok(board.rows.some((row) => row.name === "Nia Cole"));
+    assert.equal(board.pools.agency_not_on_project.some((person) => person.name === "Nia Cole"), false);
+    assert.equal(board.pools.team_not_live.some((person) => person.name === "Nia Cole"), false);
     assert.ok(board.rows.some((row) => row.name === "Alex Surveyor"));
     assert.ok(board.rows.some((row) => row.name === "Jeremy Hughes"));
     assert.equal(board.rows.find((row) => row.name === "Jeremy Hughes")?.flag, "F");
@@ -261,6 +265,7 @@ describe("resolveProgramme", () => {
       weeks: ["2026-09-21"],
       rows: [
         { name: "Bardya Amin", flag: "", weeks: [""] },
+        { name: "Pat Example", flag: "", weeks: [""] },
         { name: "Alex Surveyor", flag: "", weeks: [""] },
         { name: "Jeremy Hughes", flag: "F", weeks: [""] },
         { name: "Richard Moreing", flag: "", weeks: ["LFHA 2026"] },
@@ -270,6 +275,7 @@ describe("resolveProgramme", () => {
         agency_not_on_project: [
           { flag: "F", name: "Bardya Amin" },
           { flag: "F", name: "Jeremy Hughes" },
+          { flag: "", name: "Pat Example" },
         ],
         team_not_live: [
           { flag: "", name: "Alan Henderson" },
@@ -278,12 +284,14 @@ describe("resolveProgramme", () => {
       },
       ticks: {
         "Bardya Amin": false,
+        "Pat Example": false,
         "Alex Surveyor": false,
         "Jeremy Hughes": false,
         "Richard Moreing": true,
       },
       applied: {
         "Bardya Amin": false,
+        "Pat Example": false,
         "Alex Surveyor": false,
         "Jeremy Hughes": false,
         "Richard Moreing": true,
@@ -319,8 +327,8 @@ describe("resolveProgramme", () => {
       .flatMap((row) => row.children)
       .filter((cell) => cell.className === "surveyor")
       .map((cell) => cell.textContent);
-    assert.deepEqual(poolNames("agencyPool"), ["Bardya Amin", "Jeremy Hughes"]);
-    assert.deepEqual(poolNames("teamPool"), ["Alan Henderson", "Clive Gray", "Alex Surveyor"]);
+    assert.deepEqual(poolNames("agencyPool"), ["Bardya Amin", "Jeremy Hughes", "Pat Example"]);
+    assert.deepEqual(poolNames("teamPool"), ["Alan Henderson", "Clive Gray", "Pat Example", "Alex Surveyor"]);
     assert.deepEqual(onBoard, ["Richard Moreing"]);
   });
 

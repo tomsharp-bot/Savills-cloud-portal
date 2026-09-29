@@ -217,13 +217,8 @@
     return f === "F" || f === "E";
   }
 
-  function poolHasName(people, name) {
-    var key = canon(name);
-    if (!key) return false;
-    for (var i = 0; i < people.length; i++) {
-      if (canon(people[i].name) === key) return true;
-    }
-    return false;
+  function isBardyaAmin(name) {
+    return canon(name) === "bardya amin";
   }
 
   var tickMap = Object.assign({}, DATA.ticks || {});
@@ -408,7 +403,7 @@
     var admins = adminCanonSet();
     var agency = seedAgency.map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
     var team = seedTeam
-      .filter(function (p) { return !isAdminName(p.name, admins) && !poolHasName(agency, p.name); })
+      .filter(function (p) { return !isAdminName(p.name, admins) && !isBardyaAmin(p.name); })
       .map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
     var seenA = new Set(agency.map(function (p) { return p.name; }));
     var seenT = new Set(team.map(function (p) { return p.name; }));
@@ -417,7 +412,7 @@
       var entry = { flag: person.flag || "", name: person.name, fromGrid: true };
       if (isAgencyFlag(person.flag)) {
         if (!seenA.has(person.name)) { agency.push(entry); seenA.add(person.name); }
-      } else if (!isAdminName(person.name, admins) && !seenT.has(person.name) && !poolHasName(agency, person.name)) {
+      } else if (!isAdminName(person.name, admins) && !seenT.has(person.name) && !isBardyaAmin(person.name)) {
         team.push(entry);
         seenT.add(person.name);
       }
