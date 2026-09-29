@@ -368,7 +368,7 @@ body:not(.tab-grid) #main{visibility:hidden}
     <div class="cards">
       <div class="card drop" id="cDrop"><div class="big">&#11015; Drag the Vision exports here</div><div class="sub">e.g. <i>15a. Condition Data List Export &hellip;.xlsx</i> (needed) plus <i>15b. Hazard List Export &hellip;</i> and <i>15c. Comments Export &hellip;</i> (optional) &middot; drop one, two or all three together</div><button class="sbtn" id="cPick">Choose files&hellip;</button></div>
       <div class="card drop" id="oDrop"><div class="big">&#128194; &hellip;or open a master you saved earlier</div><div class="sub">&ldquo;&hellip;-Master Data File-V&hellip;.xlsm&rdquo; (or an older &hellip;.xlsx master) &ndash; brings back the grid, yellow edits, standard answers, builder settings, macros, Original Data Imported and Import Log</div><button class="sbtn" id="oPick">Open master&hellip;</button></div>
-      <div class="card drop" id="baseDrop"><div class="big">&#11015; Or start from an existing Master Data File</div><div class="sub">.xlsm or .xlsx &middot; this file&rsquo;s columns, in this order, and its rows become the new master. All columns start selected. Select all, then untick any you do not want. Unticked columns stay out. Headers stay as they are. Saved as {Project name}-Master Data File-V1.</div><button class="sbtn" id="basePick" type="button">Choose file&hellip;</button></div>
+      <div class="card drop" id="baseDrop"><div class="big">Build from previous Master Data File</div><div class="sub">.xlsm or .xlsx, a master used before, not a Vision export. This file&rsquo;s columns, headers, order, and rows become the portal file. All columns start selected. Select all, then untick any you do not want. Unticked columns stay out. Headers stay as they are. Saved as {Project name}-Master Data File-V1. Vision exports dropped afterwards fill matching columns and add new rows by UPRN.</div><button class="sbtn" id="basePick" type="button">Choose file&hellip;</button></div>
     </div>
     <div id="cPreview"></div>
     <div id="basePreview"></div>
@@ -378,7 +378,7 @@ body:not(.tab-grid) #main{visibility:hidden}
 <div class="panel" id="pImport">
   <div class="pin">
     <h2>3. Import new Vision data into the master</h2>
-    <p class="lead">Drop later Vision exports &ndash; a <b>Condition Data List Export</b>, a <b>Hazard List Export</b>, a <b>Comments Export</b>, or any mix of them at once (imported in that order). New properties are added as new rows. A property that is already in the master is <b>skipped if its Vision data is identical</b>. If the data is different, it is added as a <b>second row right under the first</b> with its UPRN shown <b>pink</b> &ndash; your validated row is never changed; compare the two with <b>Show All Duplicates</b> and delete the one you don&rsquo;t want. Hazards and comments are added to the matching properties (an issue that arrives after the row already existed is highlighted lilac, and HHSRS Checked goes back to &ldquo;No&rdquo;). Every imported row is kept on the <b>Original Data Imported</b> sheet and each import is recorded on the <b>Import Log</b> sheet.</p>
+    <p class="lead">Drop later Vision exports &ndash; a <b>Condition Data List Export</b>, a <b>Hazard List Export</b>, a <b>Comments Export</b>, or any mix of them at once (imported in that order). New properties are added as new rows. When the master was built from a previous Master Data File, Condition, Hazards, and Comments fill the columns that match and add a row for each new UPRN. The column order stays the one from that file. Otherwise a property that is already in the master is <b>skipped if its Vision data is identical</b>. If the data is different, it is added as a <b>second row right under the first</b> with its UPRN shown <b>pink</b> &ndash; your validated row is never changed; compare the two with <b>Show All Duplicates</b> and delete the one you don&rsquo;t want. Hazards and comments are added to the matching properties (an issue that arrives after the row already existed is highlighted lilac, and HHSRS Checked goes back to &ldquo;No&rdquo;). Every imported row is kept on the <b>Original Data Imported</b> sheet and each import is recorded on the <b>Import Log</b> sheet.</p>
     <div class="card drop" id="iDrop"><div class="big">&#11015; Drag the next Vision exports here</div><div class="sub">Condition rows already imported (identical) and hazards / comments with an ID already imported are skipped, so re-importing the same file is harmless.</div><button class="sbtn" id="iPick">Choose files&hellip;</button></div>
     <div id="iPreview"></div>
     <div id="iSummary"></div>
@@ -2302,6 +2302,7 @@ function photoColDefs(B, sheet){
 }
 /* keep every sheet's column list in step with the builder's photo components */
 function syncPhotoColumns(B){
+  if (B && B.exactColumns) return;
   for (const s of B.sheets) {
     const list = B.columns[s.name]; if (!list) continue;
     const want = photoColDefs(B, s.name);
@@ -2328,8 +2329,10 @@ function ensureSheetColumns(B, sheet){
   return B.columns[sheet];
 }
 function addQuestionKeys(B, sheet, keys){
-  const list = ensureSheetColumns(B, sheet), have = new Set(list.map(c => c.key)), added = [];
+  const added = [];
   added.keys = [];
+  if (B && B.exactColumns) return added;
+  const list = ensureSheetColumns(B, sheet), have = new Set(list.map(c => c.key));
   const heads = new Set(list.map(c => c.header.toLowerCase()));
   for (const k of keys) {
     if (have.has(k) || k.startsWith('u|') || k.startsWith('p|')) continue;
@@ -2470,6 +2473,7 @@ function rowSig(a, idx){ let s = ''; for (const i of idx) s += fmt(a[i]).trim() 
 /* v3: uprnIndex() moved to v3.js */
 function migrateToMulti(comps){
   const B = MS.B;
+  if (B.exactColumns) return [];
   for (const comp of comps) {
     const qk = 'q|' + comp, old = ['q|', 'qa|', 'qr|', 'qq|'].map(p => p + comp), sub = {'qa|':'ia|', 'qr|':'ir|', 'qq|':'iq|'};
     for (const sh of B.sheets) {
@@ -2628,7 +2632,7 @@ function renderBuilder(){
           <button class="sbtn" id="cShow">Show all listed</button><button class="sbtn" id="cHide">Hide all listed</button></div>
         <div class="hint" id="cCount"></div>
         <div class="scroll colscroll"><table class="ctab" id="colTab"></table></div>
-        <div class="hint">Drag ⋮⋮ to reorder (or use ↑ ↓). Hidden columns stay in the saved master (as hidden Excel columns) and keep their data. ${B.exactColumns ? 'This master was started from an existing file. The columns and their order are the ones in that file, and columns that were not in it are not added.' : 'A new master starts with <b>Postcode</b> hidden and the 35 HHSRS issue columns shown. Opening a master you already saved does not change those Show ticks. Usual columns: UPRN, Phase Status, Checked?, Surveyor, Date, Address, Postcode, Asset Type, Condition Status, Flag, Issue, Number of Issues, Explanation (validation notes), SAP Required, Property Age.'}</div>
+        <div class="hint">Drag ⋮⋮ to reorder (or use ↑ ↓). Hidden columns stay in the saved master (as hidden Excel columns) and keep their data. ${B.exactColumns ? 'This master was built from a previous Master Data File. The columns, headers, and order are that file’s. Vision exports fill matching columns and add new rows by UPRN, and they leave this order as it is.' : 'A new master starts with <b>Postcode</b> hidden and the 35 HHSRS issue columns shown. Opening a master you already saved does not change those Show ticks. Usual columns: UPRN, Phase Status, Checked?, Surveyor, Date, Address, Postcode, Asset Type, Condition Status, Flag, Issue, Number of Issues, Explanation (validation notes), SAP Required, Property Age.'}</div>
       </div>
     </div>
     <div class="row" style="margin-top:14px"><button class="pbig" id="bApply">Apply and open the validator</button></div>`;
@@ -3261,6 +3265,69 @@ function classifyIncoming(V){
   }
   return out;
 }
+function visionHeaderFor(key){
+  const u = USUAL.find(x => x.key === key);
+  if (u) return u.header;
+  if (key === 'g|comments' || key.startsWith('h|') || key.startsWith('p|~')) {
+    const d = hhColDefs().find(x => x.key === key);
+    if (d) return d.header;
+  }
+  if (/^(q|qa|qr|qq|y|ia|ir|iq)\|/.test(key)) {
+    const d = colDefFor(key);
+    if (d && d.header && d.header !== key) return d.header;
+  }
+  return '';
+}
+function columnByVisionKey(list, key){
+  if (!list) return null;
+  const byKey = list.find(c => c.key === key);
+  if (byKey) return byKey;
+  const header = visionHeaderFor(key);
+  if (!header) return null;
+  const n = mdfNorm(header);
+  return list.find(c => mdfNorm(c.header) === n) || null;
+}
+function exactTargetSheet(B, ptype, existingSheet){
+  if (existingSheet && B.columns[existingSheet] && B.columns[existingSheet].length) return existingSheet;
+  const want = sheetForType(B, ptype);
+  if (B.columns[want] && B.columns[want].length) return want;
+  const first = B.sheets.find(s => B.columns[s.name] && B.columns[s.name].length);
+  return first ? first.name : '';
+}
+/* Vision values land on columns the previous master already has. Nothing is added and nothing is reordered. */
+function exactFillProp(p, V, B, copies, st){
+  const cp = computeProp(p, V, B, B.comps);
+  const u = String(p.uprn);
+  const cs = copies.get(u);
+  const sheet = exactTargetSheet(B, p.ptype, cs && cs[0].sheet);
+  if (!sheet) return;
+  const list = B.columns[sheet];
+  const row = cs ? cs[0].row : {vals:{}, e:new Set(), ins:false};
+  for (const [k, v] of cp.vals) {
+    const col = columnByVisionKey(list, k);
+    if (col) row.vals[col.key] = v;
+  }
+  if (!cs) {
+    sheetRows(sheet).push(row);
+    copies.set(u, [{sheet, row}]);
+    st.newProps++; st.newUprns.push(u);
+  } else st.filled = (st.filled || 0) + 1;
+}
+function settleExactRows(){
+  if (!MS || !MS.B || !MS.B.exactColumns) return;
+  for (const [sheet, rows] of MS.data) {
+    const list = MS.B.columns[sheet] || [];
+    const have = new Set(list.map(c => c.key));
+    for (const row of rows) {
+      for (const k of Object.keys(row.vals)) {
+        if (have.has(k)) continue;
+        const col = columnByVisionKey(list, k);
+        if (col) row.vals[col.key] = row.vals[k];
+        delete row.vals[k];
+      }
+    }
+  }
+}
 function importVision(V, batch, creating){
   const B = MS.B, stamp = nowStamp();
   B._prevComps = JSON.parse(JSON.stringify(B.comps || {}));
@@ -3290,6 +3357,7 @@ function importVision(V, batch, creating){
   const st = {props:V.props.size, newProps:0, dupProps:0, identProps:0, appended:newRows.length, skipped:dupRaw + V.blankUprnRows, newCols:[], newUprns:[], dupUprns:[], identUprns:[], dupInMaster:0, rawDup:dupRaw};
   const newColKeys = {};
   for (const p of V.props.values()) {
+    if (B.exactColumns) { exactFillProp(p, V, B, copies, st); continue; }
     const sig = propSig(propSigs.get(p.uprn) || []), cs = copies.get(p.uprn);
     if (cs && (cs.some(c => c.row.sig === sig) || !newByU.get(p.uprn))) { st.identProps++; st.identUprns.push(p.uprn); continue; }
     const cp = computeProp(p, V, B, B.comps);
@@ -3314,7 +3382,8 @@ function importVision(V, batch, creating){
     + (migrated.length ? 'Now multi-answer lists (single column split into Yes-columns): ' + migrated.join(', ') + '. ' : '')
     + (st.newCols.length ? 'New columns: ' + st.newCols.slice(0, 12).join(', ') + (st.newCols.length > 12 ? ' …' : '') + '. ' : '')
     + (dupRaw ? dupRaw + ' rows already in Vision Raw. ' : '') + (V.blankUprnRows ? V.blankUprnRows + ' rows without UPRN. ' : '');
-  MS.log.push([stamp, V.fileName, batch || '', V.rows.length + V.blankUprnRows, newRows.length, V.props.size, st.newProps, st.dupProps, st.identProps, st.dupInMaster, st.skipped, st.newCols.length, notes.trim()]);
+  const exactNote = B.exactColumns ? ' Matching columns filled. New rows added by UPRN. Column order kept. No columns added.' : '';
+  MS.log.push([stamp, V.fileName, batch || '', V.rows.length + V.blankUprnRows, newRows.length, V.props.size, st.newProps, st.dupProps, st.identProps, st.dupInMaster, st.skipped, st.newCols.length, (notes + exactNote).trim()]);
   B.imports = MS.log.length; B.updated = new Date().toISOString(); B.conflicts = [];
   dupVersion++;
   return st;
@@ -4791,7 +4860,9 @@ document.addEventListener('mouseup', () => { if (V4.drag) { V4.drag = null; if (
 /* ---------- master ⇄ grid, saving, opening, autosave ---------- */
 function masterToGrid(keepSheet){
   const B = MS.B, old = book && book.master ? book.tables : null;
-  ensureV4State(); ensureHhsrsColumns(B);
+  ensureV4State();
+  if (B.exactColumns) settleExactRows();
+  ensureHhsrsColumns(B);
   if (!B.exactColumns) for (const [name, rows] of MS.data) if (B.columns[name] && !isGarage(B, name)) for (const r of rows) hhRecalcVals(r.vals);
   if (T && old) { T.st = els.body.scrollTop; T.sl = els.body.scrollLeft; }
   const cur = keepSheet || (T && old ? T.name : null);
@@ -5132,7 +5203,12 @@ async function onImportFiles(files){
   let h = '<h3>Preview</h3>';
   for (const V of conds) {
     const c = classifyIncoming(V);
-    h += visionSummaryHtml(V) + `<table class="kv"><tr><th>New properties</th><td>${nf(c.nw.length)}${c.nw.length ? ' – ' + esc(listU(c.nw, 12)) : ''} <span class="hint">(added as new rows)</span></td></tr>
+    if (MS.B.exactColumns) {
+      const have = c.same.length + c.diff.length;
+      h += visionSummaryHtml(V) + `<table class="kv"><tr><th>New properties</th><td>${nf(c.nw.length)}${c.nw.length ? ' – ' + esc(listU(c.nw, 12)) : ''} <span class="hint">(added as new rows, matched by UPRN)</span></td></tr>
+        <tr><th>Already in the master</th><td>${nf(have)}${have ? ' – ' + esc(listU(c.same.concat(c.diff), 12)) : ''} <span class="hint">(matching columns filled on that row)</span></td></tr></table>
+        <div class="hint">Column order stays the one from the previous Master Data File. Columns that are not already there are left out.</div>`;
+    } else h += visionSummaryHtml(V) + `<table class="kv"><tr><th>New properties</th><td>${nf(c.nw.length)}${c.nw.length ? ' – ' + esc(listU(c.nw, 12)) : ''} <span class="hint">(added as new rows)</span></td></tr>
       <tr><th>Already in the master, same data</th><td>${nf(c.same.length)}${c.same.length ? ' – ' + esc(listU(c.same, 12)) : ''} <span class="hint">(skipped – nothing is changed)</span></td></tr>
       <tr><th>Already in the master, different data</th><td>${nf(c.diff.length)}${c.diff.length ? ' – ' + esc(listU(c.diff, 12)) : ''} <span class="hint">(added as a second row right under the first, UPRN shown pink)</span></td></tr>
       <tr><th>Rows already in ${ORIG_SHEET}</th><td>${nf(c.dupRows)} of ${nf(V.rows.length)}${c.dupRows === V.rows.length ? ' <span class="warnc">– this file has already been imported</span>' : ''}</td></tr></table>`;
@@ -5571,7 +5647,7 @@ function baseSheetPlans(read){
 }
 function renderBasePreview(){
   const el = $('basePreview'); const P = V4.baseFile; if (!el || !P) return;
-  let html = '<h3>New master from this file</h3>';
+  let html = '<h3>Build from previous Master Data File</h3>';
   html += '<div class="row"><label>Project name <input type="text" id="baseProj" value="' + esc(P.project) + '" style="width:240px"></label><span class="hint">Saves as <b id="baseName">' + esc(masterName({project:P.project}, 1)) + '</b></span></div>';
   if (P.skipped.length) html += '<div class="hint">Skipped, too large to read here: ' + P.skipped.map(s => esc(s.name) + ' (' + Math.round(s.bytes / 1048576) + ' MB)').join(', ') + '</div>';
   P.plans.forEach((p, pi) => {

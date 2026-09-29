@@ -35,6 +35,9 @@ describe("Data Review practice page hosting", () => {
     assert.match(page, /id="bSaveMaster"/);
     assert.match(page, /id="mdfDrop"/);
     assert.match(page, /id="baseDrop"/);
+    assert.match(page, /Build from previous Master Data File/);
+    assert.match(page, /Column order kept\. No columns added\./);
+    assert.match(page, /function exactFillProp/);
     assert.match(page, /id="basePreview"/);
     assert.ok(page.indexOf('id="pCreate"') < page.indexOf('id="baseDrop"'));
     assert.ok(page.indexOf('id="baseDrop"') < page.indexOf("Import data from an existing MDF"));
