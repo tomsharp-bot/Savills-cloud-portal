@@ -720,7 +720,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     ...shellLocals({
       activeNav: "find",
       summary,
-      title: "Find & resend — HHSRS Reporter",
+      title: "Find & Resend — HHSRS Reporter",
       flashOk: flash.ok,
       flashErr: flash.err,
     }),
