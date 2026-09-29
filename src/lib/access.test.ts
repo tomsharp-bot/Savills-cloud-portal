@@ -6,6 +6,7 @@ import {
   canEditSampleAnalysis,
   canManageReferenceDocuments,
   canSeeCompletions,
+  canSeeDataChecks,
   canSeeProgramme,
   canSeeProjectTab,
   canSeeReferenceDocuments,
@@ -75,6 +76,41 @@ describe("Projects Programme access", () => {
     assert.equal(canEditProgramme(user("surveyor", { username: "tsharp", email: "tsharp@savillshousing.co.uk" })), false);
     assert.equal(canEditProgramme(user("client", { username: "tsharp" })), false);
     assert.equal(canEditProgramme(null), false);
+  });
+});
+
+describe("Data Checks access", () => {
+  it("uses Tom Sharp’s admin login and keeps every other account out", () => {
+    const tom = user("admin", { username: "tsharp", name: "Tom Sharp", email: "tsharp@savillshousing.co.uk" });
+    assert.equal(canSeeDataChecks(tom), true);
+    assert.equal(canSeeDataChecks(user("admin", { username: "TSharp", name: "Someone Else" })), true);
+    assert.equal(
+      canSeeDataChecks(user("admin", { username: "phil.m", name: "Phil Moon", email: "tsharp@savillshousing.co.uk" })),
+      true
+    );
+
+    assert.equal(
+      canSeeDataChecks(user("admin", { username: "tom.s", name: "Tom Sharp", email: "tom.s@savills.com" })),
+      false
+    );
+    assert.equal(
+      canSeeDataChecks(
+        user("admin", {
+          username: "cfarrell",
+          name: "Carly Farrell",
+          email: "cfarrell@savillshousing.co.uk",
+        })
+      ),
+      false
+    );
+    assert.equal(canSeeDataChecks(user("admin", { username: "phil.m", name: "Phil Moon" })), false);
+    assert.equal(
+      canSeeDataChecks(user("surveyor", { username: "tsharp", name: "Tom Sharp", email: "tsharp@savillshousing.co.uk" })),
+      false
+    );
+    assert.equal(canSeeDataChecks(user("client", { username: "tsharp", name: "Tom Sharp" })), false);
+    assert.equal(canSeeDataChecks(null), false);
+    assert.equal(canSeeDataChecks(undefined), false);
   });
 });
 

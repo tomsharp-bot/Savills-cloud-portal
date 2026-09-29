@@ -8,6 +8,7 @@
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/HHSRSreporter') %>">HHSRS Reporter</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/photos') %>">Photo Storage</a><% } %>
     <% if (isAdmin) { %><a class="linkish" href="<%= baseUrl('/hhsrs-submissions') %>">HHSRS site reports</a><% } %>
+    <% if (canSeeDataChecks) { %><a class="linkish data-checks-nav" href="<%= baseUrl('/data-checks') %>"<% if (dataChecksActive) { %> aria-current="page"<% } %>>Data Checks</a><% } %>
     <span><%= user.name %> <span class="role-pill"><%= roleLabel %></span></span>
     <a class="linkish" href="<%= baseUrl('/account/password') %>">Change password</a>
     <form class="inline-form" method="post" action="<%= baseUrl('/logout') %>">

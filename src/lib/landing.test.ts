@@ -61,6 +61,9 @@ describe("admin hub tiles", () => {
     assert.match(topbar, /href="<%= baseUrl\('\/personnel'\) %>">Personnel/);
     assert.match(topbar, /HHSRS Reporter/);
     assert.match(topbar, /HHSRS site reports/);
+    assert.match(topbar, /canSeeDataChecks/);
+    assert.match(topbar, /baseUrl\('\/data-checks'\)/);
+    assert.match(topbar, />Data Checks</);
     assert.doesNotMatch(topbar, /<details class="nav-menu">/);
     assert.doesNotMatch(topbar, /<summary>Admin<\/summary>/);
     const projectsAt = topbar.indexOf(`baseUrl('/projects') %>">Projects Progress`);
@@ -70,6 +73,8 @@ describe("admin hub tiles", () => {
     const reporterAt = topbar.indexOf("HHSRS Reporter");
     const photosAt = topbar.indexOf("Photo Storage");
     const reportsAt = topbar.indexOf("HHSRS site reports");
+    const dataChecksAt = topbar.indexOf(">Data Checks<");
+    assert.ok(dataChecksAt > reportsAt);
     assert.ok(
       projectsAt >= 0 &&
         projectsAt < programmeAt &&
