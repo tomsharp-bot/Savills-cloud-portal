@@ -258,25 +258,7 @@ a.linkish.active, .linkish.active {
   color: var(--savills-red);
 }
 .side-tabs .tab-link.is-clear .tab-badge { display: none; }
-.side-tabs .tab-link.is-clear,
-.side-tabs .tab-link.is-clear.active {
-  background: #1b7a4e;
-  color: #fff;
-  border-color: #14643e;
-  box-shadow: 0 0 0 1px rgba(27, 122, 78, 0.45);
-}
-.side-tabs .tab-link.is-clear:hover,
-.side-tabs .tab-link.is-clear.active:hover {
-  background: #166844;
-  color: #fff;
-  border-color: #14643e;
-}
-.side-tabs .tab-link.is-clear .tab-ico,
-.side-tabs .tab-link.is-clear.active .tab-ico { color: #fff; }
-.side-tabs .tab-link.is-clear .tab-ico svg,
-.side-tabs .tab-link.is-clear.active .tab-ico svg { stroke: #fff; }
-.side-tabs .tab-link.is-clear .tab-ico svg [fill="currentColor"],
-.side-tabs .tab-link.is-clear.active .tab-ico svg [fill="currentColor"] { fill: #fff; }
+.side-tabs .tab-link .tab-wait { font-weight: 700; }
 .side-footnote {
   margin-top: auto;
   padding: 0.75rem 0.7rem 0.25rem;

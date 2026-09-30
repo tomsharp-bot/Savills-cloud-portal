@@ -593,11 +593,14 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /alsoWaiting\.length \? '' : 'is-clear'/);
     assert.match(steps, /summary\.waiting > 0 \? '' : ' is-clear'/);
     assert.match(sidebar, /title="Dashboard"/);
-    assert.match(sidebar, /summary\.waiting > 0 \? ' needs-attention' : ' is-clear'/);
-    assert.doesNotMatch(sidebar.slice(0, sidebar.indexOf("Review")), /tab-badge|tab-wait/);
+    assert.match(sidebar, /summary\.waiting > 0 \? ' needs-attention' : ''/);
+    assert.match(sidebar, /class="tab-wait"/);
+    assert.doesNotMatch(sidebar.slice(0, sidebar.indexOf("Review")), /tab-badge/);
+    assert.doesNotMatch(sidebar, /is-clear/);
     assert.match(alerts, /dashboard\.classList\.add\("needs-attention"\)/);
-    assert.match(alerts, /dashboard\.classList\.add\("is-clear"\)/);
     assert.match(alerts, /dashboard\.classList\.remove\("is-clear"\)/);
+    assert.doesNotMatch(alerts, /dashboard\.classList\.add\("is-clear"\)/);
+    assert.match(alerts, /tab-wait/);
     assert.match(alerts, /claimStatus === "claimed"/);
     const reporterJs = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const reporterRoute = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
@@ -610,7 +613,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(clear, /\.count-received \{ display: none/);
     assert.match(clear, /\.waiting-banner \{ display: none/);
     assert.match(css, /\.step-tabs a\.is-clear\.active \{[^}]*background:\s*#e7f6ee/);
-    assert.match(css, /\.side-tabs \.tab-link\.is-clear\.active \{[^}]*background:\s*#1b7a4e/);
+    assert.doesNotMatch(css, /\.side-tabs \.tab-link\.is-clear[^{]*\{[^}]*#1b7a4e/);
+    assert.match(css, /\.side-tabs \.tab-link\.needs-attention\s*\{[^}]*background:\s*var\(--savills-red\)/);
     assert.match(alerts, /function markClear\(el, clear\)/);
     assert.match(alerts, /markClear\(pendingPanel, clear\)/);
     assert.doesNotMatch(alerts, /markClear\(dashboard, clear\)/);
