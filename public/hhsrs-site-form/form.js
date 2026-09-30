@@ -20,8 +20,8 @@
   var chosen = [];
   var lastProject = "";
   var lastFocusedStep = "";
-  // Phone flow stops on Extra details after Comment. Optional boxes there (including a blank
-  // suspected cause) must not count as finished, and must not keep Hazard as the current step.
+  // Phone flow stops on Extra details after Comment. The optional Extra details box
+  // must not count as finished, and must not keep Hazard as the current step.
   var extrasPassed = false;
 
   function $(id) {
@@ -534,8 +534,7 @@
     }
 
     showStep(stepEx, announce);
-    // Stay on Extra details until the surveyor leaves that section. A blank suspected cause
-    // is not part of hazardDone(), so Hazard still opens Extra details.
+    // Stay on Extra details until the surveyor leaves that section. Hazard still opens it.
     if (!extrasDone() || !extrasPassed) {
       hideStep(stepPh);
       if (actions) actions.hidden = true;
@@ -592,13 +591,6 @@
     });
   }
 
-  var causeInput = $("suspectedCause");
-  if (causeInput) {
-    causeInput.addEventListener("blur", function () {
-      updateFlow({ announce: true });
-    });
-  }
-
   var extraStepEl = $("extra-box");
   if (extraStepEl) {
     extraStepEl.addEventListener("focusout", function () {
@@ -616,8 +608,8 @@
   if (photosAtLoad && !photosAtLoad.hidden) extrasPassed = true;
 
   // Phone keyboard Next on Comment moves one step, into Extra details.
-  // From there it moves one optional box at a time: Extra details, then suspected cause, then on.
-  // A blank value never makes either optional box required, and never keeps Hazard as the current step.
+  // From there Next on Extra details moves on. A blank Extra details value is never required,
+  // and never keeps Hazard as the current step.
   function stepKeyboardNext(from) {
     if (from && from.id === "comment") {
       if (!hazardDone()) return;
@@ -631,13 +623,6 @@
         try { next.focus({ preventScroll: true }); } catch (err) { next.focus(); }
       }
       return;
-    }
-    if (from && from.id === "otherDetails") {
-      var cause = $("suspectedCause");
-      if (cause && !cause.disabled) {
-        try { cause.focus({ preventScroll: true }); } catch (err) { cause.focus(); }
-        return;
-      }
     }
     if (!extrasDone()) return;
     extrasPassed = true;
@@ -656,7 +641,7 @@
   document.body.appendChild(keyNext);
 
   function optionalKeyboardField(el) {
-    return !!(progressive() && el && (el.id === "comment" || el.id === "otherDetails" || el.id === "suspectedCause"));
+    return !!(progressive() && el && (el.id === "comment" || el.id === "otherDetails"));
   }
   function placeKeyNext() {
     var vv = window.visualViewport;
@@ -933,7 +918,6 @@
     "category",
     "rating",
     "comment",
-    "suspectedCause",
     "clientCallReference",
     "otherDetails",
     "callUnreachedNote",

@@ -203,22 +203,25 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormProjectFlags("Vico 2026 8k").calls, true);
   });
 
-  it("keeps an optional suspected cause on a project with no extra flags", () => {
-    const mtvh = { id: "proj-1", name: "MTVH Pilot 2026" };
-    const blank = validateHhsrsForm(valid, mtvh);
-    assert.equal(blank.ok, true);
-    if (blank.ok) {
-      assert.equal(blank.data.suspectedCause, "");
-      assert.equal(blank.data.projectName, "MTVH Pilot 2026");
+  it("does not require a suspected cause on any project, and keeps one already supplied", () => {
+    const projects = [
+      { id: "mtvh", name: "MTVH Pilot 2026", values: valid },
+      { id: "vico", name: "Vico 2026 8k", values: { ...valid, clientCallReference: "CR-1" } },
+      { id: "onward", name: "Onward 2026", values: { ...valid, clientCallReference: "CR-1" } },
+      { id: "gateway", name: "Gateway 2026", values: valid },
+    ];
+    for (const project of projects) {
+      const blank = validateHhsrsForm(project.values, project);
+      assert.equal(blank.ok, true, project.name);
+      if (blank.ok) assert.equal(blank.data.suspectedCause, "");
+      assert.equal(siteFormSectionState({ ...project.values, suspectedCause: "" }, project.name).hazard, true);
     }
-    const filled = validateHhsrsForm(
+    const kept = validateHhsrsForm(
       { ...valid, suspectedCause: "  Leaking gutter above the bedroom  " },
-      mtvh
+      { id: "mtvh", name: "MTVH Pilot 2026" }
     );
-    assert.equal(filled.ok, true);
-    if (filled.ok) assert.equal(filled.data.suspectedCause, "Leaking gutter above the bedroom");
-    assert.equal(siteFormSectionState({ ...valid, suspectedCause: "" }, mtvh.name).hazard, true);
-    assert.equal(siteFormSectionState({ ...valid, suspectedCause: "A leak" }, mtvh.name).extras, true);
+    assert.equal(kept.ok, true);
+    if (kept.ok) assert.equal(kept.data.suspectedCause, "Leaking gutter above the bedroom");
   });
 
   it("accepts a blank other details field, and skips call reference unless the project needs it", () => {
@@ -528,7 +531,7 @@ describe("stock UPRN address", () => {
 });
 
 describe("HHSRS site form project option flags", () => {
-  it("renders data-calls, data-saxon and data-online unescaped", () => {
+  it("renders data-calls, data-saxon and data-online unescaped", async () => {
     const template = readFileSync(join(process.cwd(), "views/hhsrs-site-form/form.ejs"), "utf8");
     const html = ejs.render(
       template,
@@ -590,26 +593,47 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
     const hazard = html.slice(html.indexOf('id="step-hazard"'), html.indexOf('id="extra-box"'));
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
+    assert.doesNotMatch(html, /suspectedCause|Suspected cause|suspected-cause-hint/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = html.slice(html.indexOf('id="extra-box"'), html.indexOf('id="step-photos"'));
-    assert.ok(extras.indexOf('id="otherDetails"') < extras.indexOf('id="suspectedCause"'));
-    assert.match(extras, /Suspected cause <span class="optional">\(optional\)<\/span>/);
-    assert.match(extras, /Only if you know a likely cause\. Leave it blank if not\./);
-    assert.doesNotMatch(extras, /id="suspectedCause"[^>]*\brequired\b/);
     assert.match(extras, /id="otherDetails"[^>]*enterkeyhint="next"/);
-    assert.match(extras, /id="suspectedCause"[^>]*enterkeyhint="next"/);
-    assert.match(extras, /id="suspectedCause"[^>]*data-optional="true"/);
+    assert.doesNotMatch(extras, /id="suspectedCause"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     const flowJs = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
     assert.match(flowJs, /function stepKeyboardNext/);
     assert.match(flowJs, /from\.id === "comment"/);
-    assert.doesNotMatch(flowJs, /causeField\.tabIndex = -1/);
+    assert.doesNotMatch(flowJs, /suspectedCause/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsRequired"));
     assert.doesNotMatch(hazardFn, /suspectedCause/);
     assert.match(flowJs, /if \(!extrasDone\(\) \|\| !extrasPassed\)/);
-    const review = readFileSync(join(process.cwd(), "views/hhsrs-site-form/review.ejs"), "utf8");
-    const reviewHazard = review.slice(review.indexOf("Hazard"), review.indexOf("Extra details"));
-    assert.match(reviewHazard, /<dt>Suspected cause<\/dt>/);
+    const reviewDraft = {
+      ...emptyHhsrsValues(),
+      id: "draft-1",
+      projectName: "Gateway 2026",
+      photos: [],
+    };
+    const reviewOptions = { filename: join(process.cwd(), "views/hhsrs-site-form/review.ejs") };
+    const blankReview = await ejs.renderFile(
+      reviewOptions.filename,
+      { title: "Review issue", draft: reviewDraft, formatHhsrsSurveyDate, hhsrsUrl, storeError: "" },
+      reviewOptions
+    );
+    assert.doesNotMatch(String(blankReview), /Suspected cause/);
+    const keptReview = await ejs.renderFile(
+      reviewOptions.filename,
+      {
+        title: "Review issue",
+        draft: { ...reviewDraft, suspectedCause: "Leaking gutter above the bedroom" },
+        formatHhsrsSurveyDate,
+        hhsrsUrl,
+        storeError: "",
+      },
+      reviewOptions
+    );
+    assert.match(
+      String(keptReview),
+      /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/
+    );
     assert.match(html, /data-jump=""/);
     assert.match(html, /viewport-fit=cover/);
   });

@@ -118,5 +118,9 @@ describe("HHSRS project overview from Project Progress", () => {
       HHSRS_PROJECT_ROSTER.some((project) => /D&M/.test(project.hint)),
       false
     );
+    assert.equal(
+      HHSRS_PROJECT_ROSTER.every((project) => project.extras.cause === false),
+      true
+    );
   });
 });

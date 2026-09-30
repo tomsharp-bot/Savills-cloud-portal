@@ -94,7 +94,6 @@ function hhsrsReviewFields(): Record<string, string> {
     rating: "Severe",
     addressConfirmed: "true",
     comment: "Visible mould in bathroom.",
-    suspectedCause: "Leaking gutter above the bedroom",
     clientCallReference: "",
     otherDetails: "No access issues.",
   };
@@ -288,13 +287,11 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /HHSRS category/);
     const hazard = form.body.slice(form.body.indexOf('id="step-hazard"'), form.body.indexOf('id="extra-box"'));
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
+    assert.doesNotMatch(form.body, /suspectedCause|Suspected cause|suspected-cause-hint/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = form.body.slice(form.body.indexOf('id="extra-box"'), form.body.indexOf('id="step-photos"'));
-    assert.ok(extras.indexOf('id="otherDetails"') < extras.indexOf('id="suspectedCause"'), "Suspected cause comes after Extra details");
-    assert.match(extras, /Suspected cause <span class="optional">\(optional\)<\/span>/);
-    assert.match(extras, /Only if you know a likely cause\. Leave it blank if not\./);
-    assert.doesNotMatch(extras, /id="suspectedCause"[^>]*\brequired\b/);
-    assert.match(extras, /id="suspectedCause"[^>]*data-optional="true"/);
+    assert.match(extras, /Any other details <span class="optional">\(optional\)<\/span>/);
+    assert.doesNotMatch(extras, /id="suspectedCause"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     assert.match(form.body, /Client call reference \*/);
     assert.match(form.body, /Couldn't get through/);
@@ -414,8 +411,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /f\.hasAttribute\("data-optional"\)\) continue/);
     assert.match(js.body, /function stepKeyboardNext/);
     assert.match(js.body, /from\.id === "comment"/);
-    assert.match(js.body, /el\.id === "comment" \|\| el\.id === "otherDetails" \|\| el\.id === "suspectedCause"/);
-    assert.doesNotMatch(js.body, /causeField\.tabIndex = -1/);
+    assert.match(js.body, /el\.id === "comment" \|\| el\.id === "otherDetails"/);
+    assert.doesNotMatch(js.body, /suspectedCause/);
   });
 
   it("keeps 14px between a field box and the next field label", async () => {
@@ -504,7 +501,38 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.doesNotMatch(review.body, /2026-09-20/);
     assert.match(review.body, /Damp &amp; Mould Growth/);
     assert.match(review.body, /Visible mould in bathroom/);
-    assert.match(review.body, /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/);
+    assert.doesNotMatch(review.body, /Suspected cause/);
+    const causedUpload = multipartForm(
+      { ...hhsrsReviewFields(), suspectedCause: "Leaking gutter above the bedroom" },
+      [{ field: "photos", filename: "gutter.jpg", type: "image/jpeg", data: fakeJpeg(128) }]
+    );
+    const causedPost = await request(app, "POST", "/HHSRS-site-form/review", causedUpload);
+    assert.equal(causedPost.status, 302);
+    const causedReview = await request(app, "GET", causedPost.location);
+    assert.match(
+      causedReview.body,
+      /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/
+    );
+    const draftId = new URL(causedPost.location, "http://local").searchParams.get("draft") || "";
+    const edited = await request(app, "POST", "/HHSRS-site-form/edit", {
+      body: `draftId=${encodeURIComponent(draftId)}`,
+    });
+    assert.equal(edited.status, 200);
+    assert.doesNotMatch(edited.body, /name="suspectedCause"|Suspected cause/);
+    const keptPhoto = edited.body.match(/name="keepPhotos" value="([^"]+)"/);
+    assert.ok(keptPhoto, "existing draft photo is kept on edit");
+    const again = multipartForm({
+      ...hhsrsReviewFields(),
+      draftId,
+      keepPhotos: keptPhoto[1],
+    });
+    const keptPost = await request(app, "POST", "/HHSRS-site-form/review", again);
+    assert.equal(keptPost.status, 302);
+    const keptReview = await request(app, "GET", keptPost.location);
+    assert.match(
+      keptReview.body,
+      /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/
+    );
     assert.match(review.body, /No access issues/);
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);

@@ -177,7 +177,7 @@
             </div>
           </div>
 
-          <div class="project-extra" data-extra="cause">
+          <div class="project-extra" data-extra="cause" <%= isFilled && String(row.suspectedCause || "").trim() ? "" : "hidden" %>>
             <label for="rv-cause">Suspected cause · if reported</label>
             <input id="rv-cause" name="suspectedCause" type="text" value="<%= isFilled ? row.suspectedCause : '' %>" placeholder="Only if the surveyor reported a cause" autocomplete="off" />
             <div class="check-row">

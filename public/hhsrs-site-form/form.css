@@ -769,11 +769,7 @@ body.hhsrs-form-page {
   letter-spacing: 0;
   color: var(--muted);
 }
-.hhsrs-form-page #suspected-cause-hint {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-}
-/* Phone keyboard toolbar. Sits on top of the on-screen keyboard for Comment and the two optional boxes. */
+/* Phone keyboard toolbar. Sits on top of the on-screen keyboard for Comment and Extra details. */
 .hhsrs-key-next {
   position: fixed;
   left: 0;

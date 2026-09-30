@@ -113,10 +113,12 @@
   function setExtraVisibility(projectCfg) {
     var extras = (projectCfg && projectCfg.extras) || {};
     var nodes = document.querySelectorAll("#rv-case-form .project-extra");
+    // No project collects a suspected cause on the site form. Show the office
+    // line only when a cause is already stored, so an empty one is not a blank row.
+    var causeValue = String((($("rv-cause") && $("rv-cause").value) || "")).replace(/^\s+|\s+$/g, "");
     for (var i = 0; i < nodes.length; i++) {
       var key = nodes[i].getAttribute("data-extra");
-      // Suspected cause is collected on every project. Do not hide it behind extras.cause.
-      nodes[i].hidden = key === "cause" ? false : !extras[key];
+      nodes[i].hidden = key === "cause" ? !causeValue : !extras[key];
     }
     var vulnRule = $("rv-vuln-rule");
     var includeVuln = $("rv-include-vuln");

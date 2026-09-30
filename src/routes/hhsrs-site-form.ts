@@ -393,10 +393,15 @@ hhsrsSiteFormRouter.get("/draft/:draftId/photo/:name", async (req: Request, res:
 });
 
 hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Response) => {
-  const values = readHhsrsValues(req.body || {});
+  const body = (req.body || {}) as Record<string, unknown>;
+  const values = readHhsrsValues(body);
   const [projects, surveyors] = await Promise.all([loadActiveProjects(), loadSurveyors()]);
-  const draftId = String(req.body?.draftId || "").trim() || newDraftId();
+  const draftId = String(body.draftId || "").trim() || newDraftId();
   const existing = await readDraft(draftId);
+  // The site form no longer posts a suspected cause. Keep one already stored on the draft.
+  if (!Object.prototype.hasOwnProperty.call(body, "suspectedCause")) {
+    values.suspectedCause = String(existing?.suspectedCause || "").trim();
+  }
   const keep = existing ? keepRequestedPhotos(existing, listKeepPhotoNames(req.body || {})) : [];
   const incoming = filesOf(req);
   const photoError = uploadErrorOf(req) || validatePhotos(incoming, keep.length);

@@ -293,9 +293,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /Draft kept — come back anytime until sent or abandoned\./);
     assert.match(js, /hhsrs-review-last-key-v1/);
     assert.doesNotMatch(sidebar, /side-brand/);
-    assert.match(review, /data-extra="cause">/);
-    assert.doesNotMatch(review, /data-extra="cause"[^>]*\bhidden\b/);
-    assert.match(js, /key === "cause" \? false : !extras\[key\]/);
+    assert.match(review, /data-extra="cause"/);
+    assert.match(review, /isFilled && String\(row\.suspectedCause \|\| ""\)\.trim\(\) \? "" : "hidden"/);
+    assert.match(js, /key === "cause" \? !causeValue : !extras\[key\]/);
     assert.match(review, /id="rv-cause" name="suspectedCause"/);
     assert.match(review, /id="rv-include-cause"/);
     assert.match(review, /id="rv-call-notes" name="callNotes"/);
