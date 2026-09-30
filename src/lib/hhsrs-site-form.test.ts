@@ -38,6 +38,8 @@ import {
   siteFormShowsCallReference,
   siteFormShowsSuspectedCause,
   siteFormShowsWindowRestrictor,
+  reporterCaseDetailExtras,
+  surveyorDetailLines,
   WINDOW_RESTRICTOR_CATEGORY,
   siteSubmissionCallFields,
   ADDRESS_SOURCE_MANUAL,
@@ -290,6 +292,44 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormShowsCallReference("MTVH 2026", "High - Significant risk"), false);
     assert.equal(siteFormShowsCallReference("MTVH 2026", "High - Emergency risk"), true);
     assert.equal(siteFormShowsCallReference("Onward 2026", "Low"), true);
+    const mtvhEmergency = reporterCaseDetailExtras({
+      projectName: "MTVH 2026",
+      category: "Falling Between Levels",
+      rating: "High - Emergency risk",
+      clientCallReference: "CR-9",
+      restrictorMissingCount: "2",
+      restrictorLocations: "Hall",
+      restrictorMaterial: "PVC",
+    });
+    assert.equal(mtvhEmergency.calls, true);
+    assert.equal(mtvhEmergency.restrictors, true);
+    assert.equal(mtvhEmergency.vulnerabilities, false);
+    assert.equal(mtvhEmergency.otherDetails, true);
+    const gatewayExtras = reporterCaseDetailExtras({
+      projectName: "Gateway 2026",
+      category: "Falling Between Levels",
+      rating: "High - Emergency risk",
+      clientCallReference: "CR-9",
+      restrictorMissingCount: "2",
+    });
+    assert.equal(gatewayExtras.calls, false);
+    assert.equal(gatewayExtras.restrictors, false);
+    assert.equal(gatewayExtras.vulnerabilities, false);
+    const lines = surveyorDetailLines({
+      projectName: "MTVH 2026",
+      category: "Falling Between Levels",
+      rating: "High - Emergency risk",
+      clientCallReference: "CR-9",
+      restrictorMissingCount: "2",
+      restrictorLocations: "Hall",
+      restrictorMaterial: "Timber",
+      otherDetails: "Tenant home",
+      vulnerabilities: "Should stay off MTVH",
+    });
+    assert.deepEqual(
+      lines.map((line) => line.label),
+      ["Call reference", "Window restrictors missing", "Location", "Window material", "Any other details"]
+    );
 
     const low = validateHhsrsForm({ ...valid, rating: "Low", clientCallReference: "CR-9" }, mtvh);
     assert.equal(low.ok, true);
@@ -579,6 +619,7 @@ describe("validatePhotos", () => {
 describe("stock UPRN address", () => {
   it("builds a confirmable line and prefers a dwelling", () => {
     assert.equal(normalizeUprn(" 1000 40123456 "), "100040123456");
+    assert.equal(normalizeUprn("MTVH 000X1A"), "MTVH000X1A");
     assert.equal(
       formatStockAddressLine({
         number: "12",
@@ -768,6 +809,10 @@ describe("HHSRS site form project option flags", () => {
     assert.match(html, /class="restrictor-locs"/);
     assert.match(html, /How many are missing \*/);
     assert.match(html, /inputmode="numeric"/);
+    const uprnTag = html.match(/<input id="uprn"[^>]*>/);
+    assert.ok(uprnTag);
+    assert.match(uprnTag[0], /type="text"/);
+    assert.doesNotMatch(uprnTag[0], /inputmode=/);
     assert.match(html, /value="Hall"/);
     assert.match(html, /value="Other GF"/);
     assert.match(html, /value="Bathroom"/);
@@ -785,7 +830,8 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(hazard, /data-extra=/);
     const flowJs = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
     assert.match(flowJs, /function stepKeyboardNext/);
-    assert.match(flowJs, /from\.id === "comment"/);
+    assert.match(flowJs, /function isFreeText/);
+    assert.match(flowJs, /tag === "TEXTAREA"/);
     assert.match(flowJs, /function syncCauseBox/);
     assert.match(flowJs, /function syncRestrictorBox/);
     assert.match(flowJs, /Falling Between Levels/);

@@ -726,31 +726,73 @@
   // Phone keyboard Next on Comment moves one step, into Extra details.
   // From there Next on Extra details moves on. A blank Extra details value is never required,
   // and never keeps Hazard as the current step.
+  function isFreeText(el) {
+    if (!el || el.disabled) return false;
+    var tag = el.tagName;
+    if (tag === "TEXTAREA") return true;
+    if (tag !== "INPUT") return false;
+    var type = (el.type || "text").toLowerCase();
+    return type === "text" || type === "search" || type === "email" || type === "tel";
+  }
+
+  function fieldOnScreen(el) {
+    if (!el || el.disabled) return false;
+    if (el.closest && el.closest("[hidden]")) return false;
+    return !!(el.getClientRects && el.getClientRects().length);
+  }
+
+  function focusField(el) {
+    if (!el) return;
+    try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
+  }
+
+  function nextFieldAfter(from) {
+    if (!form) return null;
+    var nodes = form.querySelectorAll("input, select, textarea");
+    var list = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var type = (el.type || "").toLowerCase();
+      if (type === "hidden" || type === "file" || type === "checkbox" || type === "radio" || type === "button" || type === "submit") continue;
+      if (!fieldOnScreen(el)) continue;
+      list.push(el);
+    }
+    var index = list.indexOf(from);
+    return index < 0 ? null : list[index + 1] || null;
+  }
+
   function stepKeyboardNext(from) {
-    if (from && from.id === "comment") {
-      if (!hazardDone()) return;
-      var nextId = extrasFocusId();
-      var next = $(nextId);
+    if (!from) return;
+    if (from.id === "uprn" && !addressLocked() && !manualOpen()) {
+      lookupUprn();
+      return;
+    }
+    var next = nextFieldAfter(from);
+    if (next) {
+      focusField(next);
+      return;
+    }
+    var step = from.closest ? from.closest(".flow-step") : null;
+    if (step && step.id === "step-hazard" && hazardDone()) {
       if (lastFocusedStep === "extras") lastFocusedStep = "comment";
       if (from.blur) from.blur();
       updateFlow({ announce: true });
-      if (next && !next.disabled) {
-        try { next.focus({ preventScroll: true }); } catch (err) { next.focus(); }
-      }
+      focusField($(extrasFocusId()));
       return;
     }
-    if (from && from.id === "otherDetails") {
-      var cause = $("suspectedCause");
-      if (cause && !cause.disabled && causeShown()) {
-        if (from.blur) from.blur();
-        try { cause.focus({ preventScroll: true }); } catch (err) { cause.focus(); }
-        return;
-      }
+    if (step && step.id === "extra-box" && extrasDone()) {
+      extrasPassed = true;
+      if (from.blur) from.blur();
+      updateFlow({ announce: true });
+      return;
     }
-    if (!extrasDone()) return;
-    extrasPassed = true;
-    if (from && from.blur) from.blur();
-    updateFlow({ announce: true });
+    if (step && step.id === "step-property" && propertyDone()) {
+      if (from.blur) from.blur();
+      updateFlow({ announce: true });
+      focusField($("category"));
+      return;
+    }
+    if (from.blur) from.blur();
   }
 
   var keyNext = document.createElement("div");
@@ -764,7 +806,7 @@
   document.body.appendChild(keyNext);
 
   function optionalKeyboardField(el) {
-    return !!(progressive() && el && (el.id === "comment" || el.id === "otherDetails" || (el.id === "suspectedCause" && causeShown())));
+    return !!(progressive() && isFreeText(el));
   }
   function placeKeyNext() {
     var vv = window.visualViewport;
@@ -789,10 +831,10 @@
       window.setTimeout(syncKeyNext, 0);
     });
     form.addEventListener("keydown", function (e) {
-      if (!optionalKeyboardField(e.target)) return;
+      if (!isFreeText(e.target)) return;
       if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
-      // Comment stays multi-line until the hazard step can advance. Extra details is unchanged.
-      if (e.target.id === "comment" && !hazardDone()) return;
+      if (e.target.tagName === "TEXTAREA") return;
+      if (e.target.id === "uprn" && !addressLocked() && !manualOpen()) return;
       e.preventDefault();
       stepKeyboardNext(e.target);
     });

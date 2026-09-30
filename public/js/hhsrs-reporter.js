@@ -110,15 +110,41 @@
     if (cur) sel.value = cur;
   }
 
+  function fieldText(id) {
+    var el = $(id);
+    return el ? String(el.value || "").replace(/^\s+|\s+$/g, "") : "";
+  }
+
   function setExtraVisibility(projectCfg) {
     var extras = (projectCfg && projectCfg.extras) || {};
+    var site = (projectCfg && projectCfg.siteForm) || {};
     var nodes = document.querySelectorAll("#rv-case-form .project-extra");
-    // No project collects a suspected cause on the site form. Show the office
-    // line only when a cause is already stored, so an empty one is not a blank row.
-    var causeValue = String((($("rv-cause") && $("rv-cause").value) || "")).replace(/^\s+|\s+$/g, "");
+    var hazard = fieldText("rv-hazard");
+    var rating = fieldText("rv-rating");
+    var causeValue = fieldText("rv-cause");
+    var callStored = fieldText("rv-call-ref") || fieldText("rv-call-reason") || fieldText("rv-call-notes");
+    var restrictorStored = fieldText("rv-restrictor-count") || fieldText("rv-restrictor-locations") || fieldText("rv-restrictor-material");
+    var damp = /damp/i.test(hazard) && /mould|mold/i.test(hazard);
+    var show = {
+      calls: !!(extras.calls || (site.mtvh && (rating === "High - Emergency risk" || callStored))),
+      survey_date: !!(extras.survey_date || fieldText("rv-survey-date")),
+      onward: !!extras.onward,
+      cause: !!(site.vulnerabilities && (damp || causeValue)),
+      vulnerabilities: !!extras.vulnerabilities,
+      work_order: !!extras.work_order,
+      online_form: !!extras.online_form,
+      other_details: !!projectCfg,
+      restrictors: !!(site.mtvh && (hazard === "Falling Between Levels" || restrictorStored))
+    };
     for (var i = 0; i < nodes.length; i++) {
       var key = nodes[i].getAttribute("data-extra");
-      nodes[i].hidden = key === "cause" ? !causeValue : !extras[key];
+      var visible = !!show[key];
+      nodes[i].hidden = !visible;
+      var inputs = nodes[i].querySelectorAll("input, select, textarea");
+      for (var j = 0; j < inputs.length; j++) {
+        if (inputs[j].type === "hidden") continue;
+        inputs[j].disabled = !visible;
+      }
     }
     var vulnRule = $("rv-vuln-rule");
     var includeVuln = $("rv-include-vuln");
@@ -865,6 +891,8 @@
     };
     hazardEl.addEventListener("change", refreshExtras);
     hazardEl.addEventListener("input", refreshExtras);
+    var ratingEl = $("rv-rating");
+    if (ratingEl) ratingEl.addEventListener("change", refreshExtras);
   }
 
   wirePhotoPreview(document.body);

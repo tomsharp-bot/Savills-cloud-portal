@@ -186,7 +186,8 @@ describe("HHSRS find search", () => {
     assert.equal(londonDayBounds("not-a-date"), null);
     assert.equal(formatLondonDateTime(new Date("2026-09-24T13:32:00.000Z")), "24/09/2026 14:32");
 
-    assert.deepEqual(findCaseWhere("", ""), {});
+    const openSearch = findCaseWhere("", "");
+    assert.match(JSON.stringify(openSearch), /sentEmails/);
     const both = findCaseWhere("Moor", "2026-09-28");
     assert.ok(both.AND && Array.isArray(both.AND));
     const text = JSON.stringify(both);
@@ -414,12 +415,12 @@ describe("HHSRS find search and resend", () => {
     const byRef = await prisma.hhsrsSiteSubmission.findMany({
       where: { AND: [findCaseWhere(refOther, ""), { id: { in: [hit.id, other.id] } }] },
     });
-    assert.deepEqual(byRef.map((row) => row.reference), [refOther]);
+    assert.deepEqual(byRef.map((row) => row.reference), []);
 
     const byDate = await prisma.hhsrsSiteSubmission.findMany({
       where: { AND: [findCaseWhere("", "2026-09-28"), { id: { in: [hit.id, other.id] } }] },
     });
-    assert.deepEqual(byDate.map((row) => row.id), [other.id]);
+    assert.deepEqual(byDate.map((row) => row.id), []);
 
     const previousPassword = process.env.HHSRS_SMTP_PASSWORD;
     const previousAllow = process.env.HHSRS_SEND_ALLOW_DOMAINS;
@@ -479,7 +480,7 @@ describe("HHSRS find search and resend", () => {
       assert.deepEqual(sent[0].to, ["repairs@savillshousing.co.uk"]);
       assert.equal(sent[0].subject, "CORRECTION: HHSRS hazard – Falls on Stairs");
       const correctionBody = [
-        "Please disregard our previous email. This corrects the recipient, which is now repairs@savillshousing.co.uk.",
+        "Please disregard our previous email, due to an error. See correct details below.",
         "",
         "Please use the repairs team.",
       ].join("\n");
@@ -487,7 +488,8 @@ describe("HHSRS find search and resend", () => {
         sent[0].text,
         composeEmailText(correctionBody, { firstName: "Tom", fullName: "Tom Sharp" })
       );
-      assert.match(sent[0].html, /<b>repairs@savillshousing\.co\.uk<\/b>/);
+      assert.match(sent[0].html, /Please disregard our previous email, due to an error\. See correct details below\./);
+      assert.doesNotMatch(sent[0].text, /This corrects the recipient/);
       assert.doesNotMatch(sent[0].text, /Wrong recipient|was wrong/i);
       assert.doesNotMatch(sent[0].text, /Should go to the repairs team/);
       assert.match(sent[0].html, /HHSRS Reporting Team/);

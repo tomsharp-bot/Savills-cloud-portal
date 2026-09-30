@@ -294,8 +294,14 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /hhsrs-review-last-key-v1/);
     assert.doesNotMatch(sidebar, /side-brand/);
     assert.match(review, /data-extra="cause"/);
-    assert.match(review, /isFilled && String\(row\.suspectedCause \|\| ""\)\.trim\(\) \? "" : "hidden"/);
-    assert.match(js, /key === "cause" \? !causeValue : !extras\[key\]/);
+    assert.match(review, /detailExtras\.cause \? "" : "hidden"/);
+    assert.match(review, /data-extra="other_details"/);
+    assert.match(review, /data-extra="restrictors"/);
+    assert.match(review, /id="rv-other-details"/);
+    assert.match(review, /id="rv-restrictor-count"/);
+    assert.match(js, /other_details: !!projectCfg/);
+    assert.match(js, /Falling Between Levels/);
+    assert.match(js, /High - Emergency risk/);
     assert.match(review, /id="rv-cause" name="suspectedCause"/);
     assert.match(review, /id="rv-include-cause"/);
     assert.match(review, /id="rv-call-notes" name="callNotes"/);
@@ -343,9 +349,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.email-draft-panel\.is-pre-generate > \.panel-head/);
     const emailPanel = review.slice(review.indexOf("email-draft-panel"), review.indexOf('id="rv-finish-bar"'));
     const casePanel = review.slice(review.indexOf('id="rv-case-panel"'), review.indexOf("email-draft-panel"));
-    assert.match(emailPanel, /id="rv-email-generate-row"[\s\S]*id="btn-generate-email"/);
+    assert.match(casePanel, /id="rv-email-generate-row"[\s\S]*id="btn-generate-email"/);
     assert.match(casePanel, /Save review/);
-    assert.doesNotMatch(casePanel, /id="btn-generate-email"/);
+    assert.doesNotMatch(emailPanel, /id="btn-generate-email"/);
     assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*overflow:\s*hidden/);
     assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*border-radius:\s*12px/);
     assert.match(review, /Fill case details, then click Generate email\./);
@@ -561,6 +567,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(last, /<thead>/);
     assert.match(find, /partials\/pending-issues-table/);
     assert.match(find, /pendingAction:\s*"amend"/);
+    assert.match(find, /pendingShowClaim:\s*false/);
+    assert.match(table, /pendingShowClaim !== false/);
+    assert.match(table, /showClaim \? claimRowClass/);
     assert.doesNotMatch(find, /<th>Hazard<\/th>|<th>Status<\/th>/);
     assert.match(main, /partials\/pending-issues-table/);
     assert.doesNotMatch(main, /<th>Sent<\/th>|<th>Hazard<\/th>/);

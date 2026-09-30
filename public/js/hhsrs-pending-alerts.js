@@ -600,6 +600,19 @@
       dashboard.classList.remove("is-clear");
       var dashBadge = dashboard.querySelector(".tab-badge");
       if (dashBadge && dashBadge.parentNode) dashBadge.parentNode.removeChild(dashBadge);
+      var wait = dashboard.querySelector(".tab-wait");
+      if (!wait) {
+        var label = dashboard.querySelector(".tab-label");
+        if (label) {
+          wait = document.createElement("span");
+          wait.className = "tab-wait";
+          label.appendChild(wait);
+        }
+      }
+      if (wait) {
+        wait.hidden = clear;
+        wait.textContent = clear ? "" : " " + String(count);
+      }
       if (clear) dashboard.classList.remove("needs-attention");
       else dashboard.classList.add("needs-attention");
     }

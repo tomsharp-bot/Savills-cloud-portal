@@ -87,7 +87,7 @@
                 <div class="find-row<%= manualOpen ? " is-manual" : "" %>" id="uprn-row">
                   <div>
                     <label for="uprn" style="margin-top:0">UPRN *</label>
-                    <input id="uprn" name="uprn" type="text" required autocomplete="off" inputmode="numeric" placeholder="e.g. 100040123456" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" <%= addrOpen ? "readonly" : "" %> />
+                    <input id="uprn" name="uprn" type="text" required autocomplete="off" enterkeyhint="next" placeholder="e.g. 100040123456 or MTVH 000X1A" value="<%= values.uprn %>" class="<%= errors.uprn ? 'is-invalid' : '' %>" <%= addrOpen ? "readonly" : "" %> />
                   </div>
                   <button type="button" class="hhsrs-btn-find" id="btn-lookup-uprn" <%= addrOpen ? "disabled" : "" %> <%= manualOpen ? "hidden" : "" %>>Lookup</button>
                 </div>

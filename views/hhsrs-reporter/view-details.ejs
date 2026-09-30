@@ -1,0 +1,72 @@
+<%- include("partials/layout-open") %>
+<%
+  const blank = "—";
+  const show = (value) => String(value || "").trim() || blank;
+%>
+<section class="vd-page" aria-label="View details">
+  <a class="vd-back" href="<%= backHref %>">Back to Main Log</a>
+  <div class="vd-bar">View details</div>
+  <p class="vd-sub"><%= details.intro %></p>
+  <div class="vd-pair">
+    <div class="vd-col">
+      <div class="vd-bar">Surveyor entry</div>
+      <div class="vd-box">
+        <dl class="vd-fields">
+          <div><dt>Project</dt><dd><%= show(details.projectName) %></dd></div>
+          <div><dt>Address</dt><dd><%= show(details.address) %></dd></div>
+          <div><dt>UPRN</dt><dd><%= show(details.uprn) %></dd></div>
+          <div><dt>Survey date</dt><dd><%= show(details.surveyDate) %></dd></div>
+          <div><dt>Surveyor</dt><dd><%= show(details.surveyorName) %></dd></div>
+          <div><dt>Hazard</dt><dd><%= show(details.hazard) %></dd></div>
+          <div><dt>Rating</dt><dd><%= show(details.rating) %></dd></div>
+          <div><dt>Description</dt><dd><%= show(details.description) %></dd></div>
+          <% (Array.isArray(surveyorLines) ? surveyorLines : []).forEach(function (line) { %>
+            <div><dt><%= line.label %></dt><dd class="prewrap"><%= show(line.value) %></dd></div>
+          <% }) %>
+        </dl>
+        <% if (details.photos && details.photos.length) { %>
+          <div class="vd-shot">
+            <% details.photos.forEach(function (photo) { %>
+              <% if (photo.url) { %><img src="<%= photo.url %>" alt=""><% } %>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+    <div class="vd-col">
+      <div class="vd-bar">Email sent</div>
+      <% if (details.sent) { %>
+        <article class="vd-email">
+          <% if (details.sent.subject) { %><header class="vd-head"><%= details.sent.subject %></header><% } %>
+          <div class="vd-sheet">
+            <div class="vd-copy"><%- details.sent.copyHtml %></div>
+            <% if (details.sent.photos && details.sent.photos.length) { %>
+              <% details.sent.photos.forEach(function (photo) { %>
+                <img class="vd-photo" src="<%= photo.url %>" alt="">
+              <% }) %>
+            <% } %>
+            <div class="vd-sign"><%- signatureHtml %></div>
+          </div>
+        </article>
+      <% } else { %>
+        <div class="vd-box"><p class="vd-sub">Not sent from the portal.</p></div>
+      <% } %>
+      <% (details.corrections || []).forEach(function (email) { %>
+        <div class="vd-bar">Correction</div>
+        <article class="vd-email">
+          <% if (email.subject) { %><header class="vd-head"><%= email.subject %></header><% } %>
+          <div class="vd-sheet">
+            <div class="vd-copy"><%- email.copyHtml %></div>
+            <% if (email.photos && email.photos.length) { %>
+              <% email.photos.forEach(function (photo) { %>
+                <img class="vd-photo" src="<%= photo.url %>" alt="">
+              <% }) %>
+            <% } %>
+            <div class="vd-sign"><%- signatureHtml %></div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+  </div>
+</section>
+<%- include("partials/layout-close") %>

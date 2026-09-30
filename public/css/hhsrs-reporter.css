@@ -951,6 +951,8 @@ a.linkish.active, .linkish.active {
 .ps-archived-name { margin: 0; font-weight: 650; }
 .ps-archived-meta { margin: 0.15rem 0 0; font-size: 0.78rem; color: var(--muted); }
 .ps-archived-list form { margin: 0; }
+.ps-help { margin: 0; padding: 0.9rem 1.1rem 0.2rem; color: var(--muted); font-size: 0.9rem; }
+.side-tabs .tab-link .tab-wait[hidden] { display: none !important; }
 .admin-placeholder ul { margin: 0.75rem 0 0; padding-left: 1.2rem; }
 .admin-placeholder li { margin: 0.35rem 0; }
 
@@ -1528,6 +1530,26 @@ body.hhsrs-reporter {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: auto; }
+.hhsrs-reporter #last-actioned-table { min-width: 1420px; }
+.hhsrs-reporter #last-actioned-table col.c-proj { width: 110px; }
+.hhsrs-reporter #last-actioned-table col.c-addr { width: 220px; }
+.hhsrs-reporter #last-actioned-table col.c-ph { width: 72px; }
+.hhsrs-reporter #last-actioned-table col.c-uprn { width: 120px; }
+.hhsrs-reporter #last-actioned-table col.c-surv { width: 110px; }
+.hhsrs-reporter #last-actioned-table col.c-cat { width: 300px; }
+.hhsrs-reporter #last-actioned-table col.c-rate { width: 190px; }
+.hhsrs-reporter #last-actioned-table col.c-when { width: 168px; }
+.hhsrs-reporter #last-actioned-table col.c-act { width: 130px; }
+.hhsrs-reporter #last-actioned-table thead th:nth-child(6),
+.hhsrs-reporter #last-actioned-table thead th:nth-child(7),
+.hhsrs-reporter #last-actioned-table thead th:nth-child(8),
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(6),
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(7),
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(8),
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(8) > span {
+  white-space: nowrap;
 }
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
@@ -2147,14 +2169,21 @@ body.hhsrs-reporter {
   filter: grayscale(1);
 }
 .hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row .btn:disabled,
-.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row button:disabled,
-.hhsrs-reporter .email-draft-panel.is-sent-lock #rv-email-generate-row .btn:disabled,
-.hhsrs-reporter .email-draft-panel.is-sent-lock #rv-email-generate-row button:disabled {
+.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row button:disabled {
+  opacity: 1;
+}
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row {
+  opacity: 0.45;
+  filter: grayscale(0.65);
+  pointer-events: none;
+  user-select: none;
+}
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row .btn:disabled,
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row button:disabled {
   opacity: 1;
 }
 .hhsrs-reporter .email-draft-panel.is-pre-generate > .panel-head,
 .hhsrs-reporter .email-draft-panel.is-sent-lock > .panel-head,
-.hhsrs-reporter .email-draft-panel.is-sent-lock #rv-email-generate-row,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-locked,
 .hhsrs-reporter .email-draft-panel.is-pre-generate .field-locked,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-with-copy,
@@ -3369,4 +3398,34 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
 .ml-d-body .sent-card { margin-top: 8px; }
 @media (max-width: 720px) {
   .amend-box { grid-template-columns: 1fr; }
+}
+.vd-page { max-width: 1100px; }
+.vd-back { display: inline-block; margin-bottom: 0.75rem; color: var(--blue); font-weight: 650; text-decoration: none; }
+.vd-bar {
+  display: inline-block;
+  margin: 0 0 0.55rem;
+  padding: 0.28rem 0.7rem;
+  background: #eef5fb;
+  border: 1px solid #d7e4ef;
+  border-radius: 6px;
+  color: var(--navy);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.vd-sub { margin: 0 0 0.85rem; color: var(--muted); }
+.vd-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.vd-box, .vd-email { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; }
+.vd-fields { margin: 0; }
+.vd-fields > div { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.35rem 0.75rem; padding: 0.28rem 0; }
+.vd-fields dt { margin: 0; color: var(--muted); font-weight: 600; }
+.vd-fields dd { margin: 0; }
+.vd-email { margin-bottom: 0.85rem; }
+.vd-head { font-weight: 700; margin-bottom: 0.55rem; }
+.vd-copy p { margin: 0 0 0.55rem; }
+.vd-copy ul { margin: 0 0 0.55rem; padding-left: 1.1rem; }
+.vd-copy li.changed { font-weight: 700; }
+.vd-shot, .vd-photo { display: block; max-width: 100%; margin-top: 0.6rem; border-radius: 8px; }
+.vd-sign { margin-top: 0.8rem; }
+@media (max-width: 860px) {
+  .vd-pair { grid-template-columns: 1fr; }
 }

@@ -46,7 +46,7 @@
       <button type="submit" class="btn btn-primary">Search</button>
       <a class="btn btn-ghost" href="<%= reporterBase %>/find">Clear</a>
     </div>
-    <p class="find-hint">Search by reference, UPRN, or address. The project list is the same one the site form uses.</p>
+    <p class="find-hint">Search by reference, UPRN, or address. Only cases with an email already sent are listed.</p>
   </form>
 </section>
 
@@ -62,6 +62,7 @@
       pendingRows: rows,
       pendingTableId: "find-table",
       pendingAction: "amend",
+      pendingShowClaim: false,
       pendingFoot: "Newest first"
     }) %>
   <% } %>

@@ -17,7 +17,10 @@ import {
   isCallRefBlankReason,
   safeId,
   safeStoredName,
+  canonicalRestrictorLocations,
+  reporterCaseDetailExtras,
   splitCallNotes,
+  surveyorDetailLines,
 } from "../lib/hhsrs-site-form.js";
 import { copyLoggedHhsrsPhotos } from "../lib/hhsrs-completed-photos.js";
 import { ONWARD_TOPICS } from "../lib/hhsrs-reporter-draft.js";
@@ -74,6 +77,7 @@ import {
   sentBannerText,
 } from "../lib/hhsrs-send.js";
 import { listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import { buildViewDetails } from "../lib/hhsrs-view-details.js";
 import { buildAmendmentEmail, parseSentEmail } from "../lib/hhsrs-correction-email.js";
 import { emailBodyToHtml } from "../lib/hhsrs-signature.js";
 import {
@@ -318,7 +322,7 @@ async function claimIfOpen(
 }
 
 function shellLocals(opts: {
-  activeNav: "pending" | "review" | "find" | "main-log" | "duplicates" | "admin" | "project-overview" | "project-settings";
+  activeNav: "pending" | "review" | "find" | "main-log" | "duplicates" | "admin" | "project-overview";
   summary: ReporterSummary;
   title?: string;
   flashOk?: string;
@@ -439,6 +443,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     callOutcomes: HHSRS_CALL_OUTCOMES,
     callBlankReasons: CALL_REF_BLANK_REASONS,
     callBlank: { reason: "", note: "" },
+    caseDetailExtras: reporterCaseDetailExtras({ projectName: "" }),
     onwardTopics: ONWARD_TOPICS,
     matchedProject: null,
     mode: "blank",
@@ -520,6 +525,7 @@ async function renderReview(
     callOutcomes: HHSRS_CALL_OUTCOMES,
     callBlankReasons: CALL_REF_BLANK_REASONS,
     callBlank: splitCallNotes(row.callNotes || ""),
+    caseDetailExtras: reporterCaseDetailExtras(row),
     onwardTopics: ONWARD_TOPICS,
     matchedProject: matched,
     mode: "filled",
@@ -642,7 +648,12 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     rowClass: caseId === row.id ? "is-sel" : "",
   }));
 
-  const picked = caseId ? matches.find((row) => row.id === caseId) || (await loadCase(caseId)) : null;
+  let picked = caseId ? matches.find((row) => row.id === caseId) || null : null;
+  if (caseId && !picked) {
+    const loaded = await loadCase(caseId);
+    const sentCount = loaded ? await prisma.hhsrsSentEmail.count({ where: { submissionId: loaded.id } }) : 0;
+    if (loaded && sentCount > 0) picked = loaded;
+  }
   let found: Record<string, unknown> | null = null;
   let amend: Record<string, unknown> | null = null;
   let photos: ReporterCasePhoto[] = [];
@@ -680,7 +691,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
       justSent && latest
         ? `Sent to ${latest.to} at ${formatLondonDateTime(latest.sentAt)}. Status is now Corrected and the Main Log is updated below.`
         : "";
-    found = {
+    if (latest) found = {
       id: picked.id,
       reference: picked.reference || "",
       address: picked.fullAddress,
@@ -943,6 +954,53 @@ hhsrsReporterRouter.get("/main-log/export.xlsx", async (req: Request, res: Respo
   res.send(file);
 });
 
+hhsrsReporterRouter.get("/main-log/:id/details", async (req: Request, res: Response) => {
+  const row = await loadCase(req.params.id);
+  if (!row) {
+    res.status(404).send("Case not found.");
+    return;
+  }
+  const [summary, emails] = await Promise.all([loadSummary(), listSentEmails(row.id)]);
+  const photos = reporterCasePhotos(row, HHSRS_REPORTER_PATH);
+  const details = buildViewDetails({
+    projectName: row.projectName,
+    fullAddress: row.fullAddress,
+    postcode: row.postcode,
+    uprn: row.uprn,
+    surveyDate: row.surveyDate,
+    surveyorName: row.surveyorName,
+    hazard: row.category,
+    rating: row.rating,
+    description: row.comment,
+    submissionId: row.id,
+    photoPaths: row.photoPaths,
+    surveyorPhotos: photos.map((photo) => ({ name: photo.name, url: photo.url })),
+    emails: emails.map((email) => ({
+      kind: email.kind,
+      subject: email.subject,
+      body: email.body,
+      photoNames: email.photoNames,
+    })),
+    reporterBase: HHSRS_REPORTER_PATH,
+  });
+  const flash = takeFlash(req);
+  const signature = signatureLocals(res, await senderSignatureFor(req.user));
+  res.render("hhsrs-reporter/view-details", {
+    ...shellLocals({
+      activeNav: "main-log",
+      summary,
+      title: "View details — HHSRS Reporter",
+      flashOk: flash.ok,
+      flashErr: flash.err,
+    }),
+    user: req.user,
+    details,
+    surveyorLines: surveyorDetailLines(row),
+    backHref: `${HHSRS_REPORTER_PATH}/main-log`,
+    ...signature,
+  });
+});
+
 hhsrsReporterRouter.get("/main-log/:id", async (req: Request, res: Response) => {
   const row = await loadCase(req.params.id);
   if (!row) {
@@ -1031,26 +1089,14 @@ async function loadArchivedProjects(): Promise<{ id: string; name: string; proje
   }
 }
 
-/* ---------- Project settings ---------- */
-hhsrsReporterRouter.get("/project-settings", async (req: Request, res: Response) => {
-  const [summary, archivedProjects] = await Promise.all([loadSummary(), loadArchivedProjects()]);
-  const flash = takeFlash(req);
-  res.render("hhsrs-reporter/project-settings", {
-    ...shellLocals({
-      activeNav: "project-settings",
-      summary,
-      title: "Project settings — HHSRS Reporter",
-      flashOk: flash.ok,
-      flashErr: flash.err,
-    }),
-    user: req.user,
-    archivedProjects,
-  });
+/* ---------- Project settings (lives on Admin) ---------- */
+hhsrsReporterRouter.get("/project-settings", (_req: Request, res: Response) => {
+  res.redirect(`${HHSRS_REPORTER_PATH}/admin#archived-projects`);
 });
 
 hhsrsReporterRouter.post("/project-settings/reinstate", async (req: Request, res: Response) => {
   const id = String(req.body?.projectId || "").trim();
-  const back = `${HHSRS_REPORTER_PATH}/project-settings#archived-projects`;
+  const back = `${HHSRS_REPORTER_PATH}/admin#archived-projects`;
   try {
     const existing = id
       ? await prisma.project.findUnique({
@@ -1078,9 +1124,10 @@ hhsrsReporterRouter.post("/project-settings/reinstate", async (req: Request, res
 /* ---------- Admin ---------- */
 hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
   const clientFlash = takeClientEmailFlash(req);
-  const [summary, clientEmailCards] = await Promise.all([
+  const [summary, clientEmailCards, archivedProjects] = await Promise.all([
     loadSummary(),
     loadClientEmailCards(clientFlash),
+    loadArchivedProjects(),
   ]);
   const flash = takeFlash(req);
   res.render("hhsrs-reporter/admin", {
@@ -1092,6 +1139,7 @@ hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
       flashErr: flash.err,
     }),
     user: req.user,
+    archivedProjects,
     clientEmailCards,
     clientEmailFormError: unmatchedClientEmailError(
       clientEmailCards.map((card) => ({ name: card.projectName })),
@@ -1237,22 +1285,37 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   }
 
   const editor = req.user?.name || req.user?.username || "";
+  const callPosted =
+    Object.prototype.hasOwnProperty.call(posted, "clientCallReference") ||
+    Object.prototype.hasOwnProperty.call(posted, "callRefBlankReason");
   const data = {
     rating: update.rating,
     clientDescription: update.clientDescription,
-    clientCallReference: update.clientCallReference,
-    callOutcome: update.callOutcome,
-    callNotes: update.callNotes,
-    workOrder: update.workOrder,
-    suspectedCause: update.suspectedCause,
+    clientCallReference: callPosted ? update.clientCallReference : row.clientCallReference,
+    callOutcome: callPosted ? update.callOutcome : row.callOutcome,
+    callNotes: callPosted ? update.callNotes : row.callNotes,
+    workOrder: Object.prototype.hasOwnProperty.call(posted, "workOrder") ? update.workOrder : row.workOrder,
+    suspectedCause: Object.prototype.hasOwnProperty.call(posted, "suspectedCause") ? update.suspectedCause : row.suspectedCause,
     includeCause: update.includeCause,
-    vulnerabilities: update.vulnerabilities,
+    vulnerabilities: Object.prototype.hasOwnProperty.call(posted, "vulnerabilities") ? update.vulnerabilities : row.vulnerabilities,
     escalation: update.escalation,
-    onwardTopic: update.onwardTopic,
+    onwardTopic: Object.prototype.hasOwnProperty.call(posted, "onwardTopic") ? update.onwardTopic : row.onwardTopic,
     cat1Confirmed: update.cat1Confirmed,
     internalNotes: update.internalNotes,
     status: statusForReviewSave(row.status, update.status),
     lastEditedBy: editor,
+    ...(Object.prototype.hasOwnProperty.call(posted, "otherDetails")
+      ? { otherDetails: String(posted.otherDetails ?? "").trim() }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(posted, "restrictorMissingCount")
+      ? { restrictorMissingCount: String(posted.restrictorMissingCount ?? "").trim() }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(posted, "restrictorLocations")
+      ? { restrictorLocations: canonicalRestrictorLocations(posted.restrictorLocations) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(posted, "restrictorMaterial")
+      ? { restrictorMaterial: String(posted.restrictorMaterial ?? "").trim() }
+      : {}),
   };
 
   const preview = tryDraftFromRow({ ...row, ...data });
