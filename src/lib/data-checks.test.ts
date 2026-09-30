@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import vm from "node:vm";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
 import "dotenv/config";
@@ -55,8 +56,169 @@ describe("Data Review practice page hosting", () => {
     assert.match(page, /Hide HHSRS Section/);
     assert.match(page, /Selected cell/);
     assert.match(page, /Load photo folder/);
+    assert.match(page, /function starterFixedColumns/);
+    assert.match(page, /function baseMasterColumns/);
+    assert.match(page, /function appendMdfColumns/);
+  });
+
+  it("appends ticked extra columns after Comments and Hazards and does not duplicate the fixed start", () => {
+    const source = readDataReviewPage();
+    const headers = previousMasterHeaders(source, "Data Horizontal DW", [
+      { header: "Loft Hatch" },
+      { header: "UPRN" },
+      { header: "Skip Me" },
+      { header: "General Comments" },
+      { header: "Boiler Age" },
+      { header: "Address" },
+    ], new Set([0, 4]));
+
+    const uprnAt = headers.indexOf("UPRN");
+    const checkedAt = headers.indexOf("Checked?");
+    const dateAt = headers.indexOf("Date");
+    const surveyorAt = headers.indexOf("Surveyor");
+    const addressAt = headers.indexOf("Address");
+    const ageAt = headers.indexOf("Property Age");
+    const photoAt = headers.indexOf("Front Elevation Photo");
+    const commentsAt = headers.indexOf("General Comments");
+    const hazardsAt = headers.indexOf("HHSRS Checked");
+    const loftAt = headers.indexOf("Loft Hatch");
+    const boilerAt = headers.indexOf("Boiler Age");
+
+    assert.equal(uprnAt, 0);
+    assert.ok(uprnAt < checkedAt && checkedAt < surveyorAt && surveyorAt < dateAt && dateAt < addressAt);
+    assert.ok(addressAt < ageAt && ageAt < photoAt);
+    assert.ok(photoAt < commentsAt && commentsAt < hazardsAt);
+    assert.ok(loftAt > hazardsAt && boilerAt > loftAt);
+    assert.equal(headers.includes("Skip Me"), false);
+    assert.equal(headers.filter((h) => h === "UPRN").length, 1);
+    assert.equal(headers.filter((h) => h === "Address").length, 1);
+    assert.equal(headers.filter((h) => h === "General Comments").length, 1);
+
+    const garage = previousMasterHeaders(source, "Data Horizontal GAR", [
+      { header: "Loft Hatch" },
+      { header: "UPRN" },
+    ], new Set([0]));
+    assert.equal(garage.includes("General Comments"), false);
+    assert.equal(garage.includes("Front Elevation Photo"), false);
+    assert.equal(garage.indexOf("UPRN"), 0);
+    assert.ok(garage.indexOf("Property Age") < garage.indexOf("Loft Hatch"));
+    assert.equal(garage.filter((h) => h === "UPRN").length, 1);
   });
 });
+
+function sliceBalanced(source: string, openAt: number): string {
+  const open = source[openAt];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let i = openAt;
+  let state: "code" | "sq" | "dq" | "tpl" = "code";
+  let expr = 0;
+  while (i < source.length) {
+    const c = source[i];
+    const n = source[i + 1];
+    if (state === "sq" || state === "dq") {
+      const q = state === "sq" ? "'" : '"';
+      if (c === "\\") {
+        i += 2;
+        continue;
+      }
+      if (c === q) state = "code";
+      i++;
+      continue;
+    }
+    if (state === "tpl") {
+      if (c === "\\") {
+        i += 2;
+        continue;
+      }
+      if (c === "`" && expr === 0) {
+        state = "code";
+        i++;
+        continue;
+      }
+      if (c === "$" && n === "{") {
+        expr++;
+        i += 2;
+        continue;
+      }
+      if (c === "}" && expr > 0) {
+        expr--;
+        i++;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (c === "'") {
+      state = "sq";
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      state = "dq";
+      i++;
+      continue;
+    }
+    if (c === "`") {
+      state = "tpl";
+      i++;
+      continue;
+    }
+    if (c === open) depth++;
+    else if (c === close) {
+      depth--;
+      if (depth === 0) return source.slice(openAt, i + 1);
+    }
+    i++;
+  }
+  throw new Error("Unbalanced " + open);
+}
+
+function extractDecl(source: string, needle: string): string {
+  const at = source.indexOf(needle);
+  if (at < 0) throw new Error("Missing " + needle);
+  if (needle.endsWith(";")) return source.slice(at, at + needle.length);
+  const brace = source.indexOf("{", at);
+  const bracket = source.indexOf("[", at);
+  const openAt = bracket >= 0 && (brace < 0 || bracket < brace) ? bracket : brace;
+  let body = source.slice(at, openAt) + sliceBalanced(source, openAt);
+  if (source[at + body.length] === ";") body += ";";
+  return body;
+}
+
+function previousMasterHeaders(
+  source: string,
+  sheet: string,
+  file: { header: string }[],
+  picked: Set<number>
+): string[] {
+  const parts = [
+    "function fmt(v){",
+    "const USUAL = [",
+    "const PRESET_MTVH_DW = [",
+    "const PRESET_MTVH_BLK = [",
+    "function presetGroups(list, sheet){",
+    "function photoCode(B, uprn, comp, n){",
+    "function photoColDefs(B, sheet){",
+    "const HH_N = 7;",
+    "function hk(n, f){",
+    "function hhColDefs(){",
+    "function mdfNorm(s){",
+    "function sheetRole(name){",
+    "function starterPhotoGroups(sheetName){",
+    "function starterFixedColumns(sheetName){",
+    "function baseMasterColumns(sheetName, fileCols, picked, hidden){",
+  ].map((needle) => extractDecl(source, needle));
+  const sandbox: { __go?: (sheet: string, fileCols: { c: number; header: string; norm: string }[], picked: number[]) => string[] } = {};
+  vm.runInNewContext(
+    parts.join("\n") +
+      "\nglobalThis.__go = function(sheet, fileCols, picked){ return baseMasterColumns(sheet, fileCols, new Set(picked), []).cols.map(function(c){ return c.header; }); };\n",
+    sandbox
+  );
+  const norm = (s: string) => s.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  const fileCols = file.map((col, i) => ({ c: i, header: col.header, norm: norm(col.header) }));
+  return sandbox.__go!(sheet, fileCols, [...picked]);
+}
 
 async function listen(app: Express): Promise<{ server: http.Server; port: number }> {
   const server = http.createServer(app);
