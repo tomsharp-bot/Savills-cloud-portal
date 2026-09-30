@@ -208,7 +208,7 @@
     var fields = $("rv-case-fields");
     var hint = $("rv-project-hint");
     var generateBtn = $("btn-generate-email");
-    var genRow = document.querySelector("#rv-case-panel .generate-email-row");
+    var genRow = document.querySelector("#rv-email-generate-row");
     if (fields) {
       // After send, CSS supplies the same grey as Generate email. inert keeps the
       // fields read-only without the extra browser disabled fade.

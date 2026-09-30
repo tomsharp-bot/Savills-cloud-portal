@@ -144,7 +144,7 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(blank.body, /Create new email/);
     assert.match(blank.body, /id="btn-generate-email"/);
     assert.match(blank.body, /id="btn-amend-case"/);
-    assert.match(blank.body, /Fill case details, then click Generate email below Case details/);
+    assert.match(blank.body, /Fill case details, then click Generate email/);
     assert.match(blank.body, /id="rv-email-photos"[^>]*hidden/);
     assert.doesNotMatch(blank.body, /class="side-brand"/);
     assert.doesNotMatch(blank.body, /Send pack/);
