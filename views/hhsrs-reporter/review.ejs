@@ -281,7 +281,7 @@
       <% if (isFilled) { %></form><% } %>
     </section>
 
-    <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : ' is-pre-generate' %>" aria-label="Client Email Draft">
+    <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : ' is-pre-generate' %>" id="rv-email-draft" aria-label="Client Email Draft">
       <div class="panel-head review-head">
         <h2>Client Email Draft</h2>
         <span class="count <%= sentEmail ? 'count-dealt' : 'count-review' %>" id="rv-email-badge"><%= sentEmail ? "Sent" : "Draft" %></span>

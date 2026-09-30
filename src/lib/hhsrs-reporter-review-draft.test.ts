@@ -128,6 +128,13 @@ function bootReview(opts: {
   el("fieldset", "rv-case-fields");
   el("p", "rv-project-hint");
   el("button", "btn-generate-email");
+  const emailDraft = el("section", "rv-email-draft");
+  const scrollCalls: unknown[] = [];
+  emailDraft.scrollIntoView = (opts: unknown) => {
+    scrollCalls.push(opts);
+  };
+  emailDraft.getBoundingClientRect = () => ({ top: 640, height: 900, bottom: 1540, left: 0, right: 400, width: 400 });
+  emailDraft.scrollCalls = scrollCalls;
   el("p", "rv-email-empty-hint");
   el("span", "rv-email-badge");
   el("p", "rv-draft-status");
@@ -357,6 +364,31 @@ describe("HHSRS review email draft restore", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(ids["hhsrs-to"].value, "next@example.com");
     assert.equal(ids["hhsrs-bcc"].value, "");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const scrolled = ids["rv-email-draft"].scrollCalls as Array<{ behavior: string; block: string }>;
+    assert.equal(scrolled.length, 2);
+    assert.equal(scrolled[0].behavior, "auto");
+    assert.equal(scrolled[0].block, "start");
+    assert.equal(scrolled[1].block, "start");
+  });
+
+  it("does not scroll to the email draft when Generate email fails", async () => {
+    const storage = memoryStorage();
+    const { ids, listeners } = bootReview({
+      storage,
+      fetchImpl: () =>
+        Promise.resolve({
+          ok: false,
+          headers: { get: () => "application/json" },
+          json: async () => ({ ok: false, error: "Could not prepare the client email." }),
+        }),
+    });
+    const click = listeners.find((listener) => listener.target === "btn-generate-email" && listener.type === "click");
+    assert.ok(click);
+    click.fn();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.deepEqual(ids["rv-email-draft"].scrollCalls, []);
+    assert.equal(ids["hhsrs-body"].value, "");
   });
 
   it("drops the held blank email after send so leaving the page cannot put it back", async () => {

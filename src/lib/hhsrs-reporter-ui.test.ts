@@ -359,6 +359,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(casePanel, /id="rv-email-generate-row"[\s\S]*id="btn-generate-email"/);
     assert.match(casePanel, /Save review/);
     assert.doesNotMatch(emailPanel, /id="btn-generate-email"/);
+    assert.match(review, /id="rv-email-draft"/);
+    assert.match(js, /function showClientEmailDraft/);
+    assert.match(js, /anchor\.scrollIntoView\(\{ behavior: "auto", block: "start" \}\)/);
     assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*overflow:\s*hidden/);
     assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*border-radius:\s*12px/);
     assert.match(review, /Fill case details, then click Generate email\./);

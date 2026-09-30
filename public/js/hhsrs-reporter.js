@@ -780,6 +780,7 @@
         fillDraftFields(data);
         if (note) note.textContent = "Email generated. Case details are locked — Amend case details to edit, then Generate email again.";
         saveReviewDraftNow();
+        showClientEmailDraft();
       })
       .catch(function () {
         if (note) note.textContent = "Could not prepare the client email. Check the case details and try again.";
@@ -817,6 +818,30 @@
     cfg.caseId = "";
     resetCasePhotos([]);
     applyProjectChange();
+  }
+
+  function showClientEmailDraft() {
+    var anchor = $("rv-email-draft");
+    if (!anchor || typeof anchor.scrollIntoView !== "function") return;
+    setTimeout(function () {
+      function stickyTopOffset() {
+        var topbar = document.querySelector(".topbar");
+        if (!topbar || typeof topbar.getBoundingClientRect !== "function" || typeof window.getComputedStyle !== "function") return 0;
+        var cs = window.getComputedStyle(topbar);
+        if (cs.position !== "sticky" && cs.position !== "fixed") return 0;
+        return Math.ceil(topbar.getBoundingClientRect().height);
+      }
+      function park() {
+        if (typeof anchor.getBoundingClientRect !== "function" || typeof window.scrollBy !== "function") return;
+        var offset = stickyTopOffset();
+        var rect = anchor.getBoundingClientRect();
+        var delta = rect.top - offset;
+        if (Math.abs(delta) > 0.5) window.scrollBy(0, delta);
+      }
+      anchor.scrollIntoView({ behavior: "auto", block: "start" });
+      park();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(park);
+    }, 60);
   }
 
   function pingCaseDetailsToTop() {
