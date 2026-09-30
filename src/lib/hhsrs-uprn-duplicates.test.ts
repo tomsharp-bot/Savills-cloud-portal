@@ -324,6 +324,10 @@ describe("UPRN duplicates in the database", () => {
       callUnreached: false,
       callRefBlankReason: "",
       callUnreachedNote: "",
+      vulnerabilities: "",
+      restrictorMissingCount: "",
+      restrictorLocations: "",
+      restrictorMaterial: "",
       photos: saved as HhsrsPhoto[],
       createdAt: new Date().toISOString(),
     };

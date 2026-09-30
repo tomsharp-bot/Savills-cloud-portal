@@ -368,7 +368,7 @@ describe("validateHhsrsForm", () => {
       {
         ...falling,
         restrictorMissingCount: " 2 ",
-        restrictorLocations: ["Bedroom 2", "Hall", "Nope"],
+        restrictorLocations: ["Bedroom 2", "Hall", "Nope"] as unknown as string,
         restrictorMaterial: "Timber",
       },
       mtvh
@@ -844,15 +844,17 @@ describe("HHSRS site form project option flags", () => {
       projectName: "Gateway 2026",
       photos: [],
     };
-    const reviewOptions = { filename: join(process.cwd(), "views/hhsrs-site-form/review.ejs") };
-    const blankReview = await ejs.renderFile(
-      reviewOptions.filename,
+    const reviewPath = join(process.cwd(), "views/hhsrs-site-form/review.ejs");
+    const reviewTemplate = readFileSync(reviewPath, "utf8");
+    const reviewOptions = { filename: reviewPath };
+    const blankReview = ejs.render(
+      reviewTemplate,
       { title: "Review issue", draft: reviewDraft, formatHhsrsSurveyDate, hhsrsUrl, storeError: "" },
       reviewOptions
     );
     assert.doesNotMatch(String(blankReview), /Suspected cause/);
-    const keptReview = await ejs.renderFile(
-      reviewOptions.filename,
+    const keptReview = ejs.render(
+      reviewTemplate,
       {
         title: "Review issue",
         draft: { ...reviewDraft, suspectedCause: "Leaking gutter above the bedroom" },
