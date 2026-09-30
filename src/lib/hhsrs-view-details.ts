@@ -8,10 +8,27 @@ import { escapeHtml, stripTrailingSignature } from "./hhsrs-signature.js";
 
 export type ViewDetailsPhoto = { name: string; url: string };
 
+export type ViewDetailsParty = { label: string; value: string };
+
+/** Mailbox the correction is sent from. Display only; send still uses its own From line. */
+export const CORRECTION_FROM_ADDRESS = "hhsrs@savillshousing.co.uk";
+
+/** From, To, and Cc when that correction already has one. */
+export function correctionParties(input: { to?: string | null; cc?: string | null }): ViewDetailsParty[] {
+  const parties: ViewDetailsParty[] = [
+    { label: "From", value: CORRECTION_FROM_ADDRESS },
+    { label: "To", value: String(input.to || "").trim() },
+  ];
+  const cc = String(input.cc || "").trim();
+  if (cc) parties.push({ label: "Cc", value: cc });
+  return parties;
+}
+
 export type ViewDetailsEmail = {
   subject: string;
   copyHtml: string;
   photos: ViewDetailsPhoto[];
+  parties: ViewDetailsParty[];
 };
 
 export type ViewDetailsModel = {
@@ -34,6 +51,8 @@ type SentLike = {
   subject: string;
   body: string;
   photoNames: readonly string[];
+  to?: string;
+  cc?: string;
 };
 
 export function surveyorAddress(fullAddress: string, postcode: string): string {
@@ -152,10 +171,16 @@ export function buildViewDetails(input: {
   const address = surveyorAddress(input.fullAddress, input.postcode);
   const original = input.emails.find((email) => (email.kind || "original") !== "correction") || null;
   const corrections = input.emails.filter((email) => email.kind === "correction");
-  const toEmail = (email: SentLike, changed: ReadonlySet<string>, subject: string): ViewDetailsEmail => ({
+  const toEmail = (
+    email: SentLike,
+    changed: ReadonlySet<string>,
+    subject: string,
+    parties: ViewDetailsParty[]
+  ): ViewDetailsEmail => ({
     subject,
     copyHtml: emailCopyHtml(email.body, changed),
     photos: emailPhotoViews(input.submissionId, email.photoNames, input.photoPaths, input.reporterBase),
+    parties,
   });
   return {
     projectName: String(input.projectName || "").trim(),
@@ -168,9 +193,14 @@ export function buildViewDetails(input: {
     description: String(input.description || "").trim(),
     photos: [...input.surveyorPhotos],
     intro: viewDetailsIntro(input.projectName, address, Boolean(original), corrections.length),
-    sent: original ? toEmail(original, new Set(), String(original.subject || "").trim()) : null,
+    sent: original ? toEmail(original, new Set(), String(original.subject || "").trim(), []) : null,
     corrections: corrections.map((email) =>
-      toEmail(email, changedBulletKeys(original?.body || "", email.body), correctionSubject(email.subject))
+      toEmail(
+        email,
+        changedBulletKeys(original?.body || "", email.body),
+        correctionSubject(email.subject),
+        correctionParties({ to: email.to, cc: email.cc })
+      )
     ),
   };
 }

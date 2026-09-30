@@ -1042,6 +1042,8 @@ hhsrsReporterRouter.get("/main-log/:id/details", async (req: Request, res: Respo
       subject: email.subject,
       body: email.body,
       photoNames: email.photoNames,
+      to: email.to,
+      cc: email.cc,
     })),
     reporterBase: HHSRS_REPORTER_PATH,
   });

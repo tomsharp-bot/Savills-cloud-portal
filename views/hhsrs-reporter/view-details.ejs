@@ -56,6 +56,13 @@
         <article class="vd-email">
           <% if (email.subject) { %><header class="vd-head"><%= email.subject %></header><% } %>
           <div class="vd-sheet">
+            <% if (email.parties && email.parties.length) { %>
+              <div class="vd-parties">
+                <% email.parties.forEach(function (line) { %>
+                  <div><span><%= line.label %></span> <%= line.value %></div>
+                <% }) %>
+              </div>
+            <% } %>
             <div class="vd-copy"><%- email.copyHtml %></div>
             <% if (email.photos && email.photos.length) { %>
               <% email.photos.forEach(function (photo) { %>

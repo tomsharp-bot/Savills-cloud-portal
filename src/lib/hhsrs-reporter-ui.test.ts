@@ -790,6 +790,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(find, /Email resent and correction logged/);
     assert.match(find, /id="btn-generate-correction"/);
     assert.match(find, /id="fr-preview-wrap" hidden/);
+    assert.match(find, /id="fr-preview-parties"/);
+    assert.match(find, /hhsrs@savillshousing\.co\.uk/);
     assert.match(find, /Abandon amendment/);
     assert.match(find, /I've checked the details/);
     assert.match(find, /id="btn-send-correction"[^>]*disabled/);
