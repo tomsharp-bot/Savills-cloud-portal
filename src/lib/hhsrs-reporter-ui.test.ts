@@ -302,6 +302,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /How many window restrictors are missing/);
     assert.match(review, /id="rv-restrictor-locations"/);
     assert.match(review, /id="rv-restrictor-material"/);
+    assert.match(js, /otherDetails: \(\$\("rv-other-details"\)/);
+    assert.match(js, /restrictorMissingCount: \(\$\("rv-restrictor-count"\)/);
+    assert.match(js, /restrictorLocations: \(\$\("rv-restrictor-locations"\)/);
+    assert.match(js, /restrictorMaterial: \(\$\("rv-restrictor-material"\)/);
     assert.match(js, /other_details: !!projectCfg/);
     assert.match(js, /Falling Between Levels/);
     assert.match(js, /High - Emergency risk/);

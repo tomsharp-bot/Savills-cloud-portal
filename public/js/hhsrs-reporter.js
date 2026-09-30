@@ -716,6 +716,10 @@
       onwardTopic: ($("rv-onward-topic") && $("rv-onward-topic").value) || "",
       cat1Confirmed: !!($("rv-cat1") && $("rv-cat1").checked),
       workOrder: ($("rv-work-order") && $("rv-work-order").value) || "",
+      otherDetails: ($("rv-other-details") && $("rv-other-details").value) || "",
+      restrictorMissingCount: ($("rv-restrictor-count") && $("rv-restrictor-count").value) || "",
+      restrictorLocations: ($("rv-restrictor-locations") && $("rv-restrictor-locations").value) || "",
+      restrictorMaterial: ($("rv-restrictor-material") && $("rv-restrictor-material").value) || "",
       photoCount: casePhotos.length,
     };
   }
