@@ -137,8 +137,11 @@ export function renderSignatureText(_names: Pick<SenderSignature, "firstName" | 
   return lines.join("\n");
 }
 
-function signatureParagraph(text: string, marginBottom: string): string {
-  return `<p style="margin:0 0 ${marginBottom};">${text}</p>`;
+/** Clear space above Regards, in the on-screen preview and the sent email. */
+const SIGN_OFF_GAP = "32px";
+
+function signatureParagraph(text: string, marginBottom: string, marginTop = "0"): string {
+  return `<p style="margin:${marginTop} 0 ${marginBottom};">${text}</p>`;
 }
 
 export function renderSignatureHtml(
@@ -147,7 +150,7 @@ export function renderSignatureHtml(
 ): string {
   const parts: string[] = [
     `<div class="hhsrs-signature" style="font-family:Calibri,Aptos,Arial,sans-serif;font-size:14.5px;line-height:1.45;color:#111111;">`,
-    signatureParagraph("Regards", "16px"),
+    signatureParagraph("Regards", "16px", SIGN_OFF_GAP),
     signatureParagraph(SIGNATURE_TEAM, "16px"),
     signatureParagraph(escapeHtml(SIGNATURE_ADDRESS), "16px"),
     `<p style="margin:0 0 16px;"><img src="${escapeHtml(logoSrc)}" alt="Savills" width="${SIGNATURE_LOGO_PX}" height="${SIGNATURE_LOGO_PX}" style="width:${SIGNATURE_LOGO_PX}px;height:${SIGNATURE_LOGO_PX}px;object-fit:contain;border:0;display:block;" /></p>`,
@@ -232,7 +235,8 @@ function emailPhotoTable(photos: readonly EmailCardPhoto[]): string {
 export function composeEmailText(body: string, names: Pick<SenderSignature, "firstName" | "fullName">): string {
   const typed = String(body || "").replace(/\s+$/, "");
   const signature = renderSignatureText(names);
-  return typed ? `${typed}\n\n${signature}` : signature;
+  // Two blank lines: the plain-text copy of the same gap above Regards.
+  return typed ? `${typed}\n\n\n${signature}` : signature;
 }
 
 /**
