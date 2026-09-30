@@ -101,6 +101,7 @@ function bootReview(opts: {
   caseId?: string;
   mode?: string;
   withSend?: boolean;
+  withAbandon?: boolean;
   assign?: (url: string) => void;
 }) {
   const listeners: Listener[] = [];
@@ -153,6 +154,10 @@ function bootReview(opts: {
     el("input", "rv-surveyor");
     el("input", "rv-survey-date");
     el("p", "rv-send-line", { hidden: false });
+  }
+  if (opts.withAbandon) {
+    el("form", "abandon-claim-form");
+    el("button", "btn-abandon-claim");
   }
 
   const document = {
@@ -397,5 +402,45 @@ describe("HHSRS review email draft restore", () => {
     const saved = JSON.parse(storage.getItem("hhsrs-review-drafts-v1") || "{}");
     assert.equal(saved.blank, undefined);
     assert.equal((windowObj.sessionStorage as { getItem: (key: string) => string | null }).getItem("hhsrs-review-sent-clear"), "1");
+  });
+
+  it("abandons a generated email draft so leaving cannot put it back", () => {
+    const storage = memoryStorage({
+      "hhsrs-review-drafts-v1": JSON.stringify({
+        "case-kept": {
+          project: "Gateway 2026",
+          fields: { "rv-notes": "Typed site notes" },
+          email: {
+            "hhsrs-to": "kept-to@example.com",
+            "hhsrs-cc": "",
+            "hhsrs-bcc": "",
+            "hhsrs-subject": "Generated subject",
+            "hhsrs-body": "Generated draft body",
+          },
+          caseDetailsLocked: true,
+        },
+      }),
+    });
+    const { ids, listeners, windowObj } = bootReview({
+      storage,
+      withAbandon: true,
+      fetchImpl: pendingFetch,
+    });
+    assert.equal(ids["hhsrs-body"].value, "Generated draft body");
+    assert.equal(ids["hhsrs-to"].value, "kept-to@example.com");
+    const click = listeners.find((listener) => listener.target === "btn-abandon-claim" && listener.type === "click");
+    assert.ok(click);
+    click.fn();
+    listeners
+      .filter((listener) => listener.target === "window" && listener.type === "pagehide")
+      .forEach((listener) => listener.fn());
+    const saved = JSON.parse(storage.getItem("hhsrs-review-drafts-v1") || "{}");
+    assert.equal(saved["case-kept"], undefined);
+    assert.equal(ids["hhsrs-body"].value, "");
+    assert.equal(ids["hhsrs-to"].value, "");
+    assert.equal(
+      (windowObj.sessionStorage as { getItem: (key: string) => string | null }).getItem("hhsrs-review-abandoned"),
+      "1"
+    );
   });
 });

@@ -1611,6 +1611,25 @@
     return false;
   }
 
+  function discardGeneratedDraft() {
+    skipDraftSave = true;
+    if (reviewDraftSaveTimer) clearTimeout(reviewDraftSaveTimer);
+    reviewDraftSaveTimer = null;
+    if (!sentStage()) {
+      emailGenerated = false;
+      caseLocked = false;
+      REVIEW_EMAIL_FIELD_IDS.forEach(function (id) {
+        var field = $(id);
+        if (!field || field.readOnly) return;
+        field.value = "";
+        delete field.dataset.userEdited;
+      });
+    }
+    clearReviewDraft("blank");
+    if (cfg.caseId) clearReviewDraft(String(cfg.caseId));
+    clearResumeKey();
+  }
+
   function wireReviewDraftPersistence() {
     if (!$("hhsrs-body")) return;
     REVIEW_CASE_FIELD_IDS.forEach(function (id) {
@@ -1620,7 +1639,15 @@
       el.addEventListener(evt, scheduleReviewDraftSave);
     });
     window.addEventListener("pagehide", saveReviewDraftNow);
-    window.addEventListener("pageshow", function () {
+    window.addEventListener("pageshow", function (e) {
+      var abandoned = "";
+      try { abandoned = sessionStorage.getItem("hhsrs-review-abandoned") || ""; } catch (err) {}
+      if (abandoned === "1" && $("hhsrs-body")) {
+        if (e && e.persisted) discardGeneratedDraft();
+        skipDraftSave = false;
+        resumeCleared = false;
+        try { sessionStorage.removeItem("hhsrs-review-abandoned"); } catch (err2) {}
+      }
       var flag = "";
       try { flag = sessionStorage.getItem(REVIEW_SENT_CLEAR_KEY) || ""; } catch (e) {}
       if (flag !== "1") return;
@@ -1650,11 +1677,13 @@
     });
     var abandonForm = $("abandon-claim-form");
     if (abandonForm) {
-      abandonForm.addEventListener("submit", function () {
-        skipDraftSave = true;
-        clearReviewDraft(cfg.caseId || "blank");
-        clearResumeKey();
-      });
+      function onAbandon() {
+        discardGeneratedDraft();
+        try { sessionStorage.setItem("hhsrs-review-abandoned", "1"); } catch (err) {}
+      }
+      var abandonBtn = $("btn-abandon-claim");
+      if (abandonBtn) abandonBtn.addEventListener("click", onAbandon);
+      abandonForm.addEventListener("submit", onAbandon);
     }
   }
 
