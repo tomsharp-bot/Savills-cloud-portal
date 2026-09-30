@@ -452,6 +452,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     sendConfig: publicSendSettings(false),
     sentEmail: null,
     sentBanner: "",
+    showSentPopup: false,
     ...signature,
   });
 });
@@ -492,6 +493,8 @@ async function renderReview(
   const matched = resolveHhsrsProject(reviewProjectValue || row.projectName).roster;
   const recipients = await clientRecipientsForProject(reviewProjectValue || row.projectName);
   const flash = takeFlash(req);
+  const confirmation = opts.flashOk || flash.ok;
+  const showSentPopup = confirmation === REVIEW_SENT_CONFIRMATION;
   const signatureNames = sentEmail
     ? signatureFromLoggedSender(sentEmail.sentBy)
     : await senderSignatureFor(req.user);
@@ -501,7 +504,7 @@ async function renderReview(
       activeNav: "review",
       summary: opts.summary,
       title: "Review & Create — " + row.projectName,
-      flashOk: opts.flashOk || flash.ok,
+      flashOk: showSentPopup ? "" : confirmation,
       flashErr: opts.flashErr || flash.err,
     }),
     user: req.user,
@@ -534,6 +537,7 @@ async function renderReview(
     sendConfig: publicSendSettings(Boolean(sentEmail)),
     sentEmail,
     sentBanner: sentEmail ? sentBannerText(sentEmail.sentBy, sentEmail.sentAt) : "",
+    showSentPopup,
     ...signature,
     notNeededReasons: NOT_NEEDED_REASONS,
   });

@@ -786,7 +786,7 @@ export function validateHhsrsForm(
   const restrictorLocations = showRestrictor ? canonicalRestrictorLocations(values.restrictorLocations) : "";
   const restrictorMaterial = showRestrictor ? String(values.restrictorMaterial || "").trim() : "";
   if (showRestrictor) {
-    if (!restrictorMissingCount) errors.restrictorMissingCount = "Enter how many are missing.";
+    if (!restrictorMissingCount) errors.restrictorMissingCount = "Enter how many window restrictors are missing.";
     if (!restrictorLocations) errors.restrictorLocations = "Select at least one location.";
     if (!(WINDOW_RESTRICTOR_MATERIALS as readonly string[]).includes(restrictorMaterial)) {
       errors.restrictorMaterial = "Select the window material.";
