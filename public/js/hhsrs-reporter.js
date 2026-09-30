@@ -164,6 +164,23 @@
     for (var i = 0; i < nodes.length; i++) nodes[i].inert = true;
   }
 
+  function syncEmailPanelLock() {
+    var panel = document.querySelector(".email-draft-panel");
+    if (!panel || !panel.classList) return;
+    if (sentStage()) {
+      panel.classList.remove("is-pre-generate");
+      lockSentEmailFields();
+      return;
+    }
+    var waiting = !emailGenerated;
+    panel.classList.toggle("is-pre-generate", waiting);
+    if (!panel.querySelectorAll) return;
+    var nodes = panel.querySelectorAll(
+      ".field-locked, .field-with-copy, .attach-block, .signature-added-note, .email-photo-tools"
+    );
+    for (var i = 0; i < nodes.length; i++) nodes[i].inert = waiting;
+  }
+
   function clearEmailDraft() {
     if (sentStage()) return;
     ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"].forEach(function (id) {
@@ -423,6 +440,7 @@
     var amend = $("btn-amend-case");
     if (amend) amend.hidden = !caseLocked;
     setEmailPhotoTools(caseLocked);
+    syncEmailPanelLock();
   }
 
   function amendCaseDetails() {
@@ -1410,10 +1428,10 @@
     if (emptyHint) emptyHint.hidden = hasEmail;
     var emailBadge = $("rv-email-badge");
     if (emailBadge) emailBadge.textContent = hasEmail ? "Generated" : "Draft";
+    emailGenerated = hasEmail;
     caseLocked = !!draft.caseDetailsLocked;
     syncCaseLock();
     setReviewDraftStatus(true);
-    if (hasEmail) emailGenerated = true;
     syncSendButton();
     return true;
   }
@@ -1428,16 +1446,9 @@
       skipDraftSave = false;
       return false;
     }
-    if (!cfg.caseId) {
-      var last = getReviewLastKey();
-      var ids = Array.isArray(cfg.waitingIds) ? cfg.waitingIds : [];
-      if (last && last !== "blank" && ids.indexOf(last) >= 0) {
-        window.location.replace((cfg.base || "/HHSRSreporter") + "/review/" + encodeURIComponent(last));
-        return true;
-      }
-      if (last && last !== "blank") setReviewLastKey("blank");
-      return false;
-    }
+  if (!cfg.caseId) {
+    return false;
+  }
     setReviewLastKey(cfg.caseId);
     return false;
   }

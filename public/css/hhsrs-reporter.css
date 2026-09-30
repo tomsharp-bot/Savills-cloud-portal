@@ -196,20 +196,20 @@ a.linkish.active, .linkish.active {
   border-color: var(--savills-yellow);
 }
 .side-tabs .tab-link.active {
-  background: var(--savills-yellow);
-  color: var(--navy);
+  background: #12283d;
+  color: #fff;
   border-color: var(--savills-yellow);
-  box-shadow: 0 0 0 1px rgba(255,232,80,0.35);
-  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(255,232,80,0.12);
+  font-weight: 600;
 }
 .side-tabs .tab-link.active .tab-ico {
   background: transparent;
-  color: var(--navy);
+  color: var(--savills-yellow);
 }
 .side-tabs .tab-link.active .tab-ico svg {
-  stroke: var(--navy);
+  stroke: var(--savills-yellow);
 }
-.side-tabs .tab-link.active .tab-ico svg [fill="currentColor"] { fill: var(--navy); }
+.side-tabs .tab-link.active .tab-ico svg [fill="currentColor"] { fill: var(--savills-yellow); }
 .side-tabs .tab-link .tab-badge {
   font-size: 0.6875rem; font-weight: 800; padding: 0.15rem 0.5rem;
   border-radius: 999px; background: var(--savills-yellow); color: #8e0f14;
@@ -244,8 +244,8 @@ a.linkish.active, .linkish.active {
 .side-tabs .tab-link.needs-attention.active {
   background: var(--savills-red);
   color: #fff;
-  border-color: #fff;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+  border-color: var(--savills-red);
+  box-shadow: 0 0 0 1px rgba(206, 23, 30, 0.45);
 }
 .side-tabs .tab-link.needs-attention.active .tab-ico {
   color: #fff;
@@ -379,7 +379,7 @@ a.linkish.active, .linkish.active {
 }
 /* Section headers on Reporter cards use the Pending Issues bar.
    Urgent waiting and actioned strips keep their own colours. */
-.hhsrs-reporter .panel > .panel-head:not(.received-head):not(.dealt-head),
+.hhsrs-reporter .panel:not(.email-draft-panel) > .panel-head:not(.received-head):not(.dealt-head),
 .hhsrs-reporter details.panel > summary.panel-head:not(.received-head):not(.dealt-head) {
   margin: 12px 12px 0;
   padding: 0.75rem 1.05rem 0.75rem 1rem;
@@ -389,7 +389,7 @@ a.linkish.active, .linkish.active {
   border-radius: 10px;
   box-shadow: 0 1px 0 rgba(24,26,44,0.06), inset 0 1px 0 rgba(255,255,255,0.55);
 }
-.hhsrs-reporter .panel > .panel-head:not(.received-head):not(.dealt-head) h2,
+.hhsrs-reporter .panel:not(.email-draft-panel) > .panel-head:not(.received-head):not(.dealt-head) h2,
 .hhsrs-reporter details.panel > summary.panel-head:not(.received-head):not(.dealt-head) h2 {
   font-size: 1.18rem;
   font-weight: 800;
@@ -1950,10 +1950,13 @@ body.hhsrs-reporter {
 .hhsrs-reporter .rv-pending-strip.is-clear .waiting-empty-msg { display: block; }
 .hhsrs-reporter .rv-pending-strip.is-clear .table-wrap { display: none; }
 .hhsrs-reporter .review-grid,
-.hhsrs-reporter .panel.panel-overflow-visible,
-.hhsrs-reporter .panel.email-draft-panel,
 .hhsrs-reporter .blank-case-form,
 .hhsrs-reporter .case-fields { overflow: visible; }
+.hhsrs-reporter #rv-case-panel,
+.hhsrs-reporter .panel.email-draft-panel {
+  overflow: hidden;
+  border-radius: 12px;
+}
 .hhsrs-reporter .photos-block {
   margin-top: 1.35rem;
   padding: 0.85rem 0.9rem;
@@ -2147,16 +2150,22 @@ body.hhsrs-reporter {
   opacity: 1;
 }
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-locked,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .field-locked,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-with-copy,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .field-with-copy,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .attach-block,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .attach-block,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .signature-added-note,
-.hhsrs-reporter .email-draft-panel.is-sent-lock .email-photo-tools {
+.hhsrs-reporter .email-draft-panel.is-pre-generate .signature-added-note,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .email-photo-tools,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .email-photo-tools {
   opacity: 0.45;
   filter: grayscale(0.65);
   pointer-events: none;
   user-select: none;
 }
-.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-item img {
+.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-item img,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .attach-item img {
   filter: grayscale(1);
 }
 .hhsrs-reporter #rv-photos-block[hidden],

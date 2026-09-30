@@ -433,7 +433,7 @@ describe("HHSRS Reporter auth and queue", () => {
       const blockedPage = await request(app, "GET", blocked.location, { cookie: blockedCookie });
       assert.match(blockedPage.body, /Change this on Project Progress/);
 
-      const review = await request(app, "GET", `/HHSRSreporter/review/${waiting.id}`, { cookie: blockedCookie });
+      const review = await request(app, "GET", `/HHSRSreporter/review/${waiting.id}?claim=1`, { cookie: blockedCookie });
       assert.equal(review.status, 200);
       assert.match(review.body, /Abandon claim — return to pending/);
       assert.match(review.body, /id="hhsrs-bcc"/);

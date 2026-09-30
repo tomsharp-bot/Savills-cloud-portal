@@ -139,7 +139,17 @@ describe("HHSRS email signature", () => {
     if (previousEnv === "production") process.env.NODE_ENV = "test";
     try {
       const names = { firstName: "Tom", fullName: "Tom Sharp" };
-      const photos = [{ filename: "kitchen.jpg", content: Buffer.from("jpeg-bytes"), contentType: "image/jpeg" }];
+      const photos = [{
+        filename: "a4a6fb82-7a49-4f8e-9262-e41674058ece.jpg",
+        content: Buffer.from("jpeg-bytes"),
+        contentType: "image/jpeg",
+        cid: "hhsrs-photo-0@savillshousing.co.uk",
+      }];
+      const html = composeEmailHtml("Dear Sir/Madam,\n\nPlease find details.", names, `cid:${SIGNATURE_LOGO_CID}`, undefined, {
+        photos: [{ src: `cid:${photos[0].cid}`, name: photos[0].filename }],
+      });
+      assert.doesNotMatch(html, /a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg/);
+      assert.doesNotMatch(html, /font-size:11px/);
       const sent = await sendMailboxMessage({
         fromName: "Savills HHSRS",
         fromAddress: "hhsrs@savillshousing.co.uk",
@@ -148,9 +158,10 @@ describe("HHSRS email signature", () => {
         bcc: [],
         subject: "HHSRS – Damp & Mould Growth – 1 Test Street",
         text: composeEmailText("Dear Sir/Madam,\n\nPlease find details.", names),
-        html: composeEmailHtml("Dear Sir/Madam,\n\nPlease find details.", names, `cid:${SIGNATURE_LOGO_CID}`),
+        html,
         messageId: "<sig-test@savillshousing.co.uk>",
         attachments: photos,
+        inlinePhotos: photos,
       });
       const raw = sent.raw.toString("utf8");
       const unfolded = raw.replace(/=\r\n/g, "");
@@ -166,18 +177,19 @@ describe("HHSRS email signature", () => {
       assert.match(unfolded, new RegExp(`cid:${SIGNATURE_LOGO_CID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
       assert.match(raw, new RegExp(`Content-ID:\\s*<${SIGNATURE_LOGO_CID}>`, "i"));
       assert.match(raw, /Content-Disposition:\s*inline/i);
-      assert.match(raw, /filename="?kitchen\.jpg"?/i);
-      assert.match(raw, /Content-Disposition:\s*attachment/i);
+      assert.match(raw, /filename="?a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg"?/i);
+      assert.doesNotMatch(raw, /Content-Disposition:\s*attachment/i);
+      assert.doesNotMatch(unfolded, />a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg</);
       const logoStart = signatureLogoBytes().toString("base64").slice(0, 48);
       assert.equal(raw.includes(logoStart), true);
       assert.equal(photos.length, 1);
-      assert.equal(photos[0].filename, "kitchen.jpg");
+      assert.equal(photos[0].filename, "a4a6fb82-7a49-4f8e-9262-e41674058ece.jpg");
       const inlineAt = raw.search(/Content-Disposition:\s*inline/i);
       const logoNameAt = raw.indexOf("savills-logo.png");
       assert.ok(inlineAt >= 0 && logoNameAt >= 0);
       const inlinePart = raw.slice(Math.max(0, inlineAt - 400), inlineAt + 80);
       assert.match(inlinePart, /savills-logo\.png|image\/png/);
-      assert.doesNotMatch(inlinePart, /kitchen\.jpg/);
+      assert.doesNotMatch(inlinePart, /a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg/);
     } finally {
       if (previousMock === undefined) delete process.env.HHSRS_SEND_MOCK;
       else process.env.HHSRS_SEND_MOCK = previousMock;

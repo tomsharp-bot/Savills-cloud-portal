@@ -322,6 +322,20 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /#rv-case-panel\.is-drafted #rv-photos-block img/);
     assert.match(css, /#rv-case-panel\.is-sent-case #rv-photos-block img[\s\S]*filter:\s*grayscale\(1\)/);
     assert.match(css, /\.email-draft-panel\.is-sent-lock \.field-with-copy/);
+    assert.match(css, /\.email-draft-panel\.is-pre-generate \.field-with-copy[\s\S]{0,1200}opacity:\s*0\.45/);
+    assert.match(css, /\.email-draft-panel\.is-pre-generate \.field-locked[\s\S]{0,1200}filter:\s*grayscale\(0\.65\)/);
+    assert.match(css, /\.email-draft-panel\.is-pre-generate \.field-with-copy[\s\S]{0,1200}pointer-events:\s*none/);
+    assert.match(css, /\.email-draft-panel\.is-pre-generate \.email-photo-tools[\s\S]{0,400}user-select:\s*none/);
+    assert.match(review, /sentEmail \? ' is-sent-lock' : ' is-pre-generate'/);
+    assert.match(review, /class="panel-head review-head"[\s\S]{0,80}<h2>Client Email Draft<\/h2>/);
+    assert.match(css, /\.panel-head\.review-head\s*\{[^}]*background:\s*#eef5fb/);
+    assert.match(css, /\.panel:not\(\.email-draft-panel\) > \.panel-head:not\(\.received-head\):not\(\.dealt-head\)/);
+    assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*overflow:\s*hidden/);
+    assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*border-radius:\s*12px/);
+    assert.match(review, /Fill case details, then click Generate email below Case details\./);
+    assert.match(js, /function syncEmailPanelLock/);
+    assert.match(js, /panel\.classList\.toggle\("is-pre-generate", waiting\)/);
+    assert.match(js, /emailGenerated = hasEmail/);
     assert.match(review, /is-sent-case/);
     assert.match(review, /is-sent-lock/);
     assert.match(review, /sentEmail \? "disabled"/);
@@ -517,6 +531,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(table, /row\.rating/);
     assert.match(table, /photo-att-cell/);
     assert.match(table, /Review Case/);
+    assert.match(table, /\/review\/<%= row\.id %>\?claim=1/);
     assert.match(table, />Amend</);
 
     const last = pending.slice(pending.indexOf('id="last-actioned"'));
@@ -553,7 +568,16 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /alsoWaiting\.length \? '' : 'is-clear'/);
     assert.match(steps, /summary\.waiting > 0 \? '' : ' is-clear'/);
     assert.match(sidebar, /title="Dashboard"/);
-    assert.match(sidebar, /summary\.waiting > 0 \? '' : ' is-clear'/);
+    assert.match(sidebar, /summary\.waiting > 0 \? ' needs-attention' : ''/);
+    assert.doesNotMatch(sidebar.slice(0, sidebar.indexOf("Review")), /tab-badge/);
+    assert.match(alerts, /dashboard\.classList\.add\("needs-attention"\)/);
+    assert.match(alerts, /dashboard\.classList\.remove\("is-clear"\)/);
+    assert.match(alerts, /claimStatus === "claimed"/);
+    const reporterJs = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const reporterRoute = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    assert.doesNotMatch(reporterJs, /location\.replace\([\s\S]{0,80}\/review\//);
+    assert.match(sidebar, /href="<%= reporterBase %>" class="tab-link/);
+    assert.match(reporterRoute, /reviewCaseClaimRequested\(req\) \? await claimIfOpen/);
     const clear = css.slice(css.indexOf(".panel.waiting-urgent.is-clear {"), css.indexOf(".sum-card.accent-red {"));
     assert.match(clear, /border-color:\s*#1b7a4e/);
     assert.match(clear, /background:\s*#f3faf6/);
@@ -563,7 +587,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.side-tabs \.tab-link\.is-clear\.active \{[^}]*background:\s*#1b7a4e/);
     assert.match(alerts, /function markClear\(el, clear\)/);
     assert.match(alerts, /markClear\(pendingPanel, clear\)/);
-    assert.match(alerts, /markClear\(dashboard, clear\)/);
+    assert.doesNotMatch(alerts, /markClear\(dashboard, clear\)/);
   });
 
   it("turns browser autofill off on email compose fields", () => {

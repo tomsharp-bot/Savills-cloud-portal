@@ -561,13 +561,18 @@ hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
   }
 });
 
+function reviewCaseClaimRequested(req: Request): boolean {
+  const value = req.query.claim;
+  return value === "1" || (Array.isArray(value) && value.includes("1"));
+}
+
 hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
   const loaded = await loadCase(req.params.id);
   if (!loaded) {
     res.status(404).send("Case not found.");
     return;
   }
-  const row = await claimIfOpen(loaded, claimerLabel(req.user));
+  const row = reviewCaseClaimRequested(req) ? await claimIfOpen(loaded, claimerLabel(req.user)) : loaded;
   const ctx = await reviewContext(row.id);
   await renderReview(req, res, row, ctx);
 });
