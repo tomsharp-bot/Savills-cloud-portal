@@ -597,14 +597,15 @@
     }
     var dashboard = document.querySelector('#side-tabs a.tab-link[title="Dashboard"]');
     if (dashboard && dashboard.classList) {
-      dashboard.classList.remove("is-clear");
       var dashBadge = dashboard.querySelector(".tab-badge");
       if (dashBadge && dashBadge.parentNode) dashBadge.parentNode.removeChild(dashBadge);
       var wait = dashboard.querySelector(".tab-wait");
       if (clear) {
         dashboard.classList.remove("needs-attention");
+        dashboard.classList.add("is-clear");
         if (wait && wait.parentNode) wait.parentNode.removeChild(wait);
       } else {
+        dashboard.classList.remove("is-clear");
         dashboard.classList.add("needs-attention");
         if (!wait) {
           var label = dashboard.querySelector(".tab-label");

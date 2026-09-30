@@ -96,7 +96,7 @@ describe("not needed checks", () => {
     assert.doesNotMatch(page, /delete/i);
     assert.match(side, /Duplicates &amp; Errors/);
     assert.match(side, /summary\.duplicates > 0 \? 'needs-attention'/);
-    assert.match(side, /summary\.waiting > 0 \? ' needs-attention' : ''/);
+    assert.match(side, /summary\.waiting > 0 \? ' needs-attention' : ' is-clear'/);
     assert.match(
       readFileSync("public/css/hhsrs-reporter.css", "utf8"),
       /\.side-tabs \.tab-link\.needs-attention\s*\{[\s\S]*?background:\s*var\(--savills-red\)/
