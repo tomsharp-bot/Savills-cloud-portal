@@ -368,7 +368,7 @@ body:not(.tab-grid) #main{visibility:hidden}
     <div class="cards">
       <div class="card drop" id="cDrop"><div class="big">&#11015; Drag the Vision exports here</div><div class="sub">e.g. <i>15a. Condition Data List Export &hellip;.xlsx</i> (needed) plus <i>15b. Hazard List Export &hellip;</i> and <i>15c. Comments Export &hellip;</i> (optional) &middot; drop one, two or all three together</div><button class="sbtn" id="cPick">Choose files&hellip;</button></div>
       <div class="card drop" id="oDrop"><div class="big">&#128194; &hellip;or open a master you saved earlier</div><div class="sub">&ldquo;&hellip;-Master Data File-V&hellip;.xlsm&rdquo; (or an older &hellip;.xlsx master) &ndash; brings back the grid, yellow edits, standard answers, builder settings, macros, Original Data Imported and Import Log</div><button class="sbtn" id="oPick">Open master&hellip;</button></div>
-      <div class="card drop" id="baseDrop"><div class="big">Build from previous Master Data File</div><div class="sub">.xlsm or .xlsx, a master used before, not a Vision export. This file&rsquo;s columns, headers, order, and rows become the portal file. All columns start selected. Select all, then untick any you do not want. Unticked columns stay out. Headers stay as they are. Saved as {Project name}-Master Data File-V1. Vision exports dropped afterwards fill matching columns and add new rows by UPRN.</div><button class="sbtn" id="basePick" type="button">Choose file&hellip;</button></div>
+      <div class="card drop" id="baseDrop"><div class="big">Build from previous Master Data File</div><div class="sub">.xlsm or .xlsx, a master used before, not a Vision export. The new file keeps the usual starter order: property details, then the main photo columns, then Comments and Hazards. Other columns from this file are listed underneath. All of those start selected. Select all, then untick any you do not want. Unticked columns stay out. Ticked columns are added after Comments and Hazards, in the order they have in this file. A column already in the starter order is kept once, in its place. Headers stay as they are. Saved as {Project name}-Master Data File-V1. Vision exports dropped afterwards fill matching columns and add new rows by UPRN.</div><button class="sbtn" id="basePick" type="button">Choose file&hellip;</button></div>
     </div>
     <div id="cPreview"></div>
     <div id="basePreview"></div>
@@ -378,7 +378,7 @@ body:not(.tab-grid) #main{visibility:hidden}
 <div class="panel" id="pImport">
   <div class="pin">
     <h2>3. Import new Vision data into the master</h2>
-    <p class="lead">Drop later Vision exports &ndash; a <b>Condition Data List Export</b>, a <b>Hazard List Export</b>, a <b>Comments Export</b>, or any mix of them at once (imported in that order). New properties are added as new rows. When the master was built from a previous Master Data File, Condition, Hazards, and Comments fill the columns that match and add a row for each new UPRN. The column order stays the one from that file. Otherwise a property that is already in the master is <b>skipped if its Vision data is identical</b>. If the data is different, it is added as a <b>second row right under the first</b> with its UPRN shown <b>pink</b> &ndash; your validated row is never changed; compare the two with <b>Show All Duplicates</b> and delete the one you don&rsquo;t want. Hazards and comments are added to the matching properties (an issue that arrives after the row already existed is highlighted lilac, and HHSRS Checked goes back to &ldquo;No&rdquo;). Every imported row is kept on the <b>Original Data Imported</b> sheet and each import is recorded on the <b>Import Log</b> sheet.</p>
+    <p class="lead">Drop later Vision exports &ndash; a <b>Condition Data List Export</b>, a <b>Hazard List Export</b>, a <b>Comments Export</b>, or any mix of them at once (imported in that order). New properties are added as new rows. When the master was built from a previous Master Data File, Condition, Hazards, and Comments fill the columns that match and add a row for each new UPRN. The column order stays as it is, and extra columns after Comments and Hazards stay where they are. Otherwise a property that is already in the master is <b>skipped if its Vision data is identical</b>. If the data is different, it is added as a <b>second row right under the first</b> with its UPRN shown <b>pink</b> &ndash; your validated row is never changed; compare the two with <b>Show All Duplicates</b> and delete the one you don&rsquo;t want. Hazards and comments are added to the matching properties (an issue that arrives after the row already existed is highlighted lilac, and HHSRS Checked goes back to &ldquo;No&rdquo;). Every imported row is kept on the <b>Original Data Imported</b> sheet and each import is recorded on the <b>Import Log</b> sheet.</p>
     <div class="card drop" id="iDrop"><div class="big">&#11015; Drag the next Vision exports here</div><div class="sub">Condition rows already imported (identical) and hazards / comments with an ID already imported are skipped, so re-importing the same file is harmless.</div><button class="sbtn" id="iPick">Choose files&hellip;</button></div>
     <div id="iPreview"></div>
     <div id="iSummary"></div>
@@ -2632,7 +2632,7 @@ function renderBuilder(){
           <button class="sbtn" id="cShow">Show all listed</button><button class="sbtn" id="cHide">Hide all listed</button></div>
         <div class="hint" id="cCount"></div>
         <div class="scroll colscroll"><table class="ctab" id="colTab"></table></div>
-        <div class="hint">Drag ⋮⋮ to reorder (or use ↑ ↓). Hidden columns stay in the saved master (as hidden Excel columns) and keep their data. ${B.exactColumns ? 'This master was built from a previous Master Data File. The columns, headers, and order are that file’s. Vision exports fill matching columns and add new rows by UPRN, and they leave this order as it is.' : 'A new master starts with <b>Postcode</b> hidden and the 35 HHSRS issue columns shown. Opening a master you already saved does not change those Show ticks. Usual columns: UPRN, Phase Status, Checked?, Surveyor, Date, Address, Postcode, Asset Type, Condition Status, Flag, Issue, Number of Issues, Explanation (validation notes), SAP Required, Property Age.'}</div>
+        <div class="hint">Drag ⋮⋮ to reorder (or use ↑ ↓). Hidden columns stay in the saved master (as hidden Excel columns) and keep their data. ${B.exactColumns ? 'This master was built from a previous Master Data File. It keeps the usual property details, then the main photo columns, then Comments and Hazards. Extra columns from that file sit after Comments and Hazards. Vision exports fill matching columns and add new rows by UPRN, and they leave this order as it is.' : 'A new master starts with <b>Postcode</b> hidden and the 35 HHSRS issue columns shown. Opening a master you already saved does not change those Show ticks. Usual columns: UPRN, Phase Status, Checked?, Surveyor, Date, Address, Postcode, Asset Type, Condition Status, Flag, Issue, Number of Issues, Explanation (validation notes), SAP Required, Property Age.'}</div>
       </div>
     </div>
     <div class="row" style="margin-top:14px"><button class="pbig" id="bApply">Apply and open the validator</button></div>`;
@@ -5207,7 +5207,7 @@ async function onImportFiles(files){
       const have = c.same.length + c.diff.length;
       h += visionSummaryHtml(V) + `<table class="kv"><tr><th>New properties</th><td>${nf(c.nw.length)}${c.nw.length ? ' – ' + esc(listU(c.nw, 12)) : ''} <span class="hint">(added as new rows, matched by UPRN)</span></td></tr>
         <tr><th>Already in the master</th><td>${nf(have)}${have ? ' – ' + esc(listU(c.same.concat(c.diff), 12)) : ''} <span class="hint">(matching columns filled on that row)</span></td></tr></table>
-        <div class="hint">Column order stays the one from the previous Master Data File. Columns that are not already there are left out.</div>`;
+        <div class="hint">Column order stays as it is. Extra columns after Comments and Hazards are not moved. Columns that are not already there are left out.</div>`;
     } else h += visionSummaryHtml(V) + `<table class="kv"><tr><th>New properties</th><td>${nf(c.nw.length)}${c.nw.length ? ' – ' + esc(listU(c.nw, 12)) : ''} <span class="hint">(added as new rows)</span></td></tr>
       <tr><th>Already in the master, same data</th><td>${nf(c.same.length)}${c.same.length ? ' – ' + esc(listU(c.same, 12)) : ''} <span class="hint">(skipped – nothing is changed)</span></td></tr>
       <tr><th>Already in the master, different data</th><td>${nf(c.diff.length)}${c.diff.length ? ' – ' + esc(listU(c.diff, 12)) : ''} <span class="hint">(added as a second row right under the first, UPRN shown pink)</span></td></tr>
@@ -5415,7 +5415,10 @@ function renderMdfPreview(){
     html += '<h4>Not already in this master</h4>';
     if (!p.unmatched.length) html += '<div class="hint">Every source column matched a header already in this master.</div>';
     else {
-      html += '<div class="hint">' + nf(p.unmatched.length) + ' columns are in this file and not already in the master. They are listed in the file’s order. Select all, then untick any you do not want. Ticked columns are inserted between the neighbouring columns already on this sheet, in that same order, not stacked at the end. Unticked columns stay out. Headers are not renamed.</div>';
+      const place = (MS && MS.B && MS.B.exactColumns)
+        ? 'Ticked columns are added after the columns already on this sheet, in that same order. They are not moved into the property details, photos, or Comments and Hazards.'
+        : 'Ticked columns are inserted between the neighbouring columns already on this sheet, in that same order, not stacked at the end.';
+      html += '<div class="hint">' + nf(p.unmatched.length) + ' columns are in this file and not already in the master. They are listed in the file’s order. Select all, then untick any you do not want. ' + place + ' Unticked columns stay out. Headers are not renamed.</div>';
       html += pickListHtml('mdf', pi, p.unmatched.map(c => c.header), false);
     }
   });
@@ -5424,11 +5427,11 @@ function renderMdfPreview(){
   wirePickList('mdf');
   const b = $('mdfApply'); if (b) b.onclick = applyMdfImport;
 }
-function pickListHtml(prefix, pi, headers, checked){
+function pickListHtml(prefix, pi, headers, checked, indexes){
   let html = '<div class="row" style="margin-top:6px"><button type="button" class="sbtn" data-' + prefix + '-all="' + pi + '">Select all</button><button type="button" class="sbtn" data-' + prefix + '-none="' + pi + '">Clear</button><span class="hint" data-' + prefix + '-count="' + pi + '"></span></div>';
   html += '<input type="text" data-' + prefix + '-find="' + pi + '" placeholder="Find a column…" style="width:100%;max-width:420px;margin:6px 0">';
   html += '<div style="max-height:360px;overflow:auto;border:1px solid #ddd;padding:6px" data-' + prefix + '-list="' + pi + '">';
-  headers.forEach((h, ci) => { html += '<label style="display:block"><input type="checkbox" data-' + prefix + '-pick="' + pi + ':' + ci + '"' + (checked ? ' checked' : '') + '> ' + esc(h) + '</label>'; });
+  headers.forEach((h, i) => { const ci = indexes ? indexes[i] : i; html += '<label style="display:block"><input type="checkbox" data-' + prefix + '-pick="' + pi + ':' + ci + '"' + (checked ? ' checked' : '') + '> ' + esc(h) + '</label>'; });
   html += '</div>';
   return html;
 }
@@ -5522,6 +5525,25 @@ function weaveMdfColumns(cols, fileCols, srcToKey, pickedSrc){
   }
   return {out, picked, byKeyAdds};
 }
+/* A master built from a previous file already has its fixed start. Later ticked columns are appended, in file order, and are not woven into that start. */
+function appendMdfColumns(cols, fileCols, pickedSrc){
+  const out = cols.slice();
+  const usedK = new Set(out.map(c => c.key));
+  const haveNorm = new Set(out.map(c => mdfNorm(c.header)));
+  const byKeyAdds = [];
+  let picked = 0;
+  for (const src of fileCols) {
+    if (!pickedSrc.has(src.c) || haveNorm.has(src.norm)) continue;
+    let k = 'c|' + src.norm.slice(0, 80) + '|' + src.c;
+    while (usedK.has(k)) k += 'x';
+    usedK.add(k);
+    haveNorm.add(src.norm);
+    out.push({key:k, header:src.header, kind:'custom', visible:true, src:'Ticked in when importing an existing MDF'});
+    byKeyAdds.push([k, src.c]);
+    picked++;
+  }
+  return {out, picked, byKeyAdds};
+}
 function applyMdfImport(){
   const P = V4.mdf; if (!P) return;
   const picks = new Set();
@@ -5549,7 +5571,7 @@ function applyMdfImport(){
       for (const m of p.matched) if (!srcToKey.has(m.src)) srcToKey.set(m.src, m.key);
       const pickedSrc = new Set();
       p.unmatched.forEach((c, ci) => { if (picks.has(pi + ':' + ci)) pickedSrc.add(c.c); });
-      const woven = weaveMdfColumns(cols, p.info.cols, srcToKey, pickedSrc);
+      const woven = B.exactColumns ? appendMdfColumns(cols, p.unmatched, pickedSrc) : weaveMdfColumns(cols, p.info.cols, srcToKey, pickedSrc);
       for (const [k, srcC] of woven.byKeyAdds) byKey.set(k, srcC);
       cols.splice(0, cols.length, ...woven.out);
       p._picked = woven.picked;
@@ -5603,27 +5625,58 @@ function baseProjectFromName(name){
   return ((m ? m[1] : stem) || 'Project').trim() || 'Project';
 }
 function baseSheetTypes(name){
-  if (/garage/i.test(name)) return ['Garage'];
-  if (/block/i.test(name) || /(^|[^a-z])blk([^a-z]|$)/i.test(name)) return ['Block'];
+  const role = sheetRole(name);
+  if (role === 'garage') return ['Garage'];
+  if (role === 'block') return ['Block'];
   return ['*'];
 }
-function baseColumnsFrom(info){
-  const known = new Map();
-  for (const u of USUAL) known.set(mdfNorm(u.header), {key:u.key, kind:'usual'});
-  for (const d of hhColDefs()) if (!known.has(mdfNorm(d.header))) known.set(mdfNorm(d.header), {key:d.key, kind:d.kind || 'hhsrs'});
-  const hidden = new Set(info.hidden || []);
-  const used = new Set(), cols = [];
-  for (const c of info.cols) {
-    const hit = known.get(c.norm);
-    let key, kind;
-    if (hit && !used.has(hit.key)) { key = hit.key; kind = hit.kind; }
-    else { key = 'c|' + c.norm.slice(0, 80) + '|' + c.c; while (used.has(key)) key += 'x'; kind = 'custom'; }
-    used.add(key);
-    const col = {key, header:c.header, kind, visible:true, src:'Copied from the existing Master Data File'};
-    if (hidden.has(c.c)) col.hid = true;
-    cols.push(col);
-  }
+function sheetRole(name){
+  const n = String(name || '');
+  if (/garage/i.test(n) || /(^|[^a-z])gar([^a-z]|$)/i.test(n)) return 'garage';
+  if (/block/i.test(n) || /(^|[^a-z])blk([^a-z]|$)/i.test(n)) return 'block';
+  return 'dwelling';
+}
+/* Main photo columns for this sheet, using the portal's MTVH starter presets. Garage sheets have none. */
+function starterPhotoGroups(sheetName){
+  const role = sheetRole(sheetName);
+  if (role === 'garage') return [];
+  const preset = role === 'block' ? PRESET_MTVH_BLK : PRESET_MTVH_DW;
+  return presetGroups(preset, sheetName);
+}
+/* Fixed start: every usual property-detail column, in USUAL order, then the main photo columns, then Comments and Hazards (hhColDefs). Garage omits photos and Comments and Hazards, as a new garage sheet already does. */
+function starterFixedColumns(sheetName){
+  const cols = USUAL.map(u => ({key:u.key, header:u.header, kind:'usual', src:u.src, visible:!u.hidden}));
+  const photos = photoColDefs({photos:starterPhotoGroups(sheetName), photoPattern:'{UPRN}-{component}{n}'}, sheetName);
+  for (const p of photos) cols.push(p);
+  if (sheetRole(sheetName) !== 'garage') for (const d of hhColDefs()) cols.push(Object.assign({}, d));
   return cols;
+}
+/* Fixed start first. Ticked file columns that are not already in it are appended in file order. A matching header is kept once, in its fixed position, using the file's own header text. */
+function baseMasterColumns(sheetName, fileCols, picked, hidden){
+  const hiddenSet = new Set(hidden || []);
+  const byNorm = new Map();
+  fileCols.forEach(c => { if (!byNorm.has(c.norm)) byNorm.set(c.norm, c); });
+  const srcByKey = new Map();
+  const cols = starterFixedColumns(sheetName).map(col => {
+    const copy = Object.assign({}, col);
+    const hit = byNorm.get(mdfNorm(copy.header));
+    if (hit) { copy.header = hit.header; srcByKey.set(copy.key, hit.c); }
+    return copy;
+  });
+  const usedNorm = new Set(cols.map(c => mdfNorm(c.header)));
+  const usedK = new Set(cols.map(c => c.key));
+  const pickedSet = picked || new Set();
+  fileCols.forEach((src, ci) => {
+    if (usedNorm.has(src.norm) || !pickedSet.has(ci)) return;
+    let k = 'c|' + src.norm.slice(0, 80) + '|' + src.c;
+    while (usedK.has(k)) k += 'x';
+    usedK.add(k); usedNorm.add(src.norm);
+    const col = {key:k, header:src.header, kind:'custom', visible:true, src:'Extra column from the previous Master Data File'};
+    if (hiddenSet.has(src.c)) col.hid = true;
+    cols.push(col);
+    srcByKey.set(k, src.c);
+  });
+  return {cols, srcByKey};
 }
 function baseDataRows(aoa, hrIndex){
   const rows = [];
@@ -5651,9 +5704,21 @@ function renderBasePreview(){
   html += '<div class="row"><label>Project name <input type="text" id="baseProj" value="' + esc(P.project) + '" style="width:240px"></label><span class="hint">Saves as <b id="baseName">' + esc(masterName({project:P.project}, 1)) + '</b></span></div>';
   if (P.skipped.length) html += '<div class="hint">Skipped, too large to read here: ' + P.skipped.map(s => esc(s.name) + ' (' + Math.round(s.bytes / 1048576) + ' MB)').join(', ') + '</div>';
   P.plans.forEach((p, pi) => {
-    const headers = p.info.cols.map(c => c.header);
-    html += '<h3>' + esc(p.sheet) + '</h3><div class="good">' + nf(headers.length) + ' columns, in the order they have in this file, and ' + nf(p.rows.length) + ' rows. All start selected. Select all, then untick any you do not want. Unticked columns stay out. Headers are not renamed.</div>';
-    html += pickListHtml('base', pi, headers, true);
+    const fixed = starterFixedColumns(p.sheet);
+    const fixedNorm = new Set(fixed.map(c => mdfNorm(c.header)));
+    const extras = [], extraIdx = [];
+    p.info.cols.forEach((c, ci) => { if (!fixedNorm.has(c.norm)) { extras.push(c.header); extraIdx.push(ci); } });
+    const role = sheetRole(p.sheet);
+    const tail = role === 'garage'
+      ? 'Property details only on this sheet (no main photo columns and no Comments and Hazards).'
+      : 'Property details, then the main photo columns, then Comments and Hazards (General Comments through HHSRS Checked).';
+    const after = role === 'garage' ? 'the property details' : 'Comments and Hazards';
+    html += '<h3>' + esc(p.sheet) + '</h3><div class="good">Fixed start: ' + nf(fixed.length) + ' columns. ' + tail + ' ' + nf(p.rows.length) + ' rows are copied. '
+      + (extras.length
+        ? nf(extras.length) + ' other columns from this file are listed below, in the file’s order. All start selected. Select all, then untick any you do not want. Unticked columns stay out. Ticked columns are added after ' + after + '. Headers are not renamed. A column already in the fixed start is kept once, in its place.'
+        : 'Every column in this file is already in the fixed start.')
+      + '</div>';
+    if (extras.length) html += pickListHtml('base', pi, extras, true, extraIdx);
   });
   html += '<div class="row"><button class="pbig" id="baseGo" type="button">Create master</button><span class="hint">This starts the file. It does not fill rows into a master that is already built.</span></div>';
   el.innerHTML = html;
@@ -5664,7 +5729,7 @@ function renderBasePreview(){
 async function onBaseFile(file){
   if (!file) return;
   if (!BASE_FILE_RE.test(file.name)) { toast('Choose a Master Data File (.xlsm or .xlsx).'); return; }
-  showLoading('Reading ' + file.name + '…', 'Columns and rows are copied as they are.');
+  showLoading('Reading ' + file.name + '…', 'The usual starter order is kept. Extra columns can be unticked.');
   try {
     const buf = await file.arrayBuffer();
     const r = await wreq({type:'readMdf', name:file.name, buf}, [buf]);
@@ -5685,11 +5750,12 @@ async function createMasterFromBase(){
   const P = V4.baseFile; if (!P || !P.plans.length) return;
   const chosen = [];
   P.plans.forEach((p, pi) => {
-    const cols = p.info.cols.filter((c, ci) => {
+    const picked = new Set();
+    p.info.cols.forEach((c, ci) => {
       const box = document.querySelector('[data-base-pick="' + pi + ':' + ci + '"]');
-      return box ? box.checked : true;
+      if (box && box.checked) picked.add(ci);
     });
-    if (cols.length) chosen.push({p, cols});
+    chosen.push({p, picked});
   });
   if (!chosen.length) { toast('Tick at least one column.'); return; }
   const project = ($('baseProj') && $('baseProj').value.trim()) || P.project || 'Project';
@@ -5698,37 +5764,39 @@ async function createMasterFromBase(){
   B.exactColumns = true;
   B.sheets = chosen.map(x => ({name:x.p.sheet, types:baseSheetTypes(x.p.sheet)}));
   B.photos = []; B.comps = {}; B.columns = {};
+  for (const x of chosen) B.photos.push(...starterPhotoGroups(x.p.sheet));
   B.ui = Object.assign({}, UI);
   const data = new Map();
   let nRows = 0;
   const notes = [];
   for (const x of chosen) {
     const p = x.p;
-    const info = {cols:x.cols, hidden:p.info.hidden || []};
-    const cols = baseColumnsFrom(info);
+    const built = baseMasterColumns(p.sheet, p.info.cols, x.picked, p.info.hidden || []);
+    const cols = built.cols;
+    const fixedN = starterFixedColumns(p.sheet).length;
     B.columns[p.sheet] = cols;
     const rows = p.rows.map(src => {
       const vals = {};
-      for (let i = 0; i < cols.length; i++) {
-        const v = src[info.cols[i].c];
-        if (v == null || (typeof v === 'string' && v.trim() === '')) continue;
-        vals[cols[i].key] = v;
-      }
+      built.srcByKey.forEach((srcC, key) => {
+        const v = src[srcC];
+        if (v == null || (typeof v === 'string' && v.trim() === '')) return;
+        vals[key] = v;
+      });
       return {vals, e:new Set(), ins:false};
     });
     data.set(p.sheet, rows);
     nRows += rows.length;
-    notes.push(p.sheet + ': ' + cols.length + ' columns in file order, ' + rows.length + ' rows');
+    notes.push(p.sheet + ': fixed start ' + fixedN + ' columns, then ' + (cols.length - fixedN) + ' extra columns after Comments and Hazards, ' + rows.length + ' rows');
   }
   MS = {B, data, raw:{header:[], rows:[]}, log:[], fileName:masterName(B, 1), bDirty:false, version:0, handle:null, fileSavedAt:0, vbaraw:V3.defaultVba ? V3.defaultVba.bin : null};
   if (MS.vbaraw) B.vba = Object.assign({}, V3.defaultVba.meta, {auto:true});
-  MS.log.push([nowStamp(), P.file, 'File base', '', nRows, nRows, nRows, 0, 0, 0, 0, 0, notes.join(' | ') + '. Headers kept. No columns added.', 'Existing file']);
+  MS.log.push([nowStamp(), P.file, 'File base', '', nRows, nRows, nRows, 0, 0, 0, 0, 0, notes.join(' | ') + '. Fixed start kept. Extra columns appended after Comments and Hazards. Headers kept.', 'Existing file']);
   book = null; T = null;
   await masterToGrid(B.sheets[0].name);
   setMasterDirty();
   setTab('grid');
   toast('Master created – ' + MS.fileName, 5000);
-  const el = $('basePreview'); if (el) el.innerHTML = '<div class="good"><b>Master created</b> for ' + esc(B.project) + '. It is the live master, saved as you go, and Save Master writes <b>' + esc(MS.fileName) + '</b>. Columns and rows were copied from ' + esc(P.file) + '.</div>';
+  const el = $('basePreview'); if (el) el.innerHTML = '<div class="good"><b>Master created</b> for ' + esc(B.project) + '. It is the live master, saved as you go, and Save Master writes <b>' + esc(MS.fileName) + '</b>. The usual starter order is kept, and ticked extra columns from ' + esc(P.file) + ' were added after Comments and Hazards.</div>';
   V4.baseFile = null;
 }
 multiDrop('baseDrop', fs => { const f = fs.find(x => BASE_FILE_RE.test(x.name)); if (f) onBaseFile(f); else toast('Choose a Master Data File (.xlsm or .xlsx).'); });
