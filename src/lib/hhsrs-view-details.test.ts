@@ -80,11 +80,19 @@ describe("correction preview markup", () => {
 describe("view details layout", () => {
   it("keeps the surveyor entry and the sent email side by side, with thumbnail photos", () => {
     const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
-    const pair = css.slice(css.indexOf(".vd-pair {"), css.indexOf(".vd-pair {") + 180);
+    const details = readFileSync("views/hhsrs-reporter/view-details.ejs", "utf8");
+    const pair = css.slice(css.indexOf(".vd-page .vd-pair {"), css.indexOf(".vd-page .vd-pair {") + 220);
     assert.match(pair, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/);
-    assert.match(css, /\.vd-shot img, \.vd-photo \{[^}]*width:\s*96px;[^}]*height:\s*72px;/s);
+    assert.match(css, /\.vd-page \.vd-shot img,[\s\S]*\.vd-photo \{[^}]*width:\s*96px;[^}]*height:\s*72px;/);
     assert.doesNotMatch(css, /\.vd-shot,\s*\.vd-photo\s*\{[^}]*max-width:\s*100%/s);
     const stack = css.slice(css.lastIndexOf("@media"));
     assert.doesNotMatch(stack, /max-width:\s*860px[\s\S]*\.vd-pair/);
+    const surveyor = details.slice(details.indexOf(">Surveyor entry<"), details.indexOf(">Email sent<"));
+    const email = details.slice(details.indexOf(">Email sent<"), details.indexOf(">Correction<"));
+    assert.match(surveyor, /class="photo-thumb"><img[\s\S]*?width="96" height="72"/);
+    assert.match(email, /class="vd-shot"/);
+    assert.match(email, /class="photo-thumb"><img class="vd-photo"[\s\S]*?width="96" height="72"/);
+    assert.ok(details.indexOf(">Surveyor entry<") < details.indexOf(">Email sent<"));
+    assert.ok(details.indexOf(">Email sent<") < details.indexOf(">Correction<"));
   });
 });

@@ -27,7 +27,7 @@
         <% if (details.photos && details.photos.length) { %>
           <div class="vd-shot">
             <% details.photos.forEach(function (photo) { %>
-              <% if (photo.url) { %><img src="<%= photo.url %>" alt=""><% } %>
+              <% if (photo.url) { %><span class="photo-thumb"><img src="<%= photo.url %>" alt="" width="96" height="72"></span><% } %>
             <% }) %>
           </div>
         <% } %>
@@ -41,9 +41,11 @@
           <div class="vd-sheet">
             <div class="vd-copy"><%- details.sent.copyHtml %></div>
             <% if (details.sent.photos && details.sent.photos.length) { %>
-              <% details.sent.photos.forEach(function (photo) { %>
-                <img class="vd-photo" src="<%= photo.url %>" alt="">
-              <% }) %>
+              <div class="vd-shot">
+                <% details.sent.photos.forEach(function (photo) { %>
+                  <span class="photo-thumb"><img class="vd-photo" src="<%= photo.url %>" alt="" width="96" height="72"></span>
+                <% }) %>
+              </div>
             <% } %>
             <div class="vd-sign"><%- signatureHtml %></div>
           </div>
@@ -65,9 +67,11 @@
             <% } %>
             <div class="vd-copy"><%- email.copyHtml %></div>
             <% if (email.photos && email.photos.length) { %>
-              <% email.photos.forEach(function (photo) { %>
-                <img class="vd-photo" src="<%= photo.url %>" alt="">
-              <% }) %>
+              <div class="vd-shot">
+                <% email.photos.forEach(function (photo) { %>
+                  <span class="photo-thumb"><img class="vd-photo" src="<%= photo.url %>" alt="" width="96" height="72"></span>
+                <% }) %>
+              </div>
             <% } %>
             <div class="vd-sign"><%- signatureHtml %></div>
           </div>
