@@ -62,6 +62,7 @@ describe("HHSRS email signature", () => {
         printLine,
       ].join("\n")
     );
+    assert.match(html, /<p style="margin:32px 0 16px;">Regards<\/p>/);
     const regardsAt = html.indexOf(">Regards<");
     const teamAt = html.indexOf(">HHSRS Reporting Team<");
     const addressAt = html.indexOf(">Savills, 33 Margaret Street, London, W1G 0JD<");
@@ -108,7 +109,7 @@ describe("HHSRS email signature", () => {
     });
     assert.deepEqual(names, { firstName: "Phil", fullName: "Phil Moon", missing: false });
     const text = composeEmailText("Dear Sir/Madam,", names);
-    assert.match(text, /^Dear Sir\/Madam,\n\nRegards\n\nHHSRS Reporting Team\n/);
+    assert.match(text, /^Dear Sir\/Madam,\n\n\nRegards\n\nHHSRS Reporting Team\n/);
     assert.doesNotMatch(text, /Phil/);
 
     const blankPersonnelName = resolveSenderSignature({
