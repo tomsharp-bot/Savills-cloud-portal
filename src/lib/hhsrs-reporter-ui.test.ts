@@ -736,6 +736,64 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: 12%; \}/);
   });
 
+  it("limits every date search year to 4 digits", () => {
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const layout = readFileSync("views/hhsrs-reporter/partials/layout-close.ejs", "utf8");
+    const appScripts = readFileSync("views/partials/app-scripts.ejs", "utf8");
+    const js = readFileSync("public/js/date-search-year.js", "utf8");
+    const form = readFileSync("views/hhsrs-site-form/form.ejs", "utf8");
+    const sample = readFileSync("views/partials/sample-analysis.ejs", "utf8");
+    for (const id of ["find-date", "ml-from", "ml-to"]) {
+      const tag = (id === "find-date" ? find : main).match(new RegExp(`<input\\b[^>]*\\bid="${id}"[^>]*>`));
+      assert.ok(tag, id);
+      assert.match(tag[0], /type="date"/, id);
+      assert.match(tag[0], /data-date-search/, id);
+    }
+    assert.match(layout, /\/js\/date-search-year\.js/);
+    assert.match(appScripts, /\/js\/date-search-year\.js/);
+    assert.match(js, /yearDigits >= 4/);
+    assert.match(js, /emptyYearDigits >= 4/);
+    assert.match(js, /preventDefault\(\)/);
+    assert.match(js, /data-date-search/);
+    assert.doesNotMatch(form, /data-date-search/);
+    assert.doesNotMatch(sample, /data-date-search/);
+  });
+
+  it("keeps Find and resend off the side email panel", () => {
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const js = readFileSync("public/js/hhsrs-find.js", "utf8");
+    const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    assert.doesNotMatch(find, /fr-drawer/);
+    assert.match(find, /Email resent and correction logged/);
+    assert.match(find, /id="btn-generate-correction"/);
+    assert.match(find, /id="fr-preview-wrap" hidden/);
+    assert.match(find, /Abandon amendment/);
+    assert.match(find, /I've checked the details/);
+    assert.match(find, /id="btn-send-correction"[^>]*disabled/);
+    assert.doesNotMatch(find, /<figcaption>/);
+    assert.match(js, /Please disregard our previous email, due to an error\. See correct details below\./);
+    assert.match(js, /CORRECTION: /);
+    assert.match(route, /resentNotice: justSent/);
+  });
+
+  it("fills a new email address from project stock and keeps dropdowns on the list", () => {
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    const office = readFileSync("src/lib/hhsrs-office-case.ts", "utf8");
+    const blank = review.slice(review.indexOf('id="rv-hazard"'), review.indexOf('id="rv-hazard"') + 500);
+    assert.match(review, /<select id="rv-hazard"/);
+    assert.doesNotMatch(review, /hazard-list|datalist/);
+    assert.match(review, /id="rv-address-stock"/);
+    assert.match(js, /\/review\/stock-lookup/);
+    assert.match(js, /Not on this project's stock list\. Type the address\./);
+    assert.match(route, /hhsrsReporterRouter\.get\("\/review\/stock-lookup"/);
+    assert.match(office, /Choose a hazard from the list\./);
+    assert.match(office, /Choose a rating from the list\./);
+    assert.ok(blank.includes("<select"));
+  });
+
   it("declares review draft storage keys before restore runs", () => {
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const draftsAt = js.indexOf('var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1"');

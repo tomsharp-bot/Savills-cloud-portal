@@ -101,7 +101,7 @@
       opt.textContent = r;
       sel.appendChild(opt);
     });
-    if (cur && opts.indexOf(cur) < 0) {
+    if (cfg.mode === "filled" && cur && opts.indexOf(cur) < 0) {
       var extra = document.createElement("option");
       extra.value = cur;
       extra.textContent = cur;
@@ -876,6 +876,73 @@
     if (cfg.initialProject && !projectSel.value) ensureProjectSelectValue(cfg.initialProject);
     applyProjectChange({ keepRating: keep, skipDraft: true });
   }
+
+  (function wireBlankStockAddress() {
+    if (cfg.mode === "filled") return;
+    var uprnEl = $("rv-uprn");
+    var addressEl = $("rv-address");
+    if (!uprnEl || !addressEl) return;
+    var fromStock = false;
+    var timer = null;
+    var seq = 0;
+    var note = $("rv-address-stock");
+    function setNote(text) {
+      if (!note) return;
+      note.textContent = text || "";
+      note.hidden = !text;
+    }
+    function clearStockFill() {
+      if (fromStock) {
+        addressEl.value = "";
+        fromStock = false;
+      }
+    }
+    function lookup() {
+      var project = ($("rv-project") && $("rv-project").value) || "";
+      var uprn = String(uprnEl.value || "").trim();
+      if (!project || !uprn) {
+        clearStockFill();
+        setNote("");
+        return;
+      }
+      var ticket = ++seq;
+      var base = String(cfg.base || "").replace(/\/$/, "");
+      fetch(base + "/review/stock-lookup?project=" + encodeURIComponent(project) + "&uprn=" + encodeURIComponent(uprn), {
+        headers: { Accept: "application/json" }
+      }).then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, data: data || {} }; }).catch(function () {
+          return { ok: false, data: {} };
+        });
+      }).then(function (result) {
+        if (ticket !== seq) return;
+        var match = result.ok && result.data && result.data.match;
+        if (!match || !match.line) {
+          clearStockFill();
+          setNote("Not on this project's stock list. Type the address.");
+          return;
+        }
+        var line = String(match.line);
+        var postcode = String(match.postcode || "").trim();
+        if (postcode && line.toLowerCase().indexOf(postcode.toLowerCase()) === -1) line += ", " + postcode;
+        addressEl.value = line;
+        fromStock = true;
+        setNote("");
+        scheduleReviewDraftSave();
+      }).catch(function () {
+        if (ticket !== seq) return;
+        clearStockFill();
+        setNote("Not on this project's stock list. Type the address.");
+      });
+    }
+    function schedule() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(lookup, 250);
+    }
+    uprnEl.addEventListener("input", schedule);
+    uprnEl.addEventListener("change", lookup);
+    addressEl.addEventListener("input", function () { fromStock = false; });
+    if ($("rv-project")) $("rv-project").addEventListener("change", lookup);
+  })();
 
   var callRefEl = $("rv-call-ref");
   if (callRefEl) {

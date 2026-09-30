@@ -18,8 +18,10 @@ import {
   safeId,
   safeStoredName,
   canonicalRestrictorLocations,
+  normalizeUprn,
   reporterCaseDetailExtras,
   splitCallNotes,
+  stockMatchFromRows,
   surveyorDetailLines,
 } from "../lib/hhsrs-site-form.js";
 import { copyLoggedHhsrsPhotos } from "../lib/hhsrs-completed-photos.js";
@@ -572,6 +574,56 @@ function reviewCaseClaimRequested(req: Request): boolean {
   return value === "1" || (Array.isArray(value) && value.includes("1"));
 }
 
+hhsrsReporterRouter.get("/review/stock-lookup", async (req: Request, res: Response) => {
+  const projectName = String(req.query.project || "").trim();
+  const uprn = normalizeUprn(String(req.query.uprn || ""));
+  if (!projectName) {
+    res.status(400).json({ error: "Choose a project first." });
+    return;
+  }
+  if (!uprn) {
+    res.status(400).json({ error: "Enter a UPRN." });
+    return;
+  }
+  const project = await prisma.project.findFirst({
+    where: { name: { equals: projectName, mode: "insensitive" }, stage: "current" },
+    select: { id: true },
+  });
+  if (!project) {
+    res.status(404).json({ error: "No match on this project's stock list — check the UPRN." });
+    return;
+  }
+  try {
+    const rows = await prisma.asset.findMany({
+      where: {
+        projectId: project.id,
+        omitAsset: false,
+        stockMissing: false,
+        uprn: { equals: uprn, mode: "insensitive" },
+      },
+      select: {
+        uprn: true,
+        kind: true,
+        number: true,
+        block: true,
+        street: true,
+        area: true,
+        city: true,
+        postcode: true,
+      },
+      take: 8,
+    });
+    const match = stockMatchFromRows(rows);
+    if (!match) {
+      res.status(404).json({ error: "No match on this project's stock list — check the UPRN." });
+      return;
+    }
+    res.json({ match });
+  } catch {
+    res.status(503).json({ error: "Could not look up that UPRN. Try again." });
+  }
+});
+
 hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
   const loaded = await loadCase(req.params.id);
   if (!loaded) {
@@ -643,9 +695,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
 
   const rows = matches.map((row) => ({
     ...row,
-    href: findUrl({ q, date, project, caseId: row.id }),
     amendUrl: findUrl({ q, date, project, caseId: row.id, view: "amend" }),
-    rowClass: caseId === row.id ? "is-sel" : "",
   }));
 
   let picked = caseId ? matches.find((row) => row.id === caseId) || null : null;
@@ -764,6 +814,7 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
     photos,
     sendConfig: publicSendSettings(false),
     findResend: Boolean(amend),
+    resentNotice: justSent,
     ...signature,
   });
 });
@@ -795,7 +846,14 @@ hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response)
     },
   });
   if (!result.ok) flashErr(req, result.error);
-  res.redirect(findUrl({ q, date, project, caseId: row.id, view: result.ok ? undefined : "amend", sent: result.ok ? "1" : undefined }));
+  res.redirect(findUrl({
+    q,
+    date,
+    project,
+    caseId: result.ok ? undefined : row.id,
+    view: result.ok ? undefined : "amend",
+    sent: result.ok ? "1" : undefined,
+  }));
 });
 
 function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {}): string {

@@ -2770,6 +2770,7 @@ body.hhsrs-reporter {
 .find-err { color: #b91c1c; font-weight: 700; font-size: 14px; margin: 0; }
 .find-ok { background: #dcfce7; border: 1px solid #86efac; color: #14532d; border-radius: 10px; padding: 14px 16px; }
 .find-ok b { display: block; font-size: 18px; margin-bottom: 4px; }
+.find-ok b:last-child { margin-bottom: 0; }
 .find-ok p { margin: 0; }
 .find-info { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; }
 .find-info b { display: block; margin-bottom: 4px; }

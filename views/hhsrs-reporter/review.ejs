@@ -100,7 +100,8 @@
           </div>
           <div>
             <label for="rv-address">Address</label>
-            <input id="rv-address" type="text" value="<%= isFilled ? (row.fullAddress + (row.postcode ? ', ' + row.postcode : '')) : '' %>" <%= isFilled ? "readonly" : "" %> placeholder="Flat / house address" autocomplete="off" />
+            <input id="rv-address" type="text" value="<%= isFilled ? (row.fullAddress + (row.postcode ? ', ' + row.postcode : '')) : '' %>" <%= isFilled ? "readonly" : "" %> placeholder="<%= isFilled ? 'Flat / house address' : 'Filled from this project’s stock, or type it if the UPRN is not listed' %>" autocomplete="off" />
+            <% if (!isFilled) { %><p class="review-project-hint" id="rv-address-stock" hidden></p><% } %>
             <% if (isFilled && row.addressSource === "manual") { %>
               <p class="address-typed-note" id="address-typed-note">Address typed by surveyor</p>
             <% } %>
@@ -111,10 +112,10 @@
               <% if (isFilled) { %>
                 <input id="rv-hazard" type="text" value="<%= row.category %>" readonly />
               <% } else { %>
-                <input id="rv-hazard" type="text" placeholder="e.g. Electrical Hazards" autocomplete="off" list="hazard-list" />
-                <datalist id="hazard-list">
-                  <% categories.forEach((c) => { %><option value="<%= c %>"></option><% }) %>
-                </datalist>
+                <select id="rv-hazard" autocomplete="off">
+                  <option value="">Select…</option>
+                  <% categories.forEach((c) => { %><option value="<%= c %>"><%= c %></option><% }) %>
+                </select>
               <% } %>
             </div>
             <div>

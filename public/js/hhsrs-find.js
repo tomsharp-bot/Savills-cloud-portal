@@ -85,10 +85,22 @@
     if (send) send.disabled = !(checked && checked.checked);
   }
   if (checked) checked.addEventListener("change", syncSend);
+  var previewWrap = $("fr-preview-wrap");
+  var generate = $("btn-generate-correction");
+  function showPreview() {
+    if (previewWrap) previewWrap.hidden = false;
+    paint();
+    if (previewWrap && previewWrap.scrollIntoView) previewWrap.scrollIntoView({ block: "start" });
+  }
+  if (generate) generate.addEventListener("click", showPreview);
   document.querySelectorAll("#fr-amend input, #fr-amend select").forEach(function (el) {
-    if (el.id === "fr-checked") return;
-    el.addEventListener("input", paint);
-    el.addEventListener("change", paint);
+    if (el.id === "fr-checked" || el.id === "btn-generate-correction") return;
+    el.addEventListener("input", function () {
+      if (previewWrap && !previewWrap.hidden) paint();
+    });
+    el.addEventListener("change", function () {
+      if (previewWrap && !previewWrap.hidden) paint();
+    });
   });
   var form = $("rv-send-form");
   if (form) {
@@ -100,5 +112,4 @@
     });
   }
   syncSend();
-  paint();
 })();
