@@ -131,6 +131,11 @@
     <div id="fr-preview-wrap" hidden>
       <article class="sent-card" id="fr-preview" aria-label="Correction email">
         <h2 id="fr-preview-subject"><%= amend.subject %></h2>
+        <div class="sent-parties" id="fr-preview-parties">
+          <div><span>From</span> hhsrs@savillshousing.co.uk</div>
+          <div><span>To</span> <%= amend.to %></div>
+          <% if (String(amend.cc || "").trim()) { %><div><span>Cc</span> <%= amend.cc %></div><% } %>
+        </div>
         <div class="sent-body">
           <div class="sent-copy" id="fr-preview-copy"><%- amend.previewHtml %></div>
           <div class="sent-sign" id="rv-signature-preview"><%- typeof signatureHtml !== "undefined" ? signatureHtml : "" %></div>

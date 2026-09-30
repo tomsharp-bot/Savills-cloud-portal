@@ -1543,17 +1543,8 @@ body.hhsrs-reporter {
   text-overflow: ellipsis;
   max-width: 100%;
 }
-.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: auto; }
-.hhsrs-reporter #last-actioned-table { min-width: 1420px; }
-.hhsrs-reporter #last-actioned-table col.c-proj { width: 110px; }
-.hhsrs-reporter #last-actioned-table col.c-addr { width: 220px; }
-.hhsrs-reporter #last-actioned-table col.c-ph { width: 72px; }
-.hhsrs-reporter #last-actioned-table col.c-uprn { width: 120px; }
-.hhsrs-reporter #last-actioned-table col.c-surv { width: 110px; }
-.hhsrs-reporter #last-actioned-table col.c-cat { width: 300px; }
-.hhsrs-reporter #last-actioned-table col.c-rate { width: 190px; }
-.hhsrs-reporter #last-actioned-table col.c-when { width: 168px; }
-.hhsrs-reporter #last-actioned-table col.c-act { width: 130px; }
+.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: hidden; max-width: 100%; }
+.hhsrs-reporter #last-actioned-table { width: 100%; min-width: 0; }
 .hhsrs-reporter #last-actioned-table thead th:nth-child(6),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(7),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(8),
@@ -1562,6 +1553,11 @@ body.hhsrs-reporter {
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8),
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8) > span {
   white-space: nowrap;
+}
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(6),
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(7) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
@@ -3377,6 +3373,20 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
   border-bottom: 1px solid var(--border);
 }
 .sent-sec { margin: 0 0 8px; }
+.sent-parties, .vd-parties {
+  margin: 0 16px 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--navy);
+}
+.sent-parties div + div, .vd-parties div + div { margin-top: 2px; }
+.sent-parties span, .vd-parties span {
+  display: inline-block;
+  min-width: 3.2rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.vd-parties { margin: 0 0 0.7rem; }
 .sent-body {
   margin: 0 16px; background: #f7f9fb; border: 1px solid #d5dee8; border-radius: 10px;
   padding: 14px 16px; font-size: 14px; line-height: 1.5;
@@ -3426,7 +3436,8 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
   font-weight: 600;
 }
 .vd-sub { margin: 0 0 0.85rem; color: var(--muted); }
-.vd-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.hhsrs-reporter .vd-page .vd-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; width: 100%; }
+.hhsrs-reporter .vd-page .vd-col { min-width: 0; }
 .vd-box, .vd-email { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; }
 .vd-fields { margin: 0; }
 .vd-fields > div { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.35rem 0.75rem; padding: 0.28rem 0; }
@@ -3437,8 +3448,20 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
 .vd-copy p { margin: 0 0 0.55rem; }
 .vd-copy ul { margin: 0 0 0.55rem; padding-left: 1.1rem; }
 .vd-copy li.changed { font-weight: 700; }
-.vd-shot, .vd-photo { display: block; max-width: 100%; margin-top: 0.6rem; border-radius: 8px; }
-.vd-sign { margin-top: 0.8rem; }
-@media (max-width: 860px) {
-  .vd-pair { grid-template-columns: 1fr; }
+.hhsrs-reporter .vd-page .vd-shot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0.75rem; }
+.hhsrs-reporter .vd-page .vd-shot .photo-thumb { width: 96px; height: 72px; flex: 0 0 96px; overflow: hidden; }
+.hhsrs-reporter .vd-page .vd-shot img,
+.hhsrs-reporter .vd-page .vd-photo {
+  display: block;
+  width: 96px;
+  height: 72px;
+  max-width: 96px;
+  max-height: 72px;
+  object-fit: cover;
+  margin: 0;
+  border-radius: 8px;
+}
+.hhsrs-reporter .vd-page .vd-sign { margin-top: 0.8rem; }
+@media (max-width: 640px) {
+  .hhsrs-reporter .vd-page .vd-pair { grid-template-columns: minmax(0, 1fr); }
 }
