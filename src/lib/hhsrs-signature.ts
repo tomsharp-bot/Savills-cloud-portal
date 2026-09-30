@@ -222,9 +222,8 @@ function emailPhotoTable(photos: readonly EmailCardPhoto[]): string {
   if (!photos.length) return "";
   const cells = photos
     .map((photo) => {
-      const name = escapeHtml(photo.name || "Photo");
       const src = escapeHtml(photo.src);
-      return `<td style="padding:0 10px 0 0;vertical-align:top;"><img src="${src}" alt="${name}" width="96" height="72" style="width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #d5dee8;display:block;" /><div style="margin:4px 0 0;font-size:11px;line-height:1.3;color:#5c6b7a;">${name}</div></td>`;
+      return `<td style="padding:0 10px 0 0;vertical-align:top;"><img src="${src}" alt="" width="96" height="72" style="width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #d5dee8;display:block;" /></td>`;
     })
     .join("");
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px;border-collapse:collapse;"><tr>${cells}</tr></table>`;
@@ -238,7 +237,7 @@ export function composeEmailText(body: string, names: Pick<SenderSignature, "fir
 
 /**
  * Client email: the same grey card as Find and resend.
- * Photos are pictures under the signature. The short signature has no personal name and no NOTICE.
+ * Photos are pictures under the signature, with no filename caption. The short signature has no personal name and no NOTICE.
  */
 export function composeEmailHtml(
   body: string,

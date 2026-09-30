@@ -113,10 +113,12 @@
   function setExtraVisibility(projectCfg) {
     var extras = (projectCfg && projectCfg.extras) || {};
     var nodes = document.querySelectorAll("#rv-case-form .project-extra");
+    // No project collects a suspected cause on the site form. Show the office
+    // line only when a cause is already stored, so an empty one is not a blank row.
+    var causeValue = String((($("rv-cause") && $("rv-cause").value) || "")).replace(/^\s+|\s+$/g, "");
     for (var i = 0; i < nodes.length; i++) {
       var key = nodes[i].getAttribute("data-extra");
-      // Suspected cause is collected on every project. Do not hide it behind extras.cause.
-      nodes[i].hidden = key === "cause" ? false : !extras[key];
+      nodes[i].hidden = key === "cause" ? !causeValue : !extras[key];
     }
     var vulnRule = $("rv-vuln-rule");
     var includeVuln = $("rv-include-vuln");
@@ -162,6 +164,23 @@
     for (var i = 0; i < nodes.length; i++) nodes[i].inert = true;
   }
 
+  function syncEmailPanelLock() {
+    var panel = document.querySelector(".email-draft-panel");
+    if (!panel || !panel.classList) return;
+    if (sentStage()) {
+      panel.classList.remove("is-pre-generate");
+      lockSentEmailFields();
+      return;
+    }
+    var waiting = !emailGenerated;
+    panel.classList.toggle("is-pre-generate", waiting);
+    if (!panel.querySelectorAll) return;
+    var nodes = panel.querySelectorAll(
+      ".field-locked, .field-with-copy, .attach-block, .signature-added-note, .email-photo-tools"
+    );
+    for (var i = 0; i < nodes.length; i++) nodes[i].inert = waiting;
+  }
+
   function clearEmailDraft() {
     if (sentStage()) return;
     ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"].forEach(function (id) {
@@ -189,7 +208,7 @@
     var fields = $("rv-case-fields");
     var hint = $("rv-project-hint");
     var generateBtn = $("btn-generate-email");
-    var genRow = document.querySelector("#rv-case-panel .generate-email-row");
+    var genRow = document.querySelector("#rv-email-generate-row");
     if (fields) {
       // After send, CSS supplies the same grey as Generate email. inert keeps the
       // fields read-only without the extra browser disabled fade.
@@ -421,6 +440,7 @@
     var amend = $("btn-amend-case");
     if (amend) amend.hidden = !caseLocked;
     setEmailPhotoTools(caseLocked);
+    syncEmailPanelLock();
   }
 
   function amendCaseDetails() {
@@ -1408,10 +1428,10 @@
     if (emptyHint) emptyHint.hidden = hasEmail;
     var emailBadge = $("rv-email-badge");
     if (emailBadge) emailBadge.textContent = hasEmail ? "Generated" : "Draft";
+    emailGenerated = hasEmail;
     caseLocked = !!draft.caseDetailsLocked;
     syncCaseLock();
     setReviewDraftStatus(true);
-    if (hasEmail) emailGenerated = true;
     syncSendButton();
     return true;
   }
@@ -1426,16 +1446,9 @@
       skipDraftSave = false;
       return false;
     }
-    if (!cfg.caseId) {
-      var last = getReviewLastKey();
-      var ids = Array.isArray(cfg.waitingIds) ? cfg.waitingIds : [];
-      if (last && last !== "blank" && ids.indexOf(last) >= 0) {
-        window.location.replace((cfg.base || "/HHSRSreporter") + "/review/" + encodeURIComponent(last));
-        return true;
-      }
-      if (last && last !== "blank") setReviewLastKey("blank");
-      return false;
-    }
+  if (!cfg.caseId) {
+    return false;
+  }
     setReviewLastKey(cfg.caseId);
     return false;
   }

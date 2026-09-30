@@ -596,8 +596,13 @@
       strong.textContent = String(count);
     }
     var dashboard = document.querySelector('#side-tabs a.tab-link[title="Dashboard"]');
-    setCountBadge(dashboard, "tab-badge", count);
-    markClear(dashboard, clear);
+    if (dashboard && dashboard.classList) {
+      dashboard.classList.remove("is-clear");
+      var dashBadge = dashboard.querySelector(".tab-badge");
+      if (dashBadge && dashBadge.parentNode) dashBadge.parentNode.removeChild(dashBadge);
+      if (clear) dashboard.classList.remove("needs-attention");
+      else dashboard.classList.add("needs-attention");
+    }
     var steps = document.querySelectorAll(".step-tabs a");
     for (i = 0; i < steps.length; i++) {
       if ((steps[i].textContent || "").indexOf("Pending Issues") !== -1) {

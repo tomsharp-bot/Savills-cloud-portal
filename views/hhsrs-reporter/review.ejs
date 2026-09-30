@@ -177,7 +177,7 @@
             </div>
           </div>
 
-          <div class="project-extra" data-extra="cause">
+          <div class="project-extra" data-extra="cause" <%= isFilled && String(row.suspectedCause || "").trim() ? "" : "hidden" %>>
             <label for="rv-cause">Suspected cause · if reported</label>
             <input id="rv-cause" name="suspectedCause" type="text" value="<%= isFilled ? row.suspectedCause : '' %>" placeholder="Only if the surveyor reported a cause" autocomplete="off" />
             <div class="check-row">
@@ -237,22 +237,26 @@
             </div>
           </div>
         </fieldset>
-        <div class="generate-email-row">
-          <button type="button" class="btn btn-primary" id="btn-generate-email" <%= isFilled && !sentEmail ? "" : "disabled" %>>Generate email</button>
+        <div class="case-actions">
+          <div class="generate-email-row case-save-row">
+            <% if (isFilled) { %>
+              <button type="submit" class="btn btn-ghost" <%= sentEmail ? "disabled" : "" %>>Save review</button>
+            <% } %>
+          </div>
           <button type="button" class="btn btn-ghost" id="btn-amend-case" hidden>Amend case details</button>
-          <% if (isFilled) { %>
-            <button type="submit" class="btn btn-ghost" <%= sentEmail ? "disabled" : "" %>>Save review</button>
-          <% } %>
-          <span class="review-project-hint" id="rv-generate-note">Choose a project, complete the case details, then generate the email.</span>
         </div>
       </div>
       <% if (isFilled) { %></form><% } %>
     </section>
 
-    <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : '' %>" aria-label="Client Email Draft">
-      <div class="panel-head neutral">
+    <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : ' is-pre-generate' %>" aria-label="Client Email Draft">
+      <div class="panel-head review-head">
         <h2>Client Email Draft</h2>
         <span class="count <%= sentEmail ? 'count-dealt' : 'count-review' %>" id="rv-email-badge"><%= sentEmail ? "Sent" : "Draft" %></span>
+      </div>
+      <div class="generate-email-row" id="rv-email-generate-row">
+        <button type="button" class="btn btn-primary" id="btn-generate-email" <%= isFilled && !sentEmail ? "" : "disabled" %>>Generate email</button>
+        <span class="review-project-hint" id="rv-generate-note">Choose a project, complete the case details, then generate the email.</span>
       </div>
       <p class="review-draft-status" id="rv-draft-status" hidden></p>
       <% if (draftError) { %><p class="flash flash-err"><%= draftError %></p><% } %>
@@ -325,7 +329,7 @@
           </div>
         </div>
         <p class="signature-added-note" id="rv-signature-note">Signature added when sent</p>
-        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email below Case details.</p>
+        <p class="review-project-hint email-empty-hint" id="rv-email-empty-hint" <%= sentEmail ? "hidden" : "" %>>Fill case details, then click Generate email.</p>
       </form>
     </section>
   </div>

@@ -144,7 +144,7 @@ describe("HHSRS Reporter auth and queue", () => {
     assert.match(blank.body, /Create new email/);
     assert.match(blank.body, /id="btn-generate-email"/);
     assert.match(blank.body, /id="btn-amend-case"/);
-    assert.match(blank.body, /Fill case details, then click Generate email below Case details/);
+    assert.match(blank.body, /Fill case details, then click Generate email/);
     assert.match(blank.body, /id="rv-email-photos"[^>]*hidden/);
     assert.doesNotMatch(blank.body, /class="side-brand"/);
     assert.doesNotMatch(blank.body, /Send pack/);
@@ -433,7 +433,7 @@ describe("HHSRS Reporter auth and queue", () => {
       const blockedPage = await request(app, "GET", blocked.location, { cookie: blockedCookie });
       assert.match(blockedPage.body, /Change this on Project Progress/);
 
-      const review = await request(app, "GET", `/HHSRSreporter/review/${waiting.id}`, { cookie: blockedCookie });
+      const review = await request(app, "GET", `/HHSRSreporter/review/${waiting.id}?claim=1`, { cookie: blockedCookie });
       assert.equal(review.status, 200);
       assert.match(review.body, /Abandon claim — return to pending/);
       assert.match(review.body, /id="hhsrs-bcc"/);

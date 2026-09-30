@@ -109,7 +109,10 @@ describe("HHSRS project overview from Project Progress", () => {
 
     assert.match(css, /\.po-table\s*\{[\s\S]*?table-layout:\s*fixed/);
     assert.match(css, /#po-project-select\s*\{[\s\S]*?width:\s*18rem/);
-    assert.match(css, /\.side-tabs \.tab-link\.active\s*\{[\s\S]*?background:\s*var\(--savills-yellow\)/);
+    assert.match(css, /\.side-tabs \.tab-link\.active\s*\{[^}]*background:\s*#12283d/);
+    assert.match(css, /\.side-tabs \.tab-link\.active\s*\{[^}]*font-weight:\s*600/);
+    assert.doesNotMatch(css, /\.side-tabs \.tab-link\.active\s*\{[^}]*background:\s*var\(--savills-yellow\)/);
+    assert.doesNotMatch(css, /\.side-tabs \.tab-link\.active\s*\{[^}]*font-weight:\s*700/);
 
     const saxon = REPORTER_DEMO_PROJECTS.find((project) => project.name === "Saxon Weald 2026 Phase 4");
     assert.match(saxon?.hint || "", /damp and mould/);
@@ -117,6 +120,10 @@ describe("HHSRS project overview from Project Progress", () => {
     assert.equal(
       HHSRS_PROJECT_ROSTER.some((project) => /D&M/.test(project.hint)),
       false
+    );
+    assert.equal(
+      HHSRS_PROJECT_ROSTER.every((project) => project.extras.cause === false),
+      true
     );
   });
 });

@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
+import {
+  HHSRS_SITE_FORM_NEW_RATINGS,
+  HHSRS_SITE_FORM_RATINGS,
+  isHhsrsCategory,
+} from "./hhsrs-categories.js";
 import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import {
   defaultSitePhotoStorage,
@@ -230,6 +234,12 @@ export type HhsrsFormValues = {
   callRefBlankReason: string;
   /** Draft-only. Extra detail. Required when the blank reason is Other. */
   callUnreachedNote: string;
+  /** Required on Vico. Empty for every other project. */
+  vulnerabilities: string;
+  /** MTVH window restrictors (Falling Between Levels). Empty otherwise. */
+  restrictorMissingCount: string;
+  restrictorLocations: string;
+  restrictorMaterial: string;
 };
 
 /** Which Extra details blocks apply to a live project name. */
@@ -238,6 +248,11 @@ export type SiteFormProjectFlags = {
   onward: boolean;
   saxon: boolean;
   online: boolean;
+  /** Vico only. Resident vulnerabilities are required on the site form. */
+  vulnerabilities: boolean;
+  /** Names that resolve to MTVH. */
+  mtvh: boolean;
+  ratingScheme: "NEW" | "OLD";
 };
 
 export function siteFormProjectFlags(projectName: string): SiteFormProjectFlags {
@@ -246,8 +261,75 @@ export function siteFormProjectFlags(projectName: string): SiteFormProjectFlags 
     calls: Boolean(roster?.extras.calls),
     onward: Boolean(roster?.extras.onward),
     saxon: Boolean(roster && /^saxon\b/i.test(roster.name)),
-    online: Boolean(roster?.extras.online_form),
+    // Cornwall’s office online-form note stays in the Reporter. The site form does not show it.
+    online: false,
+    vulnerabilities: Boolean(roster?.extras.vulnerabilities),
+    mtvh: Boolean(roster && /^MTVH\b/i.test(roster.name)),
+    ratingScheme: roster?.ratingScheme === "OLD" ? "OLD" : "NEW",
   };
+}
+
+/** New-scheme rating that asks MTVH for a client call reference. */
+export const HHSRS_EMERGENCY_RISK_RATING = "High - Emergency risk";
+
+/**
+ * Missing window restrictors use the existing hazard Falling Between Levels
+ * (falls between levels). There is no separate window-restrictor category.
+ */
+export const WINDOW_RESTRICTOR_CATEGORY = "Falling Between Levels";
+
+export const WINDOW_RESTRICTOR_LOCATIONS = [
+  "Hall",
+  "Kitchen",
+  "Lounge",
+  "Other GF",
+  "Landing",
+  "Bedroom 1",
+  "Bedroom 2",
+  "Bedroom 3",
+  "Bathroom",
+] as const;
+
+export const WINDOW_RESTRICTOR_MATERIALS = ["PVC", "Timber", "Metal"] as const;
+
+/** Always-on for call projects. MTVH only when the rating is High - Emergency risk. */
+export function siteFormShowsCallReference(projectName: string, rating: string): boolean {
+  const flags = siteFormProjectFlags(projectName);
+  if (flags.calls) return true;
+  return flags.mtvh && String(rating || "") === HHSRS_EMERGENCY_RISK_RATING;
+}
+
+export function siteFormShowsWindowRestrictor(projectName: string, category: string): boolean {
+  return siteFormProjectFlags(projectName).mtvh && String(category || "") === WINDOW_RESTRICTOR_CATEGORY;
+}
+
+export function canonicalRestrictorLocations(value: unknown): string {
+  const parts = Array.isArray(value) ? value : String(value ?? "").split(",");
+  const allowed = new Set<string>(WINDOW_RESTRICTOR_LOCATIONS);
+  const chosen = new Set<string>();
+  for (const part of parts) {
+    const text = String(part || "").trim();
+    if (allowed.has(text)) chosen.add(text);
+  }
+  return WINDOW_RESTRICTOR_LOCATIONS.filter((loc) => chosen.has(loc)).join(", ");
+}
+
+/** Damp and mould is the only category that asks Vico for a suspected cause. */
+export function isDampMouldCategory(category: string): boolean {
+  const text = String(category || "");
+  return /damp/i.test(text) && /mould|mold/i.test(text);
+}
+
+/** Vico shows suspected cause only after damp and mould is selected. It is required then. */
+export function siteFormShowsSuspectedCause(projectName: string, category: string): boolean {
+  return siteFormProjectFlags(projectName).vulnerabilities && isDampMouldCategory(category);
+}
+
+/** Rating dropdown for the surveyor form. Old-scheme projects keep the existing list. */
+export function siteFormRatingChoices(projectName: string): readonly string[] {
+  return siteFormProjectFlags(projectName).ratingScheme === "OLD"
+    ? HHSRS_SITE_FORM_RATINGS
+    : HHSRS_SITE_FORM_NEW_RATINGS;
 }
 
 function readFlag(body: Record<string, unknown>, name: string): boolean {
@@ -326,6 +408,10 @@ export function buildThanksSummary(
     clientCallReference?: string | null;
     callOutcome?: string | null;
     callNotes?: string | null;
+    vulnerabilities?: string | null;
+    restrictorMissingCount?: string | null;
+    restrictorLocations?: string | null;
+    restrictorMaterial?: string | null;
     photoPaths: unknown;
   },
   photoUrl: (fileName: string) => string
@@ -350,6 +436,16 @@ export function buildThanksSummary(
   const notes: ThanksField[] = [];
   const cause = String(row.suspectedCause || "").trim();
   if (cause) notes.push({ label: "Suspected cause", value: cause });
+  const vulnerabilities = String(row.vulnerabilities || "").trim();
+  if (vulnerabilities) notes.push({ label: "Vulnerabilities", value: vulnerabilities });
+  const missingRestrictors = String(row.restrictorMissingCount || "").trim();
+  if (missingRestrictors) {
+    notes.push({ label: "Window restrictors missing", value: missingRestrictors });
+    const locations = String(row.restrictorLocations || "").trim();
+    if (locations) notes.push({ label: "Location", value: locations });
+    const material = String(row.restrictorMaterial || "").trim();
+    if (material) notes.push({ label: "Window material", value: material });
+  }
   const other = String(row.otherDetails || "").trim();
   if (other) notes.push({ label: "Other details", value: other });
   const flags = siteFormProjectFlags(row.projectName);
@@ -409,6 +505,10 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     callUnreached: false,
     callRefBlankReason: "",
     callUnreachedNote: "",
+    vulnerabilities: "",
+    restrictorMissingCount: "",
+    restrictorLocations: "",
+    restrictorMaterial: "",
   };
 }
 
@@ -442,6 +542,10 @@ export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues 
     callUnreached: readFlag(body, "callUnreached"),
     callRefBlankReason,
     callUnreachedNote,
+    vulnerabilities: field("vulnerabilities"),
+    restrictorMissingCount: field("restrictorMissingCount"),
+    restrictorLocations: canonicalRestrictorLocations(body.restrictorLocations),
+    restrictorMaterial: field("restrictorMaterial"),
   };
 }
 
@@ -494,12 +598,22 @@ export function siteFormSectionState(
             String(values.postcode || "").trim() &&
             values.addressConfirmed)
     );
+  const showRestrictor = siteFormShowsWindowRestrictor(projectName, values.category);
+  const restrictorOk =
+    !showRestrictor ||
+    Boolean(
+      String(values.restrictorMissingCount || "").trim() &&
+        canonicalRestrictorLocations(values.restrictorLocations) &&
+        (WINDOW_RESTRICTOR_MATERIALS as readonly string[]).includes(String(values.restrictorMaterial || "").trim())
+    );
   const hazard =
     property &&
-    Boolean(String(values.category || "").trim() && String(values.rating || "").trim() && String(values.comment || "").trim());
+    Boolean(String(values.category || "").trim() && String(values.rating || "").trim() && String(values.comment || "").trim()) &&
+    restrictorOk;
   const flags = siteFormProjectFlags(projectName);
+  const showCalls = siteFormShowsCallReference(projectName, values.rating);
   let callOk = true;
-  if (flags.calls) {
+  if (showCalls) {
     const reason = String(values.callRefBlankReason || "").trim();
     const notes = String(values.callUnreachedNote || "").trim();
     if (values.callUnreached) {
@@ -508,7 +622,10 @@ export function siteFormSectionState(
       callOk = Boolean(String(values.clientCallReference || "").trim());
     }
   }
-  const extras = hazard && callOk;
+  const vulnOk = !flags.vulnerabilities || Boolean(String(values.vulnerabilities || "").trim());
+  const causeOk =
+    !siteFormShowsSuspectedCause(projectName, values.category) || Boolean(String(values.suspectedCause || "").trim());
+  const extras = hazard && callOk && vulnOk && causeOk;
   return { visit, property, hazard, extras };
 }
 
@@ -546,15 +663,20 @@ export function validateHhsrsForm(
   }
   if (!values.category) errors.category = "Select an HHSRS category.";
   else if (!isHhsrsCategory(values.category)) errors.category = "Select a valid HHSRS category.";
+  const ratingChoices = siteFormRatingChoices(activeProject?.name || "");
   if (!values.rating) errors.rating = "Select a rating.";
-  else if (!isHhsrsSiteFormRating(values.rating)) errors.rating = "Select a rating from the list.";
+  else if (!ratingChoices.includes(values.rating)) errors.rating = "Select a rating from the list.";
   if (!values.comment) errors.comment = "Enter a comment.";
-  const flags = siteFormProjectFlags(activeProject?.name || "");
+  const projectName = activeProject?.name || "";
+  const flags = siteFormProjectFlags(projectName);
+  const showCalls = siteFormShowsCallReference(projectName, values.rating);
+  const showCause = siteFormShowsSuspectedCause(projectName, values.category);
+  const showRestrictor = siteFormShowsWindowRestrictor(projectName, values.category);
   const callUnreached = Boolean(values.callUnreached);
   const callReason = String(values.callRefBlankReason || "").trim();
   const callNote = String(values.callUnreachedNote || "").trim();
   let skippedCall = false;
-  if (flags.calls) {
+  if (showCalls) {
     if (callUnreached) {
       if (!isCallRefBlankReason(callReason)) {
         errors.callRefBlankReason = "Select why the call reference is blank.";
@@ -565,6 +687,22 @@ export function validateHhsrsForm(
       }
     } else if (!String(values.clientCallReference || "").trim()) {
       errors.clientCallReference = "Enter the client call reference, or say why it is blank.";
+    }
+  }
+  if (flags.vulnerabilities && !String(values.vulnerabilities || "").trim()) {
+    errors.vulnerabilities = "Enter the vulnerabilities.";
+  }
+  if (showCause && !String(values.suspectedCause || "").trim()) {
+    errors.suspectedCause = "Enter the suspected cause.";
+  }
+  const restrictorMissingCount = showRestrictor ? String(values.restrictorMissingCount || "").trim() : "";
+  const restrictorLocations = showRestrictor ? canonicalRestrictorLocations(values.restrictorLocations) : "";
+  const restrictorMaterial = showRestrictor ? String(values.restrictorMaterial || "").trim() : "";
+  if (showRestrictor) {
+    if (!restrictorMissingCount) errors.restrictorMissingCount = "Enter how many are missing.";
+    if (!restrictorLocations) errors.restrictorLocations = "Select at least one location.";
+    if (!(WINDOW_RESTRICTOR_MATERIALS as readonly string[]).includes(restrictorMaterial)) {
+      errors.restrictorMaterial = "Select the window material.";
     }
   }
   if (Object.keys(errors).length) return { ok: false, errors };
@@ -578,12 +716,16 @@ export function validateHhsrsForm(
         values.addressSource === ADDRESS_SOURCE_MANUAL
           ? composeManualFullAddress(values.addressLine1, values.addressLine2, values.town)
           : values.fullAddress,
-      clientCallReference: skippedCall ? "" : String(values.clientCallReference || "").trim(),
-      suspectedCause: String(values.suspectedCause || "").trim(),
+      clientCallReference: showCalls && !skippedCall ? String(values.clientCallReference || "").trim() : "",
+      suspectedCause: showCause ? String(values.suspectedCause || "").trim() : "",
+      vulnerabilities: flags.vulnerabilities ? String(values.vulnerabilities || "").trim() : "",
+      restrictorMissingCount,
+      restrictorLocations,
+      restrictorMaterial,
       otherDetails: String(values.otherDetails || "").trim(),
-      callUnreached: skippedCall,
-      callRefBlankReason: skippedCall ? callReason : "",
-      callUnreachedNote: skippedCall ? callNote : "",
+      callUnreached: showCalls && skippedCall,
+      callRefBlankReason: showCalls && skippedCall ? callReason : "",
+      callUnreachedNote: showCalls && skippedCall ? callNote : "",
       addressConfirmed: true,
       cat1Confirmed: false,
       projectName: activeProject!.name,

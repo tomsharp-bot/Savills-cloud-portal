@@ -830,6 +830,7 @@ export function projectRequiresCallReference(projectName: string): boolean {
 
 const WHY_CALL_REFERENCE_BLANK = /^•\s*Why the call reference is blank\s*:/i;
 const CALL_REFERENCE_LINE = /^•\s*(?:Client call reference|Onward call reference|Call reference)\s*:/i;
+const EMPTY_CAUSE_LINE = /^•\s*Cause\s*:\s*$/i;
 
 /**
  * Drop a blank-call explanation, and drop any call-reference line when this
@@ -841,6 +842,7 @@ export function prepareClientEmailBody(projectName: string, body: string): strin
     .split("\n")
     .filter((line) => {
       const trimmed = line.trim();
+      if (EMPTY_CAUSE_LINE.test(trimmed)) return false;
       if (WHY_CALL_REFERENCE_BLANK.test(trimmed)) return false;
       if (!keepCallReference && CALL_REFERENCE_LINE.test(trimmed)) return false;
       return true;

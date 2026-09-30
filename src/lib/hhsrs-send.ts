@@ -268,9 +268,9 @@ export type OutboundEmail = {
   text: string;
   html: string;
   messageId: string;
-  /** Case photos as file attachments. The same pictures are also inline under the signature. */
+  /** Case photo bytes. Sent inline in the body, not as file attachments. */
   attachments: OutboundAttachment[];
-  /** Copies of the case photos, referenced from the HTML card. Not the signature logo. */
+  /** Those photos, referenced from the HTML card under the signature. Not the signature logo. */
   inlinePhotos?: InlineEmailPhoto[];
 };
 

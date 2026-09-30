@@ -5,12 +5,13 @@
   const action = typeof pendingAction === "string" ? pendingAction : "review";
   const foot = typeof pendingFoot === "string" ? pendingFoot : "Newest first";
   const showPhotoCount = typeof pendingShowPhotoCount !== "undefined" && pendingShowPhotoCount === true;
+  const showReference = typeof pendingShowReference === "undefined" || pendingShowReference !== false;
   const sortColumns = typeof pendingSortColumns !== "undefined" && Array.isArray(pendingSortColumns) ? pendingSortColumns : [];
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
-  <table class="landing-table pending-issues-table" id="<%= tableId %>">
+  <table class="landing-table pending-issues-table<%= showReference ? "" : " is-noref" %>" id="<%= tableId %>">
     <colgroup>
-      <col class="c-ref" /><col class="c-proj" /><col class="c-addr" /><col class="c-ph" />
+      <% if (showReference) { %><col class="c-ref" /><% } %><col class="c-proj" /><col class="c-addr" /><col class="c-ph" />
       <col class="c-uprn" /><col class="c-surv" /><col class="c-cat" /><col class="c-rate" />
       <col class="c-when" /><col class="c-act" />
     </colgroup>
@@ -26,7 +27,7 @@
           <% }) %>
           <th></th>
         <% } else { %>
-          <th>Reference</th>
+          <% if (showReference) { %><th>Reference</th><% } %>
           <th>Project</th>
           <th>Address</th>
           <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
@@ -45,7 +46,7 @@
         const claim = claimView(row);
       %>
         <tr class="<%= [claimRowClass(row), row.href ? "find-result" : "", row.rowClass || ""].filter(Boolean).join(" ") %>" data-claim-status="<%= claim.status %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
-          <td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td>
+          <% if (showReference) { %><td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td><% } %>
           <td><span class="project-pill"><%= row.projectName %></span></td>
           <td class="addr-cell">
             <strong><%= row.fullAddress %></strong>
@@ -64,7 +65,7 @@
             <% if (action === "amend") { %>
               <a class="btn-review-create" href="<%= row.amendUrl %>">Amend</a>
             <% } else { %>
-              <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>">Review Case</a>
+              <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>?claim=1">Review Case</a>
             <% } %>
           </td>
         </tr>

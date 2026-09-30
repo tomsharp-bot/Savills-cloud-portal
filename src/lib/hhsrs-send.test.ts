@@ -332,6 +332,9 @@ describe("HHSRS portal send and Main Log record", () => {
     const photoAt = mail.html.indexOf("cid:hhsrs-photo-0@savillshousing.co.uk");
     assert.ok(printAt >= 0 && photoAt > printAt, "photos are pictures under the signature");
     assert.ok(mail.html.indexOf("cid:hhsrs-photo-1@savillshousing.co.uk") > photoAt);
+    assert.equal((mail.inlinePhotos || []).length, 2);
+    assert.doesNotMatch(mail.html, /sample-photo-1\.jpg|sample-photo-2\.jpg/);
+    assert.doesNotMatch(mail.html, /font-size:11px/);
     assert.match(mail.html, /width:53px;height:53px;object-fit:contain/);
     assert.doesNotMatch(mail.html, />Tom Sharp</);
     assert.doesNotMatch(mail.html, /dbeafe/);

@@ -394,7 +394,19 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       suspectedCause: "Leaking gutter above the bedroom",
       includeCause: true,
     });
-    assert.match(filled.body, /• Cause: leaking gutter above the bedroom/);
+    assert.equal(
+      filled.body.split("\n").find((line) => line.startsWith("• Cause:")),
+      "• Cause: leaking gutter above the bedroom"
+    );
+    const keptWording = prepareClientEmailBody(
+      "MTVH Pilot 2026",
+      filled.body + "\n• Cause:\n• Cause:   "
+    );
+    assert.equal(
+      keptWording.split("\n").find((line) => line.startsWith("• Cause:")),
+      "• Cause: leaking gutter above the bedroom"
+    );
+    assert.equal(keptWording.split("\n").filter((line) => /^• Cause:/.test(line)).length, 1);
     const blank = draftFromSubmission({ ...shared, suspectedCause: "   ", includeCause: true });
     assert.doesNotMatch(blank.body, /Cause:/);
     assert.doesNotMatch(blank.body, /Suspected cause/i);

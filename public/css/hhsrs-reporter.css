@@ -196,20 +196,20 @@ a.linkish.active, .linkish.active {
   border-color: var(--savills-yellow);
 }
 .side-tabs .tab-link.active {
-  background: var(--savills-yellow);
-  color: var(--navy);
+  background: #12283d;
+  color: #fff;
   border-color: var(--savills-yellow);
-  box-shadow: 0 0 0 1px rgba(255,232,80,0.35);
-  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(255,232,80,0.12);
+  font-weight: 600;
 }
 .side-tabs .tab-link.active .tab-ico {
   background: transparent;
-  color: var(--navy);
+  color: var(--savills-yellow);
 }
 .side-tabs .tab-link.active .tab-ico svg {
-  stroke: var(--navy);
+  stroke: var(--savills-yellow);
 }
-.side-tabs .tab-link.active .tab-ico svg [fill="currentColor"] { fill: var(--navy); }
+.side-tabs .tab-link.active .tab-ico svg [fill="currentColor"] { fill: var(--savills-yellow); }
 .side-tabs .tab-link .tab-badge {
   font-size: 0.6875rem; font-weight: 800; padding: 0.15rem 0.5rem;
   border-radius: 999px; background: var(--savills-yellow); color: #8e0f14;
@@ -244,8 +244,8 @@ a.linkish.active, .linkish.active {
 .side-tabs .tab-link.needs-attention.active {
   background: var(--savills-red);
   color: #fff;
-  border-color: #fff;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+  border-color: var(--savills-red);
+  box-shadow: 0 0 0 1px rgba(206, 23, 30, 0.45);
 }
 .side-tabs .tab-link.needs-attention.active .tab-ico {
   color: #fff;
@@ -375,25 +375,26 @@ a.linkish.active, .linkish.active {
 .panel-head.neutral { background: #fafbfc; }
 .panel-head.review-head { background: #eef5fb; }
 .panel-head h2 {
-  font-size: 0.9375rem; font-weight: 700; color: var(--navy); margin: 0;
+  font-size: 0.9375rem; font-weight: 600; color: var(--navy); margin: 0;
 }
-/* Section headers on Reporter cards use the Pending Issues bar.
-   Urgent waiting and actioned strips keep their own colours. */
-.hhsrs-reporter .panel > .panel-head:not(.received-head):not(.dealt-head),
+/* Smaller card headers match the Last 20 bar: flush, soft, no dark edge.
+   Colour is the existing pale blue-grey, not the green actioned strip.
+   Urgent waiting headers and the page title keep their own look. */
+.hhsrs-reporter .panel:not(.email-draft-panel):not(#rv-case-panel) > .panel-head:not(.received-head):not(.dealt-head),
 .hhsrs-reporter details.panel > summary.panel-head:not(.received-head):not(.dealt-head) {
-  margin: 12px 12px 0;
-  padding: 0.75rem 1.05rem 0.75rem 1rem;
-  background: linear-gradient(180deg, #DDE3EE 0%, #D0D8E6 100%);
-  border: 1px solid #B8C2D4;
-  border-left: 5px solid var(--navy);
-  border-radius: 10px;
-  box-shadow: 0 1px 0 rgba(24,26,44,0.06), inset 0 1px 0 rgba(255,255,255,0.55);
+  margin: 0;
+  padding: 0.85rem 1.1rem;
+  background: #eef5fb;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
 }
-.hhsrs-reporter .panel > .panel-head:not(.received-head):not(.dealt-head) h2,
+.hhsrs-reporter .panel:not(.email-draft-panel):not(#rv-case-panel) > .panel-head:not(.received-head):not(.dealt-head) h2,
 .hhsrs-reporter details.panel > summary.panel-head:not(.received-head):not(.dealt-head) h2 {
-  font-size: 1.18rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--navy);
 }
 .panel-head .count {
@@ -928,6 +929,28 @@ a.linkish.active, .linkish.active {
   color: var(--muted);
   line-height: 1.55;
 }
+.ps-empty {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  color: var(--muted);
+}
+.ps-archived-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ps-archived-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.65rem 1.1rem;
+  border-bottom: 1px solid #e4e8ee;
+}
+.ps-archived-list li:last-child { border-bottom: none; }
+.ps-archived-name { margin: 0; font-weight: 650; }
+.ps-archived-meta { margin: 0.15rem 0 0; font-size: 0.78rem; color: var(--muted); }
+.ps-archived-list form { margin: 0; }
 .admin-placeholder ul { margin: 0.75rem 0 0; padding-left: 1.2rem; }
 .admin-placeholder li { margin: 0.35rem 0; }
 
@@ -1495,6 +1518,17 @@ body.hhsrs-reporter {
 .hhsrs-reporter .pending-issues-table .addr-cell strong {
   white-space: normal;
 }
+/* Last 20 drops the reference column. Give that width to the address and
+   keep the address itself on one line. Other tables still wrap. */
+.hhsrs-reporter .pending-issues-table.is-noref col.c-addr { width: 24%; }
+.hhsrs-reporter .pending-issues-table.is-noref td.addr-cell { overflow: hidden; }
+.hhsrs-reporter .pending-issues-table.is-noref .addr-cell > strong {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
   overflow: visible;
@@ -1698,17 +1732,17 @@ body.hhsrs-reporter {
   list-style: none;
   cursor: pointer;
   user-select: none;
-  background: linear-gradient(180deg, #DDE3EE 0%, #D0D8E6 100%);
-  border: 1px solid #B8C2D4;
-  border-left: 5px solid var(--navy);
-  border-radius: 10px;
+  background: #eef5fb;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }
 #po-archived-section.po-archived-details > .po-archived-summary::-webkit-details-marker { display: none; }
-#po-archived-section.po-archived-details[open] > .po-archived-summary { border-bottom-color: #B8C2D4; }
+#po-archived-section.po-archived-details[open] > .po-archived-summary { border-bottom-color: var(--border); }
 .po-archived-summary-left {
   display: inline-flex;
   align-items: center;
@@ -1731,9 +1765,9 @@ body.hhsrs-reporter {
 }
 #po-archived-section .panel-head.archived-head h2 {
   color: var(--navy);
-  font-size: 1.18rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 #po-archived-section .count-archived {
   background: #e2e6ec;
@@ -1850,6 +1884,29 @@ body.hhsrs-reporter {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
 }
+.hhsrs-reporter .pending-issues-table .photo-att-counted .photo-att-icon {
+  width: auto;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem 0 0.28rem;
+  gap: 0.2rem;
+}
+.hhsrs-reporter .pending-issues-table .photo-att-count.is-shown {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #44546a;
+  font-family: var(--font);
+}
+.hhsrs-reporter .pending-issues-table td.photo-att-cell,
+.hhsrs-reporter .pending-issues-table th.photo-att-col { overflow: visible; white-space: nowrap; }
 .hhsrs-reporter #review-workspace { padding-bottom: 85vh; }
 .hhsrs-reporter #rv-project-block { scroll-margin-top: 0; }
 .hhsrs-reporter .review-project-first.panel { padding: 0; overflow: hidden; }
@@ -1894,10 +1951,13 @@ body.hhsrs-reporter {
 .hhsrs-reporter .rv-pending-strip.is-clear .waiting-empty-msg { display: block; }
 .hhsrs-reporter .rv-pending-strip.is-clear .table-wrap { display: none; }
 .hhsrs-reporter .review-grid,
-.hhsrs-reporter .panel.panel-overflow-visible,
-.hhsrs-reporter .panel.email-draft-panel,
 .hhsrs-reporter .blank-case-form,
 .hhsrs-reporter .case-fields { overflow: visible; }
+.hhsrs-reporter #rv-case-panel,
+.hhsrs-reporter .panel.email-draft-panel {
+  overflow: hidden;
+  border-radius: 12px;
+}
 .hhsrs-reporter .photos-block {
   margin-top: 1.35rem;
   padding: 0.85rem 0.9rem;
@@ -2069,8 +2129,14 @@ body.hhsrs-reporter {
   border-top: 1px solid var(--border);
 }
 .hhsrs-reporter .generate-email-row .review-project-hint { margin: 0; }
+.hhsrs-reporter #rv-case-panel.is-drafted > form > .panel-head,
+.hhsrs-reporter #rv-case-panel.is-sent-case > form > .panel-head,
+.hhsrs-reporter #rv-case-panel.is-drafted > .panel-head,
+.hhsrs-reporter #rv-case-panel.is-sent-case > .panel-head,
 .hhsrs-reporter #rv-case-panel.is-drafted #rv-case-fields,
-.hhsrs-reporter #rv-case-panel.is-sent-case #rv-case-fields {
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-case-fields,
+.hhsrs-reporter #rv-case-panel.is-drafted .case-save-row,
+.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row {
   opacity: 0.45;
   filter: grayscale(0.65);
   pointer-events: none;
@@ -2080,27 +2146,32 @@ body.hhsrs-reporter {
 .hhsrs-reporter #rv-case-panel.is-sent-case #rv-photos-block img {
   filter: grayscale(1);
 }
-.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row {
-  opacity: 0.45;
-  filter: grayscale(0.65);
-  pointer-events: none;
-  user-select: none;
-}
-.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row .btn:disabled,
-.hhsrs-reporter #rv-case-panel.is-sent-case .generate-email-row button:disabled {
+.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row .btn:disabled,
+.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row button:disabled,
+.hhsrs-reporter .email-draft-panel.is-sent-lock #rv-email-generate-row .btn:disabled,
+.hhsrs-reporter .email-draft-panel.is-sent-lock #rv-email-generate-row button:disabled {
   opacity: 1;
 }
+.hhsrs-reporter .email-draft-panel.is-pre-generate > .panel-head,
+.hhsrs-reporter .email-draft-panel.is-sent-lock > .panel-head,
+.hhsrs-reporter .email-draft-panel.is-sent-lock #rv-email-generate-row,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-locked,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .field-locked,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-with-copy,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .field-with-copy,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .attach-block,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .attach-block,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .signature-added-note,
-.hhsrs-reporter .email-draft-panel.is-sent-lock .email-photo-tools {
+.hhsrs-reporter .email-draft-panel.is-pre-generate .signature-added-note,
+.hhsrs-reporter .email-draft-panel.is-sent-lock .email-photo-tools,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .email-photo-tools {
   opacity: 0.45;
   filter: grayscale(0.65);
   pointer-events: none;
   user-select: none;
 }
-.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-item img {
+.hhsrs-reporter .email-draft-panel.is-sent-lock .attach-item img,
+.hhsrs-reporter .email-draft-panel.is-pre-generate .attach-item img {
   filter: grayscale(1);
 }
 .hhsrs-reporter #rv-photos-block[hidden],
@@ -3257,10 +3328,11 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
   box-shadow: 0 1px 3px rgba(11, 31, 51, 0.08); padding: 0 0 16px; overflow: hidden;
 }
 .sent-card h2, .sent-sec {
-  display: inline-block; margin: 14px 16px; padding: 8px 14px; border-radius: 10px;
-  font-size: 16px; font-weight: 800; letter-spacing: -0.02em; color: var(--navy);
-  background: linear-gradient(180deg, #dde3ee 0%, #d0d8e6 100%);
-  border-bottom: 1px solid #b8c2d4; border-left: 5px solid var(--navy);
+  display: block; margin: 0 0 12px; padding: 0.85rem 1.1rem; border-radius: 0;
+  font-size: 0.9375rem; font-weight: 600; letter-spacing: 0; color: var(--navy);
+  background: #eef5fb;
+  border: 0;
+  border-bottom: 1px solid var(--border);
 }
 .sent-sec { margin: 0 0 8px; }
 .sent-body {

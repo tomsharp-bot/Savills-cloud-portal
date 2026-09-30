@@ -20,8 +20,8 @@
   var chosen = [];
   var lastProject = "";
   var lastFocusedStep = "";
-  // Phone flow stops on Extra details after Comment. Optional boxes there (including a blank
-  // suspected cause) must not count as finished, and must not keep Hazard as the current step.
+  // Phone flow stops on Extra details after Comment. The optional Extra details box
+  // must not count as finished, and must not keep Hazard as the current step.
   var extrasPassed = false;
 
   function $(id) {
@@ -383,18 +383,57 @@
     return Boolean(addressLocked() && val("uprn") && val("fullAddress") && val("postcode") && confirm && confirm.checked);
   }
 
-  function hazardDone() {
-    return Boolean(val("category") && val("rating") && val("comment"));
+  function vicoSelected() {
+    var opt = selectedOption();
+    return !!(opt && opt.getAttribute("data-vulnerabilities") === "1");
   }
 
-  function callsRequired() {
+  function mtvhSelected() {
+    var opt = selectedOption();
+    return !!(opt && opt.getAttribute("data-mtvh") === "1");
+  }
+
+  function dampSelected() {
+    var text = val("category");
+    return /damp/i.test(text) && /mould|mold/i.test(text);
+  }
+
+  function causeShown() {
+    var box = $("suspected-cause-box");
+    return !!(box && !box.hidden);
+  }
+
+  function restrictorShown() {
+    return mtvhSelected() && val("category") === (window.HHSRS_RESTRICTOR_CATEGORY || "Falling Between Levels");
+  }
+
+  function restrictorDone() {
+    if (!restrictorShown()) return true;
+    if (!val("restrictorMissingCount") || !val("restrictorMaterial")) return false;
+    var boxes = document.querySelectorAll('#restrictor-box input[name="restrictorLocations"]');
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].checked) return true;
+    }
+    return false;
+  }
+
+  function hazardDone() {
+    return Boolean(val("category") && val("rating") && val("comment") && restrictorDone());
+  }
+
+  function callsAlways() {
     var opt = selectedOption();
     return !!(opt && opt.getAttribute("data-calls") === "1");
   }
 
+  function callsShown() {
+    if (callsAlways()) return true;
+    return mtvhSelected() && val("rating") === (window.HHSRS_EMERGENCY_RATING || "High - Emergency risk");
+  }
+
   function extrasDone() {
     if (!hazardDone()) return false;
-    if (callsRequired()) {
+    if (callsShown()) {
       var skipped = $("callUnreached") && $("callUnreached").checked;
       if (skipped) {
         if (!val("callRefBlankReason")) return false;
@@ -403,6 +442,8 @@
         return false;
       }
     }
+    if (vicoSelected() && !val("vulnerabilities")) return false;
+    if (causeShown() && !val("suspectedCause")) return false;
     return true;
   }
 
@@ -414,20 +455,82 @@
       var name = opt && project && val("projectId") ? String(opt.textContent || "").trim() : "";
       label.textContent = name ? "· " + name : "";
     }
+    syncRatingOptions();
     var flags = {
-      calls: !!(opt && opt.getAttribute("data-calls") === "1"),
       saxon: !!(opt && opt.getAttribute("data-saxon") === "1"),
-      online: !!(opt && opt.getAttribute("data-online") === "1"),
+      vulnerabilities: vicoSelected(),
     };
     var nodes = document.querySelectorAll(".project-extra");
     for (var i = 0; i < nodes.length; i++) {
       var key = nodes[i].getAttribute("data-extra") || "";
+      if (key === "calls") continue;
       var show = !!flags[key];
       nodes[i].hidden = !show;
-      if (key === "calls") continue;
       var inputs = nodes[i].querySelectorAll("input, textarea, select");
       for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !show;
     }
+    syncCallsBox();
+    syncCauseBox();
+    syncRestrictorBox();
+  }
+
+  function ratingScheme() {
+    var opt = selectedOption();
+    return opt && opt.getAttribute("data-rating-scheme") === "OLD" ? "OLD" : "NEW";
+  }
+
+  function syncRatingOptions() {
+    var select = $("rating");
+    var lists = window.HHSRS_SITE_RATINGS;
+    if (!select || !lists) return;
+    var scheme = ratingScheme();
+    var list = lists[scheme] || lists.NEW || [];
+    if (!list.length || select.getAttribute("data-scheme") === scheme) return;
+    var current = select.value;
+    while (select.options.length) select.remove(0);
+    var placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select a rating";
+    select.appendChild(placeholder);
+    for (var i = 0; i < list.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = list[i];
+      opt.textContent = list[i];
+      if (list[i] === current) opt.selected = true;
+      select.appendChild(opt);
+    }
+    if (list.indexOf(current) === -1) select.value = "";
+    select.setAttribute("data-scheme", scheme);
+  }
+
+  function syncCauseBox() {
+    var box = $("suspected-cause-box");
+    var input = $("suspectedCause");
+    var show = vicoSelected() && dampSelected();
+    if (box) box.hidden = !show;
+    if (input) {
+      input.disabled = !show;
+      input.required = show;
+    }
+  }
+
+  function syncRestrictorBox() {
+    var box = $("restrictor-box");
+    var show = restrictorShown();
+    if (box) box.hidden = !show;
+    if (!box) return;
+    var inputs = box.querySelectorAll("input, select, textarea");
+    for (var i = 0; i < inputs.length; i++) {
+      inputs[i].disabled = !show;
+      if (inputs[i].id === "restrictorMissingCount" || inputs[i].id === "restrictorMaterial") {
+        inputs[i].required = show;
+      }
+    }
+  }
+
+  function syncCallsBox() {
+    var calls = document.querySelector('.project-extra[data-extra="calls"]');
+    if (calls) calls.hidden = !callsShown();
     syncCallUnreached();
   }
 
@@ -457,6 +560,14 @@
       note.required = need;
       note.placeholder = need ? "Please say why…" : "Add a short note if needed…";
     }
+  }
+
+  function extrasFocusId() {
+    if (callsShown()) {
+      return $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
+    }
+    if (vicoSelected()) return "vulnerabilities";
+    return "otherDetails";
   }
 
   function updateFlow(opts) {
@@ -534,16 +645,14 @@
     }
 
     showStep(stepEx, announce);
-    // Stay on Extra details until the surveyor leaves that section. A blank suspected cause
-    // is not part of hazardDone(), so Hazard still opens Extra details.
+    // Stay on Extra details until the surveyor leaves that section. Hazard still opens it.
     if (!extrasDone() || !extrasPassed) {
       hideStep(stepPh);
       if (actions) actions.hidden = true;
       setCurrent(stepEx);
       if (announce && lastFocusedStep !== "extras") {
         lastFocusedStep = "extras";
-        var focusId = $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
-        focusAndScroll(stepEx, callsRequired() ? focusId : "otherDetails");
+        focusAndScroll(stepEx, extrasFocusId());
       }
       return;
     }
@@ -567,7 +676,7 @@
     }
   }
 
-  ["projectId", "surveyDate", "surveyorName", "category", "rating", "comment", "clientCallReference", "callRefBlankReason", "callUnreachedNote", "otherDetails"].forEach(function (id) {
+  ["projectId", "surveyDate", "surveyorName", "category", "rating", "comment", "clientCallReference", "callRefBlankReason", "callUnreachedNote", "otherDetails", "vulnerabilities", "suspectedCause", "restrictorMissingCount", "restrictorMaterial"].forEach(function (id) {
     var el = $(id);
     if (!el) return;
     el.addEventListener("change", function () {
@@ -584,17 +693,16 @@
       updateFlow({ announce: true });
     });
   }
+  document.querySelectorAll('#restrictor-box input[name="restrictorLocations"]').forEach(function (box) {
+    box.addEventListener("change", function () {
+      updateFlow({ announce: false });
+    });
+  });
+
   var callBox = $("callUnreached");
   if (callBox) {
     callBox.addEventListener("change", function () {
       syncCallUnreached();
-      updateFlow({ announce: true });
-    });
-  }
-
-  var causeInput = $("suspectedCause");
-  if (causeInput) {
-    causeInput.addEventListener("blur", function () {
       updateFlow({ announce: true });
     });
   }
@@ -616,13 +724,12 @@
   if (photosAtLoad && !photosAtLoad.hidden) extrasPassed = true;
 
   // Phone keyboard Next on Comment moves one step, into Extra details.
-  // From there it moves one optional box at a time: Extra details, then suspected cause, then on.
-  // A blank value never makes either optional box required, and never keeps Hazard as the current step.
+  // From there Next on Extra details moves on. A blank Extra details value is never required,
+  // and never keeps Hazard as the current step.
   function stepKeyboardNext(from) {
     if (from && from.id === "comment") {
       if (!hazardDone()) return;
-      var focusId = $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
-      var nextId = callsRequired() ? focusId : "otherDetails";
+      var nextId = extrasFocusId();
       var next = $(nextId);
       if (lastFocusedStep === "extras") lastFocusedStep = "comment";
       if (from.blur) from.blur();
@@ -634,7 +741,8 @@
     }
     if (from && from.id === "otherDetails") {
       var cause = $("suspectedCause");
-      if (cause && !cause.disabled) {
+      if (cause && !cause.disabled && causeShown()) {
+        if (from.blur) from.blur();
         try { cause.focus({ preventScroll: true }); } catch (err) { cause.focus(); }
         return;
       }
@@ -656,7 +764,7 @@
   document.body.appendChild(keyNext);
 
   function optionalKeyboardField(el) {
-    return !!(progressive() && el && (el.id === "comment" || el.id === "otherDetails" || el.id === "suspectedCause"));
+    return !!(progressive() && el && (el.id === "comment" || el.id === "otherDetails" || (el.id === "suspectedCause" && causeShown())));
   }
   function placeKeyNext() {
     var vv = window.visualViewport;
@@ -933,11 +1041,14 @@
     "category",
     "rating",
     "comment",
-    "suspectedCause",
     "clientCallReference",
     "otherDetails",
     "callUnreachedNote",
     "callRefBlankReason",
+    "vulnerabilities",
+    "suspectedCause",
+    "restrictorMissingCount",
+    "restrictorMaterial",
   ];
 
   function todayLondonDate() {
@@ -970,6 +1081,9 @@
     extrasPassed = false;
     var callUnreached = $("callUnreached");
     if (callUnreached) callUnreached.checked = false;
+    document.querySelectorAll('#restrictor-box input[name="restrictorLocations"]').forEach(function (box) {
+      box.checked = false;
+    });
     updateFlow({ announce: false });
     var submit = form && form.querySelector('button[type="submit"]');
     if (submit) {

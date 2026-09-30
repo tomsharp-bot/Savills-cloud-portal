@@ -56,7 +56,14 @@
                 <div><dt>HHSRS category</dt><dd><%= draft.category %></dd></div>
                 <div><dt>Rating</dt><dd><span class="hhsrs-rv-pill <%= tone %>"><%= draft.rating %></span></dd></div>
                 <div><dt>Comment</dt><dd class="prewrap"><%= draft.comment %></dd></div>
-                <div><dt>Suspected cause</dt><dd class="prewrap"><%= draft.suspectedCause || "—" %></dd></div>
+                <% if (String(draft.suspectedCause || "").trim()) { %>
+                  <div><dt>Suspected cause</dt><dd class="prewrap"><%= draft.suspectedCause %></dd></div>
+                <% } %>
+                <% if (String(draft.restrictorMissingCount || "").trim()) { %>
+                  <div><dt>Window restrictors missing</dt><dd><%= draft.restrictorMissingCount %></dd></div>
+                  <div><dt>Location</dt><dd><%= draft.restrictorLocations %></dd></div>
+                  <div><dt>Window material</dt><dd><%= draft.restrictorMaterial %></dd></div>
+                <% } %>
                 <% if (draft.cat1Confirmed) { %><div><dt>Category 1 confirmed</dt><dd>Yes</dd></div><% } %>
               </dl>
             </section>
@@ -71,6 +78,9 @@
                   <% } %>
                 <% } else if (draft.clientCallReference) { %>
                   <div><dt>Client call reference</dt><dd><%= draft.clientCallReference %></dd></div>
+                <% } %>
+                <% if (String(draft.vulnerabilities || "").trim()) { %>
+                  <div><dt>Vulnerabilities</dt><dd class="prewrap"><%= draft.vulnerabilities %></dd></div>
                 <% } %>
                 <div><dt>Any other details</dt><dd class="prewrap"><%= draft.otherDetails || "—" %></dd></div>
               </dl>
