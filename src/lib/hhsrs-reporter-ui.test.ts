@@ -294,8 +294,14 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /hhsrs-review-last-key-v1/);
     assert.doesNotMatch(sidebar, /side-brand/);
     assert.match(review, /data-extra="cause"/);
-    assert.match(review, /isFilled && String\(row\.suspectedCause \|\| ""\)\.trim\(\) \? "" : "hidden"/);
-    assert.match(js, /key === "cause" \? !causeValue : !extras\[key\]/);
+    assert.match(review, /detailExtras\.cause \? "" : "hidden"/);
+    assert.match(review, /data-extra="other_details"/);
+    assert.match(review, /data-extra="restrictors"/);
+    assert.match(review, /id="rv-other-details"/);
+    assert.match(review, /id="rv-restrictor-count"/);
+    assert.match(js, /other_details: !!projectCfg/);
+    assert.match(js, /Falling Between Levels/);
+    assert.match(js, /High - Emergency risk/);
     assert.match(review, /id="rv-cause" name="suspectedCause"/);
     assert.match(review, /id="rv-include-cause"/);
     assert.match(review, /id="rv-call-notes" name="callNotes"/);
@@ -343,9 +349,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.email-draft-panel\.is-pre-generate > \.panel-head/);
     const emailPanel = review.slice(review.indexOf("email-draft-panel"), review.indexOf('id="rv-finish-bar"'));
     const casePanel = review.slice(review.indexOf('id="rv-case-panel"'), review.indexOf("email-draft-panel"));
-    assert.match(emailPanel, /id="rv-email-generate-row"[\s\S]*id="btn-generate-email"/);
+    assert.match(casePanel, /id="rv-email-generate-row"[\s\S]*id="btn-generate-email"/);
     assert.match(casePanel, /Save review/);
-    assert.doesNotMatch(casePanel, /id="btn-generate-email"/);
+    assert.doesNotMatch(emailPanel, /id="btn-generate-email"/);
     assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*overflow:\s*hidden/);
     assert.match(css, /#rv-case-panel,\s*\.hhsrs-reporter \.panel\.email-draft-panel\s*\{[^}]*border-radius:\s*12px/);
     assert.match(review, /Fill case details, then click Generate email\./);
@@ -561,6 +567,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(last, /<thead>/);
     assert.match(find, /partials\/pending-issues-table/);
     assert.match(find, /pendingAction:\s*"amend"/);
+    assert.match(find, /pendingShowClaim:\s*false/);
+    assert.match(table, /pendingShowClaim !== false/);
+    assert.match(table, /showClaim \? claimRowClass/);
     assert.doesNotMatch(find, /<th>Hazard<\/th>|<th>Status<\/th>/);
     assert.match(main, /partials\/pending-issues-table/);
     assert.doesNotMatch(main, /<th>Sent<\/th>|<th>Hazard<\/th>/);
@@ -585,9 +594,13 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(steps, /summary\.waiting > 0 \? '' : ' is-clear'/);
     assert.match(sidebar, /title="Dashboard"/);
     assert.match(sidebar, /summary\.waiting > 0 \? ' needs-attention' : ''/);
+    assert.match(sidebar, /class="tab-wait"/);
     assert.doesNotMatch(sidebar.slice(0, sidebar.indexOf("Review")), /tab-badge/);
+    assert.doesNotMatch(sidebar, /is-clear/);
     assert.match(alerts, /dashboard\.classList\.add\("needs-attention"\)/);
     assert.match(alerts, /dashboard\.classList\.remove\("is-clear"\)/);
+    assert.doesNotMatch(alerts, /dashboard\.classList\.add\("is-clear"\)/);
+    assert.match(alerts, /tab-wait/);
     assert.match(alerts, /claimStatus === "claimed"/);
     const reporterJs = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const reporterRoute = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
@@ -600,7 +613,8 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(clear, /\.count-received \{ display: none/);
     assert.match(clear, /\.waiting-banner \{ display: none/);
     assert.match(css, /\.step-tabs a\.is-clear\.active \{[^}]*background:\s*#e7f6ee/);
-    assert.match(css, /\.side-tabs \.tab-link\.is-clear\.active \{[^}]*background:\s*#1b7a4e/);
+    assert.doesNotMatch(css, /\.side-tabs \.tab-link\.is-clear[^{]*\{[^}]*#1b7a4e/);
+    assert.match(css, /\.side-tabs \.tab-link\.needs-attention\s*\{[^}]*background:\s*var\(--savills-red\)/);
     assert.match(alerts, /function markClear\(el, clear\)/);
     assert.match(alerts, /markClear\(pendingPanel, clear\)/);
     assert.doesNotMatch(alerts, /markClear\(dashboard, clear\)/);
@@ -725,6 +739,64 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.ml-page \.pending-issues-table \.ref-chip \{[^}]*font-size:\s*12\.5px/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: 12%; \}/);
+  });
+
+  it("limits every date search year to 4 digits", () => {
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const layout = readFileSync("views/hhsrs-reporter/partials/layout-close.ejs", "utf8");
+    const appScripts = readFileSync("views/partials/app-scripts.ejs", "utf8");
+    const js = readFileSync("public/js/date-search-year.js", "utf8");
+    const form = readFileSync("views/hhsrs-site-form/form.ejs", "utf8");
+    const sample = readFileSync("views/partials/sample-analysis.ejs", "utf8");
+    for (const id of ["find-date", "ml-from", "ml-to"]) {
+      const tag = (id === "find-date" ? find : main).match(new RegExp(`<input\\b[^>]*\\bid="${id}"[^>]*>`));
+      assert.ok(tag, id);
+      assert.match(tag[0], /type="date"/, id);
+      assert.match(tag[0], /data-date-search/, id);
+    }
+    assert.match(layout, /\/js\/date-search-year\.js/);
+    assert.match(appScripts, /\/js\/date-search-year\.js/);
+    assert.match(js, /yearDigits >= 4/);
+    assert.match(js, /emptyYearDigits >= 4/);
+    assert.match(js, /preventDefault\(\)/);
+    assert.match(js, /data-date-search/);
+    assert.doesNotMatch(form, /data-date-search/);
+    assert.doesNotMatch(sample, /data-date-search/);
+  });
+
+  it("keeps Find and resend off the side email panel", () => {
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const js = readFileSync("public/js/hhsrs-find.js", "utf8");
+    const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    assert.doesNotMatch(find, /fr-drawer/);
+    assert.match(find, /Email resent and correction logged/);
+    assert.match(find, /id="btn-generate-correction"/);
+    assert.match(find, /id="fr-preview-wrap" hidden/);
+    assert.match(find, /Abandon amendment/);
+    assert.match(find, /I've checked the details/);
+    assert.match(find, /id="btn-send-correction"[^>]*disabled/);
+    assert.doesNotMatch(find, /<figcaption>/);
+    assert.match(js, /Please disregard our previous email, due to an error\. See correct details below\./);
+    assert.match(js, /CORRECTION: /);
+    assert.match(route, /resentNotice: justSent/);
+  });
+
+  it("fills a new email address from project stock and keeps dropdowns on the list", () => {
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    const office = readFileSync("src/lib/hhsrs-office-case.ts", "utf8");
+    const blank = review.slice(review.indexOf('id="rv-hazard"'), review.indexOf('id="rv-hazard"') + 500);
+    assert.match(review, /<select id="rv-hazard"/);
+    assert.doesNotMatch(review, /hazard-list|datalist/);
+    assert.match(review, /id="rv-address-stock"/);
+    assert.match(js, /\/review\/stock-lookup/);
+    assert.match(js, /Not on this project's stock list\. Type the address\./);
+    assert.match(route, /hhsrsReporterRouter\.get\("\/review\/stock-lookup"/);
+    assert.match(office, /Choose a hazard from the list\./);
+    assert.match(office, /Choose a rating from the list\./);
+    assert.ok(blank.includes("<select"));
   });
 
   it("declares review draft storage keys before restore runs", () => {

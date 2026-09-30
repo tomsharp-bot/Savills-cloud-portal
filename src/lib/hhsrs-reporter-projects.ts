@@ -27,6 +27,12 @@ export type ReporterProjectDemo = {
   /** Optional. Generate email fills Bcc only when a project has addresses here. */
   bcc?: string[];
   hint: string;
+  /** Site-form extras the Reporter case details may show for this project. */
+  siteForm?: {
+    mtvh: boolean;
+    vulnerabilities: boolean;
+    calls: boolean;
+  };
 };
 
 /** Demo counts and archive seed. Not shown as rule text on Project overview. */
@@ -475,6 +481,11 @@ export function hhsrsProjectSettings(portalName: string): ReporterProjectDemo {
     cc: roster ? [...roster.cc] : [],
     bcc: roster?.bcc ? [...roster.bcc] : undefined,
     hint: roster?.hint || "",
+    siteForm: {
+      mtvh: Boolean(roster && /^MTVH\b/i.test(roster.name)),
+      vulnerabilities: Boolean(roster?.extras.vulnerabilities),
+      calls: Boolean(roster?.extras.calls),
+    },
   };
 }
 

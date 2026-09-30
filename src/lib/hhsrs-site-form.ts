@@ -325,6 +325,93 @@ export function siteFormShowsSuspectedCause(projectName: string, category: strin
   return siteFormProjectFlags(projectName).vulnerabilities && isDampMouldCategory(category);
 }
 
+export type ReporterCaseDetailExtras = {
+  calls: boolean;
+  otherDetails: boolean;
+  vulnerabilities: boolean;
+  cause: boolean;
+  restrictors: boolean;
+  surveyDate: boolean;
+};
+
+function detailFilled(value: unknown): boolean {
+  return Boolean(String(value ?? "").trim());
+}
+
+/**
+ * Which surveyor answers belong on Reporter case details.
+ * A project only shows the extra boxes its own site form asks for.
+ * A stored MTVH answer still shows if the rating or hazard later changes.
+ */
+export function reporterCaseDetailExtras(input: {
+  projectName?: string | null;
+  category?: string | null;
+  rating?: string | null;
+  surveyDate?: string | null;
+  clientCallReference?: string | null;
+  callOutcome?: string | null;
+  callNotes?: string | null;
+  suspectedCause?: string | null;
+  restrictorMissingCount?: string | null;
+  restrictorLocations?: string | null;
+  restrictorMaterial?: string | null;
+}): ReporterCaseDetailExtras {
+  const projectName = String(input.projectName || "").trim();
+  const flags = siteFormProjectFlags(projectName);
+  const category = String(input.category || "");
+  const rating = String(input.rating || "");
+  const callStored =
+    detailFilled(input.clientCallReference) || detailFilled(input.callOutcome) || detailFilled(input.callNotes);
+  const restrictorStored =
+    detailFilled(input.restrictorMissingCount) ||
+    detailFilled(input.restrictorLocations) ||
+    detailFilled(input.restrictorMaterial);
+  const roster = resolveHhsrsProject(projectName).roster;
+  return {
+    calls: Boolean(projectName) && (flags.calls || (flags.mtvh && (rating === HHSRS_EMERGENCY_RISK_RATING || callStored))),
+    otherDetails: Boolean(projectName),
+    vulnerabilities: flags.vulnerabilities,
+    cause: flags.vulnerabilities && (siteFormShowsSuspectedCause(projectName, category) || detailFilled(input.suspectedCause)),
+    restrictors: flags.mtvh && (siteFormShowsWindowRestrictor(projectName, category) || restrictorStored),
+    surveyDate: detailFilled(input.surveyDate) || Boolean(roster?.extras.survey_date),
+  };
+}
+
+/** Extra answers from the site form, and only the boxes that project uses. */
+export function surveyorDetailLines(input: {
+  projectName?: string | null;
+  category?: string | null;
+  rating?: string | null;
+  surveyDate?: string | null;
+  clientCallReference?: string | null;
+  callOutcome?: string | null;
+  callNotes?: string | null;
+  otherDetails?: string | null;
+  vulnerabilities?: string | null;
+  suspectedCause?: string | null;
+  restrictorMissingCount?: string | null;
+  restrictorLocations?: string | null;
+  restrictorMaterial?: string | null;
+}): { label: string; value: string }[] {
+  const extras = reporterCaseDetailExtras(input);
+  const lines: { label: string; value: string }[] = [];
+  const push = (show: boolean, label: string, value: unknown) => {
+    if (!show) return;
+    lines.push({ label, value: String(value ?? "").trim() });
+  };
+  push(extras.calls, "Call reference", input.clientCallReference);
+  if (extras.calls && (detailFilled(input.callNotes) || detailFilled(input.callOutcome))) {
+    push(true, "Call notes", input.callNotes);
+  }
+  push(extras.vulnerabilities, "Vulnerabilities", input.vulnerabilities);
+  push(extras.cause, "Suspected cause", input.suspectedCause);
+  push(extras.restrictors, "Window restrictors missing", input.restrictorMissingCount);
+  push(extras.restrictors, "Location", input.restrictorLocations);
+  push(extras.restrictors, "Window material", input.restrictorMaterial);
+  push(extras.otherDetails, "Any other details", input.otherDetails);
+  return lines;
+}
+
 /** Rating dropdown for the surveyor form. Old-scheme projects keep the existing list. */
 export function siteFormRatingChoices(projectName: string): readonly string[] {
   return siteFormProjectFlags(projectName).ratingScheme === "OLD"

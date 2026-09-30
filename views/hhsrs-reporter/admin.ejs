@@ -3,7 +3,7 @@
 <div class="page-header">
   <div>
     <h2 class="page-section-title">Admin</h2>
-    <p class="subtitle">Project settings placeholder — mirrors the desktop Reporter Admin area.</p>
+    <p class="subtitle">Site form link, client email, desktop alerts, and project settings.</p>
   </div>
   <div class="header-meta">
     <strong>Admin</strong>
@@ -54,23 +54,35 @@
   </div>
 </section>
 
-<h2 class="page-section-title section-bar">
+<%
+  const archived = Array.isArray(archivedProjects) ? archivedProjects : [];
+%>
+<h2 class="page-section-title section-bar" id="archived-projects">
   <span class="section-bar-label">Project Settings</span>
-  <span class="count count-review">Placeholder</span>
+  <span class="count count-review"><%= archived.length %></span>
 </h2>
-<section class="panel" aria-label="Admin placeholder">
-  <div class="admin-placeholder">
-    <p>Admin lives in the left sidebar (yellow gear, yellow-bordered control), matching the desktop Reporter.</p>
-    <p>Project setup (names, templates, extras) is deferred for a follow-up. To, Cc, and Bcc are on the card above.</p>
-    <ul>
-      <li>Edit / add projects</li>
-      <li>Choose template &amp; subject pattern</li>
-      <li>Optional extras (call details, survey date, vulnerabilities…)</li>
+<section class="panel" aria-label="Project settings">
+  <p class="ps-help">Archived projects stay on file. Reinstate puts one back to current so surveyors see it on the site form again.</p>
+  <% if (!archived.length) { %>
+    <p class="ps-empty">No archived projects.</p>
+  <% } else { %>
+    <ul class="ps-archived-list">
+      <% archived.forEach(function (project) { %>
+        <li>
+          <div>
+            <p class="ps-archived-name"><%= project.name %></p>
+            <p class="ps-archived-meta"><%= project.projectManager %></p>
+          </div>
+          <form method="post" action="<%= reporterBase %>/project-settings/reinstate">
+            <input type="hidden" name="projectId" value="<%= project.id %>" />
+            <button type="submit" class="btn btn-primary btn-sm">Reinstate</button>
+          </form>
+        </li>
+      <% }) %>
     </ul>
-    <p style="margin-top:1rem;"><a class="btn btn-ghost btn-sm" href="<%= reporterBase %>">← Back to Pending Issues</a></p>
-  </div>
+  <% } %>
 </section>
 
-<p class="footer-note">Admin · Placeholder UI · Site-form link is live</p>
+<p class="footer-note">Admin · Reinstate does not delete anything</p>
 
 <%- include("partials/layout-close") %>

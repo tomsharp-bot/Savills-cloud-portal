@@ -155,9 +155,14 @@ function londonMidnightUtc(year: number, month: number, day: number): Date {
   return new Date(utc);
 }
 
-/** Search matches reference, UPRN, or part of the address, optionally on the London submitted date. */
+/** A case is on Find & resend only after an email has been sent. */
+export function findSentWhere(): Prisma.HhsrsSiteSubmissionWhereInput {
+  return { sentEmails: { some: {} } };
+}
+
+/** Search matches reference, UPRN, or part of the address, optionally on the London submitted date. Sent emails only. */
 export function findCaseWhere(query: string, dateSubmitted: string): Prisma.HhsrsSiteSubmissionWhereInput {
-  const and: Prisma.HhsrsSiteSubmissionWhereInput[] = [];
+  const and: Prisma.HhsrsSiteSubmissionWhereInput[] = [findSentWhere()];
   const q = String(query || "").trim();
   if (q) {
     and.push({

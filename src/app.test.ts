@@ -427,8 +427,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /step-visit\|step-property\|step-hazard\|extra-box\|step-photos/);
     assert.match(js.body, /f\.hasAttribute\("data-optional"\)\) continue/);
     assert.match(js.body, /function stepKeyboardNext/);
-    assert.match(js.body, /from\.id === "comment"/);
-    assert.match(js.body, /el\.id === "comment" \|\| el\.id === "otherDetails"/);
+    assert.match(js.body, /function isFreeText/);
+    assert.match(js.body, /tag === "TEXTAREA"/);
     assert.match(js.body, /function syncCauseBox/);
     assert.match(js.body, /function syncRestrictorBox/);
   });

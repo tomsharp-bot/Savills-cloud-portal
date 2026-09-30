@@ -85,11 +85,11 @@
       </div>
       <div class="ml-f">
         <label for="ml-from">From</label>
-        <input id="ml-from" name="from" type="date" value="<%= filters.from %>" />
+        <input id="ml-from" name="from" type="date" data-date-search value="<%= filters.from %>" />
       </div>
       <div class="ml-f">
         <label for="ml-to">To</label>
-        <input id="ml-to" name="to" type="date" value="<%= filters.to %>" />
+        <input id="ml-to" name="to" type="date" data-date-search value="<%= filters.to %>" />
       </div>
       <button type="submit" class="ml-submit">Search</button>
     </form>
@@ -115,6 +115,7 @@
         pendingTableId: "main-log-table",
         pendingFoot: filters.sort ? "" : "Newest first",
         pendingShowPhotoCount: true,
+        pendingAction: "details",
         pendingSortColumns: sortColumns
       }) %>
     <% } %>

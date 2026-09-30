@@ -6,6 +6,7 @@
  */
 import fs from "node:fs/promises";
 import type { HhsrsSiteSubmission } from "@prisma/client";
+import { isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import { prisma } from "./prisma.js";
 import { createSubmissionWithReference } from "./hhsrs-reference.js";
 import { persistBufferPhotos, submissionDir, HHSRS_MAX_FILE_BYTES, HHSRS_MAX_PHOTOS, hhsrsPhotoSizeError, isAllowedImageName } from "./hhsrs-site-form.js";
@@ -88,7 +89,11 @@ export async function createOfficeCaseAndSend(args: {
   if (!address) return { ok: false, error: "Add an address." };
   if (!uprn) return { ok: false, error: "Add a UPRN." };
   if (!hazard) return { ok: false, error: "Add a hazard." };
+  if (!isHhsrsCategory(hazard)) return { ok: false, error: "Choose a hazard from the list." };
   if (!rating) return { ok: false, error: "Add a rating." };
+  if (!isHhsrsRating(rating) && !isHhsrsSiteFormRating(rating)) {
+    return { ok: false, error: "Choose a rating from the list." };
+  }
 
   const photoError = officePhotoError(args.files);
   if (photoError) return { ok: false, error: photoError };

@@ -101,7 +101,7 @@
       opt.textContent = r;
       sel.appendChild(opt);
     });
-    if (cur && opts.indexOf(cur) < 0) {
+    if (cfg.mode === "filled" && cur && opts.indexOf(cur) < 0) {
       var extra = document.createElement("option");
       extra.value = cur;
       extra.textContent = cur;
@@ -110,15 +110,41 @@
     if (cur) sel.value = cur;
   }
 
+  function fieldText(id) {
+    var el = $(id);
+    return el ? String(el.value || "").replace(/^\s+|\s+$/g, "") : "";
+  }
+
   function setExtraVisibility(projectCfg) {
     var extras = (projectCfg && projectCfg.extras) || {};
+    var site = (projectCfg && projectCfg.siteForm) || {};
     var nodes = document.querySelectorAll("#rv-case-form .project-extra");
-    // No project collects a suspected cause on the site form. Show the office
-    // line only when a cause is already stored, so an empty one is not a blank row.
-    var causeValue = String((($("rv-cause") && $("rv-cause").value) || "")).replace(/^\s+|\s+$/g, "");
+    var hazard = fieldText("rv-hazard");
+    var rating = fieldText("rv-rating");
+    var causeValue = fieldText("rv-cause");
+    var callStored = fieldText("rv-call-ref") || fieldText("rv-call-reason") || fieldText("rv-call-notes");
+    var restrictorStored = fieldText("rv-restrictor-count") || fieldText("rv-restrictor-locations") || fieldText("rv-restrictor-material");
+    var damp = /damp/i.test(hazard) && /mould|mold/i.test(hazard);
+    var show = {
+      calls: !!(extras.calls || (site.mtvh && (rating === "High - Emergency risk" || callStored))),
+      survey_date: !!(extras.survey_date || fieldText("rv-survey-date")),
+      onward: !!extras.onward,
+      cause: !!(site.vulnerabilities && (damp || causeValue)),
+      vulnerabilities: !!extras.vulnerabilities,
+      work_order: !!extras.work_order,
+      online_form: !!extras.online_form,
+      other_details: !!projectCfg,
+      restrictors: !!(site.mtvh && (hazard === "Falling Between Levels" || restrictorStored))
+    };
     for (var i = 0; i < nodes.length; i++) {
       var key = nodes[i].getAttribute("data-extra");
-      nodes[i].hidden = key === "cause" ? !causeValue : !extras[key];
+      var visible = !!show[key];
+      nodes[i].hidden = !visible;
+      var inputs = nodes[i].querySelectorAll("input, select, textarea");
+      for (var j = 0; j < inputs.length; j++) {
+        if (inputs[j].type === "hidden") continue;
+        inputs[j].disabled = !visible;
+      }
     }
     var vulnRule = $("rv-vuln-rule");
     var includeVuln = $("rv-include-vuln");
@@ -851,6 +877,73 @@
     applyProjectChange({ keepRating: keep, skipDraft: true });
   }
 
+  (function wireBlankStockAddress() {
+    if (cfg.mode === "filled") return;
+    var uprnEl = $("rv-uprn");
+    var addressEl = $("rv-address");
+    if (!uprnEl || !addressEl) return;
+    var fromStock = false;
+    var timer = null;
+    var seq = 0;
+    var note = $("rv-address-stock");
+    function setNote(text) {
+      if (!note) return;
+      note.textContent = text || "";
+      note.hidden = !text;
+    }
+    function clearStockFill() {
+      if (fromStock) {
+        addressEl.value = "";
+        fromStock = false;
+      }
+    }
+    function lookup() {
+      var project = ($("rv-project") && $("rv-project").value) || "";
+      var uprn = String(uprnEl.value || "").trim();
+      if (!project || !uprn) {
+        clearStockFill();
+        setNote("");
+        return;
+      }
+      var ticket = ++seq;
+      var base = String(cfg.base || "").replace(/\/$/, "");
+      fetch(base + "/review/stock-lookup?project=" + encodeURIComponent(project) + "&uprn=" + encodeURIComponent(uprn), {
+        headers: { Accept: "application/json" }
+      }).then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, data: data || {} }; }).catch(function () {
+          return { ok: false, data: {} };
+        });
+      }).then(function (result) {
+        if (ticket !== seq) return;
+        var match = result.ok && result.data && result.data.match;
+        if (!match || !match.line) {
+          clearStockFill();
+          setNote("Not on this project's stock list. Type the address.");
+          return;
+        }
+        var line = String(match.line);
+        var postcode = String(match.postcode || "").trim();
+        if (postcode && line.toLowerCase().indexOf(postcode.toLowerCase()) === -1) line += ", " + postcode;
+        addressEl.value = line;
+        fromStock = true;
+        setNote("");
+        scheduleReviewDraftSave();
+      }).catch(function () {
+        if (ticket !== seq) return;
+        clearStockFill();
+        setNote("Not on this project's stock list. Type the address.");
+      });
+    }
+    function schedule() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(lookup, 250);
+    }
+    uprnEl.addEventListener("input", schedule);
+    uprnEl.addEventListener("change", lookup);
+    addressEl.addEventListener("input", function () { fromStock = false; });
+    if ($("rv-project")) $("rv-project").addEventListener("change", lookup);
+  })();
+
   var callRefEl = $("rv-call-ref");
   if (callRefEl) {
     callRefEl.addEventListener("input", syncCallRefFields);
@@ -865,6 +958,8 @@
     };
     hazardEl.addEventListener("change", refreshExtras);
     hazardEl.addEventListener("input", refreshExtras);
+    var ratingEl = $("rv-rating");
+    if (ratingEl) ratingEl.addEventListener("change", refreshExtras);
   }
 
   wirePhotoPreview(document.body);

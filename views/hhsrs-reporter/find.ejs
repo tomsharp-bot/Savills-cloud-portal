@@ -2,6 +2,7 @@
 <%
   const selected = typeof found !== "undefined" ? found : null;
   const amending = view === "amend" && selected && amend;
+  const resent = typeof resentNotice !== "undefined" && resentNotice;
   const closeUrl = reporterBase + "/find" + (filters.q || filters.date || filters.project
     ? "?" + [
         filters.q ? "q=" + encodeURIComponent(filters.q) : "",
@@ -18,7 +19,7 @@
 <div class="page-header">
   <div>
     <h2 class="page-section-title">Find &amp; Resend</h2>
-    <p class="subtitle">Click a case. The email that was sent opens on the right.</p>
+    <p class="subtitle">Search sent cases, then choose Amend.</p>
   </div>
 </div>
 
@@ -41,14 +42,18 @@
       </div>
       <div>
         <label class="find-label" for="find-date">Date submitted</label>
-        <input id="find-date" name="date" type="date" value="<%= filters.date %>" />
+        <input id="find-date" name="date" type="date" data-date-search value="<%= filters.date %>" />
       </div>
       <button type="submit" class="btn btn-primary">Search</button>
       <a class="btn btn-ghost" href="<%= reporterBase %>/find">Clear</a>
     </div>
-    <p class="find-hint">Search by reference, UPRN, or address. The project list is the same one the site form uses.</p>
+    <p class="find-hint">Search by reference, UPRN, or address. Only cases with an email already sent are listed. The project list is the same one the site form uses.</p>
   </form>
 </section>
+
+<% if (resent) { %>
+<div class="find-ok" role="status"><b>Email resent and correction logged</b></div>
+<% } %>
 
 <section class="panel">
   <div class="panel-head">
@@ -62,70 +67,20 @@
       pendingRows: rows,
       pendingTableId: "find-table",
       pendingAction: "amend",
+      pendingShowClaim: false,
       pendingFoot: "Newest first"
     }) %>
   <% } %>
 </section>
 </div>
-
-<% if (selected) { %>
-<aside class="fr-drawer" id="fr-drawer" aria-label="Case">
-  <div class="fr-drawer-top">
-    <% if (selected.reference) { %><span class="ref-chip"><%= selected.reference %></span><% } %>
-    <div class="fr-drawer-actions">
-      <% if (selected.sent) { %>
-        <a class="btn btn-primary" href="<%= selected.amendUrl %>">Amend &amp; resend</a>
-      <% } %>
-      <a class="fr-x" id="fr-close" href="<%= closeUrl %>" aria-label="Close">×</a>
-    </div>
-  </div>
-  <% if (selected.notice) { %>
-    <div class="find-ok">
-      <b>Correction sent</b>
-      <p><%= selected.notice %></p>
-    </div>
-  <% } %>
-  <% if (!selected.sent) { %>
-    <div class="find-info">
-      <b>Not sent yet</b>
-      <p><%= selected.address %> · <%= selected.hazard %>. Open it in Review &amp; Create.</p>
-    </div>
-    <div class="fr-foot">
-      <a class="btn btn-primary" href="<%= selected.reviewUrl %>">Open in Review &amp; Create</a>
-    </div>
-  <% } else { %>
-    <%- include("partials/sent-email-card", {
-      cardLabel: "Email that was sent",
-      card: {
-        subject: selected.sent.subject,
-        bodyHtml: selected.sent.bodyHtml,
-        signatureHtml: typeof signatureHtml !== "undefined" ? signatureHtml : "",
-        signatureId: "rv-signature-preview",
-        photos: selected.sent.photos
-      }
-    }) %>
-    <% if (selected.log && selected.log.length) { %>
-      <div class="fr-log">
-        <div class="fr-log-title">Sends</div>
-        <% selected.log.forEach((entry) => { %>
-          <p class="<%= entry.fresh ? "is-fresh" : "" %>">
-            <b><%= entry.when %></b> <%= entry.type %>
-            <% if (entry.reason) { %> · <%= entry.reason %><% } %>
-          </p>
-        <% }) %>
-      </div>
-    <% } %>
-  <% } %>
-</aside>
-<% } %>
 </div>
 </div>
 <% } else { %>
 <section class="amend-screen" id="fr-amend">
   <div class="page-header">
     <div>
-      <h2 class="page-section-title">Amend &amp; Resend</h2>
-      <p class="subtitle">Starts from the email that was sent.<% if (selected.reference) { %> <%= selected.reference %>.<% } %></p>
+      <h2 class="page-section-title">Amend &amp; resend</h2>
+      <p class="subtitle">Change the case, then generate the correction.<% if (selected.reference) { %> <%= selected.reference %>.<% } %></p>
     </div>
   </div>
   <form id="rv-send-form" autocomplete="off" class="amend-form" method="post" action="<%= amend.action %>">
@@ -169,34 +124,39 @@
       <label>Survey date<input id="f-date" name="surveyDate" type="text" autocomplete="off" value="<%= amend.fields.surveyDate %>" /></label>
     </div>
 
-    <article class="sent-card" id="fr-preview" aria-label="Correction email">
-      <h2 id="fr-preview-subject"><%= amend.subject %></h2>
-      <div class="sent-body">
-        <div class="sent-copy" id="fr-preview-copy"><%- amend.previewHtml %></div>
-        <div class="sent-sign" id="rv-signature-preview"><%- typeof signatureHtml !== "undefined" ? signatureHtml : "" %></div>
-        <% if (amend.photos.length) { %>
-          <div class="sent-photos" id="fr-preview-photos">
-            <% amend.photos.forEach((photo) => { %>
-              <figure class="photo-zoom">
-                <div class="art">
-                  <% if (photo.url) { %><img src="<%= photo.url %>" alt="<%= photo.caption || photo.name %>" /><% } else { %><div class="art-miss">No file</div><% } %>
-                </div>
-                <figcaption><%= photo.caption || photo.name %></figcaption>
-              </figure>
-            <% }) %>
-          </div>
-        <% } %>
-      </div>
-    </article>
-
-    <label class="amend-check" for="fr-checked">
-      <input type="checkbox" id="fr-checked" name="checked" value="1" />
-      I've checked the details
-    </label>
-    <p class="amend-note">Nothing is sent until you press Send correction.</p>
     <div class="amend-actions">
-      <a class="btn btn-ghost" href="<%= selected.backUrl %>">Back</a>
-      <button type="submit" class="btn btn-primary" id="btn-send-correction" disabled>Send correction</button>
+      <button type="button" class="btn btn-primary" id="btn-generate-correction">Generate correction</button>
+    </div>
+
+    <div id="fr-preview-wrap" hidden>
+      <article class="sent-card" id="fr-preview" aria-label="Correction email">
+        <h2 id="fr-preview-subject"><%= amend.subject %></h2>
+        <div class="sent-body">
+          <div class="sent-copy" id="fr-preview-copy"><%- amend.previewHtml %></div>
+          <div class="sent-sign" id="rv-signature-preview"><%- typeof signatureHtml !== "undefined" ? signatureHtml : "" %></div>
+          <% if (amend.photos.length) { %>
+            <div class="sent-photos" id="fr-preview-photos">
+              <% amend.photos.forEach((photo) => { %>
+                <figure class="photo-zoom">
+                  <div class="art">
+                    <% if (photo.url) { %><img src="<%= photo.url %>" alt="Photo" /><% } else { %><div class="art-miss">No file</div><% } %>
+                  </div>
+                </figure>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </article>
+
+      <label class="amend-check" for="fr-checked">
+        <input type="checkbox" id="fr-checked" name="checked" value="1" />
+        I've checked the details
+      </label>
+      <p class="amend-note">Nothing is sent until you press Send correction.</p>
+      <div class="amend-actions">
+        <a class="btn btn-ghost" href="<%= closeUrl %>">Abandon amendment</a>
+        <button type="submit" class="btn btn-primary" id="btn-send-correction" disabled>Send correction</button>
+      </div>
     </div>
   </form>
   <script type="application/json" id="fr-amend-data"><%- JSON.stringify({
