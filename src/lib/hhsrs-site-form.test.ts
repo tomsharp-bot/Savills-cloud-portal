@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import ejs from "ejs";
-import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS, isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
+import {
+  HHSRS_CATEGORIES,
+  HHSRS_SITE_FORM_NEW_RATINGS,
+  HHSRS_SITE_FORM_RATINGS,
+  isHhsrsCategory,
+  isHhsrsRating,
+  isHhsrsSiteFormRating,
+} from "./hhsrs-categories.js";
 import {
   composeCallNotes,
   splitCallNotes,
@@ -26,7 +33,12 @@ import {
   normalizeUprn,
   readHhsrsValues,
   siteFormProjectFlags,
+  siteFormRatingChoices,
   siteFormSectionState,
+  siteFormShowsCallReference,
+  siteFormShowsSuspectedCause,
+  siteFormShowsWindowRestrictor,
+  WINDOW_RESTRICTOR_CATEGORY,
   siteSubmissionCallFields,
   ADDRESS_SOURCE_MANUAL,
   applyManualAddress,
@@ -60,8 +72,19 @@ describe("HHSRS categories", () => {
       "High - Emergency Risk",
       "High - Severe Risk",
     ]);
+    assert.deepEqual(HHSRS_SITE_FORM_NEW_RATINGS, [
+      "Low",
+      "Medium",
+      "High - Emergency risk",
+      "High - Significant risk",
+    ]);
+    assert.equal(HHSRS_CATEGORIES.includes("Falling Between Levels" as (typeof HHSRS_CATEGORIES)[number]), true);
+    assert.equal(WINDOW_RESTRICTOR_CATEGORY, "Falling Between Levels");
     assert.equal(isHhsrsSiteFormRating("High - Emergency Risk"), true);
+    assert.equal(isHhsrsSiteFormRating("High - Emergency risk"), true);
+    assert.equal(isHhsrsSiteFormRating("High - Significant risk"), true);
     assert.equal(isHhsrsSiteFormRating("High"), false);
+    assert.equal(isHhsrsSiteFormRating("High – severe risk"), false);
     assert.equal(isHhsrsSiteFormRating("Extreme"), false);
   });
 });
@@ -86,7 +109,7 @@ describe("validateHhsrsForm", () => {
     postcode: "EX1 1AA",
     surveyorName: "Alex Surveyor",
     category: "Damp & Mould Growth",
-    rating: "Severe",
+    rating: "Medium",
     comment: "Visible mould in bathroom.",
     otherDetails: "No access issues.",
     addressConfirmed: true,
@@ -132,8 +155,21 @@ describe("validateHhsrsForm", () => {
     assert.equal(badRating.ok, false);
     const extreme = validateHhsrsForm({ ...valid, rating: "Extreme" }, project);
     assert.equal(extreme.ok, false);
-    const emergency = validateHhsrsForm({ ...valid, rating: "High - Emergency Risk" }, project);
+    const oldEmergency = validateHhsrsForm({ ...valid, rating: "High - Emergency Risk" }, project);
+    assert.equal(oldEmergency.ok, false);
+    const severeOnNew = validateHhsrsForm({ ...valid, rating: "Severe" }, project);
+    assert.equal(severeOnNew.ok, false);
+    const enDash = validateHhsrsForm({ ...valid, rating: "High – severe risk" }, project);
+    assert.equal(enDash.ok, false);
+    const emergency = validateHhsrsForm({ ...valid, rating: "High - Emergency risk" }, project);
     assert.equal(emergency.ok, true);
+    const significant = validateHhsrsForm({ ...valid, rating: "High - Significant risk" }, project);
+    assert.equal(significant.ok, true);
+    const severeOnOld = validateHhsrsForm(
+      { ...valid, rating: "Severe", clientCallReference: "CR-1" },
+      { id: "onward", name: "Onward 2026" }
+    );
+    assert.equal(severeOnOld.ok, true);
     const stranger = validateHhsrsForm(valid, project, { surveyorNames: ["Pat Jones"] });
     assert.equal(stranger.ok, false);
     if (!stranger.ok) assert.equal(stranger.errors.surveyorName, "Select a surveyor from Personnel.");
@@ -193,7 +229,7 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").saxon, true);
     assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").calls, true);
     assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").onward, false);
-    assert.equal(siteFormProjectFlags("Cornwall 2026 Ph2").online, true);
+    assert.equal(siteFormProjectFlags("Cornwall 2026 Ph2").online, false);
     assert.equal(siteFormProjectFlags("Gateway 2026").calls, false);
     assert.equal(siteFormProjectFlags("Demo current project (local)").onward, false);
     assert.equal(siteFormProjectFlags("MTVH 2026").calls, false);
@@ -203,25 +239,159 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormProjectFlags("Vico 2026 8k").calls, true);
   });
 
-  it("does not require a suspected cause on any project, and keeps one already supplied", () => {
-    const projects = [
-      { id: "mtvh", name: "MTVH Pilot 2026", values: valid },
-      { id: "vico", name: "Vico 2026 8k", values: { ...valid, clientCallReference: "CR-1" } },
-      { id: "onward", name: "Onward 2026", values: { ...valid, clientCallReference: "CR-1" } },
-      { id: "gateway", name: "Gateway 2026", values: valid },
-    ];
-    for (const project of projects) {
-      const blank = validateHhsrsForm(project.values, project);
-      assert.equal(blank.ok, true, project.name);
-      if (blank.ok) assert.equal(blank.data.suspectedCause, "");
-      assert.equal(siteFormSectionState({ ...project.values, suspectedCause: "" }, project.name).hazard, true);
+  it("asks Vico for vulnerabilities, and for a suspected cause only on damp and mould", () => {
+    const vico = { id: "vico", name: "Vico 2026" };
+    const electrical = { ...valid, rating: "Moderate", category: "Electrical Hazards", clientCallReference: "CR-1" };
+    const missingVuln = validateHhsrsForm(electrical, vico);
+    assert.equal(missingVuln.ok, false);
+    const withVuln = validateHhsrsForm({ ...electrical, vulnerabilities: "  Elderly resident  " }, vico);
+    assert.equal(withVuln.ok, true);
+    if (withVuln.ok) {
+      assert.equal(withVuln.data.vulnerabilities, "Elderly resident");
+      assert.equal(withVuln.data.suspectedCause, "");
     }
-    const kept = validateHhsrsForm(
-      { ...valid, suspectedCause: "  Leaking gutter above the bedroom  " },
-      { id: "mtvh", name: "MTVH Pilot 2026" }
+    const dampMissing = validateHhsrsForm(
+      { ...electrical, category: "Damp & Mould Growth", vulnerabilities: "Elderly resident" },
+      vico
     );
-    assert.equal(kept.ok, true);
-    if (kept.ok) assert.equal(kept.data.suspectedCause, "Leaking gutter above the bedroom");
+    assert.equal(dampMissing.ok, false);
+    if (!dampMissing.ok) assert.equal(dampMissing.errors.suspectedCause, "Enter the suspected cause.");
+    const damp = validateHhsrsForm(
+      {
+        ...electrical,
+        category: "Damp & Mould Growth",
+        vulnerabilities: "Elderly resident",
+        suspectedCause: "  Leaking gutter  ",
+      },
+      vico
+    );
+    assert.equal(damp.ok, true);
+    if (damp.ok) assert.equal(damp.data.suspectedCause, "Leaking gutter");
+    const other = validateHhsrsForm(
+      { ...valid, suspectedCause: "Leaking gutter", vulnerabilities: "Elderly resident" },
+      project
+    );
+    assert.equal(other.ok, true);
+    if (other.ok) {
+      assert.equal(other.data.suspectedCause, "");
+      assert.equal(other.data.vulnerabilities, "");
+    }
+    assert.equal(siteFormShowsSuspectedCause("Vico 2026", "Damp & Mould Growth"), true);
+    assert.equal(siteFormShowsSuspectedCause("Vico 2026", "Electrical Hazards"), false);
+    assert.equal(siteFormShowsSuspectedCause("MTVH 2026", "Damp & Mould Growth"), false);
+  });
+
+  it("asks MTVH for a call reference only on High - Emergency risk, and for restrictors on falls between levels", () => {
+    const mtvh = { id: "mtvh", name: "MTVH 2026" };
+    assert.equal(siteFormProjectFlags("MTVH 2026").calls, false);
+    assert.equal(siteFormProjectFlags("MTVH Pilot").mtvh, true);
+    assert.equal(siteFormShowsCallReference("MTVH 2026", "Low"), false);
+    assert.equal(siteFormShowsCallReference("MTVH 2026", "Medium"), false);
+    assert.equal(siteFormShowsCallReference("MTVH 2026", "High - Significant risk"), false);
+    assert.equal(siteFormShowsCallReference("MTVH 2026", "High - Emergency risk"), true);
+    assert.equal(siteFormShowsCallReference("Onward 2026", "Low"), true);
+
+    const low = validateHhsrsForm({ ...valid, rating: "Low", clientCallReference: "CR-9" }, mtvh);
+    assert.equal(low.ok, true);
+    if (low.ok) assert.equal(low.data.clientCallReference, "");
+    const significant = validateHhsrsForm({ ...valid, rating: "High - Significant risk" }, mtvh);
+    assert.equal(significant.ok, true);
+    const emergencyMissing = validateHhsrsForm({ ...valid, rating: "High - Emergency risk" }, mtvh);
+    assert.equal(emergencyMissing.ok, false);
+    const emergency = validateHhsrsForm(
+      { ...valid, rating: "High - Emergency risk", clientCallReference: "CR-9" },
+      mtvh
+    );
+    assert.equal(emergency.ok, true);
+    if (emergency.ok) assert.equal(emergency.data.clientCallReference, "CR-9");
+    const unreached = validateHhsrsForm(
+      { ...valid, rating: "High - Emergency risk", callUnreached: true, callRefBlankReason: "No answer" },
+      mtvh
+    );
+    assert.equal(unreached.ok, true);
+    const caused = validateHhsrsForm({ ...valid, suspectedCause: "leak", vulnerabilities: "x" }, mtvh);
+    assert.equal(caused.ok, true);
+    if (caused.ok) {
+      assert.equal(caused.data.suspectedCause, "");
+      assert.equal(caused.data.vulnerabilities, "");
+    }
+
+    assert.equal(siteFormShowsWindowRestrictor("MTVH 2026", "Falling Between Levels"), true);
+    assert.equal(siteFormShowsWindowRestrictor("MTVH 2026", "Falls between levels"), false);
+    assert.equal(siteFormShowsWindowRestrictor("MTVH 2026", "Electrical Hazards"), false);
+    assert.equal(siteFormShowsWindowRestrictor("Gateway 2026", "Falling Between Levels"), false);
+    const falling = { ...valid, category: "Falling Between Levels", rating: "Medium" };
+    const missingRestrictor = validateHhsrsForm(falling, mtvh);
+    assert.equal(missingRestrictor.ok, false);
+    assert.equal(siteFormSectionState(falling, "MTVH 2026").hazard, false);
+    const restrictor = validateHhsrsForm(
+      {
+        ...falling,
+        restrictorMissingCount: " 2 ",
+        restrictorLocations: ["Bedroom 2", "Hall", "Nope"],
+        restrictorMaterial: "Timber",
+      },
+      mtvh
+    );
+    assert.equal(restrictor.ok, true);
+    if (restrictor.ok) {
+      assert.equal(restrictor.data.restrictorMissingCount, "2");
+      assert.equal(restrictor.data.restrictorLocations, "Hall, Bedroom 2");
+      assert.equal(restrictor.data.restrictorMaterial, "Timber");
+    }
+    const hidden = validateHhsrsForm(
+      {
+        ...valid,
+        category: "Electrical Hazards",
+        restrictorMissingCount: "2",
+        restrictorLocations: "Hall",
+        restrictorMaterial: "PVC",
+      },
+      mtvh
+    );
+    assert.equal(hidden.ok, true);
+    if (hidden.ok) assert.equal(hidden.data.restrictorMissingCount, "");
+    const otherProject = validateHhsrsForm(
+      { ...falling, restrictorMissingCount: "2", restrictorLocations: "Hall", restrictorMaterial: "PVC" },
+      project
+    );
+    assert.equal(otherProject.ok, true);
+    if (otherProject.ok) assert.equal(otherProject.data.restrictorMaterial, "");
+  });
+
+  it("keeps Leeds, Cornwall and BPHA on the ordinary site form", () => {
+    const names = ["Leeds Fed HA 2026", "LFHA (Leeds)", "Cornwall 2026", "BPHA", "BPHA 2026 ACQ"];
+    for (const name of names) {
+      const flags = siteFormProjectFlags(name);
+      assert.equal(flags.calls, false, name);
+      assert.equal(flags.vulnerabilities, false, name);
+      assert.equal(flags.online, false, name);
+      assert.equal(flags.saxon, false, name);
+      assert.equal(flags.mtvh, false, name);
+      assert.equal(siteFormShowsSuspectedCause(name, "Damp & Mould Growth"), false, name);
+      assert.equal(siteFormShowsCallReference(name, "High - Emergency risk"), false, name);
+      assert.equal(siteFormShowsCallReference(name, "Severe"), false, name);
+      assert.equal(siteFormShowsWindowRestrictor(name, "Falling Between Levels"), false, name);
+      const rating = siteFormRatingChoices(name).includes("Severe") ? "Severe" : "Medium";
+      const result = validateHhsrsForm(
+        {
+          ...valid,
+          rating,
+          clientCallReference: "CR-1",
+          suspectedCause: "leak",
+          vulnerabilities: "none",
+        },
+        { id: "plain", name }
+      );
+      assert.equal(result.ok, true, name);
+      if (result.ok) {
+        assert.equal(result.data.clientCallReference, "");
+        assert.equal(result.data.suspectedCause, "");
+        assert.equal(result.data.vulnerabilities, "");
+      }
+    }
+    assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").saxon, true);
+    assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").calls, true);
   });
 
   it("accepts a blank other details field, and skips call reference unless the project needs it", () => {
@@ -576,8 +746,9 @@ describe("HHSRS site form project option flags", () => {
     assert.match(saxon, /data-calls="1"/);
     assert.match(saxon, /data-saxon="1"/);
     const cornwall = option("cw");
-    assert.match(cornwall, /data-online="1"/);
+    assert.doesNotMatch(cornwall, /data-online/);
     assert.doesNotMatch(cornwall, /data-calls=/);
+    assert.doesNotMatch(html, /cornwall-damp-note|separate online form/);
     const gateway = option("gw");
     assert.doesNotMatch(gateway, /data-calls=|data-saxon=|data-online=/);
     assert.match(gateway, /data-manual-address="1"/);
@@ -593,17 +764,32 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
     const hazard = html.slice(html.indexOf('id="step-hazard"'), html.indexOf('id="extra-box"'));
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
-    assert.doesNotMatch(html, /suspectedCause|Suspected cause|suspected-cause-hint/);
+    assert.match(html, /id="restrictor-box"[^>]*hidden/);
+    assert.match(html, /class="restrictor-locs"/);
+    assert.match(html, /How many are missing \*/);
+    assert.match(html, /inputmode="numeric"/);
+    assert.match(html, /value="Hall"/);
+    assert.match(html, /value="Other GF"/);
+    assert.match(html, /value="Bathroom"/);
+    assert.match(html, /value="PVC"/);
+    assert.match(html, /value="Timber"/);
+    assert.match(html, /value="Metal"/);
+    const restrictor = html.slice(html.indexOf('id="restrictor-box"'), html.indexOf('id="comment"'));
+    assert.doesNotMatch(restrictor, /hhsrs-hint/);
+    assert.doesNotMatch(html, /suspected-cause-hint/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = html.slice(html.indexOf('id="extra-box"'), html.indexOf('id="step-photos"'));
     assert.match(extras, /id="otherDetails"[^>]*enterkeyhint="next"/);
-    assert.doesNotMatch(extras, /id="suspectedCause"/);
+    assert.match(extras, /id="suspected-cause-box"[^>]*hidden/);
+    assert.match(extras, /id="suspectedCause"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     const flowJs = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
     assert.match(flowJs, /function stepKeyboardNext/);
     assert.match(flowJs, /from\.id === "comment"/);
-    assert.doesNotMatch(flowJs, /suspectedCause/);
-    const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsRequired"));
+    assert.match(flowJs, /function syncCauseBox/);
+    assert.match(flowJs, /function syncRestrictorBox/);
+    assert.match(flowJs, /Falling Between Levels/);
+    const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsAlways"));
     assert.doesNotMatch(hazardFn, /suspectedCause/);
     assert.match(flowJs, /if \(!extrasDone\(\) \|\| !extrasPassed\)/);
     const reviewDraft = {

@@ -30,8 +30,9 @@ export const HHSRS_RATINGS = ["Low", "Medium", "High"] as const;
 export type HhsrsRating = (typeof HHSRS_RATINGS)[number];
 
 /**
- * Surveyor site-form ratings (approved mock).
- * Bare "High" and "Extreme" are not offered. Wording matches the mock, including the spaced hyphen.
+ * Surveyor site-form ratings for the old scheme.
+ * Left as the shared list the form used before new-scheme projects had their own dropdown.
+ * Bare "High" and "Extreme" are not offered.
  */
 export const HHSRS_SITE_FORM_RATINGS = [
   "Low",
@@ -42,7 +43,21 @@ export const HHSRS_SITE_FORM_RATINGS = [
   "High - Emergency Risk",
   "High - Severe Risk",
 ] as const;
-export type HhsrsSiteFormRating = (typeof HHSRS_SITE_FORM_RATINGS)[number];
+
+/**
+ * Surveyor site-form ratings for projects on the new scheme.
+ * No plain High, and no "High – severe risk".
+ */
+export const HHSRS_SITE_FORM_NEW_RATINGS = [
+  "Low",
+  "Medium",
+  "High - Emergency risk",
+  "High - Significant risk",
+] as const;
+
+export type HhsrsSiteFormRating =
+  | (typeof HHSRS_SITE_FORM_RATINGS)[number]
+  | (typeof HHSRS_SITE_FORM_NEW_RATINGS)[number];
 
 export function isHhsrsCategory(value: string): value is HhsrsCategory {
   return (HHSRS_CATEGORIES as readonly string[]).includes(value);
@@ -53,5 +68,8 @@ export function isHhsrsRating(value: string): value is HhsrsRating {
 }
 
 export function isHhsrsSiteFormRating(value: string): value is HhsrsSiteFormRating {
-  return (HHSRS_SITE_FORM_RATINGS as readonly string[]).includes(value);
+  return (
+    (HHSRS_SITE_FORM_RATINGS as readonly string[]).includes(value) ||
+    (HHSRS_SITE_FORM_NEW_RATINGS as readonly string[]).includes(value)
+  );
 }

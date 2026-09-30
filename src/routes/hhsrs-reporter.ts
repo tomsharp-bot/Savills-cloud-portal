@@ -54,6 +54,7 @@ import {
   resolveHhsrsProject,
 } from "../lib/hhsrs-reporter-projects.js";
 import { loadPortalProjectNames, storedNamesForPortalProject } from "../lib/hhsrs-portal-projects.js";
+import { archivedAtForStageChange } from "../lib/hhsrs-site-form-projects.js";
 import {
   PROJECT_PROGRESS_CHANGE_TOAST,
   buildProjectOverview,
@@ -317,7 +318,7 @@ async function claimIfOpen(
 }
 
 function shellLocals(opts: {
-  activeNav: "pending" | "review" | "find" | "main-log" | "duplicates" | "admin" | "project-overview";
+  activeNav: "pending" | "review" | "find" | "main-log" | "duplicates" | "admin" | "project-overview" | "project-settings";
   summary: ReporterSummary;
   title?: string;
   flashOk?: string;
@@ -1013,6 +1014,62 @@ function takeClientEmailFlash(req: Request): ClientEmailFlash | null {
   return flash;
 }
 
+async function loadArchivedProjects(): Promise<{ id: string; name: string; projectManager: string }[]> {
+  try {
+    return await prisma.project.findMany({
+      where: { stage: "archive" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, projectManager: true },
+    });
+  } catch {
+    return [];
+  }
+}
+
+/* ---------- Project settings ---------- */
+hhsrsReporterRouter.get("/project-settings", async (req: Request, res: Response) => {
+  const [summary, archivedProjects] = await Promise.all([loadSummary(), loadArchivedProjects()]);
+  const flash = takeFlash(req);
+  res.render("hhsrs-reporter/project-settings", {
+    ...shellLocals({
+      activeNav: "project-settings",
+      summary,
+      title: "Project settings — HHSRS Reporter",
+      flashOk: flash.ok,
+      flashErr: flash.err,
+    }),
+    user: req.user,
+    archivedProjects,
+  });
+});
+
+hhsrsReporterRouter.post("/project-settings/reinstate", async (req: Request, res: Response) => {
+  const id = String(req.body?.projectId || "").trim();
+  const back = `${HHSRS_REPORTER_PATH}/project-settings#archived-projects`;
+  try {
+    const existing = id
+      ? await prisma.project.findUnique({
+          where: { id },
+          select: { id: true, name: true, stage: true },
+        })
+      : null;
+    if (!existing || existing.stage !== "archive") {
+      flashErr(req, "That project is not archived.");
+      res.redirect(back);
+      return;
+    }
+    const archivedAt = archivedAtForStageChange(existing.stage, "current");
+    await prisma.project.update({
+      where: { id: existing.id },
+      data: archivedAt === undefined ? { stage: "current" } : { stage: "current", archivedAt },
+    });
+    flashOk(req, `${existing.name} is current again and shows on the site form.`);
+  } catch {
+    flashErr(req, "Could not reinstate that project.");
+  }
+  res.redirect(back);
+});
+
 /* ---------- Admin ---------- */
 hhsrsReporterRouter.get("/admin", async (req: Request, res: Response) => {
   const clientFlash = takeClientEmailFlash(req);
@@ -1100,7 +1157,7 @@ hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Respon
 /* Back-compat paths from PR #20 */
 hhsrsReporterRouter.get("/:id", async (req: Request, res: Response) => {
   const id = req.params.id;
-  if (["review", "find", "main-log", "duplicates", "admin", "project-overview"].includes(id)) {
+  if (["review", "find", "main-log", "duplicates", "admin", "project-overview", "project-settings"].includes(id)) {
     res.status(404).send("Not found.");
     return;
   }

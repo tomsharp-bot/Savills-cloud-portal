@@ -351,6 +351,10 @@ model HhsrsSiteSubmission {
   suspectedCause       String    @default("")
   includeCause         Boolean   @default(true)
   vulnerabilities      String    @default("")
+  /// MTVH missing window restrictors. Empty for every other case.
+  restrictorMissingCount String  @default("")
+  restrictorLocations    String  @default("")
+  restrictorMaterial     String  @default("")
   escalation           String    @default("")
   onwardTopic          String    @default("")
   cat1Confirmed        Boolean   @default(false)

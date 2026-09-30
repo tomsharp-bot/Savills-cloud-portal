@@ -91,7 +91,7 @@ function hhsrsReviewFields(): Record<string, string> {
     postcode: "EX1 1AA",
     surveyorName: "Alex Surveyor",
     category: "Damp & Mould Growth",
-    rating: "Severe",
+    rating: "High - Emergency risk",
     addressConfirmed: "true",
     comment: "Visible mould in bathroom.",
     clientCallReference: "",
@@ -287,11 +287,30 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /HHSRS category/);
     const hazard = form.body.slice(form.body.indexOf('id="step-hazard"'), form.body.indexOf('id="extra-box"'));
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
-    assert.doesNotMatch(form.body, /suspectedCause|Suspected cause|suspected-cause-hint/);
+    assert.doesNotMatch(form.body, /suspected-cause-hint/);
+    assert.match(form.body, /id="suspected-cause-box"[^>]*hidden/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = form.body.slice(form.body.indexOf('id="extra-box"'), form.body.indexOf('id="step-photos"'));
     assert.match(extras, /Any other details <span class="optional">\(optional\)<\/span>/);
-    assert.doesNotMatch(extras, /id="suspectedCause"/);
+    assert.match(extras, /id="suspectedCause"/);
+    const ratingSelect = form.body.slice(
+      form.body.indexOf('<select id="rating"'),
+      form.body.indexOf("</select>", form.body.indexOf('<select id="rating"'))
+    );
+    assert.match(ratingSelect, /value="Low"/);
+    assert.match(ratingSelect, /value="Medium"/);
+    assert.match(ratingSelect, /value="High - Emergency risk"/);
+    assert.match(ratingSelect, /value="High - Significant risk"/);
+    assert.doesNotMatch(ratingSelect, /value="High"/);
+    assert.doesNotMatch(ratingSelect, /Severe|Slight|Moderate/);
+    assert.doesNotMatch(ratingSelect, /High – severe risk/);
+    assert.match(form.body, /id="restrictor-box"[^>]*hidden/);
+    assert.match(form.body, /class="restrictor-locs"/);
+    assert.match(form.body, /data-vulnerabilities="1"/);
+    assert.match(form.body, /data-mtvh="1"/);
+    assert.match(form.body, />Vico 2026</);
+    assert.match(form.body, />MTVH 2026</);
+    assert.doesNotMatch(form.body, /separate online form/);
     assert.doesNotMatch(hazard, /data-extra=/);
     assert.match(form.body, /Client call reference \*/);
     assert.match(form.body, /Couldn't get through/);
@@ -334,8 +353,6 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /id="btn-lookup-uprn"/);
     assert.match(form.body, /data-stock-lookup="\/HHSRS-site-form\/stock-lookup"/);
     assert.match(form.body, /<select id="surveyorName"/);
-    assert.match(form.body, /High - Emergency Risk/);
-    assert.match(form.body, /High - Severe Risk/);
     assert.doesNotMatch(form.body, /<option value="High">/);
     assert.doesNotMatch(form.body, /Extreme/);
     assert.match(form.body, /viewport-fit=cover/);
@@ -412,7 +429,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(js.body, /function stepKeyboardNext/);
     assert.match(js.body, /from\.id === "comment"/);
     assert.match(js.body, /el\.id === "comment" \|\| el\.id === "otherDetails"/);
-    assert.doesNotMatch(js.body, /suspectedCause/);
+    assert.match(js.body, /function syncCauseBox/);
+    assert.match(js.body, /function syncRestrictorBox/);
   });
 
   it("keeps 14px between a field box and the next field label", async () => {
@@ -509,30 +527,49 @@ describe("HHSRS site form at domain-root paths", () => {
     const causedPost = await request(app, "POST", "/HHSRS-site-form/review", causedUpload);
     assert.equal(causedPost.status, 302);
     const causedReview = await request(app, "GET", causedPost.location);
+    assert.doesNotMatch(causedReview.body, /Suspected cause/);
+    const vicoUpload = multipartForm(
+      {
+        ...hhsrsReviewFields(),
+        projectId: "hhsrs-demo-vico",
+        rating: "Moderate",
+        clientCallReference: "CR-44",
+        vulnerabilities: "Elderly resident",
+        suspectedCause: "Leaking gutter above the bedroom",
+      },
+      [{ field: "photos", filename: "gutter.jpg", type: "image/jpeg", data: fakeJpeg(128) }]
+    );
+    const vicoPost = await request(app, "POST", "/HHSRS-site-form/review", vicoUpload);
+    assert.equal(vicoPost.status, 302);
+    const vicoReview = await request(app, "GET", vicoPost.location);
     assert.match(
-      causedReview.body,
+      vicoReview.body,
       /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/
     );
-    const draftId = new URL(causedPost.location, "http://local").searchParams.get("draft") || "";
+    assert.match(vicoReview.body, /<dt>Vulnerabilities<\/dt><dd class="prewrap">Elderly resident<\/dd>/);
+    const draftId = new URL(vicoPost.location, "http://local").searchParams.get("draft") || "";
     const edited = await request(app, "POST", "/HHSRS-site-form/edit", {
       body: `draftId=${encodeURIComponent(draftId)}`,
     });
     assert.equal(edited.status, 200);
-    assert.doesNotMatch(edited.body, /name="suspectedCause"|Suspected cause/);
+    assert.match(edited.body, /name="suspectedCause"/);
     const keptPhoto = edited.body.match(/name="keepPhotos" value="([^"]+)"/);
     assert.ok(keptPhoto, "existing draft photo is kept on edit");
     const again = multipartForm({
       ...hhsrsReviewFields(),
+      projectId: "hhsrs-demo-vico",
+      rating: "Moderate",
+      category: "Electrical Hazards",
+      clientCallReference: "CR-44",
+      vulnerabilities: "Elderly resident",
       draftId,
       keepPhotos: keptPhoto[1],
     });
     const keptPost = await request(app, "POST", "/HHSRS-site-form/review", again);
     assert.equal(keptPost.status, 302);
     const keptReview = await request(app, "GET", keptPost.location);
-    assert.match(
-      keptReview.body,
-      /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/
-    );
+    assert.doesNotMatch(keptReview.body, /Suspected cause/);
+    assert.match(keptReview.body, /Vulnerabilities/);
     assert.match(review.body, /No access issues/);
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);

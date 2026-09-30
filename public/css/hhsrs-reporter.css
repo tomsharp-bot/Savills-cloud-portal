@@ -928,6 +928,28 @@ a.linkish.active, .linkish.active {
   color: var(--muted);
   line-height: 1.55;
 }
+.ps-empty {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  color: var(--muted);
+}
+.ps-archived-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ps-archived-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.65rem 1.1rem;
+  border-bottom: 1px solid #e4e8ee;
+}
+.ps-archived-list li:last-child { border-bottom: none; }
+.ps-archived-name { margin: 0; font-weight: 650; }
+.ps-archived-meta { margin: 0.15rem 0 0; font-size: 0.78rem; color: var(--muted); }
+.ps-archived-list form { margin: 0; }
 .admin-placeholder ul { margin: 0.75rem 0 0; padding-left: 1.2rem; }
 .admin-placeholder li { margin: 0.35rem 0; }
 
@@ -1495,6 +1517,17 @@ body.hhsrs-reporter {
 .hhsrs-reporter .pending-issues-table .addr-cell strong {
   white-space: normal;
 }
+/* Last 20 drops the reference column. Give that width to the address and
+   keep the address itself on one line. Other tables still wrap. */
+.hhsrs-reporter .pending-issues-table.is-noref col.c-addr { width: 24%; }
+.hhsrs-reporter .pending-issues-table.is-noref td.addr-cell { overflow: hidden; }
+.hhsrs-reporter .pending-issues-table.is-noref .addr-cell > strong {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
   overflow: visible;
@@ -1850,6 +1883,29 @@ body.hhsrs-reporter {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
 }
+.hhsrs-reporter .pending-issues-table .photo-att-counted .photo-att-icon {
+  width: auto;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem 0 0.28rem;
+  gap: 0.2rem;
+}
+.hhsrs-reporter .pending-issues-table .photo-att-count.is-shown {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #44546a;
+  font-family: var(--font);
+}
+.hhsrs-reporter .pending-issues-table td.photo-att-cell,
+.hhsrs-reporter .pending-issues-table th.photo-att-col { overflow: visible; white-space: nowrap; }
 .hhsrs-reporter #review-workspace { padding-bottom: 85vh; }
 .hhsrs-reporter #rv-project-block { scroll-margin-top: 0; }
 .hhsrs-reporter .review-project-first.panel { padding: 0; overflow: hidden; }

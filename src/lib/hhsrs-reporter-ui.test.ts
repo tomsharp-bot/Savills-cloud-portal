@@ -523,6 +523,10 @@ describe("HHSRS Reporter UI helpers", () => {
     const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
     const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
     assert.match(last, /partials\/pending-issues-table/);
+    assert.match(last, /pendingShowReference:\s*false/);
+    assert.doesNotMatch(waiting, /pendingShowReference:\s*false/);
+    assert.match(table, /pendingShowReference !== false/);
+    assert.match(table, /is-noref/);
     assert.doesNotMatch(last, /<thead>/);
     assert.match(find, /partials\/pending-issues-table/);
     assert.match(find, /pendingAction:\s*"amend"/);

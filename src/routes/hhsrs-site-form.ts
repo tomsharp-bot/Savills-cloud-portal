@@ -5,7 +5,7 @@ import multer from "multer";
 import { allowAddressLookup } from "../lib/ideal-postcodes.js";
 import { prisma } from "../lib/prisma.js";
 import { isProduction } from "../config.js";
-import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_RATINGS } from "../lib/hhsrs-categories.js";
+import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_NEW_RATINGS, HHSRS_SITE_FORM_RATINGS } from "../lib/hhsrs-categories.js";
 import {
   ADDRESS_SOURCE_MANUAL,
   CALL_REF_BLANK_REASONS,
@@ -43,7 +43,10 @@ import {
   type StockLookupRow,
   validateHhsrsForm,
   siteFormProjectFlags,
+  siteFormRatingChoices,
   siteSubmissionCallFields,
+  WINDOW_RESTRICTOR_LOCATIONS,
+  WINDOW_RESTRICTOR_MATERIALS,
   validatePhotos,
   writeDraft,
   buildThanksSummary,
@@ -97,13 +100,21 @@ function uploadPhotos(req: Request, res: Response, next: NextFunction): void {
 }
 
 const DEV_DEMO_PROJECT = { id: "hhsrs-demo-current", name: "Demo current project (local)" };
+const DEV_VICO_PROJECT = { id: "hhsrs-demo-vico", name: "Vico 2026" };
+const DEV_MTVH_PROJECT = { id: "hhsrs-demo-mtvh", name: "MTVH 2026" };
 const DEV_DEMO_SURVEYOR = { id: "hhsrs-demo-surveyor", name: "Alex Surveyor" };
+const DEV_DEMO_PROJECTS = [DEV_DEMO_PROJECT, DEV_VICO_PROJECT, DEV_MTVH_PROJECT];
 
 type SurveyorOption = { id: string; name: string };
 
+function devDemoById(projectId: string): { id: string; name: string } | null {
+  if (isProduction) return null;
+  return DEV_DEMO_PROJECTS.find((project) => project.id === projectId) || null;
+}
+
 function withDevDemo(projects: { id: string; name: string }[]): { id: string; name: string }[] {
   if (isProduction || projects.length) return projects;
-  return [DEV_DEMO_PROJECT];
+  return DEV_DEMO_PROJECTS;
 }
 
 /** Current projects, and projects archived less than 14 days ago. */
@@ -161,14 +172,15 @@ async function valuesForAddressMode(values: HhsrsFormValues, projectId: string):
 
 async function findActiveProject(projectId: string): Promise<{ id: string; name: string } | null> {
   if (!projectId) return null;
-  if (!isProduction && projectId === DEV_DEMO_PROJECT.id) return DEV_DEMO_PROJECT;
+  const demo = devDemoById(projectId);
+  if (demo) return demo;
   try {
     return await prisma.project.findFirst({
       where: { id: projectId, AND: [siteFormProjectWhere()] },
       select: { id: true, name: true },
     });
   } catch {
-    return !isProduction && projectId === DEV_DEMO_PROJECT.id ? DEV_DEMO_PROJECT : null;
+    return devDemoById(projectId);
   }
 }
 
@@ -194,7 +206,7 @@ async function loadSurveyors(): Promise<SurveyorOption[]> {
 }
 
 function isDemoProject(projectId: string): boolean {
-  return !isProduction && projectId === DEV_DEMO_PROJECT.id;
+  return devDemoById(projectId) !== null;
 }
 
 async function findStockMatch(projectId: string, uprnRaw: string): Promise<StockAddressMatch | null> {
@@ -261,7 +273,11 @@ function renderForm(
   res.render("hhsrs-site-form/form", {
     title: "New issue — Savills HHSRS Site Reporting",
     categories: HHSRS_CATEGORIES,
-    ratings: HHSRS_SITE_FORM_RATINGS,
+    ratings: siteFormRatingChoices(selected?.name || ""),
+    siteNewRatings: HHSRS_SITE_FORM_NEW_RATINGS,
+    siteOldRatings: HHSRS_SITE_FORM_RATINGS,
+    restrictorLocations: WINDOW_RESTRICTOR_LOCATIONS,
+    restrictorMaterials: WINDOW_RESTRICTOR_MATERIALS,
     callBlankReasons: CALL_REF_BLANK_REASONS,
     values: opts.values,
     errors: opts.errors || {},
@@ -398,9 +414,21 @@ hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Resp
   const [projects, surveyors] = await Promise.all([loadActiveProjects(), loadSurveyors()]);
   const draftId = String(body.draftId || "").trim() || newDraftId();
   const existing = await readDraft(draftId);
-  // The site form no longer posts a suspected cause. Keep one already stored on the draft.
+  // Hidden fields are disabled, so they are omitted. Keep a draft value, then validation clears it when it no longer applies.
   if (!Object.prototype.hasOwnProperty.call(body, "suspectedCause")) {
     values.suspectedCause = String(existing?.suspectedCause || "").trim();
+  }
+  if (!Object.prototype.hasOwnProperty.call(body, "vulnerabilities")) {
+    values.vulnerabilities = String(existing?.vulnerabilities || "").trim();
+  }
+  if (!Object.prototype.hasOwnProperty.call(body, "restrictorMissingCount")) {
+    values.restrictorMissingCount = String(existing?.restrictorMissingCount || "").trim();
+  }
+  if (!Object.prototype.hasOwnProperty.call(body, "restrictorLocations")) {
+    values.restrictorLocations = String(existing?.restrictorLocations || "").trim();
+  }
+  if (!Object.prototype.hasOwnProperty.call(body, "restrictorMaterial")) {
+    values.restrictorMaterial = String(existing?.restrictorMaterial || "").trim();
   }
   const keep = existing ? keepRequestedPhotos(existing, listKeepPhotoNames(req.body || {})) : [];
   const incoming = filesOf(req);
@@ -538,6 +566,10 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
             rating: checked.data.rating,
             comment: checked.data.comment,
             suspectedCause: checked.data.suspectedCause,
+            vulnerabilities: checked.data.vulnerabilities,
+            restrictorMissingCount: checked.data.restrictorMissingCount,
+            restrictorLocations: checked.data.restrictorLocations,
+            restrictorMaterial: checked.data.restrictorMaterial,
             clientCallReference: call.clientCallReference,
             callOutcome: call.callOutcome,
             callNotes: call.callNotes,

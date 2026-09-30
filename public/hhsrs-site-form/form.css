@@ -657,7 +657,9 @@ body.hhsrs-form-page {
 .hhsrs-form-page #btn-lookup-uprn[hidden],
 .hhsrs-form-page #find-status[hidden],
 .hhsrs-form-page #btn-type-address[hidden],
-.hhsrs-form-page #btn-back-uprn[hidden] {
+.hhsrs-form-page #btn-back-uprn[hidden],
+.hhsrs-form-page #restrictor-box[hidden],
+.hhsrs-form-page #suspected-cause-box[hidden] {
   display: none !important;
 }
 .hhsrs-form-page .hhsrs-btn-type-address {
@@ -1165,6 +1167,32 @@ body.hhsrs-flow-room .play-layout { margin-bottom: 75vh; }
 }
 
 /* 14px from a field box down to the next field label, at every width. */
+/* MTVH window restrictors: two tight columns, no extra hints. */
+.hhsrs-form-page .restrictor-box { margin-top: 8px; }
+.hhsrs-form-page .restrictor-box > label,
+.hhsrs-form-page .restrictor-label {
+  margin: 6px 0 2px;
+}
+.hhsrs-form-page .restrictor-locs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 8px;
+  row-gap: 0;
+}
+.hhsrs-form-page .restrictor-locs label.hhsrs-check {
+  margin: 0;
+  min-height: 28px;
+  gap: 6px;
+  font-size: 0.8125rem;
+}
+.hhsrs-form-page .restrictor-locs input[type=checkbox] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  flex: 0 0 18px;
+}
+
 .hhsrs-form-page .hhsrs-form select + .field-row,
 .hhsrs-form-page .hhsrs-form .field-error + .field-row,
 .hhsrs-form-page .addr-card > .field-row {

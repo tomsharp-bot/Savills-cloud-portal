@@ -31,7 +31,13 @@
           <% } %>
           <% const visitReady = steps.visit; %>
           <% const selectedProject = projects.find((p) => p.id === values.projectId); %>
-          <% const flags = selectedProject ? selectedProject.flags : { calls: false, onward: false, saxon: false, online: false }; %>
+          <% const flags = selectedProject ? selectedProject.flags : { calls: false, onward: false, saxon: false, online: false, vulnerabilities: false, mtvh: false, ratingScheme: "NEW" }; %>
+          <% const showCause = !!(flags.vulnerabilities && /damp/i.test(String(values.category || "")) && /mould|mold/i.test(String(values.category || ""))); %>
+          <% const showCalls = !!(flags.calls || (flags.mtvh && values.rating === "High - Emergency risk")); %>
+          <% const showRestrictor = !!(flags.mtvh && values.category === "Falling Between Levels"); %>
+          <% const restrictorLocationOptions = typeof restrictorLocations !== "undefined" ? restrictorLocations : ["Hall", "Kitchen", "Lounge", "Other GF", "Landing", "Bedroom 1", "Bedroom 2", "Bedroom 3", "Bathroom"]; %>
+          <% const restrictorMaterialOptions = typeof restrictorMaterials !== "undefined" ? restrictorMaterials : ["PVC", "Timber", "Metal"]; %>
+          <% const chosenLocations = new Set(String(values.restrictorLocations || "").split(",").map((part) => part.trim())); %>
           <% const noStockManual = !!(selectedProject && selectedProject.manualAddress); %>
           <% const manualOpen = noStockManual || values.addressSource === "manual"; %>
           <% const addrOpen = !manualOpen && !!(String(values.uprn || "").trim() && (String(values.fullAddress || "").trim() || values.addressConfirmed)); %>
@@ -44,7 +50,7 @@
               <select id="projectId" name="projectId" required class="<%= errors.projectId ? 'is-invalid' : '' %>">
                 <option value=""><%= projects.length ? "Select an active project" : "No active projects found" %></option>
                 <% projects.forEach((p) => { %>
-                  <option value="<%= p.id %>"<%= values.projectId === p.id ? " selected" : "" %><% if (p.flags.calls) { %> data-calls="1"<% } %><% if (p.flags.saxon) { %> data-saxon="1"<% } %><% if (p.flags.online) { %> data-online="1"<% } %><% if (p.manualAddress) { %> data-manual-address="1"<% } %>><%= p.name %></option>
+                  <option value="<%= p.id %>"<%= values.projectId === p.id ? " selected" : "" %><% if (p.flags.calls) { %> data-calls="1"<% } %><% if (p.flags.saxon) { %> data-saxon="1"<% } %><% if (p.flags.vulnerabilities) { %> data-vulnerabilities="1"<% } %><% if (p.flags.mtvh) { %> data-mtvh="1"<% } %><% if (p.flags.ratingScheme === "OLD") { %> data-rating-scheme="OLD"<% } %><% if (p.manualAddress) { %> data-manual-address="1"<% } %>><%= p.name %></option>
                 <% }) %>
               </select>
               <% if (errors.projectId) { %><p class="field-error"><%= errors.projectId %></p><% } %>
@@ -140,7 +146,7 @@
                   </div>
                   <div>
                     <label for="rating">Rating *</label>
-                    <select id="rating" name="rating" required class="<%= errors.rating ? 'is-invalid' : '' %>">
+                    <select id="rating" name="rating" required data-scheme="<%= flags.ratingScheme === "OLD" ? "OLD" : "NEW" %>" class="<%= errors.rating ? 'is-invalid' : '' %>">
                       <option value="">Select a rating</option>
                       <% ratings.forEach((r) => { %>
                         <option value="<%= r %>" <%= values.rating === r ? "selected" : "" %>><%= r %></option>
@@ -150,6 +156,27 @@
                   </div>
                 </div>
 
+                <div id="restrictor-box" class="restrictor-box" <%= showRestrictor ? "" : "hidden" %>>
+                  <label for="restrictorMissingCount">How many are missing *</label>
+                  <input id="restrictorMissingCount" name="restrictorMissingCount" type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off" value="<%= values.restrictorMissingCount || "" %>" class="<%= errors.restrictorMissingCount ? 'is-invalid' : '' %>" <%= showRestrictor ? "required" : "disabled" %> />
+                  <% if (errors.restrictorMissingCount) { %><p class="field-error"><%= errors.restrictorMissingCount %></p><% } %>
+                  <p class="restrictor-label" id="restrictor-location-label">Location *</p>
+                  <div class="restrictor-locs" role="group" aria-labelledby="restrictor-location-label">
+                    <% restrictorLocationOptions.forEach((loc) => { %>
+                      <label class="hhsrs-check"><input type="checkbox" name="restrictorLocations" value="<%= loc %>" <%= chosenLocations.has(loc) ? "checked" : "" %> <%= showRestrictor ? "" : "disabled" %> /><span><%= loc %></span></label>
+                    <% }) %>
+                  </div>
+                  <% if (errors.restrictorLocations) { %><p class="field-error"><%= errors.restrictorLocations %></p><% } %>
+                  <label for="restrictorMaterial">Window material *</label>
+                  <select id="restrictorMaterial" name="restrictorMaterial" class="<%= errors.restrictorMaterial ? 'is-invalid' : '' %>" <%= showRestrictor ? "required" : "disabled" %>>
+                    <option value="">Select a material</option>
+                    <% restrictorMaterialOptions.forEach((material) => { %>
+                      <option value="<%= material %>" <%= values.restrictorMaterial === material ? "selected" : "" %>><%= material %></option>
+                    <% }) %>
+                  </select>
+                  <% if (errors.restrictorMaterial) { %><p class="field-error"><%= errors.restrictorMaterial %></p><% } %>
+                </div>
+
                 <label for="comment">Comment *</label>
                 <textarea id="comment" name="comment" required rows="5" enterkeyhint="next" placeholder="Describe the hazard in plain facts…" class="<%= errors.comment ? 'is-invalid' : '' %>"><%= values.comment %></textarea>
                 <% if (errors.comment) { %><p class="field-error"><%= errors.comment %></p><% } %>
@@ -157,17 +184,17 @@
 
               <div class="info-box flow-step" id="extra-box" data-flow="extras" <%= steps.hazard ? "" : "hidden" %>>
                 <p class="box-title">Extra details <span id="extra-project-label" class="extra-project-label"><%= selectedProject ? "· " + selectedProject.name : "" %></span></p>
-                <div class="project-extra" data-extra="calls" <%= flags.calls ? "" : "hidden" %>>
+                <div class="project-extra" data-extra="calls" <%= showCalls ? "" : "hidden" %>>
                   <label for="clientCallReference">Client call reference *</label>
-                  <input id="clientCallReference" name="clientCallReference" type="text" placeholder="Call reference number" value="<%= values.clientCallReference %>" class="<%= errors.clientCallReference ? 'is-invalid' : '' %>" <%= flags.calls && !values.callUnreached ? "" : "disabled" %> />
+                  <input id="clientCallReference" name="clientCallReference" type="text" placeholder="Call reference number" value="<%= values.clientCallReference %>" class="<%= errors.clientCallReference ? 'is-invalid' : '' %>" <%= showCalls && !values.callUnreached ? "" : "disabled" %> />
                   <% if (errors.clientCallReference) { %><p class="field-error"><%= errors.clientCallReference %></p><% } %>
                   <label class="hhsrs-check" for="callUnreached">
-                    <input id="callUnreached" name="callUnreached" type="checkbox" value="true" <%= values.callUnreached ? "checked" : "" %> <%= flags.calls ? "" : "disabled" %> />
+                    <input id="callUnreached" name="callUnreached" type="checkbox" value="true" <%= values.callUnreached ? "checked" : "" %> <%= showCalls ? "" : "disabled" %> />
                     <span>Couldn't get through — leave call reference blank</span>
                   </label>
-                  <div id="call-ref-why" <%= values.callUnreached && flags.calls ? "" : "hidden" %>>
+                  <div id="call-ref-why" <%= values.callUnreached && showCalls ? "" : "hidden" %>>
                     <label for="callRefBlankReason">Why the call reference is blank *</label>
-                    <select id="callRefBlankReason" name="callRefBlankReason" class="<%= errors.callRefBlankReason ? 'is-invalid' : '' %>" <%= flags.calls && values.callUnreached ? "" : "disabled" %>>
+                    <select id="callRefBlankReason" name="callRefBlankReason" class="<%= errors.callRefBlankReason ? 'is-invalid' : '' %>" <%= showCalls && values.callUnreached ? "" : "disabled" %>>
                       <option value="">Select a reason</option>
                       <% callBlankReasons.forEach((reason) => { %>
                         <option value="<%= reason %>" <%= values.callRefBlankReason === reason ? "selected" : "" %>><%= reason %></option>
@@ -175,21 +202,28 @@
                     </select>
                     <% if (errors.callRefBlankReason) { %><p class="field-error"><%= errors.callRefBlankReason %></p><% } %>
                     <label for="callUnreachedNote">Extra detail <span class="optional">(optional, unless Other)</span></label>
-                    <textarea id="callUnreachedNote" name="callUnreachedNote" rows="2" placeholder="<%= values.callRefBlankReason === 'Other' ? 'Please say why…' : 'Add a short note if needed…' %>" class="<%= errors.callUnreachedNote ? 'is-invalid' : '' %>" <%= flags.calls && values.callUnreached ? "" : "disabled" %>><%= values.callUnreachedNote || "" %></textarea>
+                    <textarea id="callUnreachedNote" name="callUnreachedNote" rows="2" placeholder="<%= values.callRefBlankReason === 'Other' ? 'Please say why…' : 'Add a short note if needed…' %>" class="<%= errors.callUnreachedNote ? 'is-invalid' : '' %>" <%= showCalls && values.callUnreached ? "" : "disabled" %>><%= values.callUnreachedNote || "" %></textarea>
                     <% if (errors.callUnreachedNote) { %><p class="field-error"><%= errors.callUnreachedNote %></p><% } %>
                   </div>
                   <p class="hhsrs-hint">Required for this project. Enter the call reference, or pick why it is blank.</p>
                 </div>
+                <div class="project-extra" data-extra="vulnerabilities" <%= flags.vulnerabilities ? "" : "hidden" %>>
+                  <label for="vulnerabilities">Vulnerabilities *</label>
+                  <textarea id="vulnerabilities" name="vulnerabilities" rows="3" enterkeyhint="next" class="<%= errors.vulnerabilities ? 'is-invalid' : '' %>" <%= flags.vulnerabilities ? "required" : "disabled" %>><%= values.vulnerabilities || "" %></textarea>
+                  <% if (errors.vulnerabilities) { %><p class="field-error"><%= errors.vulnerabilities %></p><% } %>
+                </div>
                 <div class="project-extra" data-extra="saxon" <%= flags.saxon ? "" : "hidden" %>>
                   <p class="hhsrs-hint" id="saxon-damp-note">Saxon Weald: all damp and mould is phoned in. Email only if Severe, and include the call reference.</p>
-                </div>
-                <div class="project-extra" data-extra="online" <%= flags.online ? "" : "hidden" %>>
-                  <p class="hhsrs-hint" id="cornwall-damp-note">Cornwall: any damp and mould needs Tom’s separate online form.</p>
                 </div>
 
                 <label for="otherDetails">Any other details <span class="optional">(optional)</span></label>
                 <textarea id="otherDetails" name="otherDetails" rows="4" enterkeyhint="next" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
                 <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
+                <div id="suspected-cause-box" <%= showCause ? "" : "hidden" %>>
+                  <label for="suspectedCause">Suspected cause *</label>
+                  <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || "" %>" class="<%= errors.suspectedCause ? 'is-invalid' : '' %>" <%= showCause ? "required" : "disabled" %> />
+                  <% if (errors.suspectedCause) { %><p class="field-error"><%= errors.suspectedCause %></p><% } %>
+                </div>
               </div>
 
               <div class="info-box flow-step" id="step-photos" data-flow="photos" <%= steps.extras ? "" : "hidden" %>>
@@ -226,6 +260,14 @@
       </div>
     </div>
   </div>
+  <script>
+    window.HHSRS_SITE_RATINGS = <%- JSON.stringify({
+      NEW: typeof siteNewRatings !== "undefined" ? siteNewRatings : ["Low", "Medium", "High - Emergency risk", "High - Significant risk"],
+      OLD: typeof siteOldRatings !== "undefined" ? siteOldRatings : ["Low", "Medium", "Slight", "Moderate", "Severe", "High - Emergency Risk", "High - Severe Risk"]
+    }) %>;
+    window.HHSRS_RESTRICTOR_CATEGORY = "Falling Between Levels";
+    window.HHSRS_EMERGENCY_RATING = "High - Emergency risk";
+  </script>
   <script src="<%= hhsrsUrl('/assets/form.js') %>"></script>
 </body>
 </html>
