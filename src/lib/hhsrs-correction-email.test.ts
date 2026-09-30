@@ -398,6 +398,16 @@ describe("HHSRS amend and resend", () => {
   const previous = parseSentEmail(ORIGINAL).fields;
 
   it("bolds only the lines that differ and keeps the short correction opening", () => {
+    const plain = buildAmendmentEmail({
+      previousBody: ORIGINAL,
+      previousSubject: PREVIOUS_SUBJECT,
+      next: previous,
+      amendment: "   ",
+    });
+    assert.match(
+      plain.text,
+      /^Hi all,\n\nPlease disregard our previous email, due to an error\. See correct details below\.\n/
+    );
     const built = buildAmendmentEmail({
       previousBody: ORIGINAL,
       previousSubject: PREVIOUS_SUBJECT,
@@ -405,7 +415,10 @@ describe("HHSRS amend and resend", () => {
       amendment: "Wrong hazard. It is Excess Cold.",
     });
     assert.match(built.subject, /^CORRECTION: /);
-    assert.match(built.text, /^Hi all,\n\nPlease disregard our previous email\. Wrong hazard\. It is Excess Cold\./);
+    assert.match(
+      built.text,
+      /^Hi all,\n\nPlease disregard our previous email, due to an error\. See correct details below\. Wrong hazard\. It is Excess Cold\./
+    );
     assert.match(built.messageHtml, /<li>Hazard: <b>Excess Cold<\/b><\/li>/);
     assert.match(built.messageHtml, /<li>Rating: <b>Low<\/b><\/li>/);
     assert.match(built.messageHtml, /<li>Address: 14 Example Street, London<\/li>/);

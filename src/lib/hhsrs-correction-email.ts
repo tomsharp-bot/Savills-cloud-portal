@@ -62,7 +62,7 @@ export function stripCorrectionIntro(body: string): string {
   const text = normalizeNewlines(body);
   const greeting = text.match(/^(Hi all,)\n+/i);
   const rest = greeting ? text.slice(greeting[0].length).replace(/^\n+/, "") : text;
-  if (!/^Please disregard our previous email\./i.test(rest)) return text;
+  if (!/^Please disregard our previous email[.,]/i.test(rest)) return text;
   const blank = rest.search(/\n\s*\n/);
   const after = blank === -1 ? "" : rest.slice(blank).replace(/^\n\s*\n/, "").replace(/^\n+/, "");
   if (!greeting) return after;
@@ -288,7 +288,7 @@ export function parseSentEmail(body: string): ParsedSentEmail {
     const match = line.match(/^•\s*([^:]+):\s*(.*)$/);
     if (!match) {
       const plain = line.trim();
-      if (!plain || /^hi all,$/i.test(plain) || /^please disregard our previous email\./i.test(plain)) continue;
+      if (!plain || /^hi all,$/i.test(plain) || /^please disregard our previous email[.,]/i.test(plain)) continue;
       prose.push(plain);
       continue;
     }
@@ -384,8 +384,8 @@ export function buildAmendmentEmail(input: {
   };
   const amendment = tidy(input.amendment);
   const intro = amendment
-    ? `Please disregard our previous email. ${amendment}`
-    : "Please disregard our previous email.";
+    ? `Please disregard our previous email, due to an error. See correct details below. ${amendment}`
+    : "Please disregard our previous email, due to an error. See correct details below.";
   const textLines = ["Hi all,", "", intro, ""];
   for (const line of parsed.prose) textLines.push(line, "");
   const htmlBits = [`<p>Hi all,</p>`, `<p>${escapeHtml(intro)}</p>`];

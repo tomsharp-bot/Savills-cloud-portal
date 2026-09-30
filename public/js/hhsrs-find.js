@@ -61,9 +61,8 @@
     var title = $("fr-preview-subject");
     if (title) title.textContent = subject;
     var amendment = val("f-amendment");
-    var intro = amendment
-      ? "Please disregard our previous email. " + amendment
-      : "Please disregard our previous email.";
+    var intro = "Please disregard our previous email, due to an error. See correct details below.";
+    if (amendment) intro += " " + amendment;
     var html = "<p>Hi all,</p><p>" + esc(intro) + "</p>";
     prose.forEach(function (line) { html += "<p>" + esc(line) + "</p>"; });
     var items = "";
