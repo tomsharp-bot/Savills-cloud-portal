@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data Checks — Savills Cloud Portal</title>
+  <%- include("../partials/head-css") %>
+  <link rel="stylesheet" href="<%= baseUrl('/css/data-checks.css') %>" />
+</head>
+<body>
+<div id="screen-app">
+  <%- include("../partials/topbar") %>
+  <div class="main">
+    <h2 class="page-title">Data Checks</h2>
+    <p class="page-sub">Live master files. Open a file to validate it, then come back to this list.</p>
+    <% if (notice) { %><p class="flash flash-ok"><%= notice %></p><% } %>
+    <% if (error) { %><p class="flash flash-err"><%= error %></p><% } %>
+    <div style="overflow-x:auto">
+      <table class="docs-table mdf-list">
+        <thead>
+          <tr><th>Master Data File</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% if (!files.length) { %>
+            <tr><td colspan="2" class="empty">No live master files.</td></tr>
+          <% } else { %>
+            <% files.forEach(function (file) { %>
+              <tr>
+                <td><a class="mdf-name" href="<%= baseUrl('/data-checks/files/' + file.id) %>"><%= file.name %></a></td>
+                <td class="mdf-actions">
+                  <a class="btn btn-ghost btn-sm" href="<%= baseUrl('/data-checks/files/' + file.id + '/download') %>">Download File</a>
+                  <form method="post" action="<%= baseUrl('/data-checks/files/' + file.id + '/archive') %>" data-confirm="Archive <%= file.name %>? It leaves the live list. The file and its validations are kept." onsubmit="return confirm(this.getAttribute('data-confirm'));">
+                    <button class="btn btn-ghost btn-sm" type="submit">Archive File</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>
