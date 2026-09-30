@@ -127,6 +127,10 @@ export type ReviewDraftSource = {
   escalation: string;
   onwardTopic: string;
   cat1Confirmed: boolean;
+  otherDetails?: string;
+  restrictorMissingCount?: string;
+  restrictorLocations?: string;
+  restrictorMaterial?: string;
   photoPaths: unknown;
 };
 
@@ -184,6 +188,10 @@ export function mergeReviewDraftFields(
       escalation: postedString(body, "escalation"),
       onwardTopic: postedString(body, "onwardTopic"),
       cat1Confirmed: postedFlag(body.cat1Confirmed, false),
+      otherDetails: postedString(body, "otherDetails"),
+      restrictorMissingCount: postedString(body, "restrictorMissingCount"),
+      restrictorLocations: postedString(body, "restrictorLocations"),
+      restrictorMaterial: postedString(body, "restrictorMaterial"),
       photoCount: postedPhotoCount(body, 0),
     };
   }
@@ -219,6 +227,17 @@ export function mergeReviewDraftFields(
     escalation: body.escalation === undefined ? row.escalation : postedString(body, "escalation"),
     onwardTopic: body.onwardTopic === undefined ? row.onwardTopic : postedString(body, "onwardTopic"),
     cat1Confirmed: postedFlag(body.cat1Confirmed, row.cat1Confirmed),
+    otherDetails: body.otherDetails === undefined ? row.otherDetails || "" : postedString(body, "otherDetails"),
+    restrictorMissingCount:
+      body.restrictorMissingCount === undefined
+        ? row.restrictorMissingCount || ""
+        : postedString(body, "restrictorMissingCount"),
+    restrictorLocations:
+      body.restrictorLocations === undefined
+        ? row.restrictorLocations || ""
+        : postedString(body, "restrictorLocations"),
+    restrictorMaterial:
+      body.restrictorMaterial === undefined ? row.restrictorMaterial || "" : postedString(body, "restrictorMaterial"),
     photoCount: postedPhotoCount(body, photoAttachmentCount(row.photoPaths)),
   };
 }
@@ -284,7 +303,13 @@ export function submissionDraftInput(
     | "onwardTopic"
     | "cat1Confirmed"
     | "photoPaths"
-  >
+  > &
+    Partial<
+      Pick<
+        HhsrsSiteSubmission,
+        "otherDetails" | "restrictorMissingCount" | "restrictorLocations" | "restrictorMaterial"
+      >
+    >
 ): SubmissionDraftInput {
   return {
     projectName: row.projectName,
@@ -306,6 +331,10 @@ export function submissionDraftInput(
     escalation: row.escalation,
     onwardTopic: row.onwardTopic,
     cat1Confirmed: row.cat1Confirmed,
+    otherDetails: row.otherDetails || "",
+    restrictorMissingCount: row.restrictorMissingCount || "",
+    restrictorLocations: row.restrictorLocations || "",
+    restrictorMaterial: row.restrictorMaterial || "",
     photoCount: photoNames(row).length,
   };
 }

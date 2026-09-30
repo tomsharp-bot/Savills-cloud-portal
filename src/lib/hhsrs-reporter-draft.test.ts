@@ -9,7 +9,7 @@ import {
   projectDraft,
   templateId,
 } from "./hhsrs-reporter-draft.js";
-import { statusLabel, tryDraftFromRow } from "./hhsrs-reporter.js";
+import { draftEmailFromReviewFields, mergeReviewDraftFields, statusLabel, tryDraftFromRow } from "./hhsrs-reporter.js";
 
 describe("HHSRS Reporter templateId", () => {
   it("maps project names to known template families", () => {
@@ -300,9 +300,10 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callOutcome: "Attempted",
       callNotes: "No answer",
     });
-    assert.doesNotMatch(mtvh.body, /Client call reference/);
+    assert.match(mtvh.body, /• Client call reference: CR-9/);
     assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
     assert.doesNotMatch(mtvh.body, /• Call:/);
+    assert.doesNotMatch(mtvh.body, /No answer/);
   });
 
   it("leaves a blank call reference out of Test Housing and any project that does not use one", () => {
@@ -375,6 +376,14 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.match(vicoKept, /• Client call reference: CR-9/);
     assert.doesNotMatch(vicoKept, /Why the call reference is blank/);
     assert.match(vicoKept, /• Address: 1 High Street/);
+
+    const mtvhKept = prepareClientEmailBody(
+      "MTVH Pilot 2026",
+      "Hi all,\n\n• Address: 1 High Street\n• Client call reference: CR-9\n• Why the call reference is blank: No answer"
+    );
+    assert.match(mtvhKept, /• Client call reference: CR-9/);
+    assert.doesNotMatch(mtvhKept, /Why the call reference is blank/);
+    assert.match(mtvhKept, /• Address: 1 High Street/);
   });
 
   it("adds a suspected cause for MTVH and leaves a blank cause out of the email", () => {
@@ -417,6 +426,199 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.doesNotMatch(omitted.body, /Cause:/);
     assert.doesNotMatch(omitted.body, /gutter/);
+  });
+
+  it("adds stored case-detail answers to the client email only when that case has them", () => {
+    const shared = {
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      rating: "High - Significant risk",
+      comment: "Missing window restrictors in the hall.",
+      photoCount: 0,
+    };
+    const mtvh = draftFromSubmission({
+      ...shared,
+      projectName: "MTVH Pilot 2026",
+      category: "Falling Between Levels",
+      clientCallReference: "CR-9",
+      callOutcome: "",
+      callNotes: "",
+      otherDetails: "Tenant was home.",
+      restrictorMissingCount: "2",
+      restrictorLocations: "Hall, Bedroom 1",
+      restrictorMaterial: "PVC",
+    });
+    assert.match(mtvh.body, /• Address: 1 High Street, EX1 1AA/);
+    assert.match(mtvh.body, /• UPRN: 100123/);
+    assert.match(mtvh.body, /• Rating: High - Significant risk/);
+    assert.match(mtvh.body, /• Survey date: 20\/09\/2026/);
+    assert.match(mtvh.body, /• Client call reference: CR-9/);
+    assert.match(mtvh.body, /• Any other details: Tenant was home\./);
+    assert.match(mtvh.body, /• How many window restrictors are missing: 2/);
+    assert.match(mtvh.body, /• Location: Hall, Bedroom 1/);
+    assert.match(mtvh.body, /• Window material: PVC/);
+    assert.ok(mtvh.body.indexOf("• Client call reference:") < mtvh.body.indexOf("• Survey date:"));
+    assert.ok(mtvh.body.indexOf("• Survey date:") < mtvh.body.indexOf("• Any other details:"));
+    assert.ok(
+      mtvh.body.indexOf("• Any other details:") < mtvh.body.indexOf("• How many window restrictors are missing:")
+    );
+    assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
+    assert.doesNotMatch(mtvh.body, /Internal notes/);
+    assert.doesNotMatch(mtvh.body, /• Surveyor:/);
+
+    const without = draftFromSubmission({
+      ...shared,
+      projectName: "MTVH Pilot 2026",
+      category: "Falling Between Levels",
+      clientCallReference: "",
+      otherDetails: "   ",
+      restrictorMissingCount: "",
+      restrictorLocations: "",
+      restrictorMaterial: "",
+    });
+    assert.doesNotMatch(without.body, /Client call reference/);
+    assert.doesNotMatch(without.body, /Any other details/);
+    assert.doesNotMatch(without.body, /window restrictors are missing/i);
+    assert.doesNotMatch(without.body, /• Location:/);
+    assert.doesNotMatch(without.body, /Window material/);
+
+    const countOnly = draftFromSubmission({
+      ...shared,
+      projectName: "MTVH Pilot 2026",
+      category: "Falling Between Levels",
+      restrictorMissingCount: "1",
+    });
+    assert.match(countOnly.body, /• How many window restrictors are missing: 1/);
+    assert.doesNotMatch(countOnly.body, /• Location:/);
+    assert.doesNotMatch(countOnly.body, /Window material/);
+
+    const gateway = draftFromSubmission({
+      ...shared,
+      projectName: "Gateway 2026",
+      category: "Falling Between Levels",
+      clientCallReference: "CR-9",
+      restrictorMissingCount: "2",
+      restrictorLocations: "Hall",
+      restrictorMaterial: "Timber",
+      otherDetails: "No access issues.",
+    });
+    assert.doesNotMatch(gateway.body, /call reference/i);
+    assert.doesNotMatch(gateway.body, /CR-9/);
+    assert.doesNotMatch(gateway.body, /window restrictors are missing/i);
+    assert.doesNotMatch(gateway.body, /Window material/);
+    assert.doesNotMatch(gateway.body, /• Location:/);
+    assert.match(gateway.body, /• Any other details: No access issues\./);
+    assert.match(gateway.body, /• Site notes:/);
+
+    const vico = draftFromSubmission({
+      ...shared,
+      projectName: "Vico 2026",
+      category: "Damp & Mould Growth",
+      rating: "High",
+      comment: "Visible mould in bathroom.",
+      clientCallReference: "CR-9",
+      suspectedCause: "Leaking gutter above the bedroom",
+      includeCause: true,
+      vulnerabilities: "Elderly resident",
+      otherDetails: "Key safe on the left.",
+      restrictorMissingCount: "4",
+      restrictorLocations: "Hall",
+      restrictorMaterial: "Metal",
+    });
+    assert.match(vico.body, /• Client call reference: CR-9/);
+    assert.match(vico.body, /• Cause: leaking gutter above the bedroom/);
+    assert.match(vico.body, /• Vulnerabilities: Elderly resident/);
+    assert.match(vico.body, /• Any other details: Key safe on the left\./);
+    assert.match(vico.body, /• Site notes: Visible mould in bathroom\./);
+    assert.doesNotMatch(vico.body, /window restrictors are missing/i);
+    assert.doesNotMatch(vico.body, /Window material/);
+    assert.doesNotMatch(vico.body, /Why the call reference is blank/);
+
+    const vicoNoCause = draftFromSubmission({
+      ...shared,
+      projectName: "Vico 2026",
+      category: "Electrical Hazards",
+      rating: "High",
+      comment: "Damaged socket in kitchen.",
+      clientCallReference: "",
+      callOutcome: "Attempted",
+      callNotes: "No answer",
+      suspectedCause: "",
+      vulnerabilities: "",
+    });
+    assert.doesNotMatch(vicoNoCause.body, /Cause:/);
+    assert.doesNotMatch(vicoNoCause.body, /Vulnerabilities/);
+    assert.doesNotMatch(vicoNoCause.body, /Why the call reference is blank/);
+    assert.doesNotMatch(vicoNoCause.body, /No answer/);
+    assert.doesNotMatch(vicoNoCause.body, /Any other details/);
+  });
+
+  it("uses stored restrictor and other-detail answers when Generate email does not repost them", () => {
+    const row = {
+      projectName: "MTVH Pilot 2026",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      category: "Falling Between Levels",
+      rating: "High - Significant risk",
+      comment: "Missing window restrictors in the hall.",
+      clientDescription: "",
+      clientCallReference: "CR-9",
+      callOutcome: "",
+      callNotes: "",
+      workOrder: "",
+      suspectedCause: "",
+      includeCause: true,
+      vulnerabilities: "",
+      escalation: "",
+      onwardTopic: "",
+      cat1Confirmed: false,
+      otherDetails: "Tenant was home.",
+      restrictorMissingCount: "2",
+      restrictorLocations: "Hall",
+      restrictorMaterial: "PVC",
+      photoPaths: [],
+    };
+    const fromRow = draftEmailFromReviewFields(
+      mergeReviewDraftFields(row, {
+        projectName: "MTVH Pilot 2026",
+        address: "1 High Street, EX1 1AA",
+        notes: "Missing window restrictors in the hall.",
+        hazard: "Falling Between Levels",
+        rating: "High - Significant risk",
+        includeCause: true,
+      })
+    );
+    assert.match(fromRow.body, /• How many window restrictors are missing: 2/);
+    assert.match(fromRow.body, /• Location: Hall/);
+    assert.match(fromRow.body, /• Window material: PVC/);
+    assert.match(fromRow.body, /• Any other details: Tenant was home\./);
+    assert.match(fromRow.body, /• Client call reference: CR-9/);
+
+    const posted = draftEmailFromReviewFields(
+      mergeReviewDraftFields(row, {
+        projectName: "MTVH Pilot 2026",
+        address: "1 High Street, EX1 1AA",
+        notes: "Missing window restrictors in the hall.",
+        hazard: "Falling Between Levels",
+        rating: "High - Significant risk",
+        includeCause: true,
+        clientCallReference: "",
+        otherDetails: "",
+        restrictorMissingCount: "3",
+        restrictorLocations: "Kitchen",
+        restrictorMaterial: "Timber",
+      })
+    );
+    assert.match(posted.body, /• How many window restrictors are missing: 3/);
+    assert.match(posted.body, /• Location: Kitchen/);
+    assert.match(posted.body, /• Window material: Timber/);
+    assert.doesNotMatch(posted.body, /Tenant was home/);
+    assert.doesNotMatch(posted.body, /Client call reference/);
+    assert.doesNotMatch(posted.body, /CR-9/);
   });
 
   it("uses an office-edited client description verbatim when supplied", () => {

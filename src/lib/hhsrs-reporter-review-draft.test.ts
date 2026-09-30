@@ -101,6 +101,7 @@ function bootReview(opts: {
   caseId?: string;
   mode?: string;
   withSend?: boolean;
+  withAbandon?: boolean;
   assign?: (url: string) => void;
 }) {
   const listeners: Listener[] = [];
@@ -127,6 +128,13 @@ function bootReview(opts: {
   el("fieldset", "rv-case-fields");
   el("p", "rv-project-hint");
   el("button", "btn-generate-email");
+  const emailDraft = el("section", "rv-email-draft");
+  const scrollCalls: unknown[] = [];
+  emailDraft.scrollIntoView = (opts: unknown) => {
+    scrollCalls.push(opts);
+  };
+  emailDraft.getBoundingClientRect = () => ({ top: 640, height: 900, bottom: 1540, left: 0, right: 400, width: 400 });
+  emailDraft.scrollCalls = scrollCalls;
   el("p", "rv-email-empty-hint");
   el("span", "rv-email-badge");
   el("p", "rv-draft-status");
@@ -153,6 +161,10 @@ function bootReview(opts: {
     el("input", "rv-surveyor");
     el("input", "rv-survey-date");
     el("p", "rv-send-line", { hidden: false });
+  }
+  if (opts.withAbandon) {
+    el("form", "abandon-claim-form");
+    el("button", "btn-abandon-claim");
   }
 
   const document = {
@@ -352,6 +364,31 @@ describe("HHSRS review email draft restore", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(ids["hhsrs-to"].value, "next@example.com");
     assert.equal(ids["hhsrs-bcc"].value, "");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const scrolled = ids["rv-email-draft"].scrollCalls as Array<{ behavior: string; block: string }>;
+    assert.equal(scrolled.length, 2);
+    assert.equal(scrolled[0].behavior, "auto");
+    assert.equal(scrolled[0].block, "start");
+    assert.equal(scrolled[1].block, "start");
+  });
+
+  it("does not scroll to the email draft when Generate email fails", async () => {
+    const storage = memoryStorage();
+    const { ids, listeners } = bootReview({
+      storage,
+      fetchImpl: () =>
+        Promise.resolve({
+          ok: false,
+          headers: { get: () => "application/json" },
+          json: async () => ({ ok: false, error: "Could not prepare the client email." }),
+        }),
+    });
+    const click = listeners.find((listener) => listener.target === "btn-generate-email" && listener.type === "click");
+    assert.ok(click);
+    click.fn();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.deepEqual(ids["rv-email-draft"].scrollCalls, []);
+    assert.equal(ids["hhsrs-body"].value, "");
   });
 
   it("drops the held blank email after send so leaving the page cannot put it back", async () => {
@@ -397,5 +434,45 @@ describe("HHSRS review email draft restore", () => {
     const saved = JSON.parse(storage.getItem("hhsrs-review-drafts-v1") || "{}");
     assert.equal(saved.blank, undefined);
     assert.equal((windowObj.sessionStorage as { getItem: (key: string) => string | null }).getItem("hhsrs-review-sent-clear"), "1");
+  });
+
+  it("abandons a generated email draft so leaving cannot put it back", () => {
+    const storage = memoryStorage({
+      "hhsrs-review-drafts-v1": JSON.stringify({
+        "case-kept": {
+          project: "Gateway 2026",
+          fields: { "rv-notes": "Typed site notes" },
+          email: {
+            "hhsrs-to": "kept-to@example.com",
+            "hhsrs-cc": "",
+            "hhsrs-bcc": "",
+            "hhsrs-subject": "Generated subject",
+            "hhsrs-body": "Generated draft body",
+          },
+          caseDetailsLocked: true,
+        },
+      }),
+    });
+    const { ids, listeners, windowObj } = bootReview({
+      storage,
+      withAbandon: true,
+      fetchImpl: pendingFetch,
+    });
+    assert.equal(ids["hhsrs-body"].value, "Generated draft body");
+    assert.equal(ids["hhsrs-to"].value, "kept-to@example.com");
+    const click = listeners.find((listener) => listener.target === "btn-abandon-claim" && listener.type === "click");
+    assert.ok(click);
+    click.fn();
+    listeners
+      .filter((listener) => listener.target === "window" && listener.type === "pagehide")
+      .forEach((listener) => listener.fn());
+    const saved = JSON.parse(storage.getItem("hhsrs-review-drafts-v1") || "{}");
+    assert.equal(saved["case-kept"], undefined);
+    assert.equal(ids["hhsrs-body"].value, "");
+    assert.equal(ids["hhsrs-to"].value, "");
+    assert.equal(
+      (windowObj.sessionStorage as { getItem: (key: string) => string | null }).getItem("hhsrs-review-abandoned"),
+      "1"
+    );
   });
 });

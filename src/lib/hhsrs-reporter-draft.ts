@@ -4,7 +4,12 @@
  */
 
 import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
-import { formatHhsrsSurveyDate, splitCallNotes } from "./hhsrs-site-form.js";
+import {
+  formatHhsrsSurveyDate,
+  reporterCaseDetailExtras,
+  siteFormProjectFlags,
+  splitCallNotes,
+} from "./hhsrs-site-form.js";
 
 export class DraftError extends Error {
   constructor(message: string) {
@@ -66,6 +71,10 @@ export type DraftCase = {
   workOrder?: string;
   cat1Confirmed?: boolean;
   onwardTopic?: string;
+  otherDetails?: string;
+  restrictorMissingCount?: string;
+  restrictorLocations?: string;
+  restrictorMaterial?: string;
   extraHazards?: DraftCase[];
 };
 
@@ -834,10 +843,12 @@ const EMPTY_CAUSE_LINE = /^•\s*Cause\s*:\s*$/i;
 
 /**
  * Drop a blank-call explanation, and drop any call-reference line when this
- * project does not use one. Other bullets are left as they are.
+ * project does not show one. MTVH keeps a stored call reference. Other bullets
+ * are left as they are.
  */
 export function prepareClientEmailBody(projectName: string, body: string): string {
-  const keepCallReference = projectRequiresCallReference(projectName);
+  const keepCallReference =
+    projectRequiresCallReference(projectName) || siteFormProjectFlags(projectName).mtvh;
   return String(body || "")
     .split("\n")
     .filter((line) => {
@@ -873,7 +884,20 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
 
   const needsCall = projectRequiresCallReference(data.project);
   const reference = (data.callRef || "").trim();
-  if (needsCall && reference) {
+  const detailExtras = reporterCaseDetailExtras({
+    projectName: data.project,
+    category: data.hazard,
+    rating: data.rating,
+    surveyDate: data.surveyDate,
+    clientCallReference: reference,
+    callOutcome: String(data.callStatus || ""),
+    callNotes: data.callNotes,
+    suspectedCause: data.suspectedCause,
+    restrictorMissingCount: data.restrictorMissingCount,
+    restrictorLocations: data.restrictorLocations,
+    restrictorMaterial: data.restrictorMaterial,
+  });
+  if (reference && detailExtras.calls) {
     const label = templateId(data.project) === "Onward" ? "Onward call reference" : "Client call reference";
     lines.push(bullet(label, reference));
   }
@@ -902,6 +926,17 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
         if (prose) lines.push(bullet(onward ? "Onward call" : "Call", prose.replace(/\.$/, "")));
       }
     }
+  }
+  if (detailExtras.otherDetails && (data.otherDetails || "").trim()) {
+    lines.push(bullet("Any other details", data.otherDetails || ""));
+  }
+  if (detailExtras.restrictors) {
+    const count = (data.restrictorMissingCount || "").trim();
+    const locations = (data.restrictorLocations || "").trim();
+    const material = (data.restrictorMaterial || "").trim();
+    if (count) lines.push(bullet("How many window restrictors are missing", count));
+    if (locations) lines.push(bullet("Location", locations));
+    if (material) lines.push(bullet("Window material", material));
   }
   return lines;
 }
@@ -960,6 +995,10 @@ export type SubmissionDraftInput = {
   escalation?: string;
   onwardTopic?: string;
   cat1Confirmed?: boolean;
+  otherDetails?: string;
+  restrictorMissingCount?: string;
+  restrictorLocations?: string;
+  restrictorMaterial?: string;
   photoCount: number;
 };
 
@@ -987,6 +1026,10 @@ export function submissionToDraftCase(input: SubmissionDraftInput): DraftCase {
     escalation: input.escalation || "",
     onwardTopic: input.onwardTopic || "",
     cat1Confirmed: Boolean(input.cat1Confirmed),
+    otherDetails: input.otherDetails || "",
+    restrictorMissingCount: input.restrictorMissingCount || "",
+    restrictorLocations: input.restrictorLocations || "",
+    restrictorMaterial: input.restrictorMaterial || "",
   };
 }
 

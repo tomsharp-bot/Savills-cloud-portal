@@ -716,6 +716,10 @@
       onwardTopic: ($("rv-onward-topic") && $("rv-onward-topic").value) || "",
       cat1Confirmed: !!($("rv-cat1") && $("rv-cat1").checked),
       workOrder: ($("rv-work-order") && $("rv-work-order").value) || "",
+      otherDetails: ($("rv-other-details") && $("rv-other-details").value) || "",
+      restrictorMissingCount: ($("rv-restrictor-count") && $("rv-restrictor-count").value) || "",
+      restrictorLocations: ($("rv-restrictor-locations") && $("rv-restrictor-locations").value) || "",
+      restrictorMaterial: ($("rv-restrictor-material") && $("rv-restrictor-material").value) || "",
       photoCount: casePhotos.length,
     };
   }
@@ -776,6 +780,7 @@
         fillDraftFields(data);
         if (note) note.textContent = "Email generated. Case details are locked — Amend case details to edit, then Generate email again.";
         saveReviewDraftNow();
+        showClientEmailDraft();
       })
       .catch(function () {
         if (note) note.textContent = "Could not prepare the client email. Check the case details and try again.";
@@ -813,6 +818,30 @@
     cfg.caseId = "";
     resetCasePhotos([]);
     applyProjectChange();
+  }
+
+  function showClientEmailDraft() {
+    var anchor = $("rv-email-draft");
+    if (!anchor || typeof anchor.scrollIntoView !== "function") return;
+    setTimeout(function () {
+      function stickyTopOffset() {
+        var topbar = document.querySelector(".topbar");
+        if (!topbar || typeof topbar.getBoundingClientRect !== "function" || typeof window.getComputedStyle !== "function") return 0;
+        var cs = window.getComputedStyle(topbar);
+        if (cs.position !== "sticky" && cs.position !== "fixed") return 0;
+        return Math.ceil(topbar.getBoundingClientRect().height);
+      }
+      function park() {
+        if (typeof anchor.getBoundingClientRect !== "function" || typeof window.scrollBy !== "function") return;
+        var offset = stickyTopOffset();
+        var rect = anchor.getBoundingClientRect();
+        var delta = rect.top - offset;
+        if (Math.abs(delta) > 0.5) window.scrollBy(0, delta);
+      }
+      anchor.scrollIntoView({ behavior: "auto", block: "start" });
+      park();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(park);
+    }, 60);
   }
 
   function pingCaseDetailsToTop() {
@@ -1611,6 +1640,25 @@
     return false;
   }
 
+  function discardGeneratedDraft() {
+    skipDraftSave = true;
+    if (reviewDraftSaveTimer) clearTimeout(reviewDraftSaveTimer);
+    reviewDraftSaveTimer = null;
+    if (!sentStage()) {
+      emailGenerated = false;
+      caseLocked = false;
+      REVIEW_EMAIL_FIELD_IDS.forEach(function (id) {
+        var field = $(id);
+        if (!field || field.readOnly) return;
+        field.value = "";
+        delete field.dataset.userEdited;
+      });
+    }
+    clearReviewDraft("blank");
+    if (cfg.caseId) clearReviewDraft(String(cfg.caseId));
+    clearResumeKey();
+  }
+
   function wireReviewDraftPersistence() {
     if (!$("hhsrs-body")) return;
     REVIEW_CASE_FIELD_IDS.forEach(function (id) {
@@ -1620,7 +1668,15 @@
       el.addEventListener(evt, scheduleReviewDraftSave);
     });
     window.addEventListener("pagehide", saveReviewDraftNow);
-    window.addEventListener("pageshow", function () {
+    window.addEventListener("pageshow", function (e) {
+      var abandoned = "";
+      try { abandoned = sessionStorage.getItem("hhsrs-review-abandoned") || ""; } catch (err) {}
+      if (abandoned === "1" && $("hhsrs-body")) {
+        if (e && e.persisted) discardGeneratedDraft();
+        skipDraftSave = false;
+        resumeCleared = false;
+        try { sessionStorage.removeItem("hhsrs-review-abandoned"); } catch (err2) {}
+      }
       var flag = "";
       try { flag = sessionStorage.getItem(REVIEW_SENT_CLEAR_KEY) || ""; } catch (e) {}
       if (flag !== "1") return;
@@ -1650,11 +1706,13 @@
     });
     var abandonForm = $("abandon-claim-form");
     if (abandonForm) {
-      abandonForm.addEventListener("submit", function () {
-        skipDraftSave = true;
-        clearReviewDraft(cfg.caseId || "blank");
-        clearResumeKey();
-      });
+      function onAbandon() {
+        discardGeneratedDraft();
+        try { sessionStorage.setItem("hhsrs-review-abandoned", "1"); } catch (err) {}
+      }
+      var abandonBtn = $("btn-abandon-claim");
+      if (abandonBtn) abandonBtn.addEventListener("click", onAbandon);
+      abandonForm.addEventListener("submit", onAbandon);
     }
   }
 
