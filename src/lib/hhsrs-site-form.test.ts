@@ -807,7 +807,7 @@ describe("HHSRS site form project option flags", () => {
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
     assert.match(html, /id="restrictor-box"[^>]*hidden/);
     assert.match(html, /class="restrictor-locs"/);
-    assert.match(html, /How many are missing \*/);
+    assert.match(html, /How many window restrictors are missing \*/);
     assert.match(html, /inputmode="numeric"/);
     const uprnTag = html.match(/<input id="uprn"[^>]*>/);
     assert.ok(uprnTag);

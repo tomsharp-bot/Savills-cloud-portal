@@ -157,7 +157,7 @@
                 </div>
 
                 <div id="restrictor-box" class="restrictor-box" <%= showRestrictor ? "" : "hidden" %>>
-                  <label for="restrictorMissingCount">How many are missing *</label>
+                  <label for="restrictorMissingCount">How many window restrictors are missing *</label>
                   <input id="restrictorMissingCount" name="restrictorMissingCount" type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off" value="<%= values.restrictorMissingCount || "" %>" class="<%= errors.restrictorMissingCount ? 'is-invalid' : '' %>" <%= showRestrictor ? "required" : "disabled" %> />
                   <% if (errors.restrictorMissingCount) { %><p class="field-error"><%= errors.restrictorMissingCount %></p><% } %>
                   <p class="restrictor-label" id="restrictor-location-label">Location *</p>

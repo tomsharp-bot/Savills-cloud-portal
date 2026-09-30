@@ -844,6 +844,7 @@
      declarations, and var initialisers are not hoisted with their values. */
   var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
   var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
+  var REVIEW_SENT_CLEAR_KEY = "hhsrs-review-sent-clear";
   var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"];
   var REVIEW_EMAIL_FIELD_IDS = ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"];
   var reviewDraftSaveTimer = null;
@@ -1473,6 +1474,68 @@
     setReviewDraftStatus(false);
   }
 
+  function stopReviewDraftWrites() {
+    skipDraftSave = true;
+    if (reviewDraftSaveTimer) clearTimeout(reviewDraftSaveTimer);
+    reviewDraftSaveTimer = null;
+    try { sessionStorage.setItem(REVIEW_SENT_CLEAR_KEY, "1"); } catch (e) {}
+  }
+
+  function forgetHeldReviewDrafts() {
+    stopReviewDraftWrites();
+    clearReviewDraft("blank");
+    if (cfg.caseId) clearReviewDraft(String(cfg.caseId));
+  }
+
+  function clearHeldBlankReview() {
+    if (cfg.mode === "filled" || sentStage()) return;
+    forgetHeldReviewDrafts();
+    clearEmailDraft();
+    var project = $("rv-project");
+    if (project && !project.disabled) project.value = "";
+    REVIEW_CASE_FIELD_IDS.forEach(function (id) {
+      var field = $(id);
+      if (!field || field.readOnly) return;
+      if (field.type === "checkbox") field.checked = id === "rv-include-cause";
+      else field.value = "";
+    });
+    ["rv-restrictor-count", "rv-restrictor-locations", "rv-restrictor-material"].forEach(function (id) {
+      var field = $(id);
+      if (!field || field.readOnly) return;
+      field.value = "";
+    });
+    resetCasePhotos([]);
+    var file = $("rv-photo-file");
+    if (file) file.value = "";
+    applyProjectChange({ skipDraft: true });
+    syncSendButton();
+  }
+
+  function wireSentConfirm() {
+    var overlay = $("sent-confirm-overlay");
+    if (!overlay || overlay.hidden) return;
+    forgetHeldReviewDrafts();
+    if (document.body && document.body.style) document.body.style.overflow = "hidden";
+    var title = $("sent-confirm-title");
+    if (title && title.focus) {
+      try { title.focus({ preventScroll: true }); }
+      catch (err) { title.focus(); }
+    }
+    function closeSent() {
+      overlay.hidden = true;
+      if (document.body && document.body.style) document.body.style.overflow = "";
+    }
+    var ok = $("sent-confirm-ok");
+    if (ok) ok.addEventListener("click", closeSent);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) closeSent();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (!overlay || overlay.hidden) return;
+      if (e.key === "Escape") closeSent();
+    });
+  }
+
   function ensureProjectSelectValue(name) {
     var sel = $("rv-project");
     if (!sel || !name) return;
@@ -1557,6 +1620,31 @@
       el.addEventListener(evt, scheduleReviewDraftSave);
     });
     window.addEventListener("pagehide", saveReviewDraftNow);
+    window.addEventListener("pageshow", function () {
+      var flag = "";
+      try { flag = sessionStorage.getItem(REVIEW_SENT_CLEAR_KEY) || ""; } catch (e) {}
+      if (flag !== "1") return;
+      if (sentStage()) return;
+      if (cfg.mode === "filled") {
+        stopReviewDraftWrites();
+        var sentBtn = $("btn-send-email");
+        if (sentBtn) {
+          sentBtn.disabled = true;
+          sentBtn.textContent = "✓ Sent and logged";
+          if (sentBtn.classList) sentBtn.classList.add("is-sent");
+        }
+        var sentLine = $("rv-send-line");
+        if (sentLine) {
+          sentLine.hidden = false;
+          sentLine.textContent = "Sent and logged in the Main Log. Can't be sent again.";
+        }
+        var sentCk = $("ck-overlay");
+        if (sentCk) sentCk.hidden = true;
+        return;
+      }
+      try { sessionStorage.removeItem(REVIEW_SENT_CLEAR_KEY); } catch (e2) {}
+      clearHeldBlankReview();
+    });
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "hidden") saveReviewDraftNow();
     });
@@ -1737,6 +1825,7 @@
   if (!reviewLeavingForResume) wireReviewDraftPersistence();
   wireAttPhotoPopovers();
   wirePortalSend();
+  wireSentConfirm();
 
   function syncSendButton() {
     var btn = $("btn-send-email");
@@ -2014,7 +2103,7 @@
         }).then(function (res) {
           return res.json().then(function (data) {
             var next = (data && data.redirect) || ((cfg.base || "/HHSRSreporter") + "/review");
-            if (/\/review\/[^/?#]+/.test(next)) clearReviewDraft("blank");
+            if (/\/review\/[^/?#]+/.test(next)) forgetHeldReviewDrafts();
             window.location.assign(next);
           });
         }).catch(function () {
@@ -2025,6 +2114,7 @@
         });
         return;
       }
+      stopReviewDraftWrites();
       $("rv-send-to").value = val("hhsrs-to");
       $("rv-send-cc").value = val("hhsrs-cc");
       $("rv-send-bcc").value = val("hhsrs-bcc");

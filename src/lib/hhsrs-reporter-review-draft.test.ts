@@ -88,9 +88,20 @@ function makeEl(tag: string, id: string) {
   return el;
 }
 
+function FakeFormData(this: { parts: Array<[string, unknown]> }) {
+  this.parts = [];
+}
+FakeFormData.prototype.append = function (this: { parts: Array<[string, unknown]> }, name: string, value: unknown) {
+  this.parts.push([name, value]);
+};
+
 function bootReview(opts: {
   storage: ReturnType<typeof memoryStorage>;
   fetchImpl: () => Promise<unknown>;
+  caseId?: string;
+  mode?: string;
+  withSend?: boolean;
+  assign?: (url: string) => void;
 }) {
   const listeners: Listener[] = [];
   const ids: Record<string, ReturnType<typeof makeEl>> = {};
@@ -121,6 +132,28 @@ function bootReview(opts: {
   el("p", "rv-draft-status");
   el("section", "rv-case-panel");
   el("a", "btn-create-plain-email");
+  if (opts.withSend) {
+    el("button", "btn-send-email");
+    el("div", "ck-overlay", { hidden: true });
+    el("div", "ck-body");
+    el("input", "ck-tick", { type: "checkbox" });
+    el("label", "ck-tick-label");
+    el("button", "ck-send");
+    el("button", "ck-back");
+    el("form", "rv-send-form");
+    el("input", "rv-send-to");
+    el("input", "rv-send-cc");
+    el("input", "rv-send-bcc");
+    el("input", "rv-send-subject");
+    el("textarea", "rv-send-body");
+    el("div", "rv-send-photo-fields");
+    el("input", "rv-address");
+    el("input", "rv-uprn");
+    el("select", "rv-hazard");
+    el("input", "rv-surveyor");
+    el("input", "rv-survey-date");
+    el("p", "rv-send-line", { hidden: false });
+  }
 
   const document = {
     getElementById(id: string) {
@@ -158,8 +191,8 @@ function bootReview(opts: {
   const windowObj: Record<string, unknown> = {
     HHSRS_REPORTER: {
       base: "/HHSRSreporter",
-      mode: "filled",
-      caseId: "case-kept",
+      mode: opts.mode || "filled",
+      caseId: opts.caseId === undefined ? "case-kept" : opts.caseId,
       initialProject: "Gateway 2026",
       casePhotos: [],
       waitingIds: ["case-kept"],
@@ -183,7 +216,11 @@ function bootReview(opts: {
       search: "",
       pathname: "/HHSRSreporter/review/case-kept",
       href: "http://127.0.0.1/HHSRSreporter/review/case-kept",
+      assign(url: string) {
+        if (opts.assign) opts.assign(url);
+      },
     },
+    alert() {},
     history: { replaceState() {} },
     document,
     addEventListener(type: string, fn: Listener["fn"]) {
@@ -212,6 +249,7 @@ function bootReview(opts: {
     localStorage: opts.storage,
     sessionStorage: windowObj.sessionStorage,
     fetch: (...args: unknown[]) => (windowObj.fetch as (...a: unknown[]) => Promise<unknown>)(...args),
+    FormData: FakeFormData,
     setInterval() {
       return 0;
     },
@@ -314,5 +352,50 @@ describe("HHSRS review email draft restore", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(ids["hhsrs-to"].value, "next@example.com");
     assert.equal(ids["hhsrs-bcc"].value, "");
+  });
+
+  it("drops the held blank email after send so leaving the page cannot put it back", async () => {
+    const storage = memoryStorage({
+      "hhsrs-review-drafts-v1": JSON.stringify({
+        blank: {
+          project: "Gateway 2026",
+          fields: { "rv-notes": "Same email" },
+          email: {
+            "hhsrs-to": "kept-to@example.com",
+            "hhsrs-cc": "",
+            "hhsrs-bcc": "",
+            "hhsrs-subject": "Kept subject",
+            "hhsrs-body": "Kept draft body",
+          },
+        },
+      }),
+    });
+    let assigned = "";
+    const { ids, listeners, windowObj } = bootReview({
+      storage,
+      caseId: "",
+      mode: "blank",
+      withSend: true,
+      assign(url) {
+        assigned = url;
+      },
+      fetchImpl: () =>
+        Promise.resolve({
+          json: async () => ({ ok: true, redirect: "/HHSRSreporter/review/sent-case" }),
+        }),
+    });
+    assert.equal(ids["hhsrs-body"].value, "Kept draft body");
+    (ids["ck-tick"] as { checked: boolean }).checked = true;
+    const submit = listeners.find((listener) => listener.target === "rv-send-form" && listener.type === "submit");
+    assert.ok(submit);
+    submit.fn({ preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(assigned, "/HHSRSreporter/review/sent-case");
+    listeners
+      .filter((listener) => listener.target === "window" && listener.type === "pagehide")
+      .forEach((listener) => listener.fn());
+    const saved = JSON.parse(storage.getItem("hhsrs-review-drafts-v1") || "{}");
+    assert.equal(saved.blank, undefined);
+    assert.equal((windowObj.sessionStorage as { getItem: (key: string) => string | null }).getItem("hhsrs-review-sent-clear"), "1");
   });
 });

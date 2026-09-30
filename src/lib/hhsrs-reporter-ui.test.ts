@@ -299,6 +299,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(review, /data-extra="restrictors"/);
     assert.match(review, /id="rv-other-details"/);
     assert.match(review, /id="rv-restrictor-count"/);
+    assert.match(review, /How many window restrictors are missing/);
+    assert.match(review, /id="rv-restrictor-locations"/);
+    assert.match(review, /id="rv-restrictor-material"/);
     assert.match(js, /other_details: !!projectCfg/);
     assert.match(js, /Falling Between Levels/);
     assert.match(js, /High - Emergency risk/);
@@ -427,6 +430,11 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(workspace, /btn-copy/);
     assert.match(workspace, /Download photos/);
     assert.match(review, /Check Before Sending/);
+    assert.match(review, /id="sent-confirm-overlay"/);
+    assert.match(review, /id="sent-confirm-title"[^>]*>Email sent</);
+    assert.match(review, /id="sent-confirm-copy">Sent and logged in the Main Log\./);
+    assert.match(review, /This email cannot be sent again\./);
+    assert.match(review, /id="sent-confirm-ok"/);
     assert.match(review, /I've checked the details/);
     assert.match(review, /id="ck-send"[^>]*>Send and log</);
     assert.match(review, /Nothing is sent until you press Send and log\./);
@@ -439,6 +447,9 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(pending, /Cases move to Main Log when you press Send and log\./);
     assert.doesNotMatch(pending, /Mark as actioned/);
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    assert.match(js, /function forgetHeldReviewDrafts/);
+    assert.match(js, /hhsrs-review-sent-clear/);
+    assert.match(js, /forgetHeldReviewDrafts\(\);/);
     assert.match(js, /Start a new email\? Your unsent draft will be cleared\./);
     assert.match(js, /Sends the email and adds it to the Main Log\./);
     assert.doesNotMatch(js, /Open a case before sending/);
