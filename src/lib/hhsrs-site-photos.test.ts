@@ -112,6 +112,10 @@ function draftFor(id: string, photos: HhsrsPhoto[]): HhsrsDraft {
     callUnreached: false,
     callRefBlankReason: "",
     callUnreachedNote: "",
+    vulnerabilities: "",
+    restrictorMissingCount: "",
+    restrictorLocations: "",
+    restrictorMaterial: "",
     photos,
     createdAt: new Date().toISOString(),
   };
