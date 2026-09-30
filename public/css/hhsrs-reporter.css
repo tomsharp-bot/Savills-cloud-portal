@@ -1543,17 +1543,8 @@ body.hhsrs-reporter {
   text-overflow: ellipsis;
   max-width: 100%;
 }
-.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: auto; }
-.hhsrs-reporter #last-actioned-table { min-width: 1420px; }
-.hhsrs-reporter #last-actioned-table col.c-proj { width: 110px; }
-.hhsrs-reporter #last-actioned-table col.c-addr { width: 220px; }
-.hhsrs-reporter #last-actioned-table col.c-ph { width: 72px; }
-.hhsrs-reporter #last-actioned-table col.c-uprn { width: 120px; }
-.hhsrs-reporter #last-actioned-table col.c-surv { width: 110px; }
-.hhsrs-reporter #last-actioned-table col.c-cat { width: 300px; }
-.hhsrs-reporter #last-actioned-table col.c-rate { width: 190px; }
-.hhsrs-reporter #last-actioned-table col.c-when { width: 168px; }
-.hhsrs-reporter #last-actioned-table col.c-act { width: 130px; }
+.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: hidden; max-width: 100%; }
+.hhsrs-reporter #last-actioned-table { width: 100%; min-width: 0; }
 .hhsrs-reporter #last-actioned-table thead th:nth-child(6),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(7),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(8),
@@ -1562,6 +1553,11 @@ body.hhsrs-reporter {
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8),
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8) > span {
   white-space: nowrap;
+}
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(6),
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(7) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {

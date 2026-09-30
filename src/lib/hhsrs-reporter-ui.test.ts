@@ -606,6 +606,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(waiting, /> Pending Issues</);
     assert.match(waiting, /<% if \(waitingRows\.length\) \{ %>\s*<span class="count count-received">/);
     assert.match(pending, /Last 20 Issues That Have Been Actioned/);
+    assert.match(css, /#last-actioned-table \{ width: 100%; min-width: 0; \}/);
+    assert.doesNotMatch(css, /#last-actioned-table \{ min-width: 1420px; \}/);
+    assert.match(css, /#last-actioned-table tbody td:nth-child\(6\)/);
+    assert.match(css, /\.pending-issues-table\.is-noref \.addr-cell > strong \{[^}]*white-space:\s*nowrap/s);
     assert.doesNotMatch(pending, /desktop-alerts-control/);
     assert.doesNotMatch(pending, /Pending issues/);
     assert.match(review, /alsoWaiting\.length \? '' : 'is-clear'/);
