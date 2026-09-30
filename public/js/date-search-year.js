@@ -152,14 +152,23 @@
     if (!isDateSearch(event.target)) return;
     var current = readState(event.target);
     clearTyping(current);
-    current.segment = 0;
+    if (!current.picked) current.segment = 0;
+    current.picked = false;
     current.previous = event.target.value || "";
   }, true);
 
+  // Year is the last segment in both day/month/year and month/day/year.
+  // A click in that band starts a year, including before day and month are filled.
   document.addEventListener("pointerdown", function (event) {
     if (!isDateSearch(event.target)) return;
     var current = readState(event.target);
     clearTyping(current);
-    current.segment = -1;
+    var rect = event.target.getBoundingClientRect();
+    var ratio = rect.width ? (event.clientX - rect.left) / rect.width : -1;
+    current.picked = true;
+    if (ratio >= 0.42 && ratio < 0.78) current.segment = 2;
+    else if (ratio >= 0.24 && ratio < 0.42) current.segment = 1;
+    else if (ratio >= 0 && ratio < 0.24) current.segment = 0;
+    else current.segment = -1;
   }, true);
 })();
