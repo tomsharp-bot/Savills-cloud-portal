@@ -798,7 +798,28 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(find, /hhsrs@savillshousing\.co\.uk/);
     assert.match(find, /Abandon amendment/);
     assert.match(find, /I've checked the details/);
+    assert.match(find, /I've checked the photo is correct/);
+    assert.match(find, /id="fr-photo-checked"/);
+    assert.match(find, /id="fr-photo-drop"/);
+    assert.match(find, /id="fr-photo-file"/);
+    assert.match(find, /name="replacement"/);
+    assert.match(find, /name="photoSelection" value="1"/);
+    assert.match(find, /data-remove-photo/);
+    assert.match(find, /enctype="multipart\/form-data"/);
     assert.match(find, /id="btn-send-correction"[^>]*disabled/);
+    assert.match(js, /fr-photo-checked/);
+    assert.match(js, /function bothTicked/);
+    assert.match(js, /DataTransfer/);
+    const untouched = [
+      readFileSync("views/hhsrs-site-form/form.ejs", "utf8"),
+      readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8"),
+      readFileSync("views/hhsrs-reporter/partials/sidebar.ejs", "utf8"),
+      readFileSync("views/hhsrs-reporter/duplicates.ejs", "utf8"),
+      readFileSync("views/hhsrs-reporter/review.ejs", "utf8"),
+    ];
+    for (const file of untouched) {
+      assert.doesNotMatch(file, /fr-photo-drop|fr-photo-checked|photosChecked|photoSelection/);
+    }
     assert.doesNotMatch(find, /<figcaption>/);
     assert.match(js, /Please disregard our previous email, due to an error\. See correct details below\./);
     assert.match(js, /CORRECTION: /);
