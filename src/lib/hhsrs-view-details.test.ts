@@ -17,7 +17,7 @@ describe("correction email parties", () => {
     );
   });
 
-  it("puts those lines on a sent correction and leaves the original email without them", () => {
+  it("puts those lines on the original send and on a sent correction", () => {
     const details = buildViewDetails({
       projectName: "Gateway 2026",
       fullAddress: "1 High Street",
@@ -51,29 +51,77 @@ describe("correction email parties", () => {
         },
       ],
     });
-    assert.deepEqual(details.sent?.parties, []);
+    assert.deepEqual(details.sent?.parties, [
+      { label: "From", value: "hhsrs@savillshousing.co.uk" },
+      { label: "To", value: "original@example.com" },
+      { label: "Cc", value: "orig-cc@example.com" },
+    ]);
     assert.equal(details.corrections.length, 1);
     assert.deepEqual(details.corrections[0].parties, [
       { label: "From", value: "hhsrs@savillshousing.co.uk" },
       { label: "To", value: "client@example.com" },
     ]);
     assert.doesNotMatch(details.corrections[0].copyHtml, /hhsrs@savillshousing/);
+    assert.doesNotMatch(details.sent?.copyHtml || "", /hhsrs@savillshousing/);
+  });
+
+  it("leaves a send with no stored recipient blank instead of inventing one", () => {
+    const details = buildViewDetails({
+      projectName: "Test Housing",
+      fullAddress: "Test, Testing, TE1 3ST",
+      postcode: "",
+      uprn: "Gdk",
+      surveyDate: "2026-09-30",
+      surveyorName: "Admin",
+      hazard: "Damp & Mould Growth",
+      rating: "High - Emergency risk",
+      description: "Vxhb",
+      submissionId: "case-blank",
+      photoPaths: [],
+      surveyorPhotos: [],
+      reporterBase: "/HHSRSreporter",
+      emails: [
+        {
+          kind: "original",
+          subject: "Test Housing - HHSRS",
+          body: "Hi all,\n\n• Address: Test, Testing, TE1 3ST",
+          photoNames: [],
+          to: "  ",
+          cc: "",
+        },
+      ],
+    });
+    assert.deepEqual(details.sent?.parties, [
+      { label: "From", value: CORRECTION_FROM_ADDRESS },
+      { label: "To", value: "" },
+    ]);
+    assert.equal(details.sent?.parties.some((line) => line.label === "Cc" || line.label === "Bcc"), false);
   });
 });
 
 describe("correction preview markup", () => {
-  it("shows From and To on the correction preview and the View details correction", () => {
+  it("shows From and To on the correction preview and both View details cards", () => {
     const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
     const details = readFileSync("views/hhsrs-reporter/view-details.ejs", "utf8");
+    const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
     const preview = find.slice(find.indexOf('id="fr-preview"'), find.indexOf('id="fr-preview-copy"'));
     assert.match(preview, /id="fr-preview-parties"/);
     assert.match(preview, /From<\/span> hhsrs@savillshousing\.co\.uk/);
     assert.match(preview, /To<\/span> <%= amend\.to %>/);
     assert.match(preview, /amend\.cc/);
     assert.doesNotMatch(preview, /amend\.bcc/);
+    const emailAt = details.indexOf(">Email sent<");
     const correctionAt = details.indexOf(">Correction<");
+    const sentCard = details.slice(emailAt, correctionAt);
+    assert.match(sentCard, /details\.sent\.parties/);
+    assert.match(sentCard, /vd-parties/);
     assert.match(details.slice(correctionAt), /email\.parties/);
-    assert.doesNotMatch(details.slice(0, correctionAt), /vd-parties/);
+    assert.doesNotMatch(details.slice(details.indexOf(">Surveyor entry<"), emailAt), /vd-parties/);
+    const handler = route.slice(route.indexOf('"/main-log/:id/details"'), route.indexOf('hhsrsReporterRouter.get("/main-log/:id"'));
+    assert.match(handler, /listSentEmails\(row\.id\)/);
+    assert.match(handler, /to: email\.to/);
+    assert.match(handler, /cc: email\.cc/);
+    assert.doesNotMatch(handler, /clientRecipients|HhsrsClientEmail|recipientsFromStoredOrCode/);
   });
 });
 

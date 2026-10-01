@@ -10,10 +10,13 @@ export type ViewDetailsPhoto = { name: string; url: string };
 
 export type ViewDetailsParty = { label: string; value: string };
 
-/** Mailbox the correction is sent from. Display only; send still uses its own From line. */
+/** Mailbox shown on a sent card. Display only; the send still uses its own From line. */
 export const CORRECTION_FROM_ADDRESS = "hhsrs@savillshousing.co.uk";
 
-/** From, To, and Cc when that correction already has one. */
+/**
+ * From, the To stored on that send, and Cc only when that send already has one.
+ * A blank stored To stays blank. This does not look up a project client address.
+ */
 export function correctionParties(input: { to?: string | null; cc?: string | null }): ViewDetailsParty[] {
   const parties: ViewDetailsParty[] = [
     { label: "From", value: CORRECTION_FROM_ADDRESS },
@@ -193,7 +196,14 @@ export function buildViewDetails(input: {
     description: String(input.description || "").trim(),
     photos: [...input.surveyorPhotos],
     intro: viewDetailsIntro(input.projectName, address, Boolean(original), corrections.length),
-    sent: original ? toEmail(original, new Set(), String(original.subject || "").trim(), []) : null,
+    sent: original
+      ? toEmail(
+          original,
+          new Set(),
+          String(original.subject || "").trim(),
+          correctionParties({ to: original.to, cc: original.cc })
+        )
+      : null,
     corrections: corrections.map((email) =>
       toEmail(
         email,

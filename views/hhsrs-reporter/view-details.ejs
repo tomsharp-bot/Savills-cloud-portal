@@ -39,6 +39,13 @@
         <article class="vd-email">
           <% if (details.sent.subject) { %><header class="vd-head"><%= details.sent.subject %></header><% } %>
           <div class="vd-sheet">
+            <% if (details.sent.parties && details.sent.parties.length) { %>
+              <div class="vd-parties">
+                <% details.sent.parties.forEach(function (line) { %>
+                  <div><span><%= line.label %></span> <%= line.value %></div>
+                <% }) %>
+              </div>
+            <% } %>
             <div class="vd-copy"><%- details.sent.copyHtml %></div>
             <% if (details.sent.photos && details.sent.photos.length) { %>
               <div class="vd-shot">
