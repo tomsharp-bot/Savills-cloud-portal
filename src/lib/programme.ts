@@ -14,6 +14,8 @@ export type ProgrammePerson = {
 export type ProgrammePoolPerson = {
   flag: string;
   name: string;
+  /** Week cells kept while the person is off the main table, so a tick can bring them back. */
+  weeks?: string[];
 };
 
 export type SavedProgrammeBoard = {
@@ -336,9 +338,22 @@ function dedupePool(people: readonly ProgrammePoolPerson[]): ProgrammePoolPerson
     const key = canonName(person.name);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    out.push({ flag: person.flag, name: collapseName(person.name) });
+    out.push({
+      flag: person.flag,
+      name: collapseName(person.name),
+      weeks: person.weeks ? person.weeks.slice() : undefined,
+    });
   }
   return out;
+}
+
+function savedBool(map: Record<string, boolean> | undefined, name: string): boolean | undefined {
+  if (!map) return undefined;
+  const key = canonName(name);
+  for (const [label, value] of Object.entries(map)) {
+    if (canonName(label) === key && typeof value === "boolean") return value;
+  }
+  return undefined;
 }
 
 function seedMaps(): { weeks: Map<string, string[]>; flags: Map<string, string> } {
@@ -419,10 +434,31 @@ export function resolveProgramme(input: {
   const adminPersonnel = indexByCanon(admins);
   const { weeks: seedWeeks, flags: seedFlags } = seedMaps();
 
-  let surveyorOrder = uniqueOrder(
+  const initialOrder = uniqueOrder(
     saved ? saved.surveyorOrder : programmeSeed.rows.map((row) => row.name),
     surveyorPersonnel
   );
+  const initialKeys = new Set(initialOrder.map((name) => canonName(name)));
+  const seedRowKeys = new Set(programmeSeed.rows.map((row) => canonName(row.name)));
+  /**
+   * Main table: people already on the programme, plus Personnel surveyors with no
+   * agency marker. An explicit untick (applied false) takes someone off.
+   * A tick (applied true) puts them back, including someone with an agency marker.
+   */
+  const showsOnMain = (name: string): boolean => {
+    const applied = savedBool(saved?.applied, name);
+    if (applied === true) return true;
+    if (applied === false) return false;
+    if (initialKeys.has(canonName(name)) || seedRowKeys.has(canonName(name))) return true;
+    const person = surveyorPersonnel.get(canonName(name));
+    return !!person && !hasAgencyLetter(person.agency);
+  };
+  let surveyorOrder = initialOrder.slice();
+  for (const row of programmeSeed.rows) {
+    if (!surveyorPersonnel.has(canonName(row.name))) continue;
+    if (savedBool(saved?.applied, row.name) === false) continue;
+    if (!hasCanon(surveyorOrder, row.name)) surveyorOrder.push(collapseName(row.name));
+  }
   const extraSurveyors = [...surveyors].sort((a, b) =>
     collapseName(a.name).localeCompare(collapseName(b.name), "en-GB")
   );
@@ -470,38 +506,64 @@ export function resolveProgramme(input: {
     ...(input.admins || []).map((person) => person.name),
     ...adminRows.map((person) => person.name),
   ];
-  const normalOnly = new Set(
-    surveyors.filter((person) => !hasAgencyLetter(person.agency)).map((person) => canonName(person.name))
-  );
-  const agencyOnly = new Set(
-    surveyors.filter((person) => hasAgencyLetter(person.agency)).map((person) => canonName(person.name))
-  );
-  let agencyPool = programmeSeed.pools.agency_not_on_project
-    .map((person) => ({
-      flag: normalizeFlag(person.flag) || personnelAgencyLetter(person.flag),
-      name: collapseName(person.name),
-    }))
-    .filter((person) => !normalOnly.has(canonName(person.name)));
+  const personnelByName = surveyorPersonnel;
+  const markerFor = (name: string, fallback = ""): string => {
+    const person = personnelByName.get(canonName(name));
+    if (person && hasAgencyLetter(person.agency)) return agencyPoolFlag(person.agency);
+    const flag = normalizeFlag(fallback) || lookupFlag(name, flags, seedFlags, surveyorPersonnel);
+    return flag;
+  };
+  const poolPerson = (name: string, flag: string): ProgrammePoolPerson => ({
+    flag,
+    name: collapseName(name),
+    weeks: weeksFor(name),
+  });
+  let agencyPool: ProgrammePoolPerson[] = programmeSeed.pools.agency_not_on_project
+    .map((person) => poolPerson(person.name, normalizeFlag(person.flag) || personnelAgencyLetter(person.flag)))
+    .filter((person) => !showsOnMain(person.name));
   for (const person of surveyors) {
-    if (!agencyOnly.has(canonName(person.name))) continue;
+    if (!hasAgencyLetter(person.agency) || showsOnMain(person.name)) continue;
     if (agencyPool.some((row) => canonName(row.name) === canonName(person.name))) continue;
-    agencyPool.push({ flag: agencyPoolFlag(person.agency), name: collapseName(person.name) });
+    agencyPool.push(poolPerson(person.name, agencyPoolFlag(person.agency)));
+  }
+  for (const name of surveyorOrder) {
+    if (showsOnMain(name)) continue;
+    const flag = markerFor(name);
+    if (!flag) continue;
+    if (agencyPool.some((row) => canonName(row.name) === canonName(name))) continue;
+    agencyPool.push(poolPerson(name, flag));
   }
   agencyPool = dedupePool(agencyPool);
   const agencyNames = new Set(agencyPool.map((person) => canonName(person.name)));
-  const normalOrder = surveyorOrder.filter((name) => {
-    const key = canonName(name);
-    if (agencyOnly.has(key)) return false;
-    if (agencyNames.has(key)) return false;
-    return true;
-  });
-  const normalRows = normalOrder.map((name) => ({
-    name,
-    flag: lookupFlag(name, flags, seedFlags, surveyorPersonnel),
-    weeks: weeksFor(name),
-  }));
+  const normalRows = surveyorOrder
+    .filter((name) => showsOnMain(name) && !agencyNames.has(canonName(name)))
+    .map((name) => ({
+      name,
+      flag: lookupFlag(name, flags, seedFlags, surveyorPersonnel),
+      weeks: weeksFor(name),
+    }));
   const normalNames = new Set(normalRows.map((row) => canonName(row.name)));
-  const everyone = [...normalRows.map((row) => row.name), ...adminRows.map((row) => row.name)];
+  const onBoard = new Set([...normalNames, ...adminRows.map((row) => canonName(row.name))]);
+  let teamPool: ProgrammePoolPerson[] = teamPoolExcludingAdmins(
+    programmeSeed.pools.team_not_live.map((person) => poolPerson(person.name, normalizeFlag(person.flag))),
+    adminNamesForPool
+  ).filter((person) => {
+    const key = canonName(person.name);
+    return !onBoard.has(key) && !agencyNames.has(key);
+  });
+  for (const name of surveyorOrder) {
+    if (showsOnMain(name) || agencyNames.has(canonName(name))) continue;
+    if (teamPool.some((row) => canonName(row.name) === canonName(name))) continue;
+    if (adminNamesForPool.some((admin) => canonName(admin) === canonName(name))) continue;
+    teamPool.push(poolPerson(name, ""));
+  }
+  teamPool = dedupePool(teamPool);
+  const everyone = [
+    ...normalRows.map((row) => row.name),
+    ...adminRows.map((row) => row.name),
+    ...agencyPool.map((person) => person.name),
+    ...teamPool.map((person) => person.name),
+  ];
 
   return {
     weeks: visibleWeeks,
@@ -509,18 +571,7 @@ export function resolveProgramme(input: {
     admins: adminRows,
     pools: {
       agency_not_on_project: agencyPool,
-      team_not_live: dedupePool(
-        teamPoolExcludingAdmins(
-          programmeSeed.pools.team_not_live.map((person) => ({
-            flag: normalizeFlag(person.flag),
-            name: collapseName(person.name),
-          })),
-          adminNamesForPool
-        ).filter((person) => {
-          const key = canonName(person.name);
-          return !agencyNames.has(key) && !normalNames.has(key) && !agencyOnly.has(key);
-        })
-      ),
+      team_not_live: teamPool,
     },
     ticks: remapBools(saved?.ticks, everyone),
     applied: remapBools(saved?.applied, everyone),
@@ -697,10 +748,10 @@ export function teamPoolExcludingAdmins<T extends { name: string }>(
 }
 
 /**
- * Distinct week columns where an on-board person has this project.
+ * Tiles on the main programme grid for this project.
+ * One tile is one filled week cell. Two people in the same week count as two.
  * People with active === false are off the main grid and do not count.
  * Missing active means on the board, matching the programme tick default.
- * Two people assigned in the same week count as one tile.
  * A tile matches the project by full name or by the short stamp
  * ({@link programmeCellMatchesProject}). `catalogue` is the Current and
  * Upcoming names, so two different projects that share a stamp are not merged.
@@ -712,18 +763,17 @@ export function projectWeeksOnGrid(
 ): number {
   if (!programmeCanon(projectName)) return 0;
   const names = catalogue && catalogue.length ? catalogue : [projectName];
-  const hit = new Set<number>();
+  let count = 0;
   for (const person of people) {
     if (person.active === false) continue;
-    const weeks = person.weeks || [];
-    for (let i = 0; i < weeks.length; i++) {
-      if (programmeCellMatchesProject(weeks[i] || "", projectName, names)) hit.add(i);
+    for (const week of person.weeks || []) {
+      if (programmeCellMatchesProject(week || "", projectName, names)) count += 1;
     }
   }
-  return hit.size;
+  return count;
 }
 
-/** One occupied week column on the main grid stands for about this many surveys. */
+/** One project tile on the main grid stands for about this many surveys. */
 export const APPROX_SURVEYS_PER_WEEK = 40;
 
 const PROGRAMME_SHORT_LABELS: Record<string, string> = {
@@ -817,7 +867,7 @@ export function programmeCellMatchesProject(
   return false;
 }
 
-/** Approx surveys = distinct on-grid week columns for the project × 40. */
+/** Approx surveys = project tiles on the main grid × 40. */
 export function approxSurveysOnGrid(
   projectName: string,
   people: readonly { weeks?: readonly string[]; active?: boolean }[],
@@ -950,14 +1000,18 @@ export function jobTileColorKey(text: string, catalogue?: readonly string[]): st
   return value;
 }
 
+/** Holiday and the other leave labels, as they looked before job colours: muted fill, red text. */
+export const HOLIDAY_TILE_COLOR: JobTileColor = { background: "#eeeeee", color: "#c62828" };
+
 /**
- * Colour shared by the top project tile and the week-grid tile.
- * The key is hashed to a hue (step 163, so the draft jobs sit apart), then a
- * light background and dark text of that hue. The same key always returns the
- * same colour. A different key returns a different colour unless the hashes
- * land on the same bucket.
+ * Colour shared by the top project tile, the week-grid tile, and the counts-section name.
+ * Holiday stays the old muted fill with red text. Every other key is hashed to a hue
+ * (step 163), then a light background and dark text of that hue.
  */
+
 export function jobTileColor(text: string, catalogue?: readonly string[]): JobTileColor {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (isHolidayLabel(raw)) return HOLIDAY_TILE_COLOR;
   const value = jobTileColorKey(text, catalogue);
   const hash = jobTileHash(value);
   const hue = (hash * 163) % 360;

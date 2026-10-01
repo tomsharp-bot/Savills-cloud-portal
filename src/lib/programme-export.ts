@@ -43,70 +43,6 @@ type Look = {
   align?: "left" | "center" | "right";
 };
 
-type Paint = { bg: string; fg: string; bold?: boolean; italic?: boolean };
-
-/** Same class names and hex values as the on-screen programme matrix. */
-const PAINT: Record<string, Paint> = {
-  "c-MTVH": { bg: "FFCFE2F3", fg: "FF0B3A5C", bold: true },
-  "c-Onward": { bg: "FFD9EAD3", fg: "FF1E3D1A", bold: true },
-  "c-LFHA": { bg: "FFFCE5CD", fg: "FF6B3F00", bold: true },
-  "c-Vico": { bg: "FFD0E2FF", fg: "FF1A2F6B", bold: true },
-  "c-Cornwall": { bg: "FFEAD1DC", fg: "FF5B2340", bold: true },
-  "c-BPHA": { bg: "FFD9D2E9", fg: "FF3D2A5C", bold: true },
-  "c-A2D": { bg: "FFC9DAF8", fg: "FF1C4587", bold: true },
-  "c-OTHER": { bg: "FFFFF2CC", fg: "FF5C4A00", bold: true },
-  "c-Awaiting": { bg: "FFF4CCCC", fg: "FF660000", bold: true },
-  "c-Holiday": { bg: "FFEEEEEE", fg: "FFC62828", bold: true },
-  "c-Festive": { bg: "FFEEEEEE", fg: "FFC62828", bold: true },
-  "c-note": { bg: "FFF3F3F3", fg: "FF555555", italic: true },
-  "c-Southern": { bg: "FFD0E8D8", fg: "FF1A3D28", bold: true },
-  "c-Flagship": { bg: "FFFDE9D0", fg: "FF6B3F00", bold: true },
-  "c-Radius": { bg: "FFDDE8F7", fg: "FF1C3558", bold: true },
-  "c-Saxon": { bg: "FFE8D9F0", fg: "FF3D2A5C", bold: true },
-  "c-Bristol": { bg: "FFD9F0EE", fg: "FF1A4540", bold: true },
-};
-
-/** Insertion order matches PROJECT_STYLE in public/js/programme.js. */
-const PROJECT_STYLE: { name: string; cls: string }[] = [
-  { name: "MTVH", cls: "c-MTVH" },
-  { name: "Onward", cls: "c-Onward" },
-  { name: "LFHA 2026", cls: "c-LFHA" },
-  { name: "LFHA", cls: "c-LFHA" },
-  { name: "Vico 2026", cls: "c-Vico" },
-  { name: "Vico", cls: "c-Vico" },
-  { name: "Holiday", cls: "c-Holiday" },
-  { name: "Festive Period", cls: "c-Festive" },
-  { name: "OTHER WORK", cls: "c-OTHER" },
-  { name: "Cornwall 2026 Ph2", cls: "c-Cornwall" },
-  { name: "Cornwall", cls: "c-Cornwall" },
-  { name: "BPHA 2026 ACQ", cls: "c-BPHA" },
-  { name: "BPHA ACQ", cls: "c-BPHA" },
-  { name: "A2D Ph4", cls: "c-A2D" },
-  { name: "Awaiting Start", cls: "c-Awaiting" },
-  { name: "Southern Blocks", cls: "c-Southern" },
-  { name: "Flagship", cls: "c-Flagship" },
-  { name: "Radius Ph1", cls: "c-Radius" },
-  { name: "Saxon Weald Ph 4", cls: "c-Saxon" },
-  { name: "Bristol Ph2", cls: "c-Bristol" },
-];
-
-const EXTRA = [
-  "c-MTVH",
-  "c-Onward",
-  "c-LFHA",
-  "c-Vico",
-  "c-Cornwall",
-  "c-BPHA",
-  "c-A2D",
-  "c-Southern",
-  "c-Flagship",
-  "c-Radius",
-  "c-Saxon",
-  "c-Bristol",
-];
-
-const HOLIDAY = /holiday|festive|leave|annual leave|bank holiday/i;
-
 const HEADER: Look = { bg: NAVY, fg: WHITE, bold: true, align: "center" };
 const PROJ_HEADER: Look = { bg: PROJ_HEADER_BG, fg: NAVY, bold: true, align: "left" };
 const PLAIN: Look = { bg: WHITE, fg: TEXT, align: "left" };
@@ -281,24 +217,6 @@ export function parseProgrammeExport(body: unknown): ProgrammeExportInput | null
   };
 }
 
-/** Mirrors classForName() in public/js/programme.js. */
-function classForName(name: string): string {
-  const exact = PROJECT_STYLE.find((item) => item.name === name);
-  if (exact) return exact.cls;
-  if (HOLIDAY.test(name)) return "c-Holiday";
-  if (/^A2Dominion\b/i.test(name)) return "c-A2D";
-  for (const item of PROJECT_STYLE) {
-    if (name.startsWith(item.name) || item.name.startsWith(name)) return item.cls;
-  }
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 33 + name.charCodeAt(i)) >>> 0;
-  return EXTRA[hash % EXTRA.length];
-}
-
-function paintFor(name: string): Paint {
-  return PAINT[classForName(name)] || PAINT["c-note"];
-}
-
 function argbFromHex(hex: string): string {
   return "FF" + hex.slice(1).toUpperCase();
 }
@@ -310,8 +228,8 @@ function weekLook(value: string, catalogue: readonly string[]): Look {
 }
 
 function projectLook(name: string): Look {
-  const paint = paintFor(name);
-  return { bg: paint.bg, fg: paint.fg, bold: paint.bold ?? true, italic: paint.italic, align: "left" };
+  const tone = jobTileColor(name);
+  return { bg: argbFromHex(tone.background), fg: argbFromHex(tone.color), bold: true, align: "left" };
 }
 
 function styleCell(cell: ExcelJS.Cell, look: Look, border: boolean): void {

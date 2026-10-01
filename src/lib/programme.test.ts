@@ -115,10 +115,10 @@ describe("resolveProgramme", () => {
     assert.equal(board.admins.find((row) => row.name === "Tom Sharp")?.weeks.length, board.weeks.length);
     assert.ok(!board.admins.some((row) => row.name.startsWith("Admin ")));
     assert.equal(board.rows.at(-1)?.name, "Alex Surveyor");
-    assert.equal(board.rows.some((row) => canonName(row.name) === "peter may"), false);
-    const peter = board.pools.agency_not_on_project.filter((person) => canonName(person.name) === "peter may");
-    assert.equal(peter.length, 1);
-    assert.equal(peter[0].flag, "E");
+    const peter = board.rows.find((row) => canonName(row.name) === "peter may");
+    assert.ok(peter);
+    assert.equal(peter.flag, "E");
+    assert.equal(board.pools.agency_not_on_project.some((person) => canonName(person.name) === "peter may"), false);
     assert.equal(board.pools.team_not_live.some((person) => canonName(person.name) === "peter may"), false);
   });
 
@@ -143,11 +143,14 @@ describe("resolveProgramme", () => {
     });
     assert.deepEqual(
       board.rows.map((row) => row.name),
-      ["Richard Moreing", "Peter May", "Zoe New"]
+      ["Richard Moreing", "Zoe New"]
     );
     assert.equal(board.rows[0].weeks[0], "Onward");
     assert.equal(board.rows[0].weeks[1], "");
-    assert.equal(board.rows[1].flag, "F");
+    const peter = board.pools.agency_not_on_project.filter((person) => person.name === "Peter May");
+    assert.equal(peter.length, 1);
+    assert.equal(peter[0].flag, "F");
+    assert.equal(board.pools.team_not_live.some((person) => person.name === "Peter May"), false);
     assert.equal(board.applied["Peter May"], false);
     assert.equal(board.ticks["Peter May"], false);
     assert.deepEqual(
@@ -214,7 +217,8 @@ describe("resolveProgramme", () => {
     assert.deepEqual(places("Nia Cole"), { rows: 0, agency: 1, team: 0 });
     assert.equal(board.pools.agency_not_on_project.find((person) => person.name === "Nia Cole")?.flag, "Ele");
     assert.deepEqual(places("Alex Surveyor"), { rows: 0, agency: 1, team: 0 });
-    assert.deepEqual(places("peter may"), { rows: 0, agency: 1, team: 0 });
+    assert.deepEqual(places("peter may"), { rows: 1, agency: 0, team: 0 });
+    assert.equal(board.rows.find((row) => canonName(row.name) === "peter may")?.flag, "E");
     assert.deepEqual(places("Jeremy Hughes"), { rows: 0, agency: 1, team: 0 });
     assert.equal(board.pools.agency_not_on_project.find((person) => person.name === "Jeremy Hughes")?.flag, "F");
     assert.deepEqual(places("Sam Blank"), { rows: 1, agency: 0, team: 0 });
@@ -376,9 +380,119 @@ describe("resolveProgramme", () => {
       .flatMap((row: FakeEl) => row.children)
       .filter((cell: FakeEl) => cell.className === "surveyor")
       .map((cell: FakeEl) => cell.textContent);
-    assert.deepEqual(poolNames("agencyPool"), ["Bardya Amin", "Nia Cole", "Jeremy Hughes"]);
+    assert.deepEqual(poolNames("agencyPool").filter(Boolean), []);
     assert.deepEqual(poolNames("teamPool"), ["Alan Henderson", "Clive Gray", "Alex Surveyor"]);
-    assert.deepEqual(onBoard, ["Sam Blank", "Richard Moreing"]);
+    assert.deepEqual(onBoard, ["Bardya Amin", "Nia Cole", "Jeremy Hughes", "Sam Blank", "Richard Moreing"]);
+    function hasTick(id: string) {
+      return (lists.get(id)?.children || []).every((li) =>
+        li.children.some((child) => child.className === "active-hit pool-active-hit" && child.children.some((input) => input.className === "active-cb pool-active-cb"))
+      );
+    }
+    assert.equal(hasTick("teamPool"), true);
+    assert.match(script, /tick then hit Refresh to return to the main table/);
+    assert.doesNotMatch(script, /if \(p\.fromGrid\) \{\s*var hit/);
+  });
+
+  it("keeps Shahid Hanif and Djibril Hanif on the main table when Personnel marks them as agency", () => {
+    const board = resolveProgramme({
+      now: DRAFT_WEEK,
+      surveyors: [
+        { name: "Shahid Hanif", agency: "E" },
+        { name: "Djibril Hanif", agency: "E" },
+        { name: "New Agency", agency: "Ele" },
+        { name: "New Surveyor" },
+      ],
+    });
+    for (const name of ["Shahid Hanif", "Djibril Hanif"]) {
+      const rows = board.rows.filter((row) => row.name === name);
+      assert.equal(rows.length, 1, name);
+      assert.ok(rows[0].weeks.includes("Onward"), name);
+      assert.equal(board.pools.agency_not_on_project.some((person) => person.name === name), false, name);
+      assert.equal(board.pools.team_not_live.some((person) => person.name === name), false, name);
+    }
+    assert.equal(board.pools.agency_not_on_project.filter((person) => person.name === "New Agency").length, 1);
+    assert.equal(board.rows.some((row) => row.name === "New Agency"), false);
+    assert.equal(board.pools.team_not_live.some((person) => person.name === "New Agency"), false);
+    assert.equal(board.rows.filter((row) => row.name === "New Surveyor").length, 1);
+    assert.equal(board.pools.agency_not_on_project.some((person) => person.name === "New Surveyor"), false);
+    assert.equal(board.pools.team_not_live.some((person) => person.name === "New Surveyor"), false);
+
+    const dropped = resolveProgramme({
+      now: DRAFT_WEEK,
+      saved: {
+        version: 1,
+        ticks: {},
+        applied: {},
+        surveyorOrder: ["Richard Moreing"],
+        adminOrder: [],
+        cells: { "Richard Moreing": ["LFHA 2026"] },
+        flags: {},
+      },
+      surveyors: [
+        { name: "Shahid Hanif", agency: "E" },
+        { name: "Djibril Hanif", agency: "E" },
+      ],
+    });
+    assert.equal(dropped.rows.find((row) => row.name === "Shahid Hanif")?.weeks[0], "Onward");
+    assert.equal(dropped.rows.find((row) => row.name === "Djibril Hanif")?.weeks[0], "Onward");
+    assert.equal(dropped.pools.agency_not_on_project.some((person) => /hanif/i.test(person.name)), false);
+    assert.equal(dropped.pools.team_not_live.some((person) => /hanif/i.test(person.name)), false);
+  });
+
+  it("puts an unticked person in one bottom table and brings them back when ticked", () => {
+    const off = resolveProgramme({
+      now: DRAFT_WEEK,
+      saved: {
+        version: 1,
+        ticks: { "Shahid Hanif": false, "Richard Moreing": false },
+        applied: { "Shahid Hanif": false, "Richard Moreing": false },
+        surveyorOrder: ["Richard Moreing", "Shahid Hanif"],
+        adminOrder: [],
+        cells: {
+          "Shahid Hanif": ["Onward", "Onward"],
+          "Richard Moreing": ["LFHA 2026"],
+        },
+        flags: { "Shahid Hanif": "E" },
+      },
+      surveyors: [
+        { name: "Shahid Hanif", agency: "E" },
+        { name: "Richard Moreing" },
+      ],
+    });
+    assert.equal(off.rows.some((row) => row.name === "Shahid Hanif"), false);
+    assert.equal(off.rows.some((row) => row.name === "Richard Moreing"), false);
+    const shahid = off.pools.agency_not_on_project.filter((person) => person.name === "Shahid Hanif");
+    assert.equal(shahid.length, 1);
+    assert.equal(shahid[0].weeks?.[0], "Onward");
+    assert.equal(off.pools.team_not_live.some((person) => person.name === "Shahid Hanif"), false);
+    const richard = off.pools.team_not_live.filter((person) => person.name === "Richard Moreing");
+    assert.equal(richard.length, 1);
+    assert.equal(richard[0].weeks?.[0], "LFHA 2026");
+    assert.equal(off.pools.agency_not_on_project.some((person) => person.name === "Richard Moreing"), false);
+
+    const back = resolveProgramme({
+      now: DRAFT_WEEK,
+      saved: {
+        version: 1,
+        ticks: { "Shahid Hanif": true, "Richard Moreing": true },
+        applied: { "Shahid Hanif": true, "Richard Moreing": true },
+        surveyorOrder: ["Richard Moreing", "Shahid Hanif"],
+        adminOrder: [],
+        cells: {
+          "Shahid Hanif": ["Onward", "Onward"],
+          "Richard Moreing": ["LFHA 2026"],
+        },
+        flags: { "Shahid Hanif": "E" },
+      },
+      surveyors: [
+        { name: "Shahid Hanif", agency: "E" },
+        { name: "Richard Moreing" },
+      ],
+    });
+    assert.equal(back.rows.find((row) => row.name === "Shahid Hanif")?.weeks[0], "Onward");
+    assert.equal(back.rows.find((row) => row.name === "Richard Moreing")?.weeks[0], "LFHA 2026");
+    assert.equal(back.pools.agency_not_on_project.some((person) => person.name === "Shahid Hanif"), false);
+    assert.equal(back.pools.team_not_live.some((person) => person.name === "Richard Moreing"), false);
   });
 
   it("skips frozen Personnel when adding people", () => {
@@ -418,7 +532,10 @@ describe("boardFromClient", () => {
       surveyors: [],
       admins: [{ name: "Phil Moon" }],
     });
-    assert.equal(board.rows[0].weeks[0], "Holiday");
+    const peter = board.pools.agency_not_on_project.find((person) => person.name === "Peter May");
+    assert.equal(peter?.weeks?.[0], "Holiday");
+    assert.equal(peter?.weeks?.[1], "Onward");
+    assert.equal(board.rows.some((row) => row.name === "Peter May"), false);
     assert.equal(board.admins[0].name, "Phil Moon");
     assert.equal(parseSavedBoard(saved)?.surveyorOrder[0], "Peter May");
   });
@@ -565,36 +682,36 @@ describe("programmeShortLabel", () => {
 });
 
 describe("projectWeeksOnGrid", () => {
-  it("counts distinct weeks on the main grid, including admin rows that are on the board", () => {
+  it("counts every tile on the main grid, including two people in the same week", () => {
     const people = [
       { weeks: ["Onward", "Onward", ""], active: true },
       { weeks: ["Onward", "LFHA 2026", ""], active: true },
       { weeks: ["Onward", "Onward", "Onward"], active: false },
       { weeks: ["LFHA 2026", "LFHA 2026", "Holiday"], active: true },
     ];
-    assert.equal(projectWeeksOnGrid("Onward", people), 2);
-    assert.equal(projectWeeksOnGrid("lfha  2026", people), 2);
+    assert.equal(projectWeeksOnGrid("Onward", people), 3);
+    assert.equal(projectWeeksOnGrid("lfha  2026", people), 3);
     assert.equal(projectWeeksOnGrid("Holiday", people), 1);
     assert.equal(projectWeeksOnGrid("Missing", people), 0);
     assert.equal(projectWeeksOnGrid("Onward", [{ weeks: ["Onward"], active: false }]), 0);
-    assert.equal(approxSurveysOnGrid("Onward", people), 80);
+    assert.equal(approxSurveysOnGrid("Onward", people), 120);
     assert.equal(approxSurveysOnGrid("Holiday", people), 40);
     assert.equal(approxSurveysOnGrid("Missing", people), 0);
   });
 
-  it("counts short stamps and full names as the same project, once per week", () => {
+  it("counts short stamps and full names as the same project, one per tile", () => {
     const people = [
       { weeks: ["LFHA", "A2D Ph4", "Cornwall", "LFHA 2026"], active: true },
       { weeks: ["LFHA", "Vico", "A2Dominion 2026 – Ph 4", ""], active: true },
       { weeks: ["LFHA 2026", "LFHA", "LFHA", "LFHA"], active: false },
     ];
     const catalogue = ["LFHA 2026", "A2Dominion 2026 - Ph4", "Cornwall 2026 Ph2", "Vico", "Onward"];
-    assert.equal(projectWeeksOnGrid("LFHA 2026", people, catalogue), 2);
+    assert.equal(projectWeeksOnGrid("LFHA 2026", people, catalogue), 3);
     assert.equal(projectWeeksOnGrid("A2Dominion 2026 - Ph4", people, catalogue), 2);
     assert.equal(projectWeeksOnGrid("Cornwall 2026 Ph2", people, catalogue), 1);
     assert.equal(projectWeeksOnGrid("Vico", people, catalogue), 1);
     assert.equal(projectWeeksOnGrid("Onward", people, catalogue), 0);
-    assert.equal(approxSurveysOnGrid("LFHA 2026", people, catalogue), 80);
+    assert.equal(approxSurveysOnGrid("LFHA 2026", people, catalogue), 120);
     assert.equal(approxSurveysOnGrid("Vico", people, catalogue), 40);
     assert.equal(programmeCellMatchesProject("LFHA 2025", "LFHA 2026", catalogue), false);
     assert.equal(programmeCellMatchesProject("Saxon", "Saxon Weald Ph 4", ["Saxon Weald Ph 4"]), true);
@@ -735,14 +852,16 @@ describe("job tile colours", () => {
     }
   });
 
-  it("keeps Holiday and other labels on their own colours", () => {
+  it("keeps Holiday on the old clear fill with red text", () => {
     const holiday = jobTileColor("Holiday", catalogue);
     const festive = jobTileColor("Festive Period", catalogue);
     const other = jobTileColor("OTHER WORK", catalogue);
-    assert.notDeepEqual(holiday, festive);
+    assert.deepEqual(holiday, { background: "#eeeeee", color: "#c62828" });
+    assert.deepEqual(festive, holiday);
     assert.notDeepEqual(holiday, other);
-    assert.notDeepEqual(festive, jobTileColor("MTVH", catalogue));
+    assert.notDeepEqual(other, jobTileColor("MTVH", catalogue));
     assert.deepEqual(jobTileColor("Holiday", catalogue), jobTileColor("  Holiday  ", catalogue));
+    assert.notDeepEqual(jobTileColor("Onward", catalogue), holiday);
     assert.notDeepEqual(jobTileColor("Vico", ["Vico", "Vico 2026"]), jobTileColor("Vico 2026", ["Vico", "Vico 2026"]));
   });
 
