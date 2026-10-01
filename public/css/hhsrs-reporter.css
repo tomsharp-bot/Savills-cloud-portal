@@ -3214,6 +3214,31 @@ tr.is-new-log td { background: #f5f3ff; }
   stroke-linejoin: round;
 }
 .hhsrs-reporter .btn-not-needed:hover { background: #f4f7fb; border-color: #8aa0b8; }
+.hhsrs-reporter .req-star { color: #c0392b; font-weight: 700; }
+.hhsrs-reporter .req-star[hidden] { display: none; }
+.hhsrs-reporter .office-dismiss { margin-top: 0.85rem; }
+.hhsrs-reporter .office-dismiss textarea { min-height: 64px; }
+.hhsrs-reporter .office-dismiss-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+.hhsrs-reporter .btn-dismiss-hazard {
+  background: #fff;
+  color: #8a1f1f;
+  border: 1px solid #8a1f1f;
+  font-weight: 650;
+}
+.hhsrs-reporter .btn-dismiss-hazard:hover { background: #fdf6f6; }
+.hhsrs-reporter .ml-row-note {
+  display: block;
+  margin-top: 4px;
+  color: #8a1f1f;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
 .hhsrs-reporter .finish-bar .send-block {
   display: flex;
   align-items: center;

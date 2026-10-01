@@ -16,7 +16,8 @@
       createdAt: row.createdAt,
       href: row.href,
       rowClass: row.selected ? "is-sel" : "",
-      amendedNote: row.correctedNote ? "Amended" : ""
+      amendedNote: row.correctedNote ? "Amended" : "",
+      rowNote: row.kind === "dismissed" ? (row.logLine || "") : ""
     };
   });
 %>
@@ -156,12 +157,14 @@
         <% }) %>
       </div>
     <% } %>
-    <% if (panel.kind === "not_sent") { %>
+    <% if (panel.kind === "dismissed") { %>
+      <div class="ml-origbox"><%= panel.logLine %></div>
+    <% } else if (panel.kind === "not_sent") { %>
       <div class="ml-origbox">Not sent from the portal. Marked actioned on <%= panel.when %>.</div>
     <% } %>
     <div class="ml-facts">
-      <div><span>Sent by</span><b><%= panel.sentBy || "—" %></b></div>
-      <div><span>Sent</span><b><%= panel.when %></b></div>
+      <div><span><%= panel.kind === "dismissed" ? "Viewed by" : "Sent by" %></span><b><%= panel.sentBy || "—" %></b></div>
+      <div><span><%= panel.kind === "dismissed" ? "Viewed" : "Sent" %></span><b><%= panel.when %></b></div>
       <div><span>Photos</span><b><%= panel.photoCount %></b></div>
     </div>
     <dl class="ml-meta">
@@ -171,7 +174,7 @@
       <dt>Bcc</dt><dd class="<%= panel.bcc ? "" : "none" %>"><%= panel.bcc || "—" %></dd>
       <dt>Subject</dt><dd class="<%= panel.subject ? "" : "none" %>"><% if (panel.subject) { %><b><%= panel.subject %></b><% } else { %>—<% } %></dd>
     </dl>
-    <% if (panel.kind !== "not_sent") { %>
+    <% if (panel.kind !== "not_sent" && panel.kind !== "dismissed") { %>
       <%- include("partials/sent-email-card", {
         cardLabel: "Email that was sent",
         card: {

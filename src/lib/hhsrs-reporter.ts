@@ -2,6 +2,7 @@ import type { HhsrsSiteSubmission } from "@prisma/client";
 import { draftFromSubmission, type SubmissionDraftInput } from "./hhsrs-reporter-draft.js";
 import { matchDemoProject, resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import { composeCallNotes, isCallRefBlankReason } from "./hhsrs-site-form.js";
+import { baselineSurveyorCheck, restrictorsAfterOfficeDecision } from "./hhsrs-office-check.js";
 
 export const HHSRS_REPORTER_PATH = "/HHSRSreporter";
 export const HHSRS_REPORTER_ALIAS = "/HHSRSreporting";
@@ -14,6 +15,7 @@ export const HHSRS_CASE_STATUSES = [
   "corrected",
   "closed",
   "not_needed",
+  "dismissed",
 ] as const;
 
 export type HhsrsCaseStatus = (typeof HHSRS_CASE_STATUSES)[number];
@@ -42,7 +44,8 @@ export function statusForReviewSave(current: string, submitted: string): string 
     current === "email_sent" ||
     current === "corrected" ||
     current === "closed" ||
-    current === "not_needed"
+    current === "not_needed" ||
+    current === "dismissed"
   ) {
     return current;
   }
@@ -67,6 +70,8 @@ export function statusLabel(status: string): string {
       return "Closed";
     case "not_needed":
       return "Not needed";
+    case "dismissed":
+      return "Dismissed";
     default:
       return status || "New";
   }
@@ -131,6 +136,7 @@ export type ReviewDraftSource = {
   restrictorMissingCount?: string;
   restrictorLocations?: string;
   restrictorMaterial?: string;
+  surveyorCheck?: unknown;
   photoPaths: unknown;
 };
 
@@ -197,6 +203,36 @@ export function mergeReviewDraftFields(
   }
 
   const matched = matchDemoProject(row.projectName);
+  const baseline = baselineSurveyorCheck(row.surveyorCheck, {
+    rating: row.rating,
+    clientCallReference: row.clientCallReference,
+    callOutcome: row.callOutcome,
+    callNotes: row.callNotes || "",
+    restrictorMissingCount: row.restrictorMissingCount || "",
+    restrictorLocations: row.restrictorLocations || "",
+    restrictorMaterial: row.restrictorMaterial || "",
+  });
+  const nextRating = postedRating || row.rating;
+  const restrictors = restrictorsAfterOfficeDecision({
+    baselineRating: baseline.rating,
+    nextRating,
+    current: {
+      restrictorMissingCount: row.restrictorMissingCount || "",
+      restrictorLocations: row.restrictorLocations || "",
+      restrictorMaterial: row.restrictorMaterial || "",
+    },
+    posted: {
+      ...(body.restrictorMissingCount !== undefined
+        ? { restrictorMissingCount: postedString(body, "restrictorMissingCount") }
+        : {}),
+      ...(body.restrictorLocations !== undefined
+        ? { restrictorLocations: postedString(body, "restrictorLocations") }
+        : {}),
+      ...(body.restrictorMaterial !== undefined
+        ? { restrictorMaterial: postedString(body, "restrictorMaterial") }
+        : {}),
+    },
+  });
   const projectUnchanged =
     !postedProject ||
     postedProject === row.projectName ||
@@ -213,7 +249,7 @@ export function mergeReviewDraftFields(
     uprn: postedString(body, "uprn") || row.uprn,
     surveyDate: postedString(body, "surveyDate") || row.surveyDate,
     category: postedString(body, "hazard") || row.category,
-    rating: postedRating || row.rating,
+    rating: nextRating,
     comment: row.comment,
     clientDescription: notesUnchanged ? row.clientDescription : postedNotes,
     clientCallReference:
@@ -228,16 +264,9 @@ export function mergeReviewDraftFields(
     onwardTopic: body.onwardTopic === undefined ? row.onwardTopic : postedString(body, "onwardTopic"),
     cat1Confirmed: postedFlag(body.cat1Confirmed, row.cat1Confirmed),
     otherDetails: body.otherDetails === undefined ? row.otherDetails || "" : postedString(body, "otherDetails"),
-    restrictorMissingCount:
-      body.restrictorMissingCount === undefined
-        ? row.restrictorMissingCount || ""
-        : postedString(body, "restrictorMissingCount"),
-    restrictorLocations:
-      body.restrictorLocations === undefined
-        ? row.restrictorLocations || ""
-        : postedString(body, "restrictorLocations"),
-    restrictorMaterial:
-      body.restrictorMaterial === undefined ? row.restrictorMaterial || "" : postedString(body, "restrictorMaterial"),
+    restrictorMissingCount: restrictors.restrictorMissingCount,
+    restrictorLocations: restrictors.restrictorLocations,
+    restrictorMaterial: restrictors.restrictorMaterial,
     photoCount: postedPhotoCount(body, photoAttachmentCount(row.photoPaths)),
   };
 }

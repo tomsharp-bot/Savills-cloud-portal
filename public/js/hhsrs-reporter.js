@@ -170,6 +170,157 @@
           "<strong>Cornwall online form:</strong> for damp / mould, Tom’s separate online form may still be required after this email. Track that action until completed.";
       }
     }
+    syncOfficeCheck();
+  }
+
+  var officeHoldMessage = "";
+  var officeRatingSeen = null;
+  var officeClearedExtras = false;
+  var HIGH_ONLY_LINE = /^•\s*(?:how many window restrictors are missing|number of window restrictors missing|window restrictors missing|window material|locations?)\s*:/i;
+
+  function isOfficeHigh(rating) {
+    var text = String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+    return text === "high - emergency risk" || text === "high - significant risk";
+  }
+
+  function isOfficeLowMedium(rating) {
+    var text = String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+    return text === "low" || text === "medium";
+  }
+
+  function surveyorValue(key) {
+    var check = cfg.surveyorCheck || {};
+    return String(check[key] || "").replace(/^\s+|\s+$/g, "");
+  }
+
+  function projectCollectsCallReference(projectCfg, rating) {
+    if (!projectCfg) return false;
+    var extras = projectCfg.extras || {};
+    var site = projectCfg.siteForm || {};
+    if (extras.calls || site.calls) return true;
+    return !!(site.mtvh && String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase() === "high - emergency risk");
+  }
+
+  function surveyorCompletedCall() {
+    return !!(surveyorValue("clientCallReference") || surveyorValue("callOutcome") || surveyorValue("callNotes"));
+  }
+
+  function setExtraInputs(node, disabled) {
+    if (!node) return;
+    var inputs = node.querySelectorAll("input, select, textarea");
+    for (var i = 0; i < inputs.length; i++) {
+      if (inputs[i].type === "hidden") continue;
+      inputs[i].disabled = disabled;
+    }
+  }
+
+  function extraBlock(key) {
+    return document.querySelector('#rv-case-form .project-extra[data-extra="' + key + '"]');
+  }
+
+  function setOfficeStar(key, on) {
+    var nodes = document.querySelectorAll('[data-office-star="' + key + '"]');
+    for (var i = 0; i < nodes.length; i++) nodes[i].hidden = !on;
+  }
+
+  function writeRestrictor(id, value) {
+    var el = $(id);
+    if (el) el.value = value;
+  }
+
+  function clearHighExtras() {
+    officeClearedExtras = true;
+    writeRestrictor("rv-restrictor-count", "");
+    writeRestrictor("rv-restrictor-locations", "");
+    writeRestrictor("rv-restrictor-material", "");
+  }
+
+  function restoreSurveyorExtras() {
+    if (!officeClearedExtras) return;
+    officeClearedExtras = false;
+    writeRestrictor("rv-restrictor-count", surveyorValue("restrictorMissingCount"));
+    writeRestrictor("rv-restrictor-locations", surveyorValue("restrictorLocations"));
+    writeRestrictor("rv-restrictor-material", surveyorValue("restrictorMaterial"));
+  }
+
+  function stripHighExtrasFromDraft() {
+    var bodyEl = $("hhsrs-body");
+    if (!bodyEl || bodyEl.readOnly) return;
+    var next = String(bodyEl.value || "")
+      .split("\n")
+      .filter(function (line) { return !HIGH_ONLY_LINE.test(String(line || "").replace(/^\s+|\s+$/g, "")); })
+      .join("\n");
+    if (next !== bodyEl.value) bodyEl.value = next;
+  }
+
+  function markEmailStale() {
+    if (sentStage()) return;
+    emailGenerated = false;
+    var badge = $("rv-email-badge");
+    if (badge && /generated/i.test(badge.textContent || "")) badge.textContent = "Draft";
+  }
+
+  function syncOfficeCheck() {
+    officeHoldMessage = "";
+    if (cfg.mode !== "filled" || !cfg.surveyorCheck || sentStage()) {
+      ["restrictorMissingCount", "restrictorLocations", "restrictorMaterial", "clientCallReference"].forEach(function (key) {
+        setOfficeStar(key, false);
+      });
+      return;
+    }
+    var rating = fieldText("rv-rating");
+    var baseline = surveyorValue("rating");
+    var dropped = isOfficeHigh(baseline) && isOfficeLowMedium(rating);
+    var raised = isOfficeLowMedium(baseline) && isOfficeHigh(rating);
+    var ratingChanged = officeRatingSeen !== null && officeRatingSeen !== rating;
+    officeRatingSeen = rating;
+    if (dropped) {
+      clearHighExtras();
+      stripHighExtrasFromDraft();
+    } else if (officeClearedExtras) {
+      restoreSurveyorExtras();
+    }
+    var restrictors = extraBlock("restrictors");
+    if (dropped && restrictors) {
+      restrictors.hidden = true;
+      setExtraInputs(restrictors, true);
+    } else if (raised && restrictors) {
+      restrictors.hidden = false;
+      setExtraInputs(restrictors, false);
+    }
+    var projectCfg = matchProject(($("rv-project") && $("rv-project").value) || "");
+    var wantsCall = raised && projectCollectsCallReference(projectCfg, rating);
+    var calls = extraBlock("calls");
+    if (wantsCall && calls) {
+      calls.hidden = false;
+      setExtraInputs(calls, false);
+      syncCallRefFields();
+    }
+    var missingCount = raised && !surveyorValue("restrictorMissingCount") && !fieldText("rv-restrictor-count");
+    var missingMaterial = raised && !surveyorValue("restrictorMaterial") && !fieldText("rv-restrictor-material");
+    var missingLocations = raised && !surveyorValue("restrictorLocations") && !fieldText("rv-restrictor-locations");
+    var missingCall = wantsCall && !surveyorCompletedCall() && !fieldText("rv-call-ref");
+    setOfficeStar("restrictorMissingCount", raised && !surveyorValue("restrictorMissingCount"));
+    setOfficeStar("restrictorMaterial", raised && !surveyorValue("restrictorMaterial"));
+    setOfficeStar("restrictorLocations", raised && !surveyorValue("restrictorLocations"));
+    setOfficeStar("clientCallReference", wantsCall && !surveyorCompletedCall());
+    var note = $("rv-office-note");
+    if (note) {
+      if (raised && (missingCount || missingMaterial || missingLocations || missingCall)) {
+        note.dataset.office = "rating";
+        note.textContent = "Raised to High, so the office fills the extra details. Red stars mean they are still needed. Send stays off until they are filled.";
+      } else if (dropped) {
+        note.dataset.office = "rating";
+        note.textContent = "Dropped below High, so the extra High details are not needed.";
+      } else if (note.dataset.office === "rating") {
+        note.textContent = "";
+        delete note.dataset.office;
+      }
+    }
+    if (missingCount || missingMaterial || missingLocations || missingCall) {
+      officeHoldMessage = "Raised to High. Fill the extra details before sending.";
+    }
+    if (ratingChanged) markEmailStale();
   }
 
   var MAX_CASE_PHOTOS = 4;
@@ -979,6 +1130,15 @@
     callRefEl.addEventListener("input", syncCallRefFields);
     callRefEl.addEventListener("change", syncCallRefFields);
   }
+  ["rv-restrictor-count", "rv-restrictor-locations", "rv-restrictor-material", "rv-call-ref"].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener("input", function () {
+      syncOfficeCheck();
+      if (emailGenerated) markEmailStale();
+      syncSendButton();
+    });
+  });
 
   var hazardEl = $("rv-hazard");
   if (hazardEl) {
@@ -1947,6 +2107,11 @@
       line.textContent = "Add a subject or body first.";
       return;
     }
+    if (officeHoldMessage) {
+      btn.disabled = true;
+      line.textContent = officeHoldMessage;
+      return;
+    }
     if (!cfg.caseId) {
       var project = ($("rv-project") && String($("rv-project").value || "").trim()) || "";
       var address = ($("rv-address") && String($("rv-address").value || "").trim()) || "";
@@ -2181,6 +2346,19 @@
       $("rv-send-body").value = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
       var holder = $("rv-send-photo-fields");
       holder.innerHTML = "";
+      [
+        ["rating", val("rv-rating")],
+        ["restrictorMissingCount", val("rv-restrictor-count")],
+        ["restrictorLocations", val("rv-restrictor-locations")],
+        ["restrictorMaterial", val("rv-restrictor-material")],
+        ["clientCallReference", val("rv-call-ref")]
+      ].forEach(function (pair) {
+        var input = document.createElement("input");
+        input.type = "hidden";
+        input.name = pair[0];
+        input.value = pair[1];
+        holder.appendChild(input);
+      });
       tickedPhotos().forEach(function (p) {
         var input = document.createElement("input");
         input.type = "hidden";
@@ -2252,6 +2430,25 @@
       clientEmailRemember(next);
     });
   }
+
+  function wireDismissHazard() {
+    var form = $("rv-dismiss-form");
+    var decision = $("rv-decision");
+    var star = $("rv-decision-star");
+    if (!form || !decision) return;
+    form.addEventListener("submit", function (e) {
+      if (String(decision.value || "").replace(/^\s+|\s+$/g, "")) return;
+      e.preventDefault();
+      if (star) star.hidden = false;
+      decision.focus();
+      var note = $("rv-office-note");
+      if (note) {
+        delete note.dataset.office;
+        note.textContent = "Add the decision, then press Dismiss hazard again. No email goes out.";
+      }
+    });
+  }
+  wireDismissHazard();
 
   function wireNotNeeded() {
     var openBtn = $("btn-not-needed");

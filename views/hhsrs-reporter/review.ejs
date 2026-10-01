@@ -144,7 +144,7 @@
           <div class="project-extra" data-extra="calls" <%= detailExtras.calls ? "" : "hidden" %>>
             <% const storedCallRef = isFilled ? String(row.clientCallReference || "").trim() : ""; %>
             <div>
-              <label for="rv-call-ref">Client call reference</label>
+              <label for="rv-call-ref">Client call reference <span class="req-star" data-office-star="clientCallReference" hidden>*</span></label>
               <input id="rv-call-ref" name="clientCallReference" type="text" value="<%= storedCallRef %>" placeholder="Call reference number" autocomplete="off" />
             </div>
             <div id="rv-call-blank" <%= storedCallRef ? "hidden" : "" %>>
@@ -214,11 +214,11 @@
           </div>
 
           <div class="project-extra" data-extra="restrictors" <%= detailExtras.restrictors ? "" : "hidden" %>>
-            <label for="rv-restrictor-count">How many window restrictors are missing</label>
+            <label for="rv-restrictor-count">How many window restrictors are missing <span class="req-star" data-office-star="restrictorMissingCount" hidden>*</span></label>
             <input id="rv-restrictor-count" name="restrictorMissingCount" type="text" value="<%= isFilled ? row.restrictorMissingCount : "" %>" autocomplete="off" />
-            <label for="rv-restrictor-locations">Location</label>
-            <input id="rv-restrictor-locations" name="restrictorLocations" type="text" value="<%= isFilled ? row.restrictorLocations : "" %>" autocomplete="off" />
-            <label for="rv-restrictor-material">Window material</label>
+            <label for="rv-restrictor-locations">Location <span class="req-star" data-office-star="restrictorLocations" hidden>*</span></label>
+            <input id="rv-restrictor-locations" name="restrictorLocations" type="text" value="<%= isFilled ? row.restrictorLocations : "" %>" placeholder="Hall, Kitchen, Landing…" autocomplete="off" />
+            <label for="rv-restrictor-material">Window material <span class="req-star" data-office-star="restrictorMaterial" hidden>*</span></label>
             <select id="rv-restrictor-material" name="restrictorMaterial">
               <option value="">Select a material</option>
               <% restrictorMaterials.forEach((material) => { %>
@@ -265,6 +265,17 @@
             </div>
           </div>
         </fieldset>
+        <% const showDismiss = isFilled && caseWaiting && !sentEmail; %>
+        <% if (showDismiss) { %>
+          <div class="office-dismiss" id="rv-office-dismiss">
+            <label for="rv-decision">Decision <span class="req-star" id="rv-decision-star" hidden>*</span></label>
+            <textarea id="rv-decision" name="decision" form="rv-dismiss-form" placeholder="Why you changed the rating, or why it is not a hazard"></textarea>
+            <div class="office-dismiss-row">
+              <button type="submit" class="btn btn-dismiss-hazard" id="btn-dismiss-hazard" form="rv-dismiss-form">Dismiss hazard</button>
+              <p class="review-project-hint" id="rv-office-note"></p>
+            </div>
+          </div>
+        <% } %>
         <div class="case-actions">
           <div class="generate-email-row case-save-row">
             <% if (isFilled) { %>
@@ -279,6 +290,11 @@
         </div>
       </div>
       <% if (isFilled) { %></form><% } %>
+      <% if (isFilled && caseWaiting && !sentEmail) { %>
+        <form id="rv-dismiss-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/dismiss">
+          <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
+        </form>
+      <% } %>
     </section>
 
     <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : ' is-pre-generate' %>" id="rv-email-draft" aria-label="Client Email Draft">

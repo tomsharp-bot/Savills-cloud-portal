@@ -52,6 +52,7 @@
           <td class="addr-cell">
             <strong><%= row.fullAddress %></strong>
             <% if (row.amendedNote) { %><span class="ml-amended"><%= row.amendedNote %></span><% } %>
+            <% if (row.rowNote) { %><span class="ml-row-note"><%= row.rowNote %></span><% } %>
             <% if (showClaim) { %><%- include("claim-chip", { claimRow: claim }) %><% } %>
           </td>
           <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase), showPhotoCount }) %>

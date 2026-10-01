@@ -344,7 +344,7 @@ model HhsrsSiteSubmission {
   clientCallReference  String    @default("")
   otherDetails         String    @default("")
   photoPaths           Json
-  /// Office workflow: new | in_review | email_ready | email_sent | corrected | closed | not_needed
+  /// Office workflow: new | in_review | email_ready | email_sent | corrected | closed | not_needed | dismissed
   status               String    @default("new")
   /// Concise client-facing hazard wording (office-edited). Empty → derive from comment.
   clientDescription    String    @default("")
@@ -384,6 +384,12 @@ model HhsrsSiteSubmission {
   notNeededLog         Json      @default("[]")
   /// Office said this case is not a duplicate. Automatic UPRN filing leaves it alone.
   notADuplicate        Boolean   @default(false)
+  /// Surveyor answers at the office's first check. Empty until the office saves, sends, or dismisses.
+  surveyorCheck        Json      @default("{}")
+  /// Why the office dismissed the hazard. Empty unless status is dismissed.
+  dismissedDecision    String    @default("")
+  dismissedBy          String    @default("")
+  dismissedAt          DateTime?
   /// Office claim. Empty claimedBy means the case is open. Stale is derived from claimedAt — never auto-stolen.
   claimedBy            String    @default("")
   claimedAt            DateTime?
