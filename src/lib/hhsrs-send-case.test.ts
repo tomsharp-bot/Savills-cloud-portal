@@ -479,7 +479,7 @@ function cookieHeader(setCookie: string[], previous = ""): string {
 }
 
 describe("claimed HHSRS case on the reporter", () => {
-  it("does not let a second person open, send, or abandon it", async (t) => {
+  it("lets a second person view a claimed case, but not edit, send, or abandon it", async (t) => {
     if (!(await dbReady())) {
       t.skip("Postgres is not available");
       return;
@@ -523,22 +523,27 @@ describe("claimed HHSRS case on the reporter", () => {
     const phil = cookieHeader(philLogin.setCookie);
     const owner = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie: phil });
     assert.equal(owner.status, 200);
+    assert.doesNotMatch(owner.body, /is-claim-locked/);
     assert.match(owner.body, /Abandon claim — return to pending/);
     assert.match(owner.body, /id="btn-send-email"/);
+    assert.doesNotMatch(owner.body, /id="btn-send-email"[^>]*disabled/);
 
     const otherLogin = await request(app, "POST", "/login", {
       body: `username=${encodeURIComponent(username)}&password=LockTest2468`,
     });
     assert.equal(otherLogin.status, 302);
     let otherCookie = cookieHeader(otherLogin.setCookie);
-    const blocked = await request(app, "GET", `/HHSRSreporter/review/${row.id}?claim=1`, { cookie: otherCookie });
-    assert.equal(blocked.status, 302);
-    assert.equal(blocked.location, "/HHSRSreporter");
-    otherCookie = cookieHeader(blocked.setCookie, otherCookie);
-    const pending = await request(app, "GET", blocked.location, { cookie: otherCookie });
-    assert.equal(pending.status, 200);
-    assert.match(pending.body, /claimed by Phil Moon/);
-    assert.doesNotMatch(pending.body, /id="btn-send-email"/);
+    const viewed = await request(app, "GET", `/HHSRSreporter/review/${row.id}?claim=1`, { cookie: otherCookie });
+    assert.equal(viewed.status, 200);
+    assert.match(viewed.body, new RegExp(`CLM-${stamp}`));
+    assert.match(viewed.body, /id="review-case-work"[^>]*class="is-claim-locked"[^>]*inert/);
+    assert.match(viewed.body, /claimed by Phil Moon/);
+    assert.match(viewed.body, /id="btn-send-email"[^>]*disabled/);
+    assert.match(viewed.body, /id="btn-generate-email"[^>]*disabled/);
+    assert.match(viewed.body, /id="btn-abandon-claim"[^>]*hidden/);
+    assert.doesNotMatch(viewed.body, /id="ck-overlay"/);
+    assert.doesNotMatch(viewed.body, /id="btn-dismiss-hazard"/);
+    otherCookie = cookieHeader(viewed.setCookie, otherCookie);
 
     const send = await request(app, "POST", `/HHSRSreporter/review/${row.id}/send`, {
       cookie: otherCookie,
@@ -559,5 +564,13 @@ describe("claimed HHSRS case on the reporter", () => {
     const open = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
     assert.equal(open.claimedBy, "");
     assert.equal(open.status, "new");
+    const taken = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie: otherCookie });
+    assert.equal(taken.status, 200);
+    assert.doesNotMatch(taken.body, /is-claim-locked/);
+    assert.match(taken.body, /id="btn-abandon-claim"/);
+    assert.doesNotMatch(taken.body, /id="btn-send-email"[^>]*disabled/);
+    const takenRow = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
+    assert.equal(takenRow.claimedBy, "Peter May");
+    assert.equal(takenRow.status, "new");
   });
 });

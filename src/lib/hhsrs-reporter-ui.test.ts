@@ -632,7 +632,7 @@ describe("HHSRS Reporter UI helpers", () => {
     const reporterRoute = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
     assert.doesNotMatch(reporterJs, /location\.replace\([\s\S]{0,80}\/review\//);
     assert.match(sidebar, /href="<%= reporterBase %>" class="tab-link/);
-    assert.match(reporterRoute, /reviewCaseClaimRequested\(req\) \? await claimIfOpen/);
+    assert.match(reporterRoute, /const row = await claimIfOpen\(closed, actor\)/);
     const clear = css.slice(css.indexOf(".panel.waiting-urgent.is-clear {"), css.indexOf(".sum-card.accent-red {"));
     assert.match(clear, /border-color:\s*#1b7a4e/);
     assert.match(clear, /background:\s*#f3faf6/);

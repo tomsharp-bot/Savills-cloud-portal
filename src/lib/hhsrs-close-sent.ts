@@ -70,6 +70,7 @@ export async function closeOpenSubmissionFromEarliestEmail(
       "lastEditedBy" = CASE WHEN btrim(s."lastEditedBy") <> '' THEN s."lastEditedBy" ELSE e."sentBy" END,
       "claimedBy" = '',
       "claimedAt" = NULL,
+      "sendLease" = '',
       "updatedAt" = CURRENT_TIMESTAMP
     FROM (
       SELECT "submissionId", "sentAt", "sentBy", "subject", "body"

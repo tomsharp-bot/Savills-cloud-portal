@@ -95,6 +95,7 @@ import {
   photoByteSize,
   postedValues,
   sendCaseEmail,
+  sendLeaseActive,
   type CaseEmailTransport,
 } from "../lib/hhsrs-send-case.js";
 import { buildViewDetails } from "../lib/hhsrs-view-details.js";
@@ -345,6 +346,7 @@ async function claimIfOpen(
   claimer: string
 ): Promise<NonNullable<Awaited<ReturnType<typeof loadCase>>>> {
   if (!isWaitingStatus(row.status)) return row;
+  if (!claimer.trim()) return row;
   if (claimView(row).status !== "open") return row;
   const claimedAt = new Date();
   const result = await prisma.hhsrsSiteSubmission.updateMany({
@@ -563,6 +565,8 @@ async function renderReview(
     projectAliases: HHSRS_PORTAL_NAME_ALIASES,
     waitingIds: opts.waitingIds,
     claim: claimView(row),
+    claimLocked: Boolean(heldClaim(row, claimerLabel(req.user))),
+    claimLockedBy: heldClaim(row, claimerLabel(req.user)),
     ratingOptions: RATING_OPTIONS,
     categories: HHSRS_CATEGORIES,
     ratings: HHSRS_RATINGS,
@@ -602,6 +606,13 @@ hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
     res.status(404).json({ ok: false, error: "Case not found." });
     return;
   }
+  if (row) {
+    const owner = heldClaim(row, claimerLabel(req.user));
+    if (owner) {
+      res.status(403).json({ ok: false, error: claimHeldMessage(owner) });
+      return;
+    }
+  }
   try {
     const fields = mergeReviewDraftFields(row, body);
     const recipients = await clientRecipientsForProject(fields.projectName);
@@ -613,11 +624,6 @@ hhsrsReporterRouter.post("/draft.json", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: message });
   }
 });
-
-function reviewCaseClaimRequested(req: Request): boolean {
-  const value = req.query.claim;
-  return value === "1" || (Array.isArray(value) && value.includes("1"));
-}
 
 /** Waiting cases only. A sent case is no longer locked. */
 function heldClaim(row: { status: string; claimedBy?: string | null }, actor: string): string {
@@ -638,7 +644,7 @@ async function closeIfAlreadyLogged(
   if (row.emailSentAt) {
     await prisma.hhsrsSiteSubmission.updateMany({
       where: { id: row.id, status: { in: [...HHSRS_WAITING_STATUSES] } },
-      data: { status: "email_sent", claimedBy: "", claimedAt: null },
+      data: { status: "email_sent", claimedBy: "", claimedAt: null, sendLease: "" },
     });
     return (await loadCase(row.id)) || row;
   }
@@ -703,13 +709,7 @@ hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
   }
   const closed = await closeIfAlreadyLogged(loaded);
   const actor = claimerLabel(req.user);
-  const row = reviewCaseClaimRequested(req) ? await claimIfOpen(closed, actor) : closed;
-  const owner = heldClaim(row, actor);
-  if (owner) {
-    flashErr(req, claimHeldMessage(owner));
-    res.redirect(HHSRS_REPORTER_PATH);
-    return;
-  }
+  const row = await claimIfOpen(closed, actor);
   const ctx = await reviewContext(row.id);
   await renderReview(req, res, row, ctx);
 });
@@ -1850,6 +1850,12 @@ async function handleDismiss(req: Request, res: Response, id: string): Promise<v
     return;
   }
   const back = `${HHSRS_REPORTER_PATH}/review/${row.id}`;
+  const owner = heldClaim(row, claimerLabel(req.user));
+  if (owner) {
+    flashErr(req, claimHeldMessage(owner));
+    res.redirect(HHSRS_REPORTER_PATH);
+    return;
+  }
   if (row.emailSentAt || !isWaitingStatus(row.status)) {
     flashErr(req, "This case is not pending.");
     res.redirect(back);
@@ -2051,10 +2057,15 @@ async function handleAbandon(req: Request, res: Response, id: string): Promise<v
     res.redirect(HHSRS_REPORTER_PATH);
     return;
   }
+  if (sendLeaseActive(row.sendLease)) {
+    flashErr(req, "A send is already in progress for this case.");
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+    return;
+  }
   if (isWaitingStatus(row.status) && String(row.claimedBy || "").trim()) {
     await prisma.hhsrsSiteSubmission.updateMany({
       where: { id: row.id, claimedBy: row.claimedBy, status: { in: [...HHSRS_WAITING_STATUSES] } },
-      data: { claimedBy: "", claimedAt: null },
+      data: { claimedBy: "", claimedAt: null, sendLease: "" },
     });
   }
   res.redirect(HHSRS_REPORTER_PATH);

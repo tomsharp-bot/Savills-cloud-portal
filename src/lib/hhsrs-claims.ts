@@ -1,4 +1,4 @@
-/** Office claim on a waiting HHSRS case. Opening Review claims an open case. Stale is a flag only — the claim stays with that person until they abandon it. */
+/** Office claim on a waiting HHSRS case. Opening Review claims an open case. Someone else can still open it to view, but cannot edit or send. Stale is a flag only — the claim stays with that person until they abandon it or send it. */
 
 export const CLAIM_STALE_MS = 6 * 60 * 60 * 1000;
 
@@ -10,9 +10,11 @@ export type ClaimView = {
   claimedAt: string | null;
 };
 
-export function claimerLabel(user: { name?: string | null; username?: string | null } | null | undefined): string {
-  const name = (user?.name || user?.username || "").trim();
-  return name || "someone";
+export function claimerLabel(user: { name?: string | null; username?: string | null; id?: string | null } | null | undefined): string {
+  const name = (user?.name || "").trim();
+  const username = (user?.username || "").trim();
+  const id = (user?.id || "").trim();
+  return name || username || id;
 }
 
 /** The claim owner when `actor` is not that person. Empty when the case is unclaimed or this person holds it. */
@@ -26,7 +28,7 @@ export function otherClaimer(claimedBy: string | null | undefined, actor: string
 
 export function claimHeldMessage(owner: string): string {
   const name = String(owner || "").trim() || "someone else";
-  return `This case is claimed by ${name}. Only they can open or send it until they abandon the claim.`;
+  return `This case is claimed by ${name}. Only they can edit or send it until they abandon the claim or send it.`;
 }
 
 export function claimView(

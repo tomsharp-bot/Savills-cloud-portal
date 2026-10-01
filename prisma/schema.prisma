@@ -393,6 +393,8 @@ model HhsrsSiteSubmission {
   /// Office claim. Empty claimedBy means the case is open. Stale is derived from claimedAt — never auto-stolen.
   claimedBy            String    @default("")
   claimedAt            DateTime?
+  /// Holds a send that has not been logged yet. Empty when no send is in progress.
+  sendLease            String    @default("")
   lastEditedBy         String    @default("")
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
