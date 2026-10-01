@@ -270,6 +270,10 @@ describe("office check on case details", () => {
     assert.match(review, /data-office-star="clientCallReference"/);
     assert.match(review, /id="rv-dismiss-form"/);
     assert.match(js, /function syncOfficeCheck/);
+    assert.match(js, /High - Emergency risk/);
+    assert.match(js, /High - Significant risk/);
+    assert.match(review, /High - Emergency risk/);
+    assert.match(review, /High - Significant risk/);
     assert.match(js, /Raised to High/);
     assert.match(js, /Dropped below High/);
     assert.match(js, /Add the decision, then press Dismiss hazard again/);

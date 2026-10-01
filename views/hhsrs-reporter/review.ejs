@@ -125,7 +125,8 @@
                 <%
                   const ratingList = (matchedProject && ratingOptions[matchedProject.ratingScheme]) || ratings;
                   const currentRating = isFilled ? row.rating : "";
-                  const opts = Array.from(new Set([...(ratingList || []), currentRating].filter(Boolean)));
+                  const officeHighRatings = isFilled ? ["High - Emergency risk", "High - Significant risk"] : [];
+                  const opts = Array.from(new Set([...(ratingList || []), ...officeHighRatings, currentRating].filter(Boolean)));
                   opts.forEach((r) => {
                 %>
                   <option value="<%= r %>" <%= currentRating === r ? "selected" : "" %>><%= r %></option>

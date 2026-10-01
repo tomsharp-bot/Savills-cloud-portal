@@ -92,7 +92,12 @@
   function fillRatingOptions(scheme, preferred) {
     var sel = $("rv-rating");
     if (!sel) return;
-    var opts = RATING_OPTIONS[scheme] || RATING_OPTIONS.NEW;
+    var opts = (RATING_OPTIONS[scheme] || RATING_OPTIONS.NEW).slice();
+    if (cfg.mode === "filled") {
+      ["High - Emergency risk", "High - Significant risk"].forEach(function (r) {
+        if (opts.indexOf(r) < 0) opts.push(r);
+      });
+    }
     var cur = preferred != null ? preferred : sel.value;
     sel.innerHTML = '<option value="">Select…</option>';
     opts.forEach(function (r) {
@@ -115,7 +120,27 @@
     return el ? String(el.value || "").replace(/^\s+|\s+$/g, "") : "";
   }
 
+  function officeRatingNow() {
+    return {
+      rating: fieldText("rv-rating"),
+      baseline: surveyorValue("rating"),
+    };
+  }
+
+  function officeDroppedNow() {
+    var now = officeRatingNow();
+    return isOfficeHigh(now.baseline) && isOfficeLowMedium(now.rating);
+  }
+
+  /** Clear or restore before visibility is read, so a drop hides the extras and switching back shows the surveyor's answers. */
+  function applyOfficeRestrictorValues() {
+    if (cfg.mode !== "filled" || !cfg.surveyorCheck || sentStage()) return;
+    if (officeDroppedNow()) clearHighExtras();
+    else if (officeClearedExtras) restoreSurveyorExtras();
+  }
+
   function setExtraVisibility(projectCfg) {
+    applyOfficeRestrictorValues();
     var extras = (projectCfg && projectCfg.extras) || {};
     var site = (projectCfg && projectCfg.siteForm) || {};
     var nodes = document.querySelectorAll("#rv-case-form .project-extra");
@@ -274,17 +299,17 @@
     var raised = isOfficeLowMedium(baseline) && isOfficeHigh(rating);
     var ratingChanged = officeRatingSeen !== null && officeRatingSeen !== rating;
     officeRatingSeen = rating;
-    if (dropped) {
-      clearHighExtras();
-      stripHighExtrasFromDraft();
-    } else if (officeClearedExtras) {
-      restoreSurveyorExtras();
-    }
+    if (dropped) stripHighExtrasFromDraft();
+    var surveyorHadRestrictors = !!(
+      surveyorValue("restrictorMissingCount") ||
+      surveyorValue("restrictorLocations") ||
+      surveyorValue("restrictorMaterial")
+    );
     var restrictors = extraBlock("restrictors");
     if (dropped && restrictors) {
       restrictors.hidden = true;
       setExtraInputs(restrictors, true);
-    } else if (raised && restrictors) {
+    } else if (restrictors && (raised || (isOfficeHigh(rating) && surveyorHadRestrictors))) {
       restrictors.hidden = false;
       setExtraInputs(restrictors, false);
     }
@@ -1133,11 +1158,13 @@
   ["rv-restrictor-count", "rv-restrictor-locations", "rv-restrictor-material", "rv-call-ref"].forEach(function (id) {
     var el = $(id);
     if (!el) return;
-    el.addEventListener("input", function () {
+    var onOfficeField = function () {
       syncOfficeCheck();
       if (emailGenerated) markEmailStale();
       syncSendButton();
-    });
+    };
+    el.addEventListener("input", onOfficeField);
+    el.addEventListener("change", onOfficeField);
   });
 
   var hazardEl = $("rv-hazard");
