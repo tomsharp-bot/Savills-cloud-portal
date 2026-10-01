@@ -341,7 +341,7 @@ export function buildAmendmentEmail(input: {
   textLines.push("", "Hi all,", "");
   for (const line of parsed.prose) textLines.push(line, "");
   const htmlBits = [`<p>${escapeHtml(intro)}</p>`];
-  if (photoLine) htmlBits.push(`<p>${escapeHtml(CORRECTION_PHOTO_LINE)}</p>`);
+  if (photoLine) htmlBits.push(`<p><b>${escapeHtml(CORRECTION_PHOTO_LINE)}</b></p>`);
   htmlBits.push(`<p>Hi all,</p>`);
   for (const line of parsed.prose) htmlBits.push(`<p>${escapeHtml(line)}</p>`);
   const bullets: string[] = [];
