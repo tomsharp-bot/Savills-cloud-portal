@@ -339,7 +339,18 @@ describe("duplicates and office emails with the database", () => {
       cookie = cookieHeader(moved.setCookie, cookie);
       const pending = await request(port, "GET", moved.location, { cookie });
       assert.match(pending.body, /Moved to Duplicates &amp; Errors\./);
-      assert.doesNotMatch(pending.body, new RegExp(duplicate.reference || "no-ref"));
+      const waiting = pending.body.slice(
+        pending.body.indexOf('id="waiting-table"'),
+        pending.body.indexOf('id="last-actioned"')
+      );
+      const dupeRow = waiting.split("<tr").find((part) => part.includes(`9 Duplicate Street ${stamp}`));
+      assert.ok(dupeRow);
+      assert.match(dupeRow, /\bpending-dupe\b/);
+      assert.match(dupeRow, new RegExp(`${duplicate.uprn}</span> <span class="pending-dupe-tag">Dupe</span>`));
+      const addrCell = dupeRow.match(/<td class="addr-cell[^"]*">[\s\S]*?<\/td>/);
+      assert.ok(addrCell);
+      assert.doesNotMatch(addrCell[0], /Dupe/);
+      assert.equal(pending.body.slice(pending.body.indexOf('id="last-actioned"')).includes(`9 Duplicate Street ${stamp}`), false);
 
       const stored = await prisma.hhsrsSiteSubmission.findUnique({ where: { id: duplicate.id } });
       assert.equal(stored?.status, "not_needed");

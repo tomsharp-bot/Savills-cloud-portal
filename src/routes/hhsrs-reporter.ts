@@ -68,7 +68,12 @@ import {
   type ProjectOverview,
 } from "../lib/hhsrs-reporter-overview.js";
 import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
-import { pendingIssueListArgs, withoutOpenCase } from "../lib/hhsrs-pending-list.js";
+import {
+  mergePendingDuplicates,
+  pendingDuplicateListArgs,
+  pendingIssueListArgs,
+  withoutOpenCase,
+} from "../lib/hhsrs-pending-list.js";
 import { claimHeldMessage, claimRowClass, claimView, claimerLabel, otherClaimer, type ClaimView } from "../lib/hhsrs-claims.js";
 import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
@@ -399,8 +404,9 @@ hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Respo
 
 /* ---------- Pending Issues ---------- */
 hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
-  const [waitingRows, actionedRows, summary] = await Promise.all([
+  const [waitingOnly, duplicateRows, actionedRows, summary] = await Promise.all([
     prisma.hhsrsSiteSubmission.findMany(pendingIssueListArgs()),
+    prisma.hhsrsSiteSubmission.findMany(pendingDuplicateListArgs()),
     prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
       orderBy: [{ emailSentAt: "desc" }, { updatedAt: "desc" }],
@@ -408,6 +414,7 @@ hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
     }),
     loadSummary(),
   ]);
+  const waitingRows = mergePendingDuplicates(waitingOnly, duplicateRows);
   const flash = takeFlash(req);
   res.render("hhsrs-reporter/pending", {
     ...shellLocals({ activeNav: "pending", summary, flashOk: flash.ok, flashErr: flash.err }),

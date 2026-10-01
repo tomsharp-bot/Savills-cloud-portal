@@ -46,7 +46,7 @@
         const ago = formatTimeAgo(row.createdAt);
         const claim = claimView(row);
       %>
-        <tr class="<%= [showClaim ? claimRowClass(row) : "", row.href ? "find-result" : "", row.rowClass || ""].filter(Boolean).join(" ") %>" data-claim-status="<%= showClaim ? claim.status : "open" %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
+        <tr class="<%= [showClaim ? claimRowClass(row) : "", row.href ? "find-result" : "", row.rowClass || "", row.pendingDupe ? "pending-dupe" : ""].filter(Boolean).join(" ") %>" data-claim-status="<%= showClaim ? claim.status : "open" %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
           <% if (showReference) { %><td class="col-ref"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td><% } %>
           <td class="col-proj"><span class="project-pill"><%= row.projectName %></span></td>
           <td class="addr-cell col-addr">
@@ -55,7 +55,7 @@
             <% if (showClaim) { %><%- include("claim-chip", { claimRow: claim }) %><% } %>
           </td>
           <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase), showPhotoCount }) %>
-          <td class="col-uprn"><span style="color:var(--muted)"><%= row.uprn %></span></td>
+          <td class="col-uprn"><span style="color:var(--muted)"><%= row.uprn %></span><% if (row.pendingDupe) { %> <span class="pending-dupe-tag">Dupe</span><% } %></td>
           <td class="col-surv"><%= row.surveyorName %></td>
           <td class="col-cat"><%= row.category %></td>
           <td class="col-rate <%= ratingDisplayClass(row.rating) %>" title="<%= row.rating %>"><%= row.rating %></td>

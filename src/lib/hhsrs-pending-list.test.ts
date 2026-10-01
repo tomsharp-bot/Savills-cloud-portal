@@ -5,7 +5,13 @@ import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
 import { HHSRS_WAITING_STATUSES } from "./hhsrs-reporter.js";
-import { PENDING_ISSUE_LIST_LIMIT, pendingIssueListArgs, withoutOpenCase } from "./hhsrs-pending-list.js";
+import {
+  PENDING_ISSUE_LIST_LIMIT,
+  mergePendingDuplicates,
+  pendingDuplicateListArgs,
+  pendingIssueListArgs,
+  withoutOpenCase,
+} from "./hhsrs-pending-list.js";
 import { prisma } from "./prisma.js";
 import { createApp } from "../app.js";
 
@@ -36,7 +42,51 @@ describe("pending issue list query", () => {
   it("does not cap Review and create at 12 rows", () => {
     const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
     assert.equal(route.match(/pendingIssueListArgs\(\)/g)?.length, 3);
+    assert.equal(route.match(/pendingDuplicateListArgs\(\)/g)?.length, 1);
+    assert.equal(route.match(/mergePendingDuplicates\(/g)?.length, 1);
     assert.doesNotMatch(route, /take:\s*12/);
+  });
+
+  it("adds duplicate filings to Pending without changing the waiting query", () => {
+    const dupes = pendingDuplicateListArgs();
+    assert.equal(dupes.where.status, "not_needed");
+    assert.equal(dupes.where.notNeededReason, "duplicate");
+    assert.equal("take" in dupes, false);
+    const waiting = pendingIssueListArgs();
+    assert.deepEqual([...waiting.where.status.in], ["new", "in_review", "email_ready"]);
+    assert.equal(waiting.take, 200);
+
+    const older = new Date("2026-09-01T00:00:00.000Z");
+    const newer = new Date("2026-09-02T00:00:00.000Z");
+    const merged = mergePendingDuplicates(
+      [{ id: "waiting", createdAt: newer }],
+      [
+        { id: "dupe", createdAt: older },
+        { id: "waiting", createdAt: newer },
+      ]
+    );
+    assert.deepEqual(
+      merged.map((row) => ({ id: row.id, pendingDupe: row.pendingDupe })),
+      [
+        { id: "waiting", pendingDupe: false },
+        { id: "dupe", pendingDupe: true },
+      ]
+    );
+  });
+
+  it("puts Dupe after the UPRN on the Pending table only", () => {
+    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const uprnCell = table.slice(table.indexOf('td class="col-uprn"'), table.indexOf('td class="col-surv"'));
+    const addressCell = table.slice(table.indexOf("addr-cell"), table.indexOf("photo-att-cell"));
+    assert.match(uprnCell, /row\.pendingDupe/);
+    assert.match(uprnCell, /pending-dupe-tag">Dupe</);
+    assert.doesNotMatch(addressCell, /pendingDupe|Dupe/);
+    assert.doesNotMatch(table, /<th[^>]*>\s*Dupe\s*</);
+    const rule = css.slice(css.indexOf("tr.pending-dupe"), css.indexOf(".pending-dupe-tag") + 180);
+    assert.match(rule, /#waiting-table/);
+    assert.match(rule, /#ffb347/);
+    assert.doesNotMatch(rule, /#last-actioned|#main-log|rv-also/);
   });
 });
 
@@ -118,6 +168,23 @@ function rowCount(html: string, tableId: string): number {
   const body = tableSlice(html, tableId);
   const tbody = body.slice(body.indexOf("<tbody>"));
   return [...tbody.matchAll(/<tr\b/g)].length;
+}
+
+function tbodyRows(html: string, tableId: string): string[] {
+  const body = tableSlice(html, tableId);
+  const tbody = body.slice(body.indexOf("<tbody>"));
+  return tbody.split(/<tr\b/).slice(1);
+}
+
+function isPendingDupeRow(row: string): boolean {
+  return /\bpending-dupe\b/.test(row);
+}
+
+function addressesInRows(rows: string[]): string[] {
+  return rows.flatMap((row) => {
+    const match = row.match(/<td class="addr-cell[^"]*">\s*<strong>([^<]*)<\/strong>/);
+    return match ? [match[1]] : [];
+  });
 }
 
 function badgeCount(html: string, sectionId: string): number {
@@ -230,13 +297,14 @@ describe("pending and review lists", () => {
     assert.equal(tableSlice(pending.body, "last-actioned-table").includes("ref-chip"), false);
     assert.deepEqual(headers(review.body, "rv-also-table"), PENDING_HEADERS);
 
-    const pendingAddresses = addresses(pending.body, "waiting-table");
+    const pendingRowHtml = tbodyRows(pending.body, "waiting-table");
+    const pendingWaiting = pendingRowHtml.filter((row) => !isPendingDupeRow(row));
     const reviewRefs = references(review.body, "rv-also-table");
     const reviewAddresses = addresses(review.body, "rv-also-table");
-    assert.deepEqual(reviewAddresses, pendingAddresses);
-    assert.equal(rowCount(pending.body, "waiting-table"), badgeCount(pending.body, "not-actioned"));
+    assert.deepEqual(reviewAddresses, addressesInRows(pendingWaiting));
+    assert.equal(pendingRowHtml.length, badgeCount(pending.body, "not-actioned"));
     assert.equal(rowCount(review.body, "rv-also-table"), badgeCount(review.body, "rv-also-waiting"));
-    assert.equal(badgeCount(pending.body, "not-actioned"), badgeCount(review.body, "rv-also-waiting"));
+    assert.equal(pendingWaiting.length, badgeCount(review.body, "rv-also-waiting"));
     for (const spec of waitingSpecs) {
       if (!spec.reference) continue;
       assert.equal(reviewRefs.includes(spec.reference), true, spec.reference);
@@ -261,7 +329,149 @@ describe("pending and review lists", () => {
       reviewRefs.filter((reference) => reference !== open.reference)
     );
     assert.equal(badgeCount(opened.body, "rv-also-waiting"), rowCount(opened.body, "rv-also-table"));
-    assert.equal(rowCount(opened.body, "rv-also-table"), rowCount(pending.body, "waiting-table") - 1);
+    assert.equal(rowCount(opened.body, "rv-also-table"), pendingWaiting.length - 1);
     assert.equal(openedRefs.length, reviewRefs.length - 1);
+  });
+
+  it("keeps a duplicate on Pending with Dupe after the UPRN, and still on the Dupes tab", async (t) => {
+    if (!(await dbReady())) {
+      t.skip("Postgres with seeded users is not available");
+      return;
+    }
+    const stamp = `d${Date.now().toString().slice(-7)}`;
+    const project = await prisma.project.create({
+      data: {
+        name: `Dupe pending ${stamp}`,
+        projectManager: "Test",
+        stage: "current",
+        hhsrsCode: `D${stamp}`.slice(0, 8),
+      },
+    });
+    const uprn = `58${stamp}`;
+    const dupeAddress = `4 Sample Road ${stamp}`;
+    const earlierAddress = `1 First ${stamp}`;
+    const plainAddress = `12 Example Street ${stamp}`;
+    const errorAddress = `9 Error Close ${stamp}`;
+    const base = {
+      projectId: project.id,
+      projectName: project.name,
+      surveyDate: "2026-09-28",
+      postcode: "EX23 8AB",
+      surveyorName: "Carly Farrell",
+      category: "Falls on stairs",
+      rating: "Severe",
+      comment: stamp,
+      photoPaths: [] as string[],
+    };
+    const plain = await prisma.hhsrsSiteSubmission.create({
+      data: { ...base, uprn: `10${stamp}`, fullAddress: plainAddress, status: "new" },
+    });
+    const earlier = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        ...base,
+        uprn,
+        fullAddress: earlierAddress,
+        reference: `DUP-${stamp}-A`,
+        status: "new",
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const later = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        ...base,
+        uprn,
+        fullAddress: dupeAddress,
+        reference: `DUP-${stamp}-B`,
+        status: "new",
+      },
+    });
+    const errorCase = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        ...base,
+        uprn: `77${stamp}`,
+        fullAddress: errorAddress,
+        reference: `DUP-${stamp}-E`,
+        status: "not_needed",
+        notNeededReason: "surveyor_error",
+        notNeededNote: "Wrong details",
+      },
+    });
+    t.after(async () => {
+      await prisma.hhsrsSiteSubmission.deleteMany({
+        where: { id: { in: [plain.id, earlier.id, later.id, errorCase.id] } },
+      });
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
+    });
+
+    const app = createApp({ basePath: "" });
+    const login = await request(app, "POST", "/login", {
+      body: "username=phil.m&password=PhilMoon2468",
+    });
+    assert.equal(login.status, 302);
+    const cookie = login.setCookie.map((item) => item.split(";")[0]).join("; ");
+
+    const pending = await request(app, "GET", "/HHSRSreporter", { cookie });
+    assert.equal(pending.status, 200);
+    assert.deepEqual(headers(pending.body, "waiting-table"), LIST_HEADERS);
+    const rows = tbodyRows(pending.body, "waiting-table");
+    const dupeRow = rows.find((row) => row.includes(dupeAddress));
+    const earlierRow = rows.find((row) => row.includes(earlierAddress));
+    const plainRow = rows.find((row) => row.includes(plainAddress));
+    assert.ok(dupeRow, "later duplicate stays on Pending");
+    assert.ok(earlierRow, "earlier duplicate stays on Pending");
+    assert.ok(plainRow);
+    assert.match(dupeRow, /\bpending-dupe\b/);
+    assert.match(earlierRow, /\bpending-dupe\b/);
+    assert.doesNotMatch(plainRow, /\bpending-dupe\b/);
+    assert.equal(tableSlice(pending.body, "waiting-table").includes(errorAddress), false);
+
+    const uprnCell = dupeRow.match(/<td class="col-uprn">([\s\S]*?)<\/td>/);
+    assert.ok(uprnCell);
+    assert.match(uprnCell[1], new RegExp(`${uprn}</span> <span class="pending-dupe-tag">Dupe</span>`));
+    const addrCell = dupeRow.match(/<td class="addr-cell[^"]*">([\s\S]*?)<\/td>/);
+    assert.ok(addrCell);
+    assert.match(addrCell[1], new RegExp(`<strong>${dupeAddress}</strong>`));
+    assert.doesNotMatch(addrCell[1], /Dupe/);
+
+    const last = pending.body.slice(pending.body.indexOf('id="last-actioned"'));
+    assert.ok(last.startsWith('id="last-actioned"'));
+    assert.equal(last.includes(dupeAddress), false);
+    assert.equal(last.includes(earlierAddress), false);
+
+    const dupes = await request(app, "GET", "/HHSRSreporter/duplicates", { cookie });
+    assert.equal(dupes.status, 200);
+    assert.match(dupes.body, new RegExp(dupeAddress));
+    assert.match(dupes.body, new RegExp(earlierAddress));
+    assert.match(dupes.body, new RegExp(errorAddress));
+    assert.match(dupes.body, new RegExp(`data-dup-id="${later.id}"`));
+    assert.match(dupes.body, new RegExp(`data-dup-id="${earlier.id}"`));
+
+    const review = await request(app, "GET", "/HHSRSreporter/review", { cookie });
+    const also = tableSlice(review.body, "rv-also-table");
+    assert.equal(also.includes(dupeAddress), false);
+    assert.equal(also.includes(earlierAddress), false);
+    assert.match(also, new RegExp(plainAddress));
+
+    const log = await request(
+      app,
+      "GET",
+      `/HHSRSreporter/main-log?q=${encodeURIComponent(dupeAddress)}`,
+      { cookie }
+    );
+    assert.equal(log.body.includes(`<strong>${dupeAddress}</strong>`), false);
+
+    const [storedLater, storedEarlier, storedPlain, storedError] = await Promise.all([
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: later.id } }),
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: earlier.id } }),
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: plain.id } }),
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: errorCase.id } }),
+    ]);
+    assert.equal(storedLater.status, "not_needed");
+    assert.equal(storedLater.notNeededReason, "duplicate");
+    assert.equal(storedEarlier.status, "not_needed");
+    assert.equal(storedEarlier.notNeededReason, "duplicate");
+    assert.equal(storedPlain.status, "new");
+    assert.equal(storedError.status, "not_needed");
+    assert.equal(storedError.notNeededReason, "surveyor_error");
   });
 });

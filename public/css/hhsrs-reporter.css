@@ -1592,6 +1592,22 @@ body.hhsrs-reporter {
   overflow-x: auto;
   max-width: 100%;
 }
+/* A duplicate that is also on the Dupes tab stays on this Pending list. */
+.hhsrs-reporter #waiting-table tbody tr.pending-dupe,
+.hhsrs-reporter #waiting-table tbody tr.pending-dupe:hover,
+.hhsrs-reporter #waiting-table tbody tr.pending-dupe td,
+.hhsrs-reporter #waiting-table tbody tr.pending-dupe:hover td {
+  background: #ffb347;
+}
+.hhsrs-reporter #waiting-table tbody tr.pending-dupe td:first-child {
+  box-shadow: inset 4px 0 #e65c00;
+}
+.hhsrs-reporter #waiting-table .pending-dupe-tag {
+  color: #9a4d00;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 0.35rem;
+}
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
   overflow: visible;
