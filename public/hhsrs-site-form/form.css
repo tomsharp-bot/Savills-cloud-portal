@@ -796,7 +796,7 @@ body.hhsrs-form-page {
   min-height: 44px;
   padding: 8px 12px;
 }
-@media (min-width: 1025px) {
+@media (min-width: 1025px) and (hover: hover) and (pointer: fine) {
   .hhsrs-key-next { display: none !important; }
 }
 /* Desktop stays open once the visit section is done. Phone and tablet step through. */

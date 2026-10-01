@@ -681,6 +681,7 @@
     if (!el) return;
     el.addEventListener("change", function () {
       updateFlow({ announce: true });
+      if (el.tagName === "SELECT") moveOnFromSelect(el);
     });
     el.addEventListener("input", function () {
       updateFlow({ announce: false });
@@ -761,13 +762,82 @@
     return index < 0 ? null : list[index + 1] || null;
   }
 
+  function touchForm() {
+    return window.matchMedia("(max-width: 1024px), (hover: none), (pointer: coarse)").matches;
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  // A dropdown can sit before an earlier empty box (surveyor chosen while the date is still blank).
+  function firstEmptyInStep(from) {
+    var step = from && from.closest ? from.closest(".flow-step") : null;
+    if (!step) return null;
+    var nodes = step.querySelectorAll("input, select, textarea");
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (el === from) continue;
+      var type = (el.type || "").toLowerCase();
+      if (type === "hidden" || type === "file" || type === "checkbox" || type === "radio" || type === "button" || type === "submit") continue;
+      if (!fieldOnScreen(el) || el.readOnly) continue;
+      if (String(el.value || "").trim()) continue;
+      return el;
+    }
+    return null;
+  }
+
+  function destinationAfter(from) {
+    return nextFieldAfter(from) || (from && from.tagName === "SELECT" ? firstEmptyInStep(from) : null);
+  }
+
+  function focusChoiceField(el) {
+    try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
+    var behavior = prefersReducedMotion() ? "auto" : "smooth";
+    try { el.scrollIntoView({ block: "center", behavior: behavior }); } catch (err2) {
+      try { el.scrollIntoView(); } catch (err3) { /* ignore */ }
+    }
+  }
+
+  // Phone and tablet pickers do not open the keyboard for the next text box.
+  // Leave the dropdown focused so the Next bar can move into it on a real tap.
+  var selectMoveToken = 0;
+  function moveOnFromSelect(el) {
+    if (!el || el.tagName !== "SELECT") return;
+    if (!String(el.value || "").trim()) {
+      syncKeyNext();
+      return;
+    }
+    var token = ++selectMoveToken;
+    var next = destinationAfter(el);
+    var deferToNext = !!(next && touchForm() && isFreeText(next));
+    if (next && !deferToNext) focusChoiceField(next);
+    function settle() {
+      if (token !== selectMoveToken) return;
+      if (deferToNext && next) {
+        var active = document.activeElement;
+        if (active === el) {
+          syncKeyNext();
+          return;
+        }
+        if (!active || active === document.body || active === document.documentElement || (form && !form.contains(active))) {
+          focusField(next);
+        }
+      }
+      syncKeyNext();
+    }
+    settle();
+    window.setTimeout(settle, 0);
+    window.setTimeout(settle, 280);
+  }
+
   function stepKeyboardNext(from) {
     if (!from) return;
     if (from.id === "uprn" && !addressLocked() && !manualOpen()) {
       lookupUprn();
       return;
     }
-    var next = nextFieldAfter(from);
+    var next = destinationAfter(from);
     if (next) {
       focusField(next);
       return;
@@ -808,23 +878,48 @@
   function optionalKeyboardField(el) {
     return !!(progressive() && isFreeText(el));
   }
+  function selectReadyForNext(el) {
+    return !!(touchForm() && el && el.tagName === "SELECT" && !el.disabled && String(el.value || "").trim() && fieldOnScreen(el));
+  }
   function placeKeyNext() {
     var vv = window.visualViewport;
     var keyboard = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
     keyNext.style.bottom = keyboard + "px";
   }
   function syncKeyNext() {
-    var show = optionalKeyboardField(document.activeElement);
+    var active = document.activeElement;
+    var show = optionalKeyboardField(active) || selectReadyForNext(active);
     keyNext.hidden = !show;
     if (show) placeKeyNext();
   }
-  keyNextBtn.addEventListener("mousedown", function (e) {
+  document.addEventListener("pointerdown", function (e) {
+    var target = e.target;
+    if (target && target.closest && target.closest("#hhsrs-key-next")) return;
+    selectMoveToken++;
+  }, true);
+  var nextFrom = null;
+  var nextRan = false;
+  function rememberField(e) {
+    // Keep the dropdown or text box focused so Next can move from it. A tap would otherwise blur it first.
     e.preventDefault();
-  });
-  keyNextBtn.addEventListener("click", function () {
-    stepKeyboardNext(document.activeElement);
+    nextRan = false;
+    var active = document.activeElement;
+    if (active && form && form.contains(active)) nextFrom = active;
+  }
+  function runKeyNext() {
+    if (nextRan) return;
+    nextRan = true;
+    var from = nextFrom && document.body.contains(nextFrom) ? nextFrom : document.activeElement;
+    nextFrom = null;
+    stepKeyboardNext(from);
     syncKeyNext();
+  }
+  keyNextBtn.addEventListener("pointerdown", rememberField);
+  keyNextBtn.addEventListener("pointerup", function (e) {
+    if (!keyNextBtn.contains(e.target)) return;
+    runKeyNext();
   });
+  keyNextBtn.addEventListener("click", runKeyNext);
   if (form) {
     form.addEventListener("focusin", syncKeyNext);
     form.addEventListener("focusout", function () {
@@ -1153,8 +1248,10 @@
 /* HHSRS site form - v4 touch add-on (append after form.js, or paste at the end of form.js).
    1. Keyboard helper: a focused text box / textarea / UPRN box is moved to roughly the top third of the
       visible area above the on-screen keyboard (window.visualViewport), re-checked while the keyboard animates in.
-   2. Next-field advance: after a dropdown (or date) is chosen and the section is not yet complete,
+   2. Next-field advance for a date: after a date is chosen and the section is not yet complete,
       move to the next empty field in that section (focus only if it is a dropdown/date; text fields are only scrolled to).
+      Dropdowns are handled earlier (moveOnFromSelect): focus the next box, or leave Next on the dropdown
+      when the next box is text and a phone keyboard needs a real tap.
    3. Take photo: a big camera button (capture="environment") that feeds the SAME photo list as "Add from gallery".
    Touch / narrow screens only (<=1024px or pointer:coarse); desktop unchanged. Respects prefers-reduced-motion.
    Never fights the user: any manual scroll (touchmove / wheel) cancels pending automatic scrolls. */
@@ -1247,7 +1344,8 @@
     window.visualViewport.addEventListener("scroll", onViewport);
   }
 
-  /* 2. next field in the same section after a dropdown/date is chosen */
+  /* 2. next field in the same section after a date is chosen.
+        Dropdowns move on in moveOnFromSelect so this does not pull focus back. */
   function nextEmptyField(step, from) {
     var list = Array.prototype.slice.call(step.querySelectorAll("input, select, textarea"));
     for (var j = list.indexOf(from) + 1; j < list.length; j++) {
@@ -1262,7 +1360,7 @@
   }
   form.addEventListener("change", function (e) {
     var el = e.target;
-    if (!touchUi() || !isChoice(el)) return;
+    if (!touchUi() || !isChoice(el) || el.tagName === "SELECT") return;
     var step = el.closest && el.closest(".flow-step");
     if (!step) return;
     var at = Date.now();
