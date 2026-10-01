@@ -51,6 +51,39 @@
     ["f-date", "surveyDate", "Survey date"]
   ];
 
+  function keptPhotoNames() {
+    var names = [];
+    document.querySelectorAll("#fr-photo-list figure.amend-photo[data-photo-name]").forEach(function (card) {
+      var name = String(card.getAttribute("data-photo-name") || "").trim();
+      if (name) names.push(name);
+    });
+    return names;
+  }
+
+  function photoKeySet(list) {
+    var set = {};
+    (list || []).forEach(function (name) {
+      var key = String(name || "").trim();
+      if (key) set[key] = true;
+    });
+    return set;
+  }
+
+  var previousPhotos = keptPhotoNames();
+
+  function photosChanged() {
+    if (pending.length) return true;
+    var before = photoKeySet(previousPhotos);
+    var after = photoKeySet(keptPhotoNames());
+    var beforeKeys = Object.keys(before);
+    var afterKeys = Object.keys(after);
+    if (beforeKeys.length !== afterKeys.length) return true;
+    for (var i = 0; i < beforeKeys.length; i++) {
+      if (!after[beforeKeys[i]]) return true;
+    }
+    return false;
+  }
+
   function paint() {
     var subject = correctionSubject(previousSubject);
     var oldHead = String(previous.address || "").split(",")[0].trim();
@@ -59,9 +92,11 @@
       subject = subject.replace(oldHead, newHead);
     }
     var title = $("fr-preview-subject");
-    if (title) title.textContent = subject;
+    if (title) title.innerHTML = "<b>" + esc(subject) + "</b>";
     var intro = "Please disregard our previous email, due to an error. See correct details below.";
-    var html = "<p>" + esc(intro) + "</p><p>Hi all,</p>";
+    var html = "<p>" + esc(intro) + "</p>";
+    if (photosChanged()) html += "<p>The photo was incorrect.</p>";
+    html += "<p>Hi all,</p>";
     prose.forEach(function (line) { html += "<p>" + esc(line) + "</p>"; });
     var items = "";
     fields.forEach(function (field) {
@@ -93,6 +128,10 @@
 
   var pending = [];
   var nextNewId = 1;
+
+  function refreshOpenPreview() {
+    if (previewWrap && !previewWrap.hidden) paint();
+  }
   var syncingFiles = false;
   var MAX_NEW_PHOTOS = 4;
 
@@ -203,6 +242,7 @@
     else if (rejected) setPhotoMsg("Photos must be JPEG, PNG, WebP or HEIC.");
     else setPhotoMsg("");
     syncFiles();
+    refreshOpenPreview();
   }
 
   var photoList = $("fr-photo-list");
@@ -227,6 +267,7 @@
       if (name) removePreview("data-photo-name", name);
       card.remove();
       setPhotoMsg("");
+      refreshOpenPreview();
     });
   }
 

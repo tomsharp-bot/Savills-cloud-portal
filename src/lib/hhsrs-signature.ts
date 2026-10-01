@@ -256,8 +256,9 @@ export function composeEmailHtml(
     ? `<div style="font-family:Calibri,Aptos,Arial,sans-serif;font-size:14.5px;line-height:1.45;color:#111111;">${inner}</div>`
     : "";
   const subject = String(options?.subject || "").trim();
+  // Outlook ignores font-weight on h1–h6. A <b> is what makes the subject bold in the client.
   const heading = subject
-    ? `<h2 style="display:inline-block;margin:14px 16px;padding:8px 14px;border-radius:10px;font-size:16px;font-weight:800;letter-spacing:-0.02em;color:#0b1f33;background:#d0d8e6;border-bottom:1px solid #b8c2d4;border-left:5px solid #0b1f33;">${escapeHtml(subject)}</h2>`
+    ? `<h2 style="display:inline-block;margin:14px 16px;padding:8px 14px;border-radius:10px;font-size:16px;font-weight:800;letter-spacing:-0.02em;color:#0b1f33;background:#d0d8e6;border-bottom:1px solid #b8c2d4;border-left:5px solid #0b1f33;"><b style="font-weight:800;">${escapeHtml(subject)}</b></h2>`
     : "";
   const photos = emailPhotoTable(options?.photos || []);
   const card =
