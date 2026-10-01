@@ -1311,7 +1311,7 @@ describe("UPRN duplicates in the database", () => {
     assert.equal(stillLatest.notADuplicate, false);
   });
 
-  it("clears an unsent comparison partner and does not rewrite an emailed one", async (t) => {
+  it("clears an emailed comparison partner with the same status rules and leaves another reason", async (t) => {
     try {
       await prisma.$queryRaw`SELECT "notADuplicate" FROM "HhsrsSiteSubmission" LIMIT 1`;
     } catch {
@@ -1483,13 +1483,70 @@ describe("UPRN duplicates in the database", () => {
     const emailedStill = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: emailedPartner.id } });
     assert.equal(buttonBack.status, "new");
     assert.equal(buttonBack.notADuplicate, true);
-    assert.equal(emailedStill.status, "not_needed");
-    assert.equal(emailedStill.notADuplicate, false);
-    assert.equal(emailedStill.notNeededReason, "duplicate");
+    assert.equal(emailedStill.status, "email_sent");
+    assert.equal(emailedStill.notADuplicate, true);
+    assert.equal(emailedStill.notNeededReason, "");
+    assert.equal(emailedStill.notNeededDuplicateOf, "");
+    assert.equal(emailedStill.notNeededNote, "");
     assert.equal(emailedStill.emailSubject, "Partner subject");
     assert.equal(emailedStill.emailBody, "This emailed case stays as it is.");
     assert.equal(emailedStill.emailSentAt?.toISOString(), at("2026-09-03T12:00:00.000Z").toISOString());
-    assert.equal(await prisma.hhsrsSentEmail.count({ where: { id: partnerEmail.id } }), 1);
+    assert.deepEqual(emailedStill.photoPaths, ["kept.jpg"]);
+    const emailedChoice = Array.isArray(emailedStill.notNeededLog) ? emailedStill.notNeededLog : [];
+    assert.equal((emailedChoice.at(-1) as { action?: string }).action, "not_duplicate");
+    const partnerEmailStill = await prisma.hhsrsSentEmail.findUniqueOrThrow({ where: { id: partnerEmail.id } });
+    assert.equal(partnerEmailStill.subject, "Partner subject");
+    assert.equal(partnerEmailStill.body, "This emailed case stays as it is.");
+    assert.equal(partnerEmailStill.to, "repairs@savillshousing.co.uk");
+    assert.equal(partnerEmailStill.kind, "original");
+
+    const correctionPartner = await make(`Correction partner ${stamp}`, "2026-09-04T10:00:00.000Z", {
+      emailSentAt: at("2026-09-04T12:00:00.000Z"),
+      emailSubject: "Partner correction subject",
+      emailBody: "The partner correction stays.",
+    });
+    const correctionButton = await make(`Correction button ${stamp}`, "2026-09-04T11:00:00.000Z", {
+      notNeededDuplicateOf: correctionPartner.reference || "",
+    });
+    const correctionPartnerEmail = await prisma.hhsrsSentEmail.create({
+      data: {
+        submissionId: correctionPartner.id,
+        sentAt: at("2026-09-04T12:00:00.000Z"),
+        sentBy: "Tom Sharp",
+        from: "HHSRS@savillshousing.co.uk",
+        to: "repairs@savillshousing.co.uk",
+        subject: "Partner correction subject",
+        body: "The partner correction stays.",
+        photoNames: [],
+        kind: "correction",
+      },
+    });
+    const clearedCorrectionPartner = await request(
+      port,
+      "POST",
+      `/HHSRSreporter/duplicates/${correctionButton.id}/not-duplicate`,
+      { cookie }
+    );
+    assert.equal(clearedCorrectionPartner.status, 302);
+    cookie = cookieHeader(clearedCorrectionPartner.setCookie, cookie);
+    const correctionPartnerBack = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({
+      where: { id: correctionPartner.id },
+    });
+    const correctionButtonBack = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({
+      where: { id: correctionButton.id },
+    });
+    assert.equal(correctionButtonBack.status, "new");
+    assert.equal(correctionButtonBack.notADuplicate, true);
+    assert.equal(correctionPartnerBack.status, "corrected");
+    assert.equal(correctionPartnerBack.notADuplicate, true);
+    assert.equal(correctionPartnerBack.emailSubject, "Partner correction subject");
+    assert.equal(correctionPartnerBack.emailBody, "The partner correction stays.");
+    assert.equal(correctionPartnerBack.emailSentAt?.toISOString(), at("2026-09-04T12:00:00.000Z").toISOString());
+    const correctionPartnerEmailStill = await prisma.hhsrsSentEmail.findUniqueOrThrow({
+      where: { id: correctionPartnerEmail.id },
+    });
+    assert.equal(correctionPartnerEmailStill.kind, "correction");
+    assert.equal(correctionPartnerEmailStill.body, "The partner correction stays.");
 
     const clearedErrorLink = await request(
       port,
@@ -1509,19 +1566,42 @@ describe("UPRN duplicates in the database", () => {
     assert.equal(errorStill.notNeededNote, "Wrong details.");
 
     const dupes = await request(port, "GET", `/HHSRSreporter/duplicates?q=${encodeURIComponent(stamp)}`, { cookie });
+    cookie = cookieHeader(dupes.setCookie, cookie);
     assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${correctionCase.id}"`));
     assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${unsentPartner.id}"`));
     assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${unsentButton.id}"`));
-    assert.match(dupes.body, new RegExp(`Emailed partner ${stamp}`));
+    assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${emailedPartner.id}"`));
+    assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${correctionPartner.id}"`));
+    assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${correctionButton.id}"`));
+    assert.doesNotMatch(dupes.body, new RegExp(`Emailed partner ${stamp}`));
     assert.match(dupes.body, new RegExp(`Surveyor error ${stamp}`));
     assert.equal(
       await prisma.hhsrsSiteSubmission.count({
         where: {
-          id: { in: [unsentPartner.id, correctionCase.id, emailedPartner.id, unsentButton.id, errorCase.id, pointsAtError.id] },
+          id: {
+            in: [
+              unsentPartner.id,
+              correctionCase.id,
+              emailedPartner.id,
+              unsentButton.id,
+              correctionPartner.id,
+              correctionButton.id,
+              errorCase.id,
+              pointsAtError.id,
+            ],
+          },
         },
       }),
-      6
+      8
     );
+    const pending = await request(port, "GET", "/HHSRSreporter", { cookie });
+    const waiting = pending.body.slice(pending.body.indexOf('id="waiting-table"'), pending.body.indexOf('id="last-actioned"'));
+    const actioned = pending.body.slice(pending.body.indexOf('id="last-actioned"'));
+    assert.match(waiting, new RegExp(`Unsent button ${stamp}`));
+    assert.equal(waiting.includes(`Emailed partner ${stamp}`), false);
+    assert.equal(waiting.includes(`Correction partner ${stamp}`), false);
+    assert.match(actioned, new RegExp(`Emailed partner ${stamp}`));
+    assert.match(actioned, new RegExp(`Correction partner ${stamp}`));
     const log = await request(
       port,
       "GET",

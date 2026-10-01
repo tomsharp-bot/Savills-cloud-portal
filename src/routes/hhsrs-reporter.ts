@@ -1758,13 +1758,27 @@ async function handleNotDuplicate(req: Request, res: Response, id: string): Prom
   }
   const label = result.reference || "The case";
   const partner = result.partnerReference;
-  if (result.emailed) {
-    const extra = partner ? ` ${partner} is not a duplicate and is back in Pending.` : "";
-    flashOk(req, `${label} is not a duplicate. The sent email stays in the Main Log.${extra}`);
-  } else if (partner) {
-    flashOk(req, `${label} and ${partner} are not duplicates and are back in Pending.`);
+  if (!partner) {
+    flashOk(
+      req,
+      result.emailed
+        ? `${label} is not a duplicate. The sent email stays in the Main Log.`
+        : `${label} is not a duplicate and is back in Pending.`
+    );
+  } else if (result.emailed && result.partnerEmailed) {
+    flashOk(req, `${label} and ${partner} are not duplicates. The sent emails stay in the Main Log.`);
+  } else if (result.emailed) {
+    flashOk(
+      req,
+      `${label} is not a duplicate. The sent email stays in the Main Log. ${partner} is not a duplicate and is back in Pending.`
+    );
+  } else if (result.partnerEmailed) {
+    flashOk(
+      req,
+      `${label} is not a duplicate and is back in Pending. ${partner} is not a duplicate. The sent email stays in the Main Log.`
+    );
   } else {
-    flashOk(req, `${label} is not a duplicate and is back in Pending.`);
+    flashOk(req, `${label} and ${partner} are not duplicates and are back in Pending.`);
   }
   res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
 }

@@ -235,16 +235,9 @@ function statusAfterNotADuplicate(row: LockedMoveRow, emailKinds: string[]): {
   return { status: "email_sent", emailed: true };
 }
 
-/**
- * The other card in this comparison. It leaves the list only when it is there
- * as an unsent duplicate. An emailed case is not rewritten from this path.
- */
-function unsentDuplicateOnList(row: LockedMoveRow, emailKinds: string[]): boolean {
-  return (
-    row.status === "not_needed" &&
-    row.notNeededReason === "duplicate" &&
-    !statusAfterNotADuplicate(row, emailKinds).emailed
-  );
+/** The other card leaves the list only when this comparison filed it as a duplicate. */
+function listedDuplicate(row: LockedMoveRow): boolean {
+  return row.status === "not_needed" && row.notNeededReason === "duplicate";
 }
 
 async function sentEmailKinds(tx: Prisma.TransactionClient, ids: string[]): Promise<Map<string, string[]>> {
@@ -321,15 +314,23 @@ async function writeNotADuplicate(
  * only leaves Duplicates & errors: the row and its Main Log email stay.
  * notADuplicate stops the UPRN sweep from filing this case again.
  *
- * The other case in that same comparison leaves too when it is only on the
- * list as an unsent duplicate. Any other duplicate, and any emailed case
- * that is not this button, is left alone.
+ * The other case in that same comparison leaves too, with the same status
+ * rules, when it is on the list as a duplicate. A third case, another UPRN,
+ * and a case filed for another reason are left alone. A sent email row is
+ * not deleted or rewritten.
  */
 export async function markCaseNotADuplicate(args: {
   id: string;
   by: string;
 }): Promise<
-  { ok: true; reference: string; emailed: boolean; partnerReference: string } | { ok: false; error: string }
+  | {
+      ok: true;
+      reference: string;
+      emailed: boolean;
+      partnerReference: string;
+      partnerEmailed: boolean;
+    }
+  | { ok: false; error: string }
 > {
   try {
     return await prisma.$transaction(async (tx) => {
@@ -360,12 +361,21 @@ export async function markCaseNotADuplicate(args: {
       await writeNotADuplicate(tx, row, args.by, decision.status, at);
 
       let partnerReference = "";
-      if (partner && unsentDuplicateOnList(partner, kinds.get(partner.id) || [])) {
-        await writeNotADuplicate(tx, partner, args.by, "new", at);
+      let partnerEmailed = false;
+      if (partner && listedDuplicate(partner)) {
+        const partnerDecision = statusAfterNotADuplicate(partner, kinds.get(partner.id) || []);
+        await writeNotADuplicate(tx, partner, args.by, partnerDecision.status, at);
         partnerReference = partner.reference || "";
+        partnerEmailed = partnerDecision.emailed;
       }
 
-      return { ok: true, reference: row.reference || "", emailed: decision.emailed, partnerReference };
+      return {
+        ok: true,
+        reference: row.reference || "",
+        emailed: decision.emailed,
+        partnerReference,
+        partnerEmailed,
+      };
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update the case.";
