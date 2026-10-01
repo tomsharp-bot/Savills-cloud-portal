@@ -121,7 +121,53 @@ describe("correction preview markup", () => {
     assert.match(handler, /listSentEmails\(row\.id\)/);
     assert.match(handler, /to: email\.to/);
     assert.match(handler, /cc: email\.cc/);
+    assert.match(handler, /sentAt: email\.sentAt/);
     assert.doesNotMatch(handler, /clientRecipients|HhsrsClientEmail|recipientsFromStoredOrCode/);
+  });
+});
+
+describe("view details dates", () => {
+  it("keeps the original survey date and stamps each send in UK time", () => {
+    const details = buildViewDetails({
+      projectName: "Gateway 2026",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "1",
+      surveyDate: "2026-09-30",
+      surveyorName: "Sam",
+      hazard: "Damp",
+      rating: "High",
+      description: "Damp ceiling",
+      submissionId: "case-1",
+      photoPaths: [],
+      surveyorPhotos: [],
+      reporterBase: "/HHSRSreporter",
+      emails: [
+        {
+          kind: "original",
+          subject: "Gateway - HHSRS",
+          body: "Hi all,\n\n• Survey date: 30/09/2026\n• Address: 1 High Street",
+          photoNames: [],
+          to: "original@example.com",
+          cc: "",
+          sentAt: new Date("2026-10-01T08:15:00.000Z"),
+        },
+        {
+          kind: "correction",
+          subject: "Gateway - HHSRS",
+          body: "Please disregard our previous email, due to an error. See correct details below.\n\n• Survey date: 02/10/2026",
+          photoNames: [],
+          to: "client@example.com",
+          cc: "",
+          sentAt: new Date("2026-10-01T09:24:00.000Z"),
+        },
+      ],
+    });
+    assert.equal(details.surveyDate, "30/09/2026");
+    assert.equal(details.sent?.when, "01/10/2026 09:15");
+    assert.equal(details.corrections.length, 1);
+    assert.equal(details.corrections[0].when, "01/10/2026 10:24");
+    assert.match(details.corrections[0].copyHtml, /02\/10\/2026/);
   });
 });
 
@@ -137,6 +183,10 @@ describe("view details layout", () => {
     assert.doesNotMatch(stack, /max-width:\s*860px[\s\S]*\.vd-pair/);
     const surveyor = details.slice(details.indexOf(">Surveyor entry<"), details.indexOf(">Email sent<"));
     const email = details.slice(details.indexOf(">Email sent<"), details.indexOf(">Correction<"));
+    assert.match(surveyor, /vd-when/);
+    assert.match(surveyor, /Survey date <%= details\.surveyDate %>/);
+    assert.match(email, /details\.sent\.when/);
+    assert.match(details.slice(details.indexOf(">Correction<")), /email\.when/);
     assert.match(surveyor, /class="photo-thumb"><img[\s\S]*?width="96" height="72"/);
     assert.match(email, /class="vd-shot"/);
     assert.match(email, /class="photo-thumb"><img class="vd-photo"[\s\S]*?width="96" height="72"/);

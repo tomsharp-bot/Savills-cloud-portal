@@ -2,7 +2,7 @@
  * View details: the original surveyor entry beside the email that was sent.
  * A correction, when one was sent, sits under that email. The surveyor side stays as entered.
  */
-import { correctionSubject, MISSING_EMAIL_BODY } from "./hhsrs-find.js";
+import { correctionSubject, formatLondonDateTime, MISSING_EMAIL_BODY } from "./hhsrs-find.js";
 import { formatHhsrsSurveyDate } from "./hhsrs-site-form.js";
 import { escapeHtml, stripTrailingSignature } from "./hhsrs-signature.js";
 
@@ -32,6 +32,8 @@ export type ViewDetailsEmail = {
   copyHtml: string;
   photos: ViewDetailsPhoto[];
   parties: ViewDetailsParty[];
+  /** UK date and time this email was sent. Blank when the send has no time. */
+  when: string;
 };
 
 export type ViewDetailsModel = {
@@ -56,7 +58,13 @@ type SentLike = {
   photoNames: readonly string[];
   to?: string;
   cc?: string;
+  sentAt?: Date | null;
 };
+
+function emailWhen(sentAt?: Date | null): string {
+  if (!(sentAt instanceof Date) || Number.isNaN(sentAt.getTime())) return "";
+  return formatLondonDateTime(sentAt);
+}
 
 export function surveyorAddress(fullAddress: string, postcode: string): string {
   const line = String(fullAddress || "").trim();
@@ -184,6 +192,7 @@ export function buildViewDetails(input: {
     copyHtml: emailCopyHtml(email.body, changed),
     photos: emailPhotoViews(input.submissionId, email.photoNames, input.photoPaths, input.reporterBase),
     parties,
+    when: emailWhen(email.sentAt),
   });
   return {
     projectName: String(input.projectName || "").trim(),
