@@ -897,7 +897,7 @@ describe("HHSRS Reporter UI helpers", () => {
       assert.doesNotMatch(file, /fr-photo-drop|fr-photo-checked|photosChecked|photoSelection/);
     }
     assert.doesNotMatch(find, /<figcaption>/);
-    assert.match(js, /Please disregard our previous email, due to an error\. See correct details below\./);
+    assert.match(js, /This notification has been adjusted after review\. Please disregard the previous notification\./);
     assert.match(js, /The photo was incorrect\./);
     assert.match(js, /if \(photosChanged\(\)\) html \+= "<p><b>The photo was incorrect\.<\/b><\/p>"/);
     assert.match(js, /title\.innerHTML = "<b>" \+ esc\(subject\) \+ "<\/b>"/);

@@ -93,7 +93,7 @@
     }
     var title = $("fr-preview-subject");
     if (title) title.innerHTML = "<b>" + esc(subject) + "</b>";
-    var intro = "Please disregard our previous email, due to an error. See correct details below.";
+    var intro = "This notification has been adjusted after review. Please disregard the previous notification.";
     var html = "<p>" + esc(intro) + "</p>";
     if (photosChanged()) html += "<p><b>The photo was incorrect.</b></p>";
     html += "<p>HHSRS notification</p>";
