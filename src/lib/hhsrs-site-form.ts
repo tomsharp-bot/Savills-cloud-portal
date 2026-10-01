@@ -1005,6 +1005,100 @@ export async function persistSubmissionPhotos(
   }
 }
 
+function photoBaseName(stored: string): string {
+  return String(stored || "").split("/").filter(Boolean).pop() || "";
+}
+
+/** A stored filename that stays inside the site-form photo rules and does not collide. */
+export function replacementPhotoName(original: string, ext: string, taken: Set<string>): string {
+  const rawStem = String(original || "")
+    .replace(/[/\\]/g, "")
+    .replace(/\.[^.]+$/, "");
+  const stem =
+    rawStem
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/^[.-]+|[.-]+$/g, "")
+      .slice(0, 48) || "photo";
+  const suffix = String(ext || "jpg").replace(/[^a-z0-9]/gi, "") || "jpg";
+  for (let n = 1; n < 100; n += 1) {
+    const candidate = n === 1 ? `${stem}.${suffix}` : `${stem}-${n}.${suffix}`;
+    if (taken.has(candidate)) continue;
+    try {
+      safeStoredName(candidate);
+    } catch {
+      continue;
+    }
+    taken.add(candidate);
+    return candidate;
+  }
+  const fallback = `${randomUUID()}.${suffix}`;
+  taken.add(fallback);
+  return fallback;
+}
+
+/**
+ * Add photos beside the ones already stored for a case.
+ * A failed upload removes only the new files. Existing case photos stay.
+ */
+export async function appendCasePhotos(
+  submissionId: string,
+  files: { originalname: string; mimetype: string; buffer: Buffer }[],
+  existingNames: readonly string[],
+  storage?: SitePhotoStorage,
+  options?: SitePhotoPutOptions
+): Promise<string[]> {
+  if (!files.length) return [];
+  const destDir = submissionDir(submissionId);
+  await fs.mkdir(destDir, { recursive: true });
+  const taken = new Set(existingNames.map(photoBaseName).filter(Boolean));
+  const paths: string[] = [];
+  const written: string[] = [];
+  const store = storage ?? defaultSitePhotoStorage();
+  try {
+    for (const file of files) {
+      const ready = await prepareSitePhoto({
+        originalName: file.originalname,
+        mime: file.mimetype,
+        buffer: file.buffer,
+      });
+      const storedName = replacementPhotoName(file.originalname, ready.ext, taken);
+      const dest = path.join(destDir, storedName);
+      await fs.writeFile(dest, ready.buffer);
+      written.push(dest);
+      const key = siteFormPhotoKey(submissionId, storedName);
+      await putSitePhotoWithRetry(store, key, ready.buffer, ready.mime, options);
+      paths.push(key);
+    }
+    return paths;
+  } catch (err) {
+    await Promise.all(paths.map((key) => store.remove(key).catch(() => false)));
+    await Promise.all(written.map((file) => fs.unlink(file).catch(() => undefined)));
+    throw err;
+  }
+}
+
+/** Drop photos added for an amendment that was not sent. Leaves every other case photo. */
+export async function discardAppendedCasePhotos(
+  submissionId: string,
+  keys: readonly string[],
+  storage?: SitePhotoStorage
+): Promise<void> {
+  if (!keys.length) return;
+  const store = storage ?? defaultSitePhotoStorage();
+  await Promise.all(keys.map((key) => store.remove(key).catch(() => false)));
+  await Promise.all(
+    keys.map(async (key) => {
+      const name = photoBaseName(key);
+      if (!name) return;
+      try {
+        await fs.unlink(path.join(submissionDir(submissionId), safeStoredName(name)));
+      } catch {
+        // already gone
+      }
+    })
+  );
+}
+
 /**
  * Store office-created photos the same way as site-form photos:
  * local cache plus the private Spaces object `hhsrs-site-form/<id>/<file>`.

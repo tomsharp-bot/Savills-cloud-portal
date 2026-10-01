@@ -83,17 +83,15 @@
       <p class="subtitle">Change the case, then generate the correction.<% if (selected.reference) { %> <%= selected.reference %>.<% } %></p>
     </div>
   </div>
-  <form id="rv-send-form" autocomplete="off" class="amend-form" method="post" action="<%= amend.action %>">
+  <form id="rv-send-form" autocomplete="off" class="amend-form" method="post" action="<%= amend.action %>" enctype="multipart/form-data">
     <input type="hidden" name="amendmentFields" value="1" />
+    <input type="hidden" name="photoSelection" value="1" />
     <input type="hidden" name="to" value="<%= amend.to %>" autocomplete="off" />
     <input type="hidden" name="cc" value="<%= amend.cc %>" autocomplete="off" />
     <input type="hidden" name="bcc" value="<%= amend.bcc %>" autocomplete="off" />
     <input type="hidden" name="q" value="<%= filters.q %>" />
     <input type="hidden" name="date" value="<%= filters.date %>" />
     <input type="hidden" name="project" value="<%= filters.project || "" %>" />
-    <% amend.photos.forEach((photo) => { %>
-      <input type="hidden" name="photo" value="<%= photo.name %>" />
-    <% }) %>
 
     <div class="amend-box">
       <div class="amend-head">
@@ -124,6 +122,28 @@
       <label>Survey date<input id="f-date" name="surveyDate" type="text" autocomplete="off" value="<%= amend.fields.surveyDate %>" /></label>
     </div>
 
+    <div class="amend-photos" id="fr-photo-tools">
+      <div class="sent-sec">Photos</div>
+      <p class="amend-photo-lead">Photos already on this email stay attached unless you remove one. Drop or upload a photo to attach it with the correction.</p>
+      <div class="amend-photo-list" id="fr-photo-list">
+        <% amend.photos.forEach((photo) => { %>
+          <figure class="amend-photo" data-photo-name="<%= photo.name %>">
+            <button type="button" class="photo-remove" data-remove-photo aria-label="Remove photo">×</button>
+            <div class="art">
+              <% if (photo.url) { %><img src="<%= photo.url %>" alt="Photo" /><% } else { %><div class="art-miss">No file</div><% } %>
+            </div>
+            <input type="hidden" name="photo" value="<%= photo.name %>" />
+          </figure>
+        <% }) %>
+      </div>
+      <label class="photos-dropzone" id="fr-photo-drop" for="fr-photo-file">
+        Drop a replacement photo here, or click to upload
+        <span class="photos-drop-hint">JPEG, PNG, WebP or HEIC</span>
+      </label>
+      <input id="fr-photo-file" class="amend-photo-file" name="replacement" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple />
+      <p class="amend-photo-msg" id="fr-photo-msg" hidden></p>
+    </div>
+
     <div class="amend-actions">
       <button type="button" class="btn btn-primary" id="btn-generate-correction">Generate correction</button>
     </div>
@@ -139,20 +159,22 @@
         <div class="sent-body">
           <div class="sent-copy" id="fr-preview-copy"><%- amend.previewHtml %></div>
           <div class="sent-sign" id="rv-signature-preview"><%- typeof signatureHtml !== "undefined" ? signatureHtml : "" %></div>
-          <% if (amend.photos.length) { %>
-            <div class="sent-photos" id="fr-preview-photos">
-              <% amend.photos.forEach((photo) => { %>
-                <figure class="photo-zoom">
-                  <div class="art">
-                    <% if (photo.url) { %><img src="<%= photo.url %>" alt="Photo" /><% } else { %><div class="art-miss">No file</div><% } %>
-                  </div>
-                </figure>
-              <% }) %>
-            </div>
-          <% } %>
+          <div class="sent-photos" id="fr-preview-photos"<% if (!amend.photos.length) { %> hidden<% } %>>
+            <% amend.photos.forEach((photo) => { %>
+              <figure class="photo-zoom" data-photo-name="<%= photo.name %>">
+                <div class="art">
+                  <% if (photo.url) { %><img src="<%= photo.url %>" alt="Photo" /><% } else { %><div class="art-miss">No file</div><% } %>
+                </div>
+              </figure>
+            <% }) %>
+          </div>
         </div>
       </article>
 
+      <label class="amend-check" for="fr-photo-checked">
+        <input type="checkbox" id="fr-photo-checked" name="photosChecked" value="1" />
+        I've checked the photo is correct
+      </label>
       <label class="amend-check" for="fr-checked">
         <input type="checkbox" id="fr-checked" name="checked" value="1" />
         I've checked the details

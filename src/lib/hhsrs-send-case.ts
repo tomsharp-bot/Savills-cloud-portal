@@ -356,8 +356,14 @@ export async function sendCaseEmail(args: {
 
   const known = casePhotoFileNames(args.row.photoPaths);
   const postedPhotos = postedValues(args.body.photo);
+  const explicitPhotos = String(args.body.photoSelection || "") === "1";
+  if (amendmentPost && explicitPhotos && !isTickChecked(args.body.photosChecked)) {
+    return { ok: false, error: "Tick the box to confirm the photo is correct." };
+  }
   const requested =
-    amendmentPost && !postedPhotos.length && previousEmail ? previousEmail.photoNames : postedPhotos;
+    amendmentPost && !postedPhotos.length && previousEmail && !explicitPhotos
+      ? previousEmail.photoNames
+      : postedPhotos;
   const sizes = new Map<string, number | null>();
   for (const name of known) {
     sizes.set(name, await photoByteSize(args.row.id, name, args.storage));

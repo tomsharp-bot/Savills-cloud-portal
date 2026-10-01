@@ -17,7 +17,9 @@ import {
   isCallRefBlankReason,
   safeId,
   safeStoredName,
+  appendCasePhotos,
   canonicalRestrictorLocations,
+  discardAppendedCasePhotos,
   normalizeUprn,
   reporterCaseDetailExtras,
   splitCallNotes,
@@ -73,12 +75,20 @@ import { claimRowClass, claimView, claimerLabel, type ClaimView } from "../lib/h
 import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
   fromAddressFromEnv,
+  isTickChecked,
   publicSendSettings,
   REVIEW_SENT_CONFIRMATION,
   senderNamesFromLogin,
   sentBannerText,
 } from "../lib/hhsrs-send.js";
-import { listSentEmails, originalSentEmail, photoByteSize, sendCaseEmail } from "../lib/hhsrs-send-case.js";
+import {
+  listSentEmails,
+  originalSentEmail,
+  photoByteSize,
+  postedValues,
+  sendCaseEmail,
+  type CaseEmailTransport,
+} from "../lib/hhsrs-send-case.js";
 import { buildViewDetails } from "../lib/hhsrs-view-details.js";
 import { buildAmendmentEmail, parseSentEmail } from "../lib/hhsrs-correction-email.js";
 import { emailBodyToHtml } from "../lib/hhsrs-signature.js";
@@ -118,11 +128,12 @@ import {
   moveCaseToNotNeeded,
   restoreCaseToPending,
 } from "../lib/hhsrs-not-needed.js";
-import { createOfficeCaseAndSend } from "../lib/hhsrs-office-case.js";
+import { createOfficeCaseAndSend, officePhotoError } from "../lib/hhsrs-office-case.js";
 import { sweepWaitingUprnDuplicates } from "../lib/hhsrs-uprn-duplicates.js";
 import {
   loadSiteFormPhoto,
   privateInlineHeaders,
+  SitePhotoError,
   sitePhotoStorageFromApp,
   type SitePhotoStorage,
 } from "../lib/hhsrs-site-photos.js";
@@ -764,7 +775,17 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
       const included = new Set(latest.photoNames);
       const sentPhotos = latest.photoNames.map((name, index) => {
         const known = casePhotos.find((photo) => photo.name === name);
-        return known || { id: name, name, caption: `Photo ${index + 1}`, url: "" };
+        if (known) return known;
+        const onCase = photoNames(picked).some((item) => (item.split("/").filter(Boolean).pop() || "") === name);
+        const caption = name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") || `Photo ${index + 1}`;
+        return {
+          id: name,
+          name,
+          caption,
+          url: onCase
+            ? `${HHSRS_REPORTER_PATH}/${encodeURIComponent(picked.id)}/photos/${encodeURIComponent(name)}`
+            : "",
+        };
       });
       const parsed = parseSentEmail(latest.body);
       const preview = buildAmendmentEmail({
@@ -823,16 +844,110 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
   });
 });
 
-hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response) => {
-  const row = await loadCase(req.params.id);
+/** Tests replace the amend resend mailbox. Production uses the portal send. */
+export const HHSRS_AMEND_TRANSPORT = "hhsrsAmendTransport";
+
+function amendTransport(req: Request): CaseEmailTransport | undefined {
+  const hooked = req.app.get(HHSRS_AMEND_TRANSPORT);
+  if (!hooked || typeof hooked !== "object") return undefined;
+  const rec = hooked as Partial<CaseEmailTransport>;
+  if (typeof rec.sendMail !== "function" || typeof rec.appendToSent !== "function") return undefined;
+  return rec as CaseEmailTransport;
+}
+
+type UploadedReplacement = { originalname: string; mimetype: string; size: number; buffer: Buffer };
+
+function uploadedReplacements(req: Request): UploadedReplacement[] {
+  const files = Array.isArray(req.files) ? req.files : [];
+  return files
+    .map((file) => ({
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      buffer: file.buffer,
+    }))
+    .filter((file) => file.buffer && file.buffer.length > 0 && file.size > 0);
+}
+
+const amendmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: hhsrsMulterLimits,
+});
+
+function uploadAmendmentPhotos(req: Request, res: Response, next: NextFunction): void {
+  amendmentUpload.array("replacement", HHSRS_MAX_PHOTOS)(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    const code = typeof err === "object" && err && "code" in err ? String((err as { code: string }).code) : "";
+    const message =
+      code === "LIMIT_FILE_SIZE"
+        ? hhsrsPhotoSizeError()
+        : code === "LIMIT_FILE_COUNT" || code === "LIMIT_UNEXPECTED_FILE"
+          ? `Add up to ${HHSRS_MAX_PHOTOS} photos.`
+          : "Could not upload photos.";
+    flashErr(req, message);
+    res.redirect(findUrl({ caseId: String(req.params.id || ""), view: "amend" }));
+  });
+}
+
+hhsrsReporterRouter.post("/find/:id/resend", uploadAmendmentPhotos, async (req: Request, res: Response) => {
+  let row = await loadCase(req.params.id);
   if (!row) {
     res.status(404).send("Case not found.");
     return;
   }
-  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const parsed = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  let body = parsed;
   const q = String(body.q || "").trim();
   const date = String(body.date || "").trim();
   const project = String(body.project || "").trim();
+  const caseId = row.id;
+  const backToAmend = () =>
+    res.redirect(findUrl({ q, date, project, caseId, view: "amend" }));
+  const amending = String(body.amendmentFields || "") === "1";
+  if (amending && !isTickChecked(body.photosChecked)) {
+    flashErr(req, "Tick the box to confirm the photo is correct.");
+    backToAmend();
+    return;
+  }
+
+  const storage = sitePhotoStorageFromApp(req.app);
+  const previousPaths = photoNames(row);
+  let added: string[] = [];
+  if (amending) {
+    const files = uploadedReplacements(req);
+    if (files.length) {
+      const photoError = officePhotoError(files);
+      if (photoError) {
+        flashErr(req, photoError);
+        backToAmend();
+        return;
+      }
+      try {
+        added = await appendCasePhotos(row.id, files, previousPaths, storage);
+        await prisma.hhsrsSiteSubmission.update({
+          where: { id: row.id },
+          data: { photoPaths: [...previousPaths, ...added] },
+        });
+        const fresh = await loadCase(row.id);
+        if (!fresh) throw new SitePhotoError("Could not upload photos.");
+        row = fresh;
+        const addedNames = added.map((key) => key.split("/").filter(Boolean).pop() || "").filter(Boolean);
+        body = { ...body, photo: [...postedValues(body.photo), ...addedNames] };
+      } catch (err) {
+        await prisma.hhsrsSiteSubmission
+          .update({ where: { id: row.id }, data: { photoPaths: previousPaths } })
+          .catch(() => undefined);
+        await discardAppendedCasePhotos(row.id, added, storage);
+        flashErr(req, err instanceof SitePhotoError ? err.message : "Could not upload photos.");
+        backToAmend();
+        return;
+      }
+    }
+  }
+
   const signature = await senderSignatureFor(req.user);
   const stored = await clientRecipientsForProject(row.projectName);
   const sendBody = sendBodyWithClientRecipients(body, stored);
@@ -843,13 +958,22 @@ hhsrsReporterRouter.post("/find/:id/resend", async (req: Request, res: Response)
     senderFullName: signature.fullName,
     hasReporterAccess: Boolean(req.user && isAdmin(req.user)),
     body: sendBody,
-    storage: sitePhotoStorageFromApp(req.app),
+    storage,
     correction: {
       reason: String(body.correctionReason || ""),
       note: String(body.correctionNote || ""),
     },
+    transport: amendTransport(req),
   });
-  if (!result.ok) flashErr(req, result.error);
+  if (!result.ok) {
+    if (added.length) {
+      await prisma.hhsrsSiteSubmission
+        .update({ where: { id: row.id }, data: { photoPaths: previousPaths } })
+        .catch(() => undefined);
+      await discardAppendedCasePhotos(row.id, added, storage);
+    }
+    flashErr(req, result.error);
+  }
   res.redirect(findUrl({
     q,
     date,

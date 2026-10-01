@@ -80,11 +80,184 @@
   }
 
   var checked = $("fr-checked");
+  var photoChecked = $("fr-photo-checked");
   var send = $("btn-send-correction");
+  function bothTicked() {
+    return Boolean(checked && checked.checked && photoChecked && photoChecked.checked);
+  }
   function syncSend() {
-    if (send) send.disabled = !(checked && checked.checked);
+    if (send) send.disabled = !bothTicked();
   }
   if (checked) checked.addEventListener("change", syncSend);
+  if (photoChecked) photoChecked.addEventListener("change", syncSend);
+
+  var pending = [];
+  var nextNewId = 1;
+  var syncingFiles = false;
+  var MAX_NEW_PHOTOS = 4;
+
+  function setPhotoMsg(text) {
+    var msg = $("fr-photo-msg");
+    if (!msg) return;
+    msg.textContent = text || "";
+    msg.hidden = !text;
+  }
+
+  function isPhotoFile(file) {
+    var type = String((file && file.type) || "").toLowerCase();
+    if (/^image\/(jpeg|jpg|png|webp|heic|heif)/.test(type)) return true;
+    return /\.(jpe?g|png|webp|heic|heif)$/i.test(String((file && file.name) || ""));
+  }
+
+  function syncPreviewPhotos() {
+    var box = $("fr-preview-photos");
+    if (!box) return;
+    box.hidden = box.children.length === 0;
+  }
+
+  function previewFigure(attr, value, src) {
+    var fig = document.createElement("figure");
+    fig.className = "photo-zoom";
+    fig.setAttribute(attr, value);
+    var art = document.createElement("div");
+    art.className = "art";
+    var img = document.createElement("img");
+    img.src = src;
+    img.alt = "Photo";
+    art.appendChild(img);
+    fig.appendChild(art);
+    return fig;
+  }
+
+  function removePreview(attr, value) {
+    var box = $("fr-preview-photos");
+    if (!box) return;
+    Array.prototype.forEach.call(box.children, function (node) {
+      if (node.getAttribute && node.getAttribute(attr) === value) node.remove();
+    });
+    syncPreviewPhotos();
+  }
+
+  function syncFiles() {
+    var input = $("fr-photo-file");
+    if (!input || typeof DataTransfer === "undefined") return;
+    syncingFiles = true;
+    try {
+      var dt = new DataTransfer();
+      pending.forEach(function (item) { dt.items.add(item.file); });
+      input.files = dt.files;
+    } catch (err) {
+      // The browser keeps the last file the input already held.
+    }
+    syncingFiles = false;
+  }
+
+  function appendNewCard(id, url) {
+    var list = $("fr-photo-list");
+    if (!list) return;
+    var fig = document.createElement("figure");
+    fig.className = "amend-photo";
+    fig.setAttribute("data-new-id", id);
+    var rem = document.createElement("button");
+    rem.type = "button";
+    rem.className = "photo-remove";
+    rem.setAttribute("data-remove-photo", "");
+    rem.setAttribute("aria-label", "Remove photo");
+    rem.textContent = "×";
+    var art = document.createElement("div");
+    art.className = "art";
+    var img = document.createElement("img");
+    img.src = url;
+    img.alt = "Photo";
+    art.appendChild(img);
+    fig.appendChild(rem);
+    fig.appendChild(art);
+    list.appendChild(fig);
+    var box = $("fr-preview-photos");
+    if (box) box.appendChild(previewFigure("data-new-id", id, url));
+    syncPreviewPhotos();
+  }
+
+  function addFiles(fileList) {
+    if (!fileList || !fileList.length) return;
+    var rejected = false;
+    var capped = false;
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      if (!file) continue;
+      if (pending.length >= MAX_NEW_PHOTOS) {
+        capped = true;
+        break;
+      }
+      if (!isPhotoFile(file)) {
+        rejected = true;
+        continue;
+      }
+      var id = "new-" + nextNewId;
+      nextNewId += 1;
+      var url = URL.createObjectURL(file);
+      pending.push({ id: id, file: file, url: url });
+      appendNewCard(id, url);
+    }
+    if (capped) setPhotoMsg("Add up to 4 photos.");
+    else if (rejected) setPhotoMsg("Photos must be JPEG, PNG, WebP or HEIC.");
+    else setPhotoMsg("");
+    syncFiles();
+  }
+
+  var photoList = $("fr-photo-list");
+  if (photoList) {
+    photoList.addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-remove-photo]");
+      if (!btn || !photoList.contains(btn)) return;
+      var card = btn.closest(".amend-photo");
+      if (!card) return;
+      var name = card.getAttribute("data-photo-name");
+      var newId = card.getAttribute("data-new-id");
+      if (newId) {
+        var kept = [];
+        pending.forEach(function (item) {
+          if (item.id === newId) URL.revokeObjectURL(item.url);
+          else kept.push(item);
+        });
+        pending = kept;
+        syncFiles();
+        removePreview("data-new-id", newId);
+      }
+      if (name) removePreview("data-photo-name", name);
+      card.remove();
+      setPhotoMsg("");
+    });
+  }
+
+  var fileInput = $("fr-photo-file");
+  if (fileInput) {
+    fileInput.addEventListener("change", function () {
+      if (syncingFiles) return;
+      addFiles(fileInput.files);
+    });
+  }
+
+  var dropzone = $("fr-photo-drop");
+  if (dropzone) {
+    dropzone.addEventListener("dragenter", function (event) {
+      event.preventDefault();
+      dropzone.classList.add("is-dragover");
+    });
+    dropzone.addEventListener("dragover", function (event) {
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      dropzone.classList.add("is-dragover");
+    });
+    dropzone.addEventListener("dragleave", function () {
+      dropzone.classList.remove("is-dragover");
+    });
+    dropzone.addEventListener("drop", function (event) {
+      event.preventDefault();
+      dropzone.classList.remove("is-dragover");
+      addFiles(event.dataTransfer && event.dataTransfer.files);
+    });
+  }
   var previewWrap = $("fr-preview-wrap");
   var generate = $("btn-generate-correction");
   function showPreview() {
@@ -94,7 +267,7 @@
   }
   if (generate) generate.addEventListener("click", showPreview);
   document.querySelectorAll("#fr-amend input, #fr-amend select").forEach(function (el) {
-    if (el.id === "fr-checked" || el.id === "btn-generate-correction") return;
+    if (el.id === "fr-checked" || el.id === "fr-photo-checked" || el.id === "fr-photo-file" || el.id === "btn-generate-correction") return;
     el.addEventListener("input", function () {
       if (previewWrap && !previewWrap.hidden) paint();
     });
@@ -105,7 +278,8 @@
   var form = $("rv-send-form");
   if (form) {
     form.addEventListener("submit", function (event) {
-      if (!checked || !checked.checked) {
+      syncFiles();
+      if (!bothTicked()) {
         event.preventDefault();
         syncSend();
       }
