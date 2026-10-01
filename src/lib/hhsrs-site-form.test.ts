@@ -824,7 +824,12 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(html, /suspected-cause-hint/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = html.slice(html.indexOf('id="extra-box"'), html.indexOf('id="step-photos"'));
-    assert.match(extras, /id="otherDetails"[^>]*enterkeyhint="next"/);
+    assert.doesNotMatch(extras, /id="otherDetails"/);
+    assert.doesNotMatch(extras, /Any other details/);
+    assert.doesNotMatch(html, /3000px/);
+    assert.doesNotMatch(html, /25 MB/);
+    assert.match(html, /id="photos"/);
+    assert.match(html, /Add photos/);
     assert.match(extras, /id="suspected-cause-box"[^>]*hidden/);
     assert.match(extras, /id="suspectedCause"/);
     assert.doesNotMatch(hazard, /data-extra=/);
@@ -837,7 +842,7 @@ describe("HHSRS site form project option flags", () => {
     assert.match(flowJs, /Falling Between Levels/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsAlways"));
     assert.doesNotMatch(hazardFn, /suspectedCause/);
-    assert.match(flowJs, /if \(!extrasDone\(\) \|\| !extrasPassed\)/);
+    assert.match(flowJs, /if \(extrasHasField\(\) && \(!extrasDone\(\) \|\| !extrasPassed\)\)/);
     const reviewDraft = {
       ...emptyHhsrsValues(),
       id: "draft-1",
@@ -853,6 +858,19 @@ describe("HHSRS site form project option flags", () => {
       reviewOptions
     );
     assert.doesNotMatch(String(blankReview), /Suspected cause/);
+    assert.doesNotMatch(String(blankReview), /Any other details/);
+    const keptDetails = ejs.render(
+      reviewTemplate,
+      {
+        title: "Review issue",
+        draft: { ...reviewDraft, otherDetails: "Tenant was home" },
+        formatHhsrsSurveyDate,
+        hhsrsUrl,
+        storeError: "",
+      },
+      reviewOptions
+    );
+    assert.match(String(keptDetails), /<dt>Any other details<\/dt><dd class="prewrap">Tenant was home<\/dd>/);
     const keptReview = ejs.render(
       reviewTemplate,
       {
