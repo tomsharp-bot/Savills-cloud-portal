@@ -1501,32 +1501,28 @@ body.hhsrs-reporter {
 }
 .hhsrs-reporter .pending-issues-wrap {
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
-/* Shared by Pending, Last 20, Main Log, and the other lists on this table.
-   Each column stays on one line. The table scrolls sideways instead of wrapping. */
 .hhsrs-reporter .pending-issues-table {
-  table-layout: auto;
-  width: max-content;
-  min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
 }
-.hhsrs-reporter .pending-issues-table col.c-ref,
-.hhsrs-reporter .pending-issues-table col.c-proj,
-.hhsrs-reporter .pending-issues-table col.c-addr,
-.hhsrs-reporter .pending-issues-table col.c-ph,
-.hhsrs-reporter .pending-issues-table col.c-uprn,
-.hhsrs-reporter .pending-issues-table col.c-surv,
-.hhsrs-reporter .pending-issues-table col.c-cat,
-.hhsrs-reporter .pending-issues-table col.c-rate,
-.hhsrs-reporter .pending-issues-table col.c-when,
-.hhsrs-reporter .pending-issues-table col.c-act { width: auto; }
+.hhsrs-reporter .pending-issues-table col.c-ref { width: 10%; }
+.hhsrs-reporter .pending-issues-table col.c-proj { width: 11%; }
+.hhsrs-reporter .pending-issues-table col.c-addr { width: 14%; }
+.hhsrs-reporter .pending-issues-table col.c-ph { width: 6.5%; }
+.hhsrs-reporter .pending-issues-table col.c-uprn { width: 11%; }
+.hhsrs-reporter .pending-issues-table col.c-surv { width: 9%; }
+.hhsrs-reporter .pending-issues-table col.c-cat { width: 10%; }
+.hhsrs-reporter .pending-issues-table col.c-rate { width: 8%; }
+.hhsrs-reporter .pending-issues-table col.c-when { width: 8.5%; }
+.hhsrs-reporter .pending-issues-table col.c-act { width: 12%; }
 .hhsrs-reporter .pending-issues-table thead th.photo-att-col { width: auto; }
 .hhsrs-reporter .pending-issues-table thead th,
 .hhsrs-reporter .pending-issues-table tbody td {
   padding: 0.45rem 0.32rem;
-  overflow-wrap: normal;
-  word-break: normal;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 .hhsrs-reporter .pending-issues-table thead th {
   letter-spacing: 0.03em;
@@ -1534,22 +1530,21 @@ body.hhsrs-reporter {
 .hhsrs-reporter .pending-issues-table .project-pill,
 .hhsrs-reporter .pending-issues-table .addr-cell,
 .hhsrs-reporter .pending-issues-table .addr-cell strong {
-  white-space: nowrap;
+  white-space: normal;
 }
-.hhsrs-reporter .pending-issues-table .time-ago-abs {
-  display: inline;
-  margin-left: 0.45rem;
-  white-space: nowrap;
-}
-/* Last 20 drops the reference column. The address still stays on one line. */
-.hhsrs-reporter .pending-issues-table.is-noref col.c-addr { width: auto; }
-.hhsrs-reporter .pending-issues-table.is-noref td.addr-cell { overflow: visible; }
+/* Last 20 drops the reference column. Give that width to the address and
+   keep the address itself on one line. Other tables still wrap. */
+.hhsrs-reporter .pending-issues-table.is-noref col.c-addr { width: 24%; }
+.hhsrs-reporter .pending-issues-table.is-noref td.addr-cell { overflow: hidden; }
 .hhsrs-reporter .pending-issues-table.is-noref .addr-cell > strong {
   display: block;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
-.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: auto; max-width: 100%; }
-.hhsrs-reporter #last-actioned-table { width: max-content; min-width: 100%; }
+.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: hidden; max-width: 100%; }
+.hhsrs-reporter #last-actioned-table { width: 100%; min-width: 0; }
 .hhsrs-reporter #last-actioned-table thead th:nth-child(6),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(7),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(8),
@@ -1558,6 +1553,11 @@ body.hhsrs-reporter {
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8),
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8) > span {
   white-space: nowrap;
+}
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(6),
+.hhsrs-reporter #last-actioned-table tbody td:nth-child(7) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
@@ -2860,10 +2860,29 @@ tr.is-new-log td { background: #f5f3ff; }
 }
 .ml-table-wrap { overflow-x: auto; max-width: 100%; }
 /* The Main Log list is the Pending table. These rules are only for a leftover .ml-table. */
+.ml-page .pending-issues-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+/* Main Log only. Each column stays on one line. A wide row scrolls sideways.
+   Amended is the only second line, and it sits under the address. */
 .ml-page .pending-issues-table {
   font-size: 0.8125rem;
   font-family: var(--font);
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
 }
+.ml-page .pending-issues-table col.c-ref,
+.ml-page .pending-issues-table col.c-proj,
+.ml-page .pending-issues-table col.c-addr,
+.ml-page .pending-issues-table col.c-ph,
+.ml-page .pending-issues-table col.c-uprn,
+.ml-page .pending-issues-table col.c-surv,
+.ml-page .pending-issues-table col.c-cat,
+.ml-page .pending-issues-table col.c-rate,
+.ml-page .pending-issues-table col.c-when,
+.ml-page .pending-issues-table col.c-act { width: auto; }
 .ml-page .pending-issues-table thead th,
 .ml-page .pending-issues-table tbody td {
   font-size: 0.8125rem;
@@ -2871,6 +2890,9 @@ tr.is-new-log td { background: #f5f3ff; }
   letter-spacing: normal;
   padding: 0.45rem 0.32rem;
   vertical-align: middle;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
 }
 .ml-page .pending-issues-table thead th {
   font-size: 0.6875rem;
@@ -2885,8 +2907,18 @@ tr.is-new-log td { background: #f5f3ff; }
   padding: 2px 7px;
   letter-spacing: normal;
 }
-.ml-page .pending-issues-table .project-pill { font-size: 0.75rem; font-weight: 600; }
-.ml-page .pending-issues-table .btn-review-create { font-size: 0.75rem; font-weight: 700; }
+.ml-page .pending-issues-table .project-pill { font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.ml-page .pending-issues-table .btn-review-create { font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+.ml-page .pending-issues-table td.addr-cell,
+.ml-page .pending-issues-table td.addr-cell > strong {
+  white-space: nowrap;
+}
+.ml-page .pending-issues-table td.addr-cell > strong { display: block; }
+.ml-page .pending-issues-table .time-ago-abs {
+  display: inline;
+  margin-left: 0.45rem;
+  white-space: nowrap;
+}
 .ml-page .pending-issues-table td.photo-att-cell,
 .ml-page .pending-issues-table th.photo-att-col { overflow: visible; white-space: nowrap; }
 .ml-page .pending-issues-table .photo-att-counted .photo-att-icon {
