@@ -85,14 +85,14 @@ describe("HHSRS Reporter projectDraft", () => {
     assert.equal(
       draft.body,
       [
-        "Hi all,",
+        "HHSRS notification",
         "",
-        "• Address: 1 high street, EX1 1AA",
         "• UPRN: 100123",
-        "• Hazard: Electrical Hazards",
-        "• Rating: High",
-        "• Site notes: Damaged light fitting in lounge.",
+        "• Address: 1 high street, EX1 1AA",
         "• Survey date: 20/09/2026",
+        "• Hazard category: Electrical Hazards",
+        "• Comments: Damaged light fitting in lounge.",
+        "• Hazard rating: High",
       ].join("\n")
     );
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
@@ -102,7 +102,7 @@ describe("HHSRS Reporter projectDraft", () => {
   it("keeps BPHA subject and omits the surveyor-visit intro", () => {
     const draft = projectDraft({ ...base, project: "BPHA East 2026" }, ["a"]);
     assert.equal(draft.subject, "BPHA - HHSRS – 1 high street, EX1 1AA");
-    assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
+    assert.match(draft.body, /• Comments: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /Attached is a photo/);
@@ -126,7 +126,7 @@ describe("HHSRS Reporter projectDraft", () => {
       draft.subject,
       "Onward 2026 – HHSRS CAT1 (Electrical) – UPRN 100123 - 1 high street, EX1 1AA"
     );
-    assert.match(draft.body, /• Onward call reference: CR-99/);
+    assert.match(draft.body, /• Call reference: CR-99/);
     assert.doesNotMatch(draft.body, /• Onward call:/);
     assert.match(draft.body, /• Survey date: 20\/09\/2026/);
     assert.doesNotMatch(draft.body, /2026-09-20/);
@@ -151,10 +151,10 @@ describe("HHSRS Reporter projectDraft", () => {
       },
       ["lounge.jpg"]
     );
-    const notes = draft.body.split("\n").find((line) => line.startsWith("• Site notes:"));
+    const notes = draft.body.split("\n").find((line) => line.startsWith("• Comments:"));
     assert.equal(
       notes,
-      "• Site notes: There is a loose socket to the communal area on the 6th floor, exposing the live parts within."
+      "• Comments: There is a loose socket to the communal area on the 6th floor, exposing the live parts within."
     );
     assert.match(draft.body, /• Address: Campion House/);
     assert.doesNotMatch(notes || "", /Campion House|photo|surveyor|HHSRS|arrange/i);
@@ -190,7 +190,7 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     };
     const draft = draftFromSubmission(input);
     assert.equal(draft.subject, "Demo Housing - HHSRS – 1 High Street, EX1 1AA");
-    assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
+    assert.match(draft.body, /• Comments: Damaged light fitting in lounge\./);
     assert.match(draft.body, /• Survey date: 20\/09\/2026/);
     assert.doesNotMatch(draft.body, /2026-09-20/);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
@@ -255,7 +255,7 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callOutcome: "",
       callNotes: "",
     });
-    assert.match(withRef.body, /• Client call reference: CR-9/);
+    assert.match(withRef.body, /• Call reference: CR-9/);
     assert.doesNotMatch(withRef.body, /Why the call reference is blank/);
 
     const noAnswer = draftFromSubmission({
@@ -268,7 +268,7 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.doesNotMatch(noAnswer.body, /Why the call reference is blank/);
     assert.doesNotMatch(noAnswer.body, /call reference/i);
     assert.doesNotMatch(noAnswer.body, /• Call:/);
-    assert.match(noAnswer.body, /• Site notes: Visible mould in bathroom\./);
+    assert.match(noAnswer.body, /• Comments: Visible mould in bathroom\./);
     assert.match(noAnswer.body, /• Survey date: 20\/09\/2026/);
 
     const busy = draftFromSubmission({
@@ -300,7 +300,7 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callOutcome: "Attempted",
       callNotes: "No answer",
     });
-    assert.match(mtvh.body, /• Client call reference: CR-9/);
+    assert.match(mtvh.body, /• Call reference: CR-9/);
     assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
     assert.doesNotMatch(mtvh.body, /• Call:/);
     assert.doesNotMatch(mtvh.body, /No answer/);
@@ -328,14 +328,14 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.equal(
       testHousing.body,
       [
-        "Hi all,",
+        "HHSRS notification",
         "",
-        "• Address: 1 jenkins house, B14 6ES",
         "• UPRN: 98756",
-        "• Hazard: Damp / Mould Growth",
-        "• Rating: High",
-        "• Site notes: Visible mould in bathroom.",
+        "• Address: 1 jenkins house, B14 6ES",
         "• Survey date: 20/09/2026",
+        "• Hazard category: Damp / Mould Growth",
+        "• Comments: Visible mould in bathroom.",
+        "• Hazard rating: High",
       ].join("\n")
     );
     assert.doesNotMatch(testHousing.body, /call reference/i);
@@ -350,21 +350,22 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.doesNotMatch(strayRef.body, /call reference/i);
     assert.doesNotMatch(strayRef.body, /CR-9/);
-    assert.match(strayRef.body, /• Site notes: Visible mould in bathroom\./);
+    assert.match(strayRef.body, /• Comments: Visible mould in bathroom\./);
 
     const pasted = prepareClientEmailBody(
       "Test Housing",
       [
-        "Hi all,",
+        "HHSRS notification",
         "",
-        "• Address: 1 jenkins house, B14 6ES",
         "• UPRN: 98756",
-        "• Hazard: Damp / Mould Growth",
-        "• Rating: High",
-        "• Site notes: Visible mould in bathroom.",
+        "• Address: 1 jenkins house, B14 6ES",
         "• Survey date: 20/09/2026",
+        "• Hazard category: Damp / Mould Growth",
+        "• Comments: Visible mould in bathroom.",
+        "• Hazard rating: High",
         "• Why the call reference is blank: No answer",
         "• Client call reference: CR-9",
+        "• Call reference: CR-9",
       ].join("\n")
     );
     assert.equal(pasted, testHousing.body);
@@ -452,18 +453,19 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.match(mtvh.body, /• Address: 1 High Street, EX1 1AA/);
     assert.match(mtvh.body, /• UPRN: 100123/);
-    assert.match(mtvh.body, /• Rating: High - Significant risk/);
+    assert.match(mtvh.body, /• Hazard rating: High - Significant risk/);
     assert.match(mtvh.body, /• Survey date: 20\/09\/2026/);
-    assert.match(mtvh.body, /• Client call reference: CR-9/);
+    assert.match(mtvh.body, /• Call reference: CR-9/);
     assert.match(mtvh.body, /• Any other details: Tenant was home\./);
-    assert.match(mtvh.body, /• How many window restrictors are missing: 2/);
-    assert.match(mtvh.body, /• Location: Hall, Bedroom 1/);
+    assert.match(mtvh.body, /• Number of window restrictors missing: 2/);
     assert.match(mtvh.body, /• Window material: PVC/);
-    assert.ok(mtvh.body.indexOf("• Client call reference:") < mtvh.body.indexOf("• Survey date:"));
-    assert.ok(mtvh.body.indexOf("• Survey date:") < mtvh.body.indexOf("• Any other details:"));
+    assert.match(mtvh.body, /• Locations: Hall, Bedroom 1/);
+    assert.ok(mtvh.body.indexOf("• Survey date:") < mtvh.body.indexOf("• Call reference:"));
+    assert.ok(mtvh.body.indexOf("• Call reference:") < mtvh.body.indexOf("• Any other details:"));
     assert.ok(
-      mtvh.body.indexOf("• Any other details:") < mtvh.body.indexOf("• How many window restrictors are missing:")
+      mtvh.body.indexOf("• Any other details:") < mtvh.body.indexOf("• Number of window restrictors missing:")
     );
+    assert.ok(mtvh.body.indexOf("• Window material:") < mtvh.body.indexOf("• Locations:"));
     assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
     assert.doesNotMatch(mtvh.body, /Internal notes/);
     assert.doesNotMatch(mtvh.body, /• Surveyor:/);
@@ -478,10 +480,10 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       restrictorLocations: "",
       restrictorMaterial: "",
     });
-    assert.doesNotMatch(without.body, /Client call reference/);
+    assert.doesNotMatch(without.body, /Call reference/);
     assert.doesNotMatch(without.body, /Any other details/);
-    assert.doesNotMatch(without.body, /window restrictors are missing/i);
-    assert.doesNotMatch(without.body, /• Location:/);
+    assert.doesNotMatch(without.body, /restrictors missing/i);
+    assert.doesNotMatch(without.body, /• Locations?:/);
     assert.doesNotMatch(without.body, /Window material/);
 
     const countOnly = draftFromSubmission({
@@ -490,8 +492,8 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       category: "Falling Between Levels",
       restrictorMissingCount: "1",
     });
-    assert.match(countOnly.body, /• How many window restrictors are missing: 1/);
-    assert.doesNotMatch(countOnly.body, /• Location:/);
+    assert.match(countOnly.body, /• Number of window restrictors missing: 1/);
+    assert.doesNotMatch(countOnly.body, /• Locations?:/);
     assert.doesNotMatch(countOnly.body, /Window material/);
 
     const gateway = draftFromSubmission({
@@ -506,11 +508,11 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.doesNotMatch(gateway.body, /call reference/i);
     assert.doesNotMatch(gateway.body, /CR-9/);
-    assert.doesNotMatch(gateway.body, /window restrictors are missing/i);
+    assert.doesNotMatch(gateway.body, /restrictors missing/i);
     assert.doesNotMatch(gateway.body, /Window material/);
-    assert.doesNotMatch(gateway.body, /• Location:/);
+    assert.doesNotMatch(gateway.body, /• Locations?:/);
     assert.match(gateway.body, /• Any other details: No access issues\./);
-    assert.match(gateway.body, /• Site notes:/);
+    assert.match(gateway.body, /• Comments:/);
 
     const vico = draftFromSubmission({
       ...shared,
@@ -527,12 +529,14 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       restrictorLocations: "Hall",
       restrictorMaterial: "Metal",
     });
-    assert.match(vico.body, /• Client call reference: CR-9/);
+    assert.match(vico.body, /• Call reference: CR-9/);
     assert.match(vico.body, /• Cause: leaking gutter above the bedroom/);
     assert.match(vico.body, /• Vulnerabilities: Elderly resident/);
     assert.match(vico.body, /• Any other details: Key safe on the left\./);
-    assert.match(vico.body, /• Site notes: Visible mould in bathroom\./);
-    assert.doesNotMatch(vico.body, /window restrictors are missing/i);
+    assert.match(vico.body, /• Comments: Visible mould in bathroom\./);
+    assert.ok(vico.body.indexOf("• Call reference:") < vico.body.indexOf("• Cause:"));
+    assert.ok(vico.body.indexOf("• Cause:") < vico.body.indexOf("• Vulnerabilities:"));
+    assert.doesNotMatch(vico.body, /restrictors missing/i);
     assert.doesNotMatch(vico.body, /Window material/);
     assert.doesNotMatch(vico.body, /Why the call reference is blank/);
 
@@ -592,11 +596,11 @@ describe("HHSRS Reporter draftFromSubmission", () => {
         includeCause: true,
       })
     );
-    assert.match(fromRow.body, /• How many window restrictors are missing: 2/);
-    assert.match(fromRow.body, /• Location: Hall/);
+    assert.match(fromRow.body, /• Number of window restrictors missing: 2/);
+    assert.match(fromRow.body, /• Locations: Hall/);
     assert.match(fromRow.body, /• Window material: PVC/);
     assert.match(fromRow.body, /• Any other details: Tenant was home\./);
-    assert.match(fromRow.body, /• Client call reference: CR-9/);
+    assert.match(fromRow.body, /• Call reference: CR-9/);
 
     const posted = draftEmailFromReviewFields(
       mergeReviewDraftFields(row, {
@@ -613,11 +617,11 @@ describe("HHSRS Reporter draftFromSubmission", () => {
         restrictorMaterial: "Timber",
       })
     );
-    assert.match(posted.body, /• How many window restrictors are missing: 3/);
-    assert.match(posted.body, /• Location: Kitchen/);
+    assert.match(posted.body, /• Number of window restrictors missing: 3/);
+    assert.match(posted.body, /• Locations: Kitchen/);
     assert.match(posted.body, /• Window material: Timber/);
     assert.doesNotMatch(posted.body, /Tenant was home/);
-    assert.doesNotMatch(posted.body, /Client call reference/);
+    assert.doesNotMatch(posted.body, /Call reference/);
     assert.doesNotMatch(posted.body, /CR-9/);
   });
 
@@ -634,8 +638,8 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       clientDescription: "There is an exposed wire on the hallway ceiling.",
       photoCount: 2,
     });
-    assert.match(draft.body, /• Site notes: There is an exposed wire on the hallway ceiling\./);
-    assert.match(draft.body, /• Rating: Medium/);
+    assert.match(draft.body, /• Comments: There is an exposed wire on the hallway ceiling\./);
+    assert.match(draft.body, /• Hazard rating: Medium/);
     assert.doesNotMatch(draft.body, /Attached are photos/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
   });

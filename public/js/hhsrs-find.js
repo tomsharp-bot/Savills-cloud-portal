@@ -43,12 +43,12 @@
   }
 
   var fields = [
-    ["f-address", "address", "Address"],
     ["f-uprn", "uprn", "UPRN"],
-    ["f-hazard", "hazard", "Hazard"],
-    ["f-rating", "rating", "Rating"],
-    ["f-notes", "notes", "Site notes"],
-    ["f-date", "surveyDate", "Survey date"]
+    ["f-address", "address", "Address"],
+    ["f-date", "surveyDate", "Survey date"],
+    ["f-hazard", "hazard", "Hazard category"],
+    ["f-notes", "notes", "Comments"],
+    ["f-rating", "rating", "Hazard rating"]
   ];
 
   function keptPhotoNames() {
@@ -96,7 +96,7 @@
     var intro = "Please disregard our previous email, due to an error. See correct details below.";
     var html = "<p>" + esc(intro) + "</p>";
     if (photosChanged()) html += "<p><b>The photo was incorrect.</b></p>";
-    html += "<p>Hi all,</p>";
+    html += "<p>HHSRS notification</p>";
     prose.forEach(function (line) { html += "<p>" + esc(line) + "</p>"; });
     var items = "";
     fields.forEach(function (field) {

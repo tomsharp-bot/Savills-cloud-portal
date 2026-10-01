@@ -496,11 +496,11 @@ describe("HHSRS amend and resend", () => {
     assert.match(built.subject, /^CORRECTION: /);
     assert.match(
       built.text,
-      /^Please disregard our previous email, due to an error\. See correct details below\.\n\nHi all,/
+      /^Please disregard our previous email, due to an error\. See correct details below\.\n\nHHSRS notification/
     );
     assert.doesNotMatch(built.text, /Wrong hazard\. It is Excess Cold/);
-    assert.match(built.messageHtml, /<li>Hazard: <b>Excess Cold<\/b><\/li>/);
-    assert.match(built.messageHtml, /<li>Rating: <b>Low<\/b><\/li>/);
+    assert.match(built.messageHtml, /<li>Hazard category: <b>Excess Cold<\/b><\/li>/);
+    assert.match(built.messageHtml, /<li>Hazard rating: <b>Low<\/b><\/li>/);
     assert.match(built.messageHtml, /<li>Address: 14 Example Street, London<\/li>/);
     assert.equal(built.messageHtml.includes("<li>Address: <b>"), false);
     assert.doesNotMatch(built.text, /NOTICE:|Tom Sharp/);
@@ -527,8 +527,8 @@ describe("HHSRS amend and resend", () => {
     });
     assert.equal(second.subject.startsWith("CORRECTION: CORRECTION:"), false);
     assert.match(second.subject, /^CORRECTION: /);
-    assert.match(second.messageHtml, /<li>Hazard: Excess Cold<\/li>/);
-    assert.match(second.messageHtml, /<li>Rating: <b>Moderate<\/b><\/li>/);
+    assert.match(second.messageHtml, /<li>Hazard category: Excess Cold<\/li>/);
+    assert.match(second.messageHtml, /<li>Hazard rating: <b>Moderate<\/b><\/li>/);
     assert.equal((second.text.match(/Please disregard our previous email/g) || []).length, 1);
   });
 
@@ -545,7 +545,7 @@ describe("HHSRS amend and resend", () => {
     assert.doesNotMatch(unchanged.messageHtml, /The photo was incorrect/);
     assert.match(
       unchanged.text,
-      /^Please disregard our previous email, due to an error\. See correct details below\.\n\nHi all,/
+      /^Please disregard our previous email, due to an error\. See correct details below\.\n\nHHSRS notification/
     );
 
     const removed = buildAmendmentEmail({
@@ -567,11 +567,11 @@ describe("HHSRS amend and resend", () => {
     for (const built of [removed, added]) {
       assert.match(
         built.text,
-        /^Please disregard our previous email, due to an error\. See correct details below\.\n\nThe photo was incorrect\.\n\nHi all,/
+        /^Please disregard our previous email, due to an error\. See correct details below\.\n\nThe photo was incorrect\.\n\nHHSRS notification/
       );
       assert.match(
         built.messageHtml,
-        /^<p>Please disregard our previous email, due to an error\. See correct details below\.<\/p><p><b>The photo was incorrect\.<\/b><\/p><p>Hi all,<\/p>/
+        /^<p>Please disregard our previous email, due to an error\. See correct details below\.<\/p><p><b>The photo was incorrect\.<\/b><\/p><p>HHSRS notification<\/p>/
       );
       assert.equal((built.text.match(/Please disregard our previous email/g) || []).length, 1);
       assert.equal((built.text.match(/The photo was incorrect\./g) || []).length, 1);
