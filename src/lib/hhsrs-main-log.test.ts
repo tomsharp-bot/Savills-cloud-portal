@@ -14,6 +14,7 @@ import {
   mainLogEmailWhere,
   mainLogNotSentWhere,
   parseMainLogFilters,
+  addressFirstLine,
   splitAddress,
   type MainLogEntry,
   type MainLogFilters,
@@ -255,6 +256,10 @@ describe("HHSRS main log arrangement", () => {
     const split = splitAddress("Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH", "ZZ1 3GH");
     assert.equal(split.line, "Flat 5, 40 Fictional Way, Sampleton");
     assert.equal(split.full, "Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH");
+    assert.equal(addressFirstLine(split.full), "Flat 5");
+    assert.equal(addressFirstLine("12 Laburnum Crescent, London SE5 8AB"), "12 Laburnum Crescent");
+    assert.equal(addressFirstLine("3 Peregrine Road"), "3 Peregrine Road");
+    assert.equal(addressFirstLine("  "), "");
     assert.match(describeMainLogFilters(blankFilters({ type: "not_sent", q: "Moor" }), 1), /Not sent from portal/);
     assert.match(describeMainLogFilters(blankFilters({ q: "Moor" }), 1), /“Moor”/);
   });
@@ -597,6 +602,14 @@ describe("HHSRS main log filters", () => {
     assert.equal((tbody.match(/<tr/g) || []).length, 2);
     assert.equal((tbody.match(/Amended/g) || []).length, 1);
     assert.doesNotMatch(tbody, /Use flat 5/);
+    assert.match(table, />Actioned</);
+    assert.match(table, />By</);
+    assert.match(tbody, /<td class="ml-actioned"><b>24\/09\/2026<\/b><\/td>/);
+    assert.match(tbody, /<td class="ml-actioned-by"><b>Carly Farrell<\/b><\/td>/);
+    assert.match(tbody, /<td class="ml-actioned-by"><b>Alex Surveyor<\/b><\/td>/);
+    assert.match(tbody, /<strong>Flat 3<\/strong>/);
+    assert.match(tbody, /class="ml-addr-full">Flat 3, 40 /);
+    assert.doesNotMatch(tbody, /<strong>Flat 3, 40 /);
 
     const detailsPage = await request(app, "GET", `/HHSRSreporter/main-log/${sentCase.id}/details`, { cookie });
     assert.equal(detailsPage.status, 200);

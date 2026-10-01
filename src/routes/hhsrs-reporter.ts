@@ -110,6 +110,7 @@ import {
   type ClientEmailFlash,
 } from "../lib/hhsrs-client-emails.js";
 import {
+  addressFirstLine,
   buildMainLogWorkbook,
   casePhotoViews,
   correctionLinkLine,
@@ -1005,7 +1006,7 @@ function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {
 }
 
 function mainLogSortTitle(key: MainLogSortKey, label: string, active: boolean, dir: MainLogFilters["dir"]): string {
-  if (!active) return `Sort by ${label}`;
+  if (!active) return key === "by" ? "Sort by who actioned it" : `Sort by ${label}`;
   if (key === "sent" || key === "received") return dir === "desc" ? "Sorted newest first. Click to reverse." : "Sorted oldest first. Click to reverse.";
   if (key === "photos") return dir === "desc" ? "Sorted most first. Click to reverse." : "Sorted fewest first. Click to reverse.";
   return dir === "desc" ? "Sorted Z to A. Click to reverse." : "Sorted A to Z. Click to reverse.";
@@ -1058,6 +1059,7 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
       ...entry,
       href: mainLogHref(filters, { open: entry.key }),
       selected: filters.open === entry.key,
+      addressLine: addressFirstLine(entry.fullAddress),
       whenDate: formatLondonDateTime(entry.at).split(" ")[0],
       whenTime: formatLondonDateTime(entry.at).split(" ")[1],
       typeLabel: mainLogTypeLabel(entry.kind),

@@ -1854,6 +1854,7 @@
       scheduleHideAttPop();
     });
     document.addEventListener("click", function (e) {
+      if (e.target.closest && e.target.closest("#main-log-table .photo-att-icon")) return;
       var btn = e.target.closest && e.target.closest(".photo-att-icon");
       if (btn) {
         e.preventDefault();

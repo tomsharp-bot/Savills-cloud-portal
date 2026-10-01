@@ -2914,10 +2914,10 @@ tr.is-new-log td { background: #f5f3ff; }
   overflow-x: auto;
   max-width: 100%;
 }
-/* Main Log only. Each column stays on one line. A wide row scrolls sideways.
-   Amended is the only second line, and it sits under the address. */
+/* Main Log only. Slightly smaller type and tighter columns, one line per row.
+   A long value scrolls sideways. The row does not wrap. */
 .ml-page .pending-issues-table {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-family: var(--font);
   table-layout: auto;
   width: max-content;
@@ -2935,17 +2935,17 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-page .pending-issues-table col.c-act { width: auto; }
 .ml-page .pending-issues-table thead th,
 .ml-page .pending-issues-table tbody td {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-family: var(--font);
   letter-spacing: normal;
-  padding: 0.45rem 0.32rem;
+  padding: 0.28rem 0.22rem;
   vertical-align: middle;
   overflow-wrap: normal;
   word-break: normal;
   white-space: nowrap;
 }
 .ml-page .pending-issues-table thead th {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -2953,17 +2953,56 @@ tr.is-new-log td { background: #f5f3ff; }
   background: #fafbfc;
 }
 .ml-page .pending-issues-table .ref-chip {
-  font-size: 12.5px;
-  padding: 2px 7px;
+  font-size: 11px;
+  padding: 2px 6px;
   letter-spacing: normal;
 }
 .ml-page .pending-issues-table .project-pill { font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .ml-page .pending-issues-table .btn-review-create { font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
 .ml-page .pending-issues-table td.addr-cell,
-.ml-page .pending-issues-table td.addr-cell > strong {
+.ml-page .pending-issues-table td.addr-cell > strong,
+.ml-page .pending-issues-table .ml-addr-hover,
+.ml-page .pending-issues-table .ml-addr-hover > strong {
   white-space: nowrap;
 }
-.ml-page .pending-issues-table td.addr-cell > strong { display: block; }
+.ml-page .pending-issues-table td.addr-cell { overflow: visible; }
+.ml-page .pending-issues-table td.addr-cell > strong,
+.ml-page .pending-issues-table .ml-addr-hover > strong { display: inline; }
+.ml-page .ml-addr-hover { position: relative; display: inline; cursor: default; }
+.ml-page .ml-addr-full {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 1.35rem;
+  z-index: 6;
+  width: 220px;
+  background: #222;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  white-space: normal;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+.ml-page .pending-issues-table td.addr-cell:hover,
+.ml-page .pending-issues-table td.addr-cell:focus-within {
+  position: relative;
+  z-index: 7;
+}
+.ml-page .ml-addr-hover:hover .ml-addr-full,
+.ml-page .ml-addr-hover:focus-within .ml-addr-full { display: block; }
+.ml-page .pending-issues-table td.ml-actioned,
+.ml-page .pending-issues-table td.ml-actioned-by {
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+}
+.ml-page .pending-issues-table .addr-claim {
+  display: inline;
+  margin: 0 0 0 0.35rem;
+}
 .ml-page .pending-issues-table .time-ago-abs {
   display: inline;
   margin-left: 0.45rem;
@@ -2986,7 +3025,7 @@ tr.is-new-log td { background: #f5f3ff; }
   overflow: visible;
   clip: auto;
   clip-path: none;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1;
   color: #44546a;
@@ -3121,9 +3160,10 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-tag.n { background: #e5e7eb; color: #374151; }
 .ml-corr-note { display: block; font-size: 0.72rem; color: #7a4b00; font-weight: 600; margin-top: 3px; white-space: nowrap; }
 .ml-page .ml-amended {
-  display: block;
+  display: inline-block;
   width: fit-content;
-  margin-top: 0.2rem;
+  margin-top: 0;
+  margin-left: 0.35rem;
   padding: 0.05rem 0.45rem;
   border-radius: 999px;
   background: #e7edf3;
@@ -3144,6 +3184,23 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-link { display: flex; align-items: center; gap: 6px; font-size: 0.84rem; color: #7a4b00; font-weight: 600; }
 .ml-arr { font-size: 1rem; line-height: 1; color: #f0b429; }
 .ml-empty { padding: 28px; text-align: center; color: var(--muted); }
+#photo-att-pop.ml-photo-source .photo-thumb { cursor: pointer; }
+.ml-photo-full {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.55);
+  align-items: center;
+  justify-content: center;
+}
+.ml-photo-full.is-show { display: flex; }
+.ml-photo-full img {
+  width: min(960px, 92vw);
+  height: min(680px, 86vh);
+  object-fit: contain;
+  background: #1a1a1a;
+}
 .ml-pager { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); }
 .ml-pager a { color: var(--blue); font-weight: 700; text-decoration: none; }
 .ml-scrim { position: fixed; inset: 0; background: rgba(7, 21, 34, 0.45); z-index: 80; }

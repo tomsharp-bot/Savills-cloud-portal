@@ -68,7 +68,7 @@ export type MainLogSort = {
   dir: MainLogSortDir;
 };
 
-/** Headings on the shared case list. Sent, recipient, and type stay sortable by URL. */
+/** Headings on the Main Log list. Sent, recipient, and type stay sortable by URL. */
 export const MAIN_LOG_COLUMNS: ReadonlyArray<{ key: MainLogSortKey; label: string; className: string }> = [
   { key: "ref", label: "Reference", className: "" },
   { key: "project", label: "Project", className: "" },
@@ -78,6 +78,8 @@ export const MAIN_LOG_COLUMNS: ReadonlyArray<{ key: MainLogSortKey; label: strin
   { key: "surveyor", label: "Surveyor", className: "" },
   { key: "hazard", label: "Category", className: "" },
   { key: "rating", label: "Rating", className: "" },
+  { key: "sent", label: "Actioned", className: "" },
+  { key: "by", label: "By", className: "" },
   { key: "received", label: "Received", className: "" },
 ];
 
@@ -194,6 +196,15 @@ function validDay(value: string): string {
 
 export function filtersActive(filters: MainLogFilters): boolean {
   return Boolean(filters.q || filters.project || filters.by || filters.type || filters.from || filters.to);
+}
+
+/** First line of a comma-joined address. The full string stays for hover. */
+export function addressFirstLine(fullAddress: string): string {
+  const full = String(fullAddress || "").trim();
+  if (!full) return "";
+  const comma = full.indexOf(",");
+  const line = (comma === -1 ? full : full.slice(0, comma)).trim();
+  return line || full;
 }
 
 /** Address for the table (no postcode) and the panel (postcode included once). */
