@@ -222,58 +222,160 @@ export async function restoreCaseToPending(args: {
   }
 }
 
+type NotDuplicateStatus = "new" | "corrected" | "email_sent";
+
+/** Same outcome the Not a duplicate button already applies to its own case. */
+function statusAfterNotADuplicate(row: LockedMoveRow, emailKinds: string[]): {
+  status: NotDuplicateStatus;
+  emailed: boolean;
+} {
+  const emailed = Boolean(row.emailSentAt) || emailKinds.length > 0;
+  if (!emailed) return { status: "new", emailed: false };
+  if (emailKinds.some((kind) => kind === "correction")) return { status: "corrected", emailed: true };
+  return { status: "email_sent", emailed: true };
+}
+
+/** The other card leaves the list only when this comparison filed it as a duplicate. */
+function listedDuplicate(row: LockedMoveRow): boolean {
+  return row.status === "not_needed" && row.notNeededReason === "duplicate";
+}
+
+async function sentEmailKinds(tx: Prisma.TransactionClient, ids: string[]): Promise<Map<string, string[]>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const byId = new Map<string, string[]>();
+  if (!unique.length) return byId;
+  const rows = await tx.hhsrsSentEmail.findMany({
+    where: { submissionId: { in: unique } },
+    select: { submissionId: true, kind: true },
+  });
+  for (const item of rows) {
+    const list = byId.get(item.submissionId) || [];
+    list.push(item.kind);
+    byId.set(item.submissionId, list);
+  }
+  return byId;
+}
+
+/** Case shown beside this one. A case is never its own comparison partner. */
+async function comparisonPartnerId(
+  tx: Prisma.TransactionClient,
+  duplicateOf: string,
+  selfId: string
+): Promise<string | null> {
+  const wanted = String(duplicateOf || "").trim();
+  if (!wanted) return null;
+  const found = await tx.hhsrsSiteSubmission.findFirst({
+    where: {
+      reference: { equals: wanted, mode: "insensitive" },
+      NOT: { id: selfId },
+    },
+    select: { id: true },
+  });
+  return found?.id || null;
+}
+
+async function writeNotADuplicate(
+  tx: Prisma.TransactionClient,
+  row: LockedMoveRow,
+  by: string,
+  status: NotDuplicateStatus,
+  at: Date
+): Promise<void> {
+  const log = readNotNeededLog(row.notNeededLog);
+  log.push({
+    action: "not_duplicate",
+    reason: row.notNeededReason,
+    duplicateOf: row.notNeededDuplicateOf,
+    note: row.notNeededNote,
+    by,
+    at: at.toISOString(),
+  });
+  await tx.hhsrsSiteSubmission.update({
+    where: { id: row.id },
+    data: {
+      status,
+      notADuplicate: true,
+      notNeededReason: "",
+      notNeededDuplicateOf: "",
+      notNeededNote: "",
+      notNeededBy: "",
+      notNeededAt: null,
+      notNeededLog: log,
+      claimedBy: "",
+      claimedAt: null,
+      lastEditedBy: by,
+    },
+  });
+}
+
 /**
- * The later case on a duplicate comparison is not a duplicate.
+ * The case on the Not a duplicate button is not a duplicate.
  * An unsent case goes back to Pending. A case that was already emailed
  * only leaves Duplicates & errors: the row and its Main Log email stay.
  * notADuplicate stops the UPRN sweep from filing this case again.
+ *
+ * The other case in that same comparison leaves too, with the same status
+ * rules, when it is on the list as a duplicate. A third case, another UPRN,
+ * and a case filed for another reason are left alone. A sent email row is
+ * not deleted or rewritten.
  */
 export async function markCaseNotADuplicate(args: {
   id: string;
   by: string;
-}): Promise<{ ok: true; reference: string; emailed: boolean } | { ok: false; error: string }> {
+}): Promise<
+  | {
+      ok: true;
+      reference: string;
+      emailed: boolean;
+      partnerReference: string;
+      partnerEmailed: boolean;
+    }
+  | { ok: false; error: string }
+> {
   try {
     return await prisma.$transaction(async (tx) => {
-      const row = await lockCase(tx, args.id);
+      const peek = await tx.hhsrsSiteSubmission.findUnique({
+        where: { id: args.id },
+        select: { id: true, notNeededDuplicateOf: true },
+      });
+      if (!peek) return { ok: false, error: "Case not found." };
+
+      const hintedPartnerId = await comparisonPartnerId(tx, peek.notNeededDuplicateOf, peek.id);
+      const locked = new Map<string, LockedMoveRow>();
+      for (const id of [...new Set([peek.id, ...(hintedPartnerId ? [hintedPartnerId] : [])])].sort()) {
+        const row = await lockCase(tx, id);
+        if (row) locked.set(row.id, row);
+      }
+
+      const row = locked.get(peek.id) || null;
       if (!row) return { ok: false, error: "Case not found." };
       if (row.status !== "not_needed") return { ok: false, error: "This case is not in Duplicates & Errors." };
-      const emails = await tx.hhsrsSentEmail.findMany({
-        where: { submissionId: row.id },
-        select: { kind: true },
-      });
-      const emailed = Boolean(row.emailSentAt) || emails.length > 0;
-      const status = !emailed
-        ? "new"
-        : emails.some((item) => item.kind === "correction")
-          ? "corrected"
-          : "email_sent";
+
+      const partnerId = await comparisonPartnerId(tx, row.notNeededDuplicateOf, row.id);
+      let partner = partnerId ? locked.get(partnerId) || null : null;
+      if (partnerId && !partner) partner = await lockCase(tx, partnerId);
+
+      const kinds = await sentEmailKinds(tx, [row.id, ...(partner ? [partner.id] : [])]);
+      const decision = statusAfterNotADuplicate(row, kinds.get(row.id) || []);
       const at = new Date();
-      const log = readNotNeededLog(row.notNeededLog);
-      log.push({
-        action: "not_duplicate",
-        reason: row.notNeededReason,
-        duplicateOf: row.notNeededDuplicateOf,
-        note: row.notNeededNote,
-        by: args.by,
-        at: at.toISOString(),
-      });
-      await tx.hhsrsSiteSubmission.update({
-        where: { id: row.id },
-        data: {
-          status,
-          notADuplicate: true,
-          notNeededReason: "",
-          notNeededDuplicateOf: "",
-          notNeededNote: "",
-          notNeededBy: "",
-          notNeededAt: null,
-          notNeededLog: log,
-          claimedBy: "",
-          claimedAt: null,
-          lastEditedBy: args.by,
-        },
-      });
-      return { ok: true, reference: row.reference || "", emailed };
+      await writeNotADuplicate(tx, row, args.by, decision.status, at);
+
+      let partnerReference = "";
+      let partnerEmailed = false;
+      if (partner && listedDuplicate(partner)) {
+        const partnerDecision = statusAfterNotADuplicate(partner, kinds.get(partner.id) || []);
+        await writeNotADuplicate(tx, partner, args.by, partnerDecision.status, at);
+        partnerReference = partner.reference || "";
+        partnerEmailed = partnerDecision.emailed;
+      }
+
+      return {
+        ok: true,
+        reference: row.reference || "",
+        emailed: decision.emailed,
+        partnerReference,
+        partnerEmailed,
+      };
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update the case.";
