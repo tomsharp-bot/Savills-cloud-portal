@@ -571,7 +571,7 @@ describe("HHSRS amend and resend", () => {
       );
       assert.match(
         built.messageHtml,
-        /^<p>Please disregard our previous email, due to an error\. See correct details below\.<\/p><p>The photo was incorrect\.<\/p><p>Hi all,<\/p>/
+        /^<p>Please disregard our previous email, due to an error\. See correct details below\.<\/p><p><b>The photo was incorrect\.<\/b><\/p><p>Hi all,<\/p>/
       );
       assert.equal((built.text.match(/Please disregard our previous email/g) || []).length, 1);
       assert.equal((built.text.match(/The photo was incorrect\./g) || []).length, 1);

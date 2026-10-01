@@ -95,7 +95,7 @@
     if (title) title.innerHTML = "<b>" + esc(subject) + "</b>";
     var intro = "Please disregard our previous email, due to an error. See correct details below.";
     var html = "<p>" + esc(intro) + "</p>";
-    if (photosChanged()) html += "<p>The photo was incorrect.</p>";
+    if (photosChanged()) html += "<p><b>The photo was incorrect.</b></p>";
     html += "<p>Hi all,</p>";
     prose.forEach(function (line) { html += "<p>" + esc(line) + "</p>"; });
     var items = "";
