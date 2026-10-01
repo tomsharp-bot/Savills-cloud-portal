@@ -115,6 +115,7 @@ import {
 import { loadDuplicateComparisons } from "../lib/hhsrs-duplicate-compare.js";
 import {
   NOT_NEEDED_REASONS,
+  markCaseNotADuplicate,
   moveCaseToNotNeeded,
   restoreCaseToPending,
 } from "../lib/hhsrs-not-needed.js";
@@ -1267,6 +1268,10 @@ hhsrsReporterRouter.post("/duplicates/:id/restore", async (req: Request, res: Re
   await handleRestore(req, res, req.params.id);
 });
 
+hhsrsReporterRouter.post("/duplicates/:id/not-duplicate", async (req: Request, res: Response) => {
+  await handleNotDuplicate(req, res, req.params.id);
+});
+
 hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Response) => {
   await handleAbandon(req, res, req.params.id);
 });
@@ -1609,6 +1614,30 @@ async function handleRestore(req: Request, res: Response, id: string): Promise<v
   }
   const label = result.reference ? `${result.reference} moved back to Pending.` : "Moved back to Pending.";
   flashOk(req, label);
+  res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
+}
+
+async function handleNotDuplicate(req: Request, res: Response, id: string): Promise<void> {
+  const result = await markCaseNotADuplicate({
+    id,
+    by: senderNamesFromLogin(req.user).sentBy || "someone",
+  });
+  if (!result.ok) {
+    if (result.error === "Case not found.") {
+      res.status(404).send("Case not found.");
+      return;
+    }
+    flashErr(req, result.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
+    return;
+  }
+  const label = result.reference || "The case";
+  flashOk(
+    req,
+    result.emailed
+      ? `${label} is not a duplicate. The sent email stays in the Main Log.`
+      : `${label} is not a duplicate and is back in Pending.`
+  );
   res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
 }
 

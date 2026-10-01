@@ -38,6 +38,8 @@ export type UprnDuplicateCandidate = {
   status: string;
   emailSentAt: Date | null;
   createdAt: Date;
+  /** Office said this case is not a duplicate. Automatic filing skips it. */
+  notADuplicate?: boolean;
 };
 
 export type UprnDuplicateMove = {
@@ -70,6 +72,7 @@ function byAge(a: UprnDuplicateCandidate, b: UprnDuplicateCandidate): number {
 }
 
 function canMove(row: UprnDuplicateCandidate): boolean {
+  if (row.notADuplicate) return false;
   if (row.emailSentAt) return false;
   return isWaitingStatus(row.status);
 }
@@ -98,9 +101,11 @@ function wasEmailed(row: UprnDuplicateCandidate): boolean {
 
 /**
  * Waiting cases that share a UPRN.
- * When none has been emailed, every waiting case moves and the note names the
- * other references. When one has been emailed, only a later waiting case
- * moves, and it is marked as matching that sent case. Address is not read.
+ * A case the office has marked as not a duplicate is left alone. Other waiting
+ * cases in the group are still filed. When none has been emailed, every other
+ * waiting case moves and the note names the other references. When one has
+ * been emailed, only a later waiting case moves, and it is marked as matching
+ * that sent case. Address is not read.
  */
 export function planUprnDuplicateMoves(
   cases: UprnDuplicateCandidate[]
@@ -151,6 +156,7 @@ type CandidateRow = {
   status: string;
   emailSentAt: Date | null;
   createdAt: Date;
+  notADuplicate: boolean;
 };
 
 const QUIET_MOVE_ERRORS = new Set([
@@ -162,7 +168,7 @@ const QUIET_MOVE_ERRORS = new Set([
 /** Cases that share a UPRN with at least one other case. Address is not compared. */
 async function loadUprnDuplicateCandidates(): Promise<UprnDuplicateCandidate[]> {
   const rows = await prisma.$queryRaw<CandidateRow[]>`
-    SELECT "id", "reference", "uprn", "status", "emailSentAt", "createdAt"
+    SELECT "id", "reference", "uprn", "status", "emailSentAt", "createdAt", "notADuplicate"
     FROM "HhsrsSiteSubmission"
     WHERE btrim("uprn") <> ''
       AND regexp_replace(upper(btrim("uprn")), '\\s+', '', 'g') IN (
@@ -180,13 +186,15 @@ async function loadUprnDuplicateCandidates(): Promise<UprnDuplicateCandidate[]> 
     status: row.status,
     emailSentAt: asDate(row.emailSentAt),
     createdAt: asDate(row.createdAt) || new Date(0),
+    notADuplicate: Boolean(row.notADuplicate),
   }));
 }
 
 /**
  * File waiting UPRN duplicates. Safe to call on submit and again when a
- * reporter page opens: a case already moved, already emailed, or matching
- * only itself is left alone.
+ * reporter page opens: a case already moved, already emailed, marked not a
+ * duplicate, or matching only itself is left alone. Cases nobody has marked
+ * are still filed.
  */
 export async function sweepWaitingUprnDuplicates(): Promise<UprnDuplicateMove[]> {
   try {
