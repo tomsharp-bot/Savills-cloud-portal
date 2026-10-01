@@ -7,6 +7,8 @@
   const showPhotoCount = typeof pendingShowPhotoCount !== "undefined" && pendingShowPhotoCount === true;
   const showReference = typeof pendingShowReference === "undefined" || pendingShowReference !== false;
   const showClaim = typeof pendingShowClaim === "undefined" || pendingShowClaim !== false;
+  const showActioned = typeof pendingShowActioned !== "undefined" && pendingShowActioned === true;
+  const addressFirstLine = typeof pendingAddressFirstLine !== "undefined" && pendingAddressFirstLine === true;
   const sortColumns = typeof pendingSortColumns !== "undefined" && Array.isArray(pendingSortColumns) ? pendingSortColumns : [];
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
@@ -14,6 +16,7 @@
     <colgroup>
       <% if (showReference) { %><col class="c-ref" /><% } %><col class="c-proj" /><col class="c-addr" /><col class="c-ph" />
       <col class="c-uprn" /><col class="c-surv" /><col class="c-cat" /><col class="c-rate" />
+      <% if (showActioned) { %><col class="c-actioned" /><col class="c-by" /><% } %>
       <col class="c-when" /><col class="c-act" />
     </colgroup>
     <thead>
@@ -50,7 +53,16 @@
           <% if (showReference) { %><td class="col-ref"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td><% } %>
           <td class="col-proj"><span class="project-pill"><%= row.projectName %></span></td>
           <td class="addr-cell col-addr">
-            <strong><%= row.fullAddress %></strong>
+            <% if (addressFirstLine) { %>
+              <span class="ml-addr-hover">
+                <strong><%= row.addressLine || row.fullAddress %></strong>
+                <% if (row.fullAddress && row.addressLine && row.fullAddress !== row.addressLine) { %>
+                  <span class="ml-addr-full"><%= row.fullAddress %></span>
+                <% } %>
+              </span>
+            <% } else { %>
+              <strong><%= row.fullAddress %></strong>
+            <% } %>
             <% if (row.amendedNote) { %><span class="ml-amended"><%= row.amendedNote %></span><% } %>
             <% if (showClaim) { %><%- include("claim-chip", { claimRow: claim }) %><% } %>
           </td>
@@ -59,6 +71,10 @@
           <td class="col-surv"><%= row.surveyorName %></td>
           <td class="col-cat"><%= row.category %></td>
           <td class="col-rate <%= ratingDisplayClass(row.rating) %>" title="<%= row.rating %>"><%= row.rating %></td>
+          <% if (showActioned) { %>
+            <td class="col-actioned ml-actioned"><b><%= row.actionedOn || "—" %></b></td>
+            <td class="col-by ml-actioned-by"><b><%= row.actionedBy || "—" %></b></td>
+          <% } %>
           <td class="col-when">
             <span class="<%= ago.urgent ? 'time-ago-urgent' : '' %>"><%= ago.relative %></span>
             <span class="time-ago-abs"><%= ago.absolute %></span>
