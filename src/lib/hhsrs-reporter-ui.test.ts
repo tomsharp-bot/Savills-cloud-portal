@@ -606,7 +606,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(waiting, /> Pending Issues</);
     assert.match(waiting, /<% if \(waitingRows\.length\) \{ %>\s*<span class="count count-received">/);
     assert.match(pending, /Last 20 Issues That Have Been Actioned/);
-    assert.match(css, /#last-actioned-table \{ width: 100%; min-width: 0; \}/);
+    assert.match(css, /#last-actioned-table \{ width: max-content; min-width: 100%; \}/);
     assert.doesNotMatch(css, /#last-actioned-table \{ min-width: 1420px; \}/);
     assert.match(css, /#last-actioned-table tbody td:nth-child\(6\)/);
     assert.match(css, /\.pending-issues-table\.is-noref \.addr-cell > strong \{[^}]*white-space:\s*nowrap/s);
@@ -758,8 +758,38 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.ml-page \.pending-issues-table \{[^}]*font-size:\s*0\.8125rem/);
     assert.match(css, /\.ml-page \.pending-issues-table thead th \{[^}]*font-size:\s*0\.6875rem/);
     assert.match(css, /\.ml-page \.pending-issues-table \.ref-chip \{[^}]*font-size:\s*12\.5px/);
-    assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
-    assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: 12%; \}/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: auto; \}/);
+  });
+
+  it("keeps Pending, Last 20, and Main Log columns on one line", () => {
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-table \{[^}]*table-layout:\s*auto/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-table \{[^}]*width:\s*max-content/);
+    assert.match(
+      css,
+      /\.hhsrs-reporter \.pending-issues-table thead th,\s*\.hhsrs-reporter \.pending-issues-table tbody td \{[^}]*white-space:\s*nowrap/
+    );
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-table \.addr-cell strong \{[^}]*white-space:\s*nowrap/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-table \.time-ago-abs \{[^}]*display:\s*inline/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-table \.btn-review-create \{[^}]*white-space:\s*nowrap/);
+    assert.match(css, /#last-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
+    assert.match(css, /#last-actioned-table \{ width: max-content; min-width: 100%; \}/);
+    assert.match(css, /\.pending-issues-table\.is-noref \.addr-cell > strong \{[^}]*white-space:\s*nowrap/s);
+    assert.doesNotMatch(css, /\.pending-issues-table\.is-noref \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/s);
+    assert.doesNotMatch(css, /#last-actioned-table tbody td:nth-child\(6\)[^{]*\{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(css, /\.ml-page \.ml-amended \{[^}]*display:\s*block/);
+    assert.match(main, /amendedNote: row\.correctedNote \? "Amended" : ""/);
+    assert.match(table, /class="ml-amended"/);
+    assert.doesNotMatch(pending, /amendedNote/);
+    assert.doesNotMatch(find, /amendedNote|ml-amended/);
+    assert.match(css, /\.find-split \{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; \}/);
+    assert.match(find, /class="find-split/);
   });
 
   it("limits every date search year to 4 digits", () => {
