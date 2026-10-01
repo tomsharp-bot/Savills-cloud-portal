@@ -61,7 +61,7 @@ describe("UK map pin rules", () => {
 });
 
 describe("Projects Progress UK map", () => {
-  it("is a fixed outline in the bottom right, with a name-only hover label", () => {
+  it("shows the UK picture at half the previous map size, with a name-only hover label", () => {
     const page = readFileSync(join(root, "views/projects.ejs"), "utf8");
     const css = readFileSync(join(root, "public/css/app.css"), "utf8");
     const script = readFileSync(join(root, "public/js/uk-map.js"), "utf8");
@@ -73,8 +73,8 @@ describe("Projects Progress UK map", () => {
 
     assert.match(page, /class="projects-page"/);
     assert.match(page, /id="uk-map" class="uk-map"/);
-    assert.match(page, /aria-label="Outline of the United Kingdom"/);
-    assert.match(map, /class="uk-map-outline"/);
+    assert.match(map, /class="uk-map-picture" src="<%= baseUrl\('\/img\/uk-map\.jpg'\) %>" width="742" height="1109"/);
+    assert.doesNotMatch(map, /<svg|uk-map-outline/);
     assert.match(map, /class="uk-map-pin-label"><%= pin\.name %>/);
     assert.match(map, /data-can-place="1"/);
     assert.match(map, /id="uk-map-project"/);
@@ -85,10 +85,12 @@ describe("Projects Progress UK map", () => {
     assert.match(widget, /position:\s*fixed/);
     assert.match(widget, /right:\s*12px/);
     assert.match(widget, /bottom:\s*12px/);
-    assert.match(widget, /width:\s*1250px/);
-    assert.match(css, /\.uk-map-canvas\{[^}]*width:\s*1232px/);
-    assert.match(css, /\.uk-map-canvas\{[^}]*height:\s*1663\.2px/);
-    assert.match(css, /\.projects-page \.main\{[^}]*padding-right:\s*1274px/);
+    assert.match(widget, /width:\s*574\.4px/);
+    assert.match(widget, /padding:\s*8px/);
+    assert.match(css, /\.uk-map-canvas\{[^}]*width:\s*556\.4px/);
+    assert.match(css, /\.uk-map-canvas\{[^}]*height:\s*831\.6px/);
+    assert.match(css, /\.uk-map-picture\{[^}]*object-fit:\s*contain/);
+    assert.match(css, /\.projects-page \.main\{[^}]*padding-right:\s*598\.4px/);
     assert.match(css, /\.uk-map-pin:hover \.uk-map-pin-label/);
     assert.match(css, /\.uk-map-pin-label\{[^}]*display:\s*none/);
 
@@ -204,7 +206,9 @@ describe("saving a UK map pin", () => {
     assert.equal(before.status, 200);
     const beforeMap = mapSection(before.body);
     assert.match(beforeMap, /class="uk-map"/);
-    assert.match(beforeMap, /Outline of the United Kingdom/);
+    assert.match(beforeMap, /class="uk-map-picture"/);
+    assert.match(beforeMap, /\/img\/uk-map\.jpg/);
+    assert.match(beforeMap, /width="742" height="1109"/);
     assert.match(beforeMap, new RegExp(`<option value="${current.id}">${currentName}</option>`));
     assert.match(beforeMap, new RegExp(`<option value="${upcoming.id}">${upcomingName}</option>`));
     assert.equal(beforeMap.includes(archiveName), false);
