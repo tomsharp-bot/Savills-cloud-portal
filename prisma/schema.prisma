@@ -73,6 +73,11 @@ model Project {
   hhsrsCode            String            @default("")
   sampleStartDate      String            @default("")
   sampleTargetEndDate  String            @default("")
+  /// Pin on the Projects Progress UK outline. Percent across the map, 0–100.
+  /// Null until an admin drops the project. Archived projects are not shown.
+  mapX                 Float?
+  /// Pin on the Projects Progress UK outline. Percent down the map, 0–100.
+  mapY                 Float?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
   access               ProjectAccess[]

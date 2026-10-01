@@ -23,6 +23,8 @@ function project(partial: Partial<Project> = {}): Project {
     sampleStartDate: "",
     sampleTargetEndDate: "",
     hhsrsCode: "",
+    mapX: null,
+    mapY: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...partial,
