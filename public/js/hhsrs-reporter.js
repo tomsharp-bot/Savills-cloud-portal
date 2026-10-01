@@ -89,10 +89,17 @@
     return null;
   }
 
+  function caseRatingList(scheme) {
+    if (cfg.mode === "filled" && scheme !== "OLD") {
+      return ["Low", "Medium", "High - Emergency risk", "High - Significant risk"];
+    }
+    return (RATING_OPTIONS[scheme] || RATING_OPTIONS.NEW).slice();
+  }
+
   function fillRatingOptions(scheme, preferred) {
     var sel = $("rv-rating");
     if (!sel) return;
-    var opts = RATING_OPTIONS[scheme] || RATING_OPTIONS.NEW;
+    var opts = caseRatingList(scheme);
     var cur = preferred != null ? preferred : sel.value;
     sel.innerHTML = '<option value="">Select…</option>';
     opts.forEach(function (r) {
@@ -115,7 +122,28 @@
     return el ? String(el.value || "").replace(/^\s+|\s+$/g, "") : "";
   }
 
+  function officeRatingNow() {
+    return {
+      rating: fieldText("rv-rating"),
+      baseline: surveyorValue("rating"),
+      project: matchProject(($("rv-project") && $("rv-project").value) || ""),
+    };
+  }
+
+  function officeDroppedNow() {
+    var now = officeRatingNow();
+    return officeDropped(now.project, now.baseline, now.rating);
+  }
+
+  /** Clear or restore before visibility is read, so a drop hides the extras and switching back shows the surveyor's answers. */
+  function applyOfficeRestrictorValues() {
+    if (cfg.mode !== "filled" || !cfg.surveyorCheck || sentStage()) return;
+    if (officeDroppedNow()) clearHighExtras();
+    else if (officeClearedExtras) restoreSurveyorExtras();
+  }
+
   function setExtraVisibility(projectCfg) {
+    applyOfficeRestrictorValues();
     var extras = (projectCfg && projectCfg.extras) || {};
     var site = (projectCfg && projectCfg.siteForm) || {};
     var nodes = document.querySelectorAll("#rv-case-form .project-extra");
@@ -170,6 +198,184 @@
           "<strong>Cornwall online form:</strong> for damp / mould, Tom’s separate online form may still be required after this email. Track that action until completed.";
       }
     }
+    syncOfficeCheck();
+  }
+
+  var officeHoldMessage = "";
+  var officeRatingSeen = null;
+  var officeClearedExtras = false;
+  var HIGH_ONLY_LINE = /^•\s*(?:how many window restrictors are missing|number of window restrictors missing|window restrictors missing|window material|locations?)\s*:/i;
+
+  function ratingText(rating) {
+    return String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+  }
+
+  function usesSevereScale(projectCfg) {
+    return !!(projectCfg && projectCfg.ratingScheme === "OLD");
+  }
+
+  function isNewHigh(rating) {
+    var text = ratingText(rating);
+    return text === "high - emergency risk" || text === "high - significant risk";
+  }
+
+  function isNewLower(rating) {
+    var text = ratingText(rating);
+    return text === "low" || text === "medium";
+  }
+
+  function officeDropped(projectCfg, fromRating, toRating) {
+    if (isNewHigh(fromRating) && isNewLower(toRating)) return true;
+    return usesSevereScale(projectCfg) && ratingText(fromRating) === "severe" && (ratingText(toRating) === "slight" || ratingText(toRating) === "moderate");
+  }
+
+  function officeRaised(projectCfg, fromRating, toRating) {
+    if (isNewLower(fromRating) && isNewHigh(toRating)) return true;
+    return usesSevereScale(projectCfg) && (ratingText(fromRating) === "slight" || ratingText(fromRating) === "moderate") && ratingText(toRating) === "severe";
+  }
+
+  function officeHighNow(projectCfg, rating) {
+    if (isNewHigh(rating)) return true;
+    return usesSevereScale(projectCfg) && ratingText(rating) === "severe";
+  }
+
+  function raiseWord(projectCfg, rating) {
+    return usesSevereScale(projectCfg) && ratingText(rating) === "severe" ? "Severe" : "High";
+  }
+
+  function surveyorValue(key) {
+    var check = cfg.surveyorCheck || {};
+    return String(check[key] || "").replace(/^\s+|\s+$/g, "");
+  }
+
+  function projectCollectsCallReference(projectCfg, rating) {
+    if (!projectCfg) return false;
+    var extras = projectCfg.extras || {};
+    var site = projectCfg.siteForm || {};
+    if (extras.calls || site.calls) return true;
+    return !!(site.mtvh && String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase() === "high - emergency risk");
+  }
+
+  function surveyorCompletedCall() {
+    return !!(surveyorValue("clientCallReference") || surveyorValue("callOutcome") || surveyorValue("callNotes"));
+  }
+
+  function setExtraInputs(node, disabled) {
+    if (!node) return;
+    var inputs = node.querySelectorAll("input, select, textarea");
+    for (var i = 0; i < inputs.length; i++) {
+      if (inputs[i].type === "hidden") continue;
+      inputs[i].disabled = disabled;
+    }
+  }
+
+  function extraBlock(key) {
+    return document.querySelector('#rv-case-form .project-extra[data-extra="' + key + '"]');
+  }
+
+  function setOfficeStar(key, on) {
+    var nodes = document.querySelectorAll('[data-office-star="' + key + '"]');
+    for (var i = 0; i < nodes.length; i++) nodes[i].hidden = !on;
+  }
+
+  function writeRestrictor(id, value) {
+    var el = $(id);
+    if (el) el.value = value;
+  }
+
+  function clearHighExtras() {
+    officeClearedExtras = true;
+    writeRestrictor("rv-restrictor-count", "");
+    writeRestrictor("rv-restrictor-locations", "");
+    writeRestrictor("rv-restrictor-material", "");
+  }
+
+  function restoreSurveyorExtras() {
+    if (!officeClearedExtras) return;
+    officeClearedExtras = false;
+    writeRestrictor("rv-restrictor-count", surveyorValue("restrictorMissingCount"));
+    writeRestrictor("rv-restrictor-locations", surveyorValue("restrictorLocations"));
+    writeRestrictor("rv-restrictor-material", surveyorValue("restrictorMaterial"));
+  }
+
+  function stripHighExtrasFromDraft() {
+    var bodyEl = $("hhsrs-body");
+    if (!bodyEl || bodyEl.readOnly) return;
+    var next = String(bodyEl.value || "")
+      .split("\n")
+      .filter(function (line) { return !HIGH_ONLY_LINE.test(String(line || "").replace(/^\s+|\s+$/g, "")); })
+      .join("\n");
+    if (next !== bodyEl.value) bodyEl.value = next;
+  }
+
+  function markEmailStale() {
+    if (sentStage()) return;
+    emailGenerated = false;
+    var badge = $("rv-email-badge");
+    if (badge && /generated/i.test(badge.textContent || "")) badge.textContent = "Draft";
+  }
+
+  function syncOfficeCheck() {
+    officeHoldMessage = "";
+    if (cfg.mode !== "filled" || !cfg.surveyorCheck || sentStage()) {
+      ["restrictorMissingCount", "restrictorLocations", "restrictorMaterial", "clientCallReference"].forEach(function (key) {
+        setOfficeStar(key, false);
+      });
+      return;
+    }
+    var rating = fieldText("rv-rating");
+    var baseline = surveyorValue("rating");
+    var projectCfg = matchProject(($("rv-project") && $("rv-project").value) || "");
+    var dropped = officeDropped(projectCfg, baseline, rating);
+    var raised = officeRaised(projectCfg, baseline, rating);
+    var ratingChanged = officeRatingSeen !== null && officeRatingSeen !== rating;
+    officeRatingSeen = rating;
+    if (dropped) stripHighExtrasFromDraft();
+    var surveyorHadRestrictors = !!(
+      surveyorValue("restrictorMissingCount") ||
+      surveyorValue("restrictorLocations") ||
+      surveyorValue("restrictorMaterial")
+    );
+    var restrictors = extraBlock("restrictors");
+    if (dropped && restrictors) {
+      restrictors.hidden = true;
+      setExtraInputs(restrictors, true);
+    } else if (restrictors && (raised || (officeHighNow(projectCfg, rating) && surveyorHadRestrictors))) {
+      restrictors.hidden = false;
+      setExtraInputs(restrictors, false);
+    }
+    var wantsCall = raised && projectCollectsCallReference(projectCfg, rating);
+    var calls = extraBlock("calls");
+    if (wantsCall && calls) {
+      calls.hidden = false;
+      setExtraInputs(calls, false);
+      syncCallRefFields();
+    }
+    var missingCount = raised && !surveyorValue("restrictorMissingCount") && !fieldText("rv-restrictor-count");
+    var missingMaterial = raised && !surveyorValue("restrictorMaterial") && !fieldText("rv-restrictor-material");
+    var missingLocations = raised && !surveyorValue("restrictorLocations") && !fieldText("rv-restrictor-locations");
+    var missingCall = wantsCall && !surveyorCompletedCall() && !fieldText("rv-call-ref");
+    setOfficeStar("restrictorMissingCount", raised && !surveyorValue("restrictorMissingCount"));
+    setOfficeStar("restrictorMaterial", raised && !surveyorValue("restrictorMaterial"));
+    setOfficeStar("restrictorLocations", raised && !surveyorValue("restrictorLocations"));
+    setOfficeStar("clientCallReference", wantsCall && !surveyorCompletedCall());
+    var note = $("rv-office-note");
+    if (note) {
+      if (raised && (missingCount || missingMaterial || missingLocations || missingCall)) {
+        note.dataset.office = "rating";
+        note.textContent = "Raised to " + raiseWord(projectCfg, rating) + ", so the office fills the extra details. Red stars mean they are still needed. Send stays off until they are filled.";
+      } else if (dropped) {
+        note.dataset.office = "rating";
+        note.textContent = "Dropped below " + raiseWord(projectCfg, baseline) + ", so the extra details are not needed.";
+      } else if (note.dataset.office === "rating") {
+        note.textContent = "";
+        delete note.dataset.office;
+      }
+    }
+    if (missingCount || missingMaterial || missingLocations || missingCall) {
+      officeHoldMessage = "Raised to " + raiseWord(projectCfg, rating) + ". Fill the extra details before sending.";
+    }
+    if (ratingChanged) markEmailStale();
   }
 
   var MAX_CASE_PHOTOS = 4;
@@ -979,6 +1185,17 @@
     callRefEl.addEventListener("input", syncCallRefFields);
     callRefEl.addEventListener("change", syncCallRefFields);
   }
+  ["rv-restrictor-count", "rv-restrictor-locations", "rv-restrictor-material", "rv-call-ref"].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    var onOfficeField = function () {
+      syncOfficeCheck();
+      if (emailGenerated) markEmailStale();
+      syncSendButton();
+    };
+    el.addEventListener("input", onOfficeField);
+    el.addEventListener("change", onOfficeField);
+  });
 
   var hazardEl = $("rv-hazard");
   if (hazardEl) {
@@ -1948,6 +2165,11 @@
       line.textContent = "Add a subject or body first.";
       return;
     }
+    if (officeHoldMessage) {
+      btn.disabled = true;
+      line.textContent = officeHoldMessage;
+      return;
+    }
     if (!cfg.caseId) {
       var project = ($("rv-project") && String($("rv-project").value || "").trim()) || "";
       var address = ($("rv-address") && String($("rv-address").value || "").trim()) || "";
@@ -2182,6 +2404,19 @@
       $("rv-send-body").value = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
       var holder = $("rv-send-photo-fields");
       holder.innerHTML = "";
+      [
+        ["rating", val("rv-rating")],
+        ["restrictorMissingCount", val("rv-restrictor-count")],
+        ["restrictorLocations", val("rv-restrictor-locations")],
+        ["restrictorMaterial", val("rv-restrictor-material")],
+        ["clientCallReference", val("rv-call-ref")]
+      ].forEach(function (pair) {
+        var input = document.createElement("input");
+        input.type = "hidden";
+        input.name = pair[0];
+        input.value = pair[1];
+        holder.appendChild(input);
+      });
       tickedPhotos().forEach(function (p) {
         var input = document.createElement("input");
         input.type = "hidden";
@@ -2253,6 +2488,25 @@
       clientEmailRemember(next);
     });
   }
+
+  function wireDismissHazard() {
+    var form = $("rv-dismiss-form");
+    var decision = $("rv-decision");
+    var star = $("rv-decision-star");
+    if (!form || !decision) return;
+    form.addEventListener("submit", function (e) {
+      if (String(decision.value || "").replace(/^\s+|\s+$/g, "")) return;
+      e.preventDefault();
+      if (star) star.hidden = false;
+      decision.focus();
+      var note = $("rv-office-note");
+      if (note) {
+        delete note.dataset.office;
+        note.textContent = "Add the decision, then press Dismiss hazard again. No email goes out.";
+      }
+    });
+  }
+  wireDismissHazard();
 
   function wireNotNeeded() {
     var openBtn = $("btn-not-needed");

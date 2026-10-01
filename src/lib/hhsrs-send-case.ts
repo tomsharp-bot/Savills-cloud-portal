@@ -347,6 +347,9 @@ export async function sendCaseEmail(args: {
   actor?: string;
 }): Promise<{ ok: true; warning: string } | { ok: false; error: string }> {
   const correction = args.correction;
+  if (!correction && args.row.status === "dismissed") {
+    return { ok: false, error: "This hazard was dismissed. No email is sent." };
+  }
   if (!correction && args.row.status === "not_needed") {
     return {
       ok: false,

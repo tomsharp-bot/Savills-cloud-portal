@@ -13,7 +13,6 @@ import {
   safeId,
   safeStoredName,
   appendCasePhotos,
-  canonicalRestrictorLocations,
   discardAppendedCasePhotos,
   normalizeUprn,
   reporterCaseDetailExtras,
@@ -51,7 +50,6 @@ import {
   HHSRS_PORTAL_NAME_ALIASES,
   amendmentRatingChoices,
   officeCategoryChoices,
-  officeRatingChoices,
   RATING_OPTIONS,
   SITE_FORM_PUBLIC_URL,
   hhsrsProjectSettings,
@@ -141,6 +139,16 @@ import {
   restoreCaseToPending,
 } from "../lib/hhsrs-not-needed.js";
 import { createOfficeCaseAndSend, officePhotoError } from "../lib/hhsrs-office-case.js";
+import {
+  baselineSurveyorCheck,
+  officeDecisionFields,
+  officeDroppedHighRating,
+  officeRaiseWord,
+  officeSendBlocked,
+  omitClearedHighExtras,
+  restrictorsAfterOfficeDecision,
+  surveyorCheckToStore,
+} from "../lib/hhsrs-office-check.js";
 import { sweepWaitingUprnDuplicates } from "../lib/hhsrs-uprn-duplicates.js";
 import {
   loadSiteFormPhoto,
@@ -572,6 +580,7 @@ async function renderReview(
     showSentPopup,
     ...signature,
     notNeededReasons: NOT_NEEDED_REASONS,
+    surveyorCheck: baselineSurveyorCheck(row.surveyorCheck, row),
   });
 }
 
@@ -1139,15 +1148,17 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
           when: formatLondonDateTime(item.at),
           href: mainLogHref(filters, { open: item.key }),
         })),
-        bodyMissing: panelEntry.kind !== "not_sent" && !panelEntry.body.trim(),
+        bodyMissing: panelEntry.kind !== "not_sent" && panelEntry.kind !== "dismissed" && !panelEntry.body.trim(),
         bodyText: panelEntry.body.trim()
           ? panelEntry.body
-          : panelEntry.kind === "not_sent"
+          : panelEntry.kind === "not_sent" || panelEntry.kind === "dismissed"
             ? ""
             : MISSING_EMAIL_BODY,
         bodyHtml: emailBodyToHtml(panelEntry.body) || (panelEntry.kind === "not_sent"
           ? "<p>Not sent from the portal.</p>"
-          : `<p>${MISSING_EMAIL_BODY}</p>`),
+          : panelEntry.kind === "dismissed"
+            ? ""
+            : `<p>${MISSING_EMAIL_BODY}</p>`),
       }
     : null;
   const signature = signatureLocals(res, await senderSignatureFor(req.user));
@@ -1440,6 +1451,10 @@ hhsrsReporterRouter.post("/review/:id/not-needed", async (req: Request, res: Res
   await handleNotNeeded(req, res, req.params.id);
 });
 
+hhsrsReporterRouter.post("/review/:id/dismiss", async (req: Request, res: Response) => {
+  await handleDismiss(req, res, req.params.id);
+});
+
 hhsrsReporterRouter.get("/duplicates", async (req: Request, res: Response) => {
   await handleDuplicates(req, res);
 });
@@ -1493,7 +1508,7 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   const ctx = await reviewContext(row.id);
   const update = readReporterUpdate(req.body || {});
   // A new rating must be on this project's list. The rating already stored on the case stays valid.
-  const allowedRatings = officeRatingChoices(row.projectName);
+  const allowedRatings = amendmentRatingChoices(row.projectName);
   if (!allowedRatings.includes(update.rating) && update.rating !== row.rating) {
     await renderReview(req, res, row, {
       ...ctx,
@@ -1541,6 +1556,25 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   }
 
   const editor = req.user?.name || req.user?.username || "";
+  const baseline = baselineSurveyorCheck(row.surveyorCheck, row);
+  const restrictors = restrictorsAfterOfficeDecision({
+    projectName: row.projectName,
+    baselineRating: baseline.rating,
+    nextRating: update.rating,
+    current: row,
+    posted: {
+      ...(Object.prototype.hasOwnProperty.call(posted, "restrictorMissingCount")
+        ? { restrictorMissingCount: String(posted.restrictorMissingCount ?? "") }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(posted, "restrictorLocations")
+        ? { restrictorLocations: String(posted.restrictorLocations ?? "") }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(posted, "restrictorMaterial")
+        ? { restrictorMaterial: String(posted.restrictorMaterial ?? "") }
+        : {}),
+    },
+  });
+  const surveyorCheck = surveyorCheckToStore(row.surveyorCheck, row);
   const callPosted =
     Object.prototype.hasOwnProperty.call(posted, "clientCallReference") ||
     Object.prototype.hasOwnProperty.call(posted, "callRefBlankReason");
@@ -1560,17 +1594,12 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
     internalNotes: update.internalNotes,
     status: statusForReviewSave(row.status, update.status),
     lastEditedBy: editor,
+    restrictorMissingCount: restrictors.restrictorMissingCount,
+    restrictorLocations: restrictors.restrictorLocations,
+    restrictorMaterial: restrictors.restrictorMaterial,
+    ...(surveyorCheck ? { surveyorCheck } : {}),
     ...(Object.prototype.hasOwnProperty.call(posted, "otherDetails")
       ? { otherDetails: String(posted.otherDetails ?? "").trim() }
-      : {}),
-    ...(Object.prototype.hasOwnProperty.call(posted, "restrictorMissingCount")
-      ? { restrictorMissingCount: String(posted.restrictorMissingCount ?? "").trim() }
-      : {}),
-    ...(Object.prototype.hasOwnProperty.call(posted, "restrictorLocations")
-      ? { restrictorLocations: canonicalRestrictorLocations(posted.restrictorLocations) }
-      : {}),
-    ...(Object.prototype.hasOwnProperty.call(posted, "restrictorMaterial")
-      ? { restrictorMaterial: String(posted.restrictorMaterial ?? "").trim() }
       : {}),
   };
 
@@ -1644,6 +1673,70 @@ async function deliverCaseEmail(
   });
 }
 
+async function prepareOfficeSend(
+  row: NonNullable<Awaited<ReturnType<typeof loadCase>>>,
+  body: Record<string, unknown>,
+  editor: string
+): Promise<
+  | { ok: true; row: NonNullable<Awaited<ReturnType<typeof loadCase>>>; body: Record<string, unknown> }
+  | { ok: false; error: string }
+> {
+  if (!Object.prototype.hasOwnProperty.call(body, "rating")) return { ok: true, row, body };
+  const nextRating = String(body.rating ?? "").trim();
+  if (!nextRating) return { ok: true, row, body };
+  const allowedRatings = amendmentRatingChoices(row.projectName);
+  if (!allowedRatings.includes(nextRating) && nextRating !== row.rating) {
+    return { ok: false, error: "Select a valid rating for this case." };
+  }
+  const baseline = baselineSurveyorCheck(row.surveyorCheck, row);
+  const postedExtras = ["restrictorMissingCount", "restrictorLocations", "restrictorMaterial"].some((key) =>
+    Object.prototype.hasOwnProperty.call(body, key)
+  );
+  const restrictors = restrictorsAfterOfficeDecision({
+    projectName: row.projectName,
+    baselineRating: baseline.rating,
+    nextRating,
+    current: row,
+    posted: postedExtras
+      ? {
+          restrictorMissingCount: String(body.restrictorMissingCount ?? ""),
+          restrictorLocations: String(body.restrictorLocations ?? ""),
+          restrictorMaterial: String(body.restrictorMaterial ?? ""),
+        }
+      : null,
+  });
+  const postedCall = Object.prototype.hasOwnProperty.call(body, "clientCallReference")
+    ? String(body.clientCallReference ?? "").trim()
+    : "";
+  const clientCallReference = postedCall || row.clientCallReference;
+  const needs = officeDecisionFields({
+    projectName: row.projectName,
+    baseline,
+    nextRating,
+    current: { ...restrictors, clientCallReference },
+  });
+  if (officeSendBlocked(needs)) {
+    const word = officeRaiseWord(row.projectName, nextRating);
+    return { ok: false, error: `Raised to ${word}. Fill the extra details before sending.` };
+  }
+  const surveyorCheck = surveyorCheckToStore(row.surveyorCheck, row);
+  const dropped = officeDroppedHighRating(baseline.rating, nextRating, row.projectName);
+  const outgoing = dropped ? omitClearedHighExtras(String(body.body ?? "")) : String(body.body ?? "");
+  await prisma.hhsrsSiteSubmission.update({
+    where: { id: row.id },
+    data: {
+      rating: nextRating,
+      ...restrictors,
+      ...(postedCall ? { clientCallReference: postedCall } : {}),
+      ...(surveyorCheck ? { surveyorCheck } : {}),
+      lastEditedBy: editor,
+    },
+  });
+  const fresh = await loadCase(row.id);
+  if (!fresh) return { ok: false, error: "Case not found." };
+  return { ok: true, row: fresh, body: { ...body, body: outgoing, rating: nextRating } };
+}
+
 async function handleSend(req: Request, res: Response, id: string): Promise<void> {
   const loaded = await loadCase(id);
   if (!loaded) {
@@ -1663,11 +1756,14 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
     res.redirect(HHSRS_REPORTER_PATH);
     return;
   }
-  const result = await deliverCaseEmail(
-    req,
-    row,
-    (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>
-  );
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const prepared = await prepareOfficeSend(row, body, req.user?.name || req.user?.username || "");
+  if (!prepared.ok) {
+    flashErr(req, prepared.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+    return;
+  }
+  const result = await deliverCaseEmail(req, prepared.row, prepared.body);
   if (!result.ok) {
     flashErr(req, result.error);
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
@@ -1745,6 +1841,59 @@ async function handleOfficeSend(req: Request, res: Response): Promise<void> {
   }
   flashErr(req, result.error);
   finishOfficeSend(req, res, `${HHSRS_REPORTER_PATH}/review`);
+}
+
+async function handleDismiss(req: Request, res: Response, id: string): Promise<void> {
+  const row = await loadCase(id);
+  if (!row) {
+    res.status(404).send("Case not found.");
+    return;
+  }
+  const back = `${HHSRS_REPORTER_PATH}/review/${row.id}`;
+  if (row.emailSentAt || !isWaitingStatus(row.status)) {
+    flashErr(req, "This case is not pending.");
+    res.redirect(back);
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const decision = String(body.decision || "").trim().slice(0, 2000);
+  if (!decision) {
+    flashErr(req, "Add the decision, then press Dismiss hazard again. No email goes out.");
+    res.redirect(back);
+    return;
+  }
+  const expected = new Date(String(body.expectedUpdatedAt || ""));
+  if (Number.isNaN(expected.getTime())) {
+    flashErr(req, "Missing concurrency token. Reload the case and try again.");
+    res.redirect(back);
+    return;
+  }
+  if (row.updatedAt.getTime() !== expected.getTime()) {
+    flashErr(req, "This case was updated by someone else since you opened it. Reload to see their changes, then try again.");
+    res.redirect(back);
+    return;
+  }
+  const names = senderNamesFromLogin(req.user);
+  const viewedBy = names.senderFullName || names.sentBy || "someone";
+  const surveyorCheck = surveyorCheckToStore(row.surveyorCheck, row);
+  const result = await prisma.hhsrsSiteSubmission.updateMany({
+    where: { id: row.id, updatedAt: expected, status: { in: [...HHSRS_WAITING_STATUSES] } },
+    data: {
+      status: "dismissed",
+      dismissedDecision: decision,
+      dismissedBy: viewedBy,
+      dismissedAt: new Date(),
+      lastEditedBy: viewedBy,
+      ...(surveyorCheck ? { surveyorCheck } : {}),
+    },
+  });
+  if (result.count !== 1) {
+    flashErr(req, "This case was updated by someone else since you opened it. Reload to see their changes, then try again.");
+    res.redirect(back);
+    return;
+  }
+  flashOk(req, "Dismissed. No email sent.");
+  res.redirect(`${HHSRS_REPORTER_PATH}/main-log?open=case:${encodeURIComponent(row.id)}`);
 }
 
 async function handleNotNeeded(req: Request, res: Response, id: string): Promise<void> {

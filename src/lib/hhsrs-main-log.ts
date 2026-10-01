@@ -10,6 +10,7 @@ import { prisma } from "./prisma.js";
 import { loadPortalProjectNames, storedNamesForPortalProject } from "./hhsrs-portal-projects.js";
 import { HHSRS_ACTIONED_STATUSES, ratingDisplayClass } from "./hhsrs-reporter.js";
 import { formatLondonDateTime, londonDayBounds, MISSING_EMAIL_BODY } from "./hhsrs-find.js";
+import { dismissLogLine } from "./hhsrs-office-check.js";
 
 export const MAIN_LOG_PAGE_SIZE = 50;
 export const NOT_SENT_LABEL = "Not sent from portal";
@@ -100,7 +101,7 @@ export type MainLogFilters = {
   projectMatchNames?: string[];
 };
 
-export type MainLogKind = "original" | "correction" | "not_sent";
+export type MainLogKind = "original" | "correction" | "not_sent" | "dismissed";
 
 export type MainLogEntry = {
   key: string;
@@ -134,6 +135,8 @@ export type MainLogEntry = {
   corrections: Array<{ key: string; at: Date; reason: string }>;
   /** The row stands for a case that has a correction, including when the link is missing. */
   amended?: boolean;
+  /** Dismissed rows: who viewed the case, the decision, and that it was dismissed. */
+  logLine?: string;
 };
 
 type SortItem = {
@@ -228,6 +231,7 @@ export function emailAddressOnly(from: string): string {
 export function mainLogTypeLabel(kind: MainLogKind): string {
   if (kind === "correction") return "Correction";
   if (kind === "not_sent") return NOT_SENT_LABEL;
+  if (kind === "dismissed") return "Dismissed";
   return "Original";
 }
 
@@ -307,6 +311,17 @@ export function mainLogEmailWhere(filters: MainLogFilters): Prisma.HhsrsSentEmai
   const submission = submissionSearch(filters);
   if (submission) where.submission = submission;
   return where;
+}
+
+export function mainLogDismissedWhere(filters: MainLogFilters): Prisma.HhsrsSiteSubmissionWhereInput | null {
+  if (filters.type === "original" || filters.type === "correction" || filters.type === "not_sent") return null;
+  const and: Prisma.HhsrsSiteSubmissionWhereInput[] = [{ status: "dismissed" }];
+  const submission = submissionSearch(filters);
+  if (submission?.AND) and.push(...(submission.AND as Prisma.HhsrsSiteSubmissionWhereInput[]));
+  if (filters.by) and.push({ dismissedBy: filters.by });
+  const range = sentRange(filters);
+  if (range.gte || range.lt) and.push({ dismissedAt: range });
+  return { AND: and };
 }
 
 export function mainLogNotSentWhere(filters: MainLogFilters): Prisma.HhsrsSiteSubmissionWhereInput | null {
@@ -437,7 +452,7 @@ export function collapseCaseRows(items: SortItem[]): {
 
   const caseAnchor = new Map<string, string>();
   for (const item of items) {
-    if (item.kind === "not_sent" || !item.caseKey) continue;
+    if (item.kind === "not_sent" || item.kind === "dismissed" || !item.caseKey) continue;
     const anchor = caseAnchor.get(item.caseKey);
     if (anchor) unionGroup(parent, anchor, item.key);
     else caseAnchor.set(item.caseKey, item.key);
@@ -616,6 +631,10 @@ type CaseRow = {
   updatedAt: Date;
   emailSubject: string;
   emailBody: string;
+  status?: string;
+  dismissedDecision?: string;
+  dismissedBy?: string;
+  dismissedAt?: Date | null;
 };
 
 function namesOf(value: unknown): string[] {
@@ -669,10 +688,13 @@ function emailEntry(row: EmailRow): MainLogEntry {
 function caseEntry(row: CaseRow): MainLogEntry {
   const address = splitAddress(row.fullAddress, row.postcode);
   const photos = namesOf(row.photoPaths).map((path) => path.split("/").filter(Boolean).pop() || path);
+  const dismissed = row.status === "dismissed";
+  const viewedBy = row.dismissedBy || row.emailSentBy || row.lastEditedBy || "";
   return {
     key: `case:${row.id}`,
-    kind: "not_sent",
-    at: row.emailSentAt || row.updatedAt,
+    kind: dismissed ? "dismissed" : "not_sent",
+    at: dismissed ? row.dismissedAt || row.updatedAt : row.emailSentAt || row.updatedAt,
+    logLine: dismissed ? dismissLogLine(viewedBy, row.dismissedDecision || "") : "",
     reference: row.reference || "",
     projectName: row.projectName,
     uprn: row.uprn,
@@ -683,7 +705,7 @@ function caseEntry(row: CaseRow): MainLogEntry {
     rating: row.rating,
     surveyorName: row.surveyorName,
     createdAt: row.createdAt,
-    sentBy: row.emailSentBy || row.lastEditedBy || "",
+    sentBy: dismissed ? viewedBy : row.emailSentBy || row.lastEditedBy || "",
     to: "",
     cc: "",
     bcc: "",
@@ -794,11 +816,21 @@ function columnValues(input: {
   };
 }
 
+function dismissedSortItem(row: { id: string; dismissedAt: Date | null; updatedAt: Date }): SortItem {
+  return {
+    key: `case:${row.id}`,
+    kind: "dismissed",
+    at: (row.dismissedAt || row.updatedAt).getTime(),
+    correctsKey: null,
+  };
+}
+
 async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
   const emailWhere = mainLogEmailWhere(filters);
   const caseWhere = mainLogNotSentWhere(filters);
+  const dismissedWhere = mainLogDismissedWhere(filters);
   if (!filters.sort) {
-    const [emails, cases] = await Promise.all([
+    const [emails, cases, dismissed] = await Promise.all([
       emailWhere
         ? prisma.hhsrsSentEmail.findMany({
             where: emailWhere,
@@ -811,6 +843,12 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
             select: { id: true, emailSentAt: true, updatedAt: true },
           })
         : Promise.resolve([]),
+      dismissedWhere
+        ? prisma.hhsrsSiteSubmission.findMany({
+            where: dismissedWhere,
+            select: { id: true, dismissedAt: true, updatedAt: true },
+          })
+        : Promise.resolve([]),
     ]);
     return [
       ...emails.map((row) => emailSortBase(row)),
@@ -820,9 +858,10 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
         at: (row.emailSentAt || row.updatedAt).getTime(),
         correctsKey: null,
       })),
+      ...dismissed.map((row) => dismissedSortItem(row)),
     ];
   }
-  const [emails, cases] = await Promise.all([
+  const [emails, cases, dismissed] = await Promise.all([
     emailWhere
       ? prisma.hhsrsSentEmail.findMany({
           where: emailWhere,
@@ -874,6 +913,27 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
           },
         })
       : Promise.resolve([]),
+    dismissedWhere
+      ? prisma.hhsrsSiteSubmission.findMany({
+          where: dismissedWhere,
+          select: {
+            id: true,
+            dismissedAt: true,
+            updatedAt: true,
+            reference: true,
+            projectName: true,
+            uprn: true,
+            fullAddress: true,
+            postcode: true,
+            category: true,
+            rating: true,
+            surveyorName: true,
+            createdAt: true,
+            dismissedBy: true,
+            photoPaths: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
   return [
     ...emails.map((row) => {
@@ -914,6 +974,24 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
         to: "",
         photos: row.photoPaths,
         kind: "not_sent",
+        surveyorName: row.surveyorName,
+        createdAt: row.createdAt,
+      }),
+    })),
+    ...dismissed.map((row) => ({
+      ...dismissedSortItem(row),
+      ...columnValues({
+        reference: row.reference,
+        projectName: row.projectName,
+        uprn: row.uprn,
+        fullAddress: row.fullAddress,
+        postcode: row.postcode,
+        category: row.category,
+        rating: row.rating,
+        sentBy: row.dismissedBy || "",
+        to: "",
+        photos: row.photoPaths,
+        kind: "dismissed",
         surveyorName: row.surveyorName,
         createdAt: row.createdAt,
       }),
@@ -1001,10 +1079,15 @@ async function loadOpenEntry(open: string): Promise<MainLogEntry | null> {
     return row ? emailEntry(row) : null;
   }
   if (open.startsWith("case:")) {
+    const id = open.slice(5);
     const row = await prisma.hhsrsSiteSubmission.findFirst({
-      where: { id: open.slice(5), status: { in: [...HHSRS_ACTIONED_STATUSES] }, sentEmails: { none: {} } },
+      where: { id, status: { in: [...HHSRS_ACTIONED_STATUSES] }, sentEmails: { none: {} } },
     });
-    return row ? caseEntry(row) : null;
+    if (row) return caseEntry(row);
+    const dismissed = await prisma.hhsrsSiteSubmission.findFirst({
+      where: { id, status: "dismissed" },
+    });
+    return dismissed ? caseEntry(dismissed) : null;
   }
   return null;
 }
@@ -1016,11 +1099,16 @@ async function projectNames(selected = ""): Promise<string[]> {
 }
 
 async function senderNames(): Promise<string[]> {
-  const [sent, cases] = await Promise.all([
+  const [sent, cases, dismissed] = await Promise.all([
     prisma.hhsrsSentEmail.findMany({ distinct: ["sentBy"], select: { sentBy: true } }),
     prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_ACTIONED_STATUSES] }, sentEmails: { none: {} } },
       select: { emailSentBy: true, lastEditedBy: true },
+    }),
+    prisma.hhsrsSiteSubmission.findMany({
+      where: { status: "dismissed" },
+      distinct: ["dismissedBy"],
+      select: { dismissedBy: true },
     }),
   ]);
   const names = new Set<string>();
@@ -1029,17 +1117,19 @@ async function senderNames(): Promise<string[]> {
     const name = row.emailSentBy || row.lastEditedBy;
     if (name) names.add(name);
   }
+  for (const row of dismissed) if (row.dismissedBy) names.add(row.dismissedBy);
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 async function unfilteredCount(): Promise<number> {
-  const [emails, cases] = await Promise.all([
+  const [emails, cases, dismissed] = await Promise.all([
     prisma.hhsrsSentEmail.count(),
     prisma.hhsrsSiteSubmission.count({
       where: { status: { in: [...HHSRS_ACTIONED_STATUSES] }, sentEmails: { none: {} } },
     }),
+    prisma.hhsrsSiteSubmission.count({ where: { status: "dismissed" } }),
   ]);
-  return emails + cases;
+  return emails + cases + dismissed;
 }
 
 export async function loadMainLogExport(query: Record<string, unknown>): Promise<{ filters: MainLogFilters; entries: MainLogEntry[] }> {
@@ -1069,7 +1159,7 @@ export function casePhotoViews(
   reporterBase: string
 ): Array<{ name: string; url: string }> {
   const paths = namesOf(entry.photoPaths);
-  const wanted = entry.kind === "not_sent"
+  const wanted = entry.kind === "not_sent" || entry.kind === "dismissed"
     ? paths.map((path) => path.split("/").filter(Boolean).pop() || path).filter(Boolean)
     : entry.photoNames;
   return wanted.map((name) => {
@@ -1110,7 +1200,7 @@ export async function buildMainLogWorkbook(input: MainLogExcelInput): Promise<Bu
   input.entries.forEach((entry, index) => {
     const when = formatLondonDateTime(entry.at).split(" ");
     const correction = entry.kind === "correction";
-    const sent = entry.kind !== "not_sent";
+    const sent = entry.kind === "original" || entry.kind === "correction";
     const values: Array<string | number | null> = [
       when[0] || null,
       when[1] || null,
@@ -1118,7 +1208,13 @@ export async function buildMainLogWorkbook(input: MainLogExcelInput): Promise<Bu
       mainLogTypeLabel(entry.kind),
       correction && entry.originalSentAt ? formatLondonDateTime(entry.originalSentAt) : null,
       correction ? entry.correctionReason || null : null,
-      correction ? entry.correctionNote || null : entry.amended || entry.corrections.length ? "Amended" : null,
+      correction
+        ? entry.correctionNote || null
+        : entry.kind === "dismissed"
+          ? entry.logLine || null
+          : entry.amended || entry.corrections.length
+            ? "Amended"
+            : null,
       entry.projectName || null,
       entry.uprn || null,
       entry.lineAddress || null,

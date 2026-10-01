@@ -30,6 +30,7 @@
     send: <%- JSON.stringify(typeof sendConfig !== 'undefined' ? sendConfig : null) %>,
     signature: <%- JSON.stringify(typeof emailSignature !== 'undefined' ? emailSignature : null) %>,
     findResend: <%- JSON.stringify(typeof findResend !== 'undefined' ? findResend : false) %>,
+    surveyorCheck: <%- JSON.stringify(typeof surveyorCheck !== 'undefined' ? surveyorCheck : null) %>,
     serverDraft: <%- JSON.stringify({
       to: typeof draftTo !== 'undefined' ? draftTo : '',
       cc: typeof draftCc !== 'undefined' ? draftCc : '',
