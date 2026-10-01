@@ -11,6 +11,8 @@ import {
   parseSavedBoard,
   approxSurveysOnGrid,
   programmeCellMatchesProject,
+  jobTileColor,
+  jobTileColorKey,
   programmeShortLabel,
   programmeVisibleWeeks,
   projectWeeksOnGrid,
@@ -703,5 +705,70 @@ describe("buildProgrammeTables", () => {
       seededSurveyTypes(projects[0]),
       "Condition Only, Condition + EPC, Blocks"
     );
+  });
+});
+
+describe("job tile colours", () => {
+  const catalogue = ["LFHA 2026", "A2Dominion 2026 - Ph4", "Cornwall 2026 Ph2", "Vico 2026", "Onward", "MTVH", "BPHA 2026 ACQ"];
+
+  function contrast(background: string, color: string): number {
+    const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    const lum = (hex: string) => rgb(hex).reduce((sum, v, i) => sum + [0.2126, 0.7152, 0.0722][i] * lin(v), 0);
+    const hi = Math.max(lum(background), lum(color));
+    const lo = Math.min(lum(background), lum(color));
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  it("uses one colour for a project on the stamp and on the grid, including its short name", () => {
+    assert.deepEqual(jobTileColor("LFHA", catalogue), jobTileColor("LFHA 2026", catalogue));
+    assert.deepEqual(jobTileColor("A2D Ph4", catalogue), jobTileColor("A2Dominion 2026 - Ph4", catalogue));
+    assert.deepEqual(jobTileColor("Cornwall", catalogue), jobTileColor("Cornwall 2026 Ph2", catalogue));
+    assert.equal(jobTileColorKey("LFHA", catalogue), "LFHA 2026");
+    assert.equal(jobTileColorKey("LFHA 2026", catalogue), "LFHA 2026");
+    const seen = new Map<string, string>();
+    for (const name of catalogue) {
+      const bg = jobTileColor(name, catalogue).background;
+      assert.equal(seen.has(bg), false, `${name} shares ${bg} with ${seen.get(bg)}`);
+      seen.set(bg, name);
+      assert.ok(contrast(jobTileColor(name, catalogue).background, jobTileColor(name, catalogue).color) >= 4.5);
+    }
+  });
+
+  it("keeps Holiday and other labels on their own colours", () => {
+    const holiday = jobTileColor("Holiday", catalogue);
+    const festive = jobTileColor("Festive Period", catalogue);
+    const other = jobTileColor("OTHER WORK", catalogue);
+    assert.notDeepEqual(holiday, festive);
+    assert.notDeepEqual(holiday, other);
+    assert.notDeepEqual(festive, jobTileColor("MTVH", catalogue));
+    assert.deepEqual(jobTileColor("Holiday", catalogue), jobTileColor("  Holiday  ", catalogue));
+    assert.notDeepEqual(jobTileColor("Vico", ["Vico", "Vico 2026"]), jobTileColor("Vico 2026", ["Vico", "Vico 2026"]));
+  });
+
+  it("paints the top project tiles and the week cells with the same browser colours", () => {
+    const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
+    assert.match(script, /tile\.className = "palette-tile"/);
+    assert.match(script, /jobTileColor\(name, catalogue\)/);
+    assert.match(script, /jobTileColor\(val, collectPaletteProjects\(\)\)/);
+    assert.doesNotMatch(script.slice(script.indexOf("function buildPalette"), script.indexOf("function fillPool")), /palette-tile " \+ st\.cls/);
+    const matchPart = script.slice(script.indexOf("var SHORT_LABELS"), script.indexOf("function adminCanonSet"));
+    const colorPart = script.slice(script.indexOf("function jobTileHash"), script.indexOf("function paintCell"));
+    const context: {
+      jobTileColor?: (text: string, catalogue?: string[]) => { background: string; color: string };
+      jobTileColorKey?: (text: string, catalogue?: string[]) => string;
+    } = {};
+    vm.runInNewContext(`${matchPart}\n${colorPart}`, context);
+    function sameTone(text: string) {
+      const fromBrowser = context.jobTileColor!(text, catalogue);
+      const fromServer = jobTileColor(text, catalogue);
+      assert.equal(fromBrowser.background, fromServer.background, text);
+      assert.equal(fromBrowser.color, fromServer.color, text);
+    }
+    sameTone("LFHA");
+    sameTone("LFHA 2026");
+    sameTone("Holiday");
+    assert.equal(context.jobTileColorKey!("A2D Ph4", catalogue), jobTileColorKey("A2D Ph4", catalogue));
+    assert.equal(context.jobTileColorKey!("Festive Period", catalogue), "Festive Period");
   });
 });

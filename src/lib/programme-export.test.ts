@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
+import { jobTileColor } from "./programme.js";
 import {
   buildProgrammeWorkbook,
   parseProgrammeExport,
@@ -17,6 +18,11 @@ function patternFill(cell: ExcelJS.Cell): string | undefined {
   const fill = cell.fill;
   if (fill && fill.type === "pattern") return fill.fgColor?.argb;
   return undefined;
+}
+
+function tileArgb(text: string, catalogue: readonly string[]): { bg: string; fg: string } {
+  const tone = jobTileColor(text, catalogue);
+  return { bg: "FF" + tone.background.slice(1).toUpperCase(), fg: "FF" + tone.color.slice(1).toUpperCase() };
 }
 
 describe("programme Excel export", () => {
@@ -95,13 +101,15 @@ describe("programme Excel export", () => {
     assert.equal(programme.getCell("B3").font?.color?.argb, "FF0B1F33");
     assert.equal(programme.getCell("B3").font?.bold, true);
     assert.equal(patternFill(programme.getCell("A3")), "FFF0F3F6");
+    const exportCatalogue = ["Onward", "LFHA 2026", "Only off the board"];
     assert.equal(programme.getCell("D3").value, "Onward");
-    assert.equal(patternFill(programme.getCell("D3")), "FFD9EAD3");
-    assert.equal(programme.getCell("D3").font?.color?.argb, "FF1E3D1A");
+    assert.equal(patternFill(programme.getCell("D3")), tileArgb("Onward", exportCatalogue).bg);
+    assert.equal(programme.getCell("D3").font?.color?.argb, tileArgb("Onward", exportCatalogue).fg);
     assert.equal(programme.getCell("E3").value, "Holiday");
-    assert.equal(patternFill(programme.getCell("E3")), "FFEEEEEE");
-    assert.equal(programme.getCell("E3").font?.color?.argb, "FFC62828");
+    assert.equal(patternFill(programme.getCell("E3")), tileArgb("Holiday", exportCatalogue).bg);
+    assert.equal(programme.getCell("E3").font?.color?.argb, tileArgb("Holiday", exportCatalogue).fg);
     assert.equal(programme.getCell("E3").font?.bold, true);
+    assert.notEqual(patternFill(programme.getCell("D3")), patternFill(programme.getCell("E3")));
 
     assert.equal(programme.getCell("B4").value, "Greg Kowalski");
     assert.equal(patternFill(programme.getCell("B4")), "FFEEF3F8");
@@ -110,8 +118,9 @@ describe("programme Excel export", () => {
     assert.equal(programme.getCell("A4").value, "Yes");
     assert.equal(patternFill(programme.getCell("A4")), "FFE8EEF5");
     assert.equal(programme.getCell("E4").value, "LFHA 2026");
-    assert.equal(patternFill(programme.getCell("E4")), "FFFCE5CD");
-    assert.equal(programme.getCell("E4").font?.color?.argb, "FF6B3F00");
+    assert.equal(patternFill(programme.getCell("E4")), tileArgb("LFHA 2026", exportCatalogue).bg);
+    assert.equal(programme.getCell("E4").font?.color?.argb, tileArgb("LFHA 2026", exportCatalogue).fg);
+    assert.notEqual(patternFill(programme.getCell("E4")), patternFill(programme.getCell("D3")));
 
     assert.equal(programme.getCell("B5").value, "Ada Blank");
     assert.equal(programme.getCell("C5").value, "F");

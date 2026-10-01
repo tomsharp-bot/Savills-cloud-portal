@@ -350,11 +350,14 @@
     lab.className = "palette-label";
     lab.textContent = "Projects:";
     palette.appendChild(lab);
-    collectPaletteProjects().forEach(function (name) {
+    var catalogue = collectPaletteProjects();
+    catalogue.forEach(function (name) {
       var st = styleFor(name);
       var tile = document.createElement("span");
-      tile.className = "palette-tile " + st.cls;
-      if (isHoliday(name)) tile.classList.add("leave");
+      var tone = jobTileColor(name, catalogue);
+      tile.className = "palette-tile";
+      tile.style.background = tone.background;
+      tile.style.color = tone.color;
       tile.textContent = st.short || name;
       tile.title = name + " — drag onto a surveyor week to stamp";
       tile.setAttribute("aria-label", name);
@@ -482,11 +485,96 @@
     span.classList.add("is-selected");
   }
 
+  // Keep in step with jobTileColorKey() and jobTileColor() in src/lib/programme.ts.
+  function jobTileHash(text) {
+    var hash = 0x811c9dc5;
+    for (var i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return hash >>> 0;
+  }
+
+  function jobTileHslHex(hue, satPercent, lightPercent) {
+    var s = satPercent / 100;
+    var l = lightPercent / 100;
+    var chroma = (1 - Math.abs(2 * l - 1)) * s;
+    var hp = hue / 60;
+    var x = chroma * (1 - Math.abs((hp % 2) - 1));
+    var r = 0;
+    var g = 0;
+    var b = 0;
+    if (hp < 1) {
+      r = chroma;
+      g = x;
+    } else if (hp < 2) {
+      r = x;
+      g = chroma;
+    } else if (hp < 3) {
+      g = chroma;
+      b = x;
+    } else if (hp < 4) {
+      g = x;
+      b = chroma;
+    } else if (hp < 5) {
+      r = x;
+      b = chroma;
+    } else {
+      r = chroma;
+      b = x;
+    }
+    var m = l - chroma / 2;
+    function channel(value) {
+      return Math.round(Math.max(0, Math.min(1, value + m)) * 255).toString(16).padStart(2, "0");
+    }
+    return "#" + channel(r) + channel(g) + channel(b);
+  }
+
+  function jobTileColorKey(text, catalogue) {
+    var value = String(text || "").replace(/\s+/g, " ").trim();
+    if (!value) return "";
+    var names = [];
+    (catalogue || []).forEach(function (name) {
+      var cleaned = String(name || "").replace(/\s+/g, " ").trim();
+      if (cleaned) names.push(cleaned);
+    });
+    var matched = {};
+    var order = [];
+    for (var i = 0; i < names.length; i++) {
+      if (!programmeCellMatches(value, names[i], names)) continue;
+      var key = programmeCanon(names[i]);
+      if (!matched[key]) {
+        matched[key] = names[i];
+        order.push(key);
+      }
+    }
+    if (order.length === 1) return matched[order[0]];
+    return value;
+  }
+
+  function jobTileColor(text, catalogue) {
+    var value = jobTileColorKey(text, catalogue);
+    var hash = jobTileHash(value);
+    var hue = (hash * 163) % 360;
+    var sat = 52 + ((hash >>> 8) % 5) * 3;
+    var bgL = 76 + ((hash >>> 16) % 4) * 2;
+    return {
+      background: jobTileHslHex(hue, sat, bgL),
+      color: jobTileHslHex(hue, Math.min(78, sat + 12), 18)
+    };
+  }
+
   function paintCell(span, val, personName, wi) {
     var st = styleFor(val);
-    span.className = "cell " + st.cls + (val ? "" : " empty");
+    span.className = "cell" + (val ? "" : " empty");
     span.textContent = st.short;
-    if (isHoliday(val)) span.classList.add("leave");
+    span.style.background = "";
+    span.style.color = "";
+    if (val) {
+      var tone = jobTileColor(val, collectPaletteProjects());
+      span.style.background = tone.background;
+      span.style.color = tone.color;
+    }
     span.dataset.value = val || "";
     span.dataset.wi = String(wi);
     var wk = fmtWeek(DATA.weeks[wi]).label;
