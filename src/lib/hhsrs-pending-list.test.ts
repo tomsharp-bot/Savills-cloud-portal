@@ -149,7 +149,9 @@ function tableSlice(html: string, tableId: string): string {
 function headers(html: string, tableId: string): string[] {
   const head = tableSlice(html, tableId);
   const thead = head.slice(head.indexOf("<thead>"), head.indexOf("</thead>"));
-  return [...thead.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
+  return [...thead.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)]
+    .map((match) => match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
 }
 
 function references(html: string, tableId: string): string[] {
@@ -301,7 +303,21 @@ describe("pending and review lists", () => {
     const pendingWaiting = pendingRowHtml.filter((row) => !isPendingDupeRow(row));
     const reviewRefs = references(review.body, "rv-also-table");
     const reviewAddresses = addresses(review.body, "rv-also-table");
-    assert.deepEqual(reviewAddresses, addressesInRows(pendingWaiting));
+    const pendingWaitingAddresses = addressesInRows(pendingWaiting);
+    assert.deepEqual([...pendingWaitingAddresses].sort(), [...reviewAddresses].sort());
+    const own = (list: string[]) => list.filter((address) => address.includes(`${stamp} Harbour Lane`));
+    const pendingOwn = own(pendingWaitingAddresses);
+    const reviewOwn = own(reviewAddresses);
+    assert.equal(reviewOwn[0], `1 ${stamp} Harbour Lane`);
+    assert.equal(pendingOwn[0], `22 ${stamp} Harbour Lane`);
+    assert.deepEqual(pendingOwn, [...reviewOwn].reverse());
+    const pendingSection = pending.body.slice(pending.body.indexOf('id="not-actioned"'), pending.body.indexOf('id="last-actioned"'));
+    assert.match(pendingSection, /class="pending-sort-default on"/);
+    assert.match(pendingSection, /Project, then highest rating, then longest wait/);
+    assert.match(pendingSection, /href="\/HHSRSreporter\?sort=rating"/);
+    assert.equal(tableSlice(pending.body, "last-actioned-table").includes("ml-sort"), false);
+    assert.equal(tableSlice(review.body, "rv-also-table").includes("ml-sort"), false);
+    assert.doesNotMatch(review.body, /pending-sort-default/);
     assert.equal(pendingRowHtml.length, badgeCount(pending.body, "not-actioned"));
     assert.equal(rowCount(review.body, "rv-also-table"), badgeCount(review.body, "rv-also-waiting"));
     assert.equal(pendingWaiting.length, badgeCount(review.body, "rv-also-waiting"));
@@ -316,6 +332,17 @@ describe("pending and review lists", () => {
       assert.equal(reviewRefs.includes(reference), false, reference);
       assert.equal(tableSlice(pending.body, "last-actioned-table").includes(reference), false);
     }
+
+    const byRating = await request(app, "GET", "/HHSRSreporter?sort=rating", { cookie });
+    assert.equal(byRating.status, 200);
+    const ratingSection = byRating.body.slice(byRating.body.indexOf('id="not-actioned"'), byRating.body.indexOf('id="last-actioned"'));
+    assert.match(ratingSection, /class="pending-sort-default"/);
+    assert.doesNotMatch(ratingSection, /pending-sort-default on/);
+    assert.match(ratingSection, /aria-sort="descending"/);
+    assert.match(ratingSection, /Highest rating first/);
+    assert.equal(own(addresses(byRating.body, "waiting-table"))[0], `1 ${stamp} Harbour Lane`);
+    assert.equal(tableSlice(byRating.body, "last-actioned-table").includes("ml-sort"), false);
+    assert.deepEqual(headers(byRating.body, "last-actioned-table"), LIST_HEADERS);
 
     const opened = await request(app, "GET", `/HHSRSreporter/review/${open.id}`, { cookie });
     assert.equal(opened.status, 200);

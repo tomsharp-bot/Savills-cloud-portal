@@ -74,6 +74,12 @@ import {
   pendingIssueListArgs,
   withoutOpenCase,
 } from "../lib/hhsrs-pending-list.js";
+import {
+  parsePendingSort,
+  pendingIssueSortColumns,
+  pendingSortFoot,
+  sortPendingIssues,
+} from "../lib/hhsrs-pending-sort.js";
 import { claimHeldMessage, claimRowClass, claimView, claimerLabel, otherClaimer, type ClaimView } from "../lib/hhsrs-claims.js";
 import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
@@ -405,6 +411,7 @@ hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Respo
 
 /* ---------- Pending Issues ---------- */
 hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
+  const pendingSort = parsePendingSort(req.query.sort);
   const [waitingOnly, duplicateRows, actionedRows, summary] = await Promise.all([
     prisma.hhsrsSiteSubmission.findMany(pendingIssueListArgs()),
     prisma.hhsrsSiteSubmission.findMany(pendingDuplicateListArgs()),
@@ -420,8 +427,11 @@ hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
   res.render("hhsrs-reporter/pending", {
     ...shellLocals({ activeNav: "pending", summary, flashOk: flash.ok, flashErr: flash.err }),
     user: req.user,
-    waitingRows,
+    waitingRows: sortPendingIssues(waitingRows, pendingSort),
     actionedRows,
+    pendingSort,
+    pendingIssueSortColumns: pendingIssueSortColumns(pendingSort, HHSRS_REPORTER_PATH),
+    pendingSortFoot: pendingSortFoot(pendingSort),
   });
 });
 
