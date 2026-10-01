@@ -97,6 +97,8 @@ describe("HHSRS Reporter projectDraft", () => {
     );
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
+    assert.doesNotMatch(draft.body, /This notification has been adjusted after review/);
+    assert.doesNotMatch(draft.body, /Please disregard/);
   });
 
   it("keeps BPHA subject and omits the surveyor-visit intro", () => {
