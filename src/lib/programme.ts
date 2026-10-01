@@ -830,13 +830,31 @@ function programmeStampKey(name: string): string {
 }
 
 /**
+ * Project name with a year or a trailing number taken off.
+ * "MTVH 2026" and "MTVH 20126" both become "mtvh". "Leeds North 2026" stays
+ * "leeds north", so a shared first word does not join two projects.
+ */
+export function programmeCore(name: string): string {
+  return programmeCanon(name)
+    .replace(/\b20\d{2}\b/g, " ")
+    .replace(/[-_/.,()]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(?:\s+\d{2,})+$/g, "")
+    .trim();
+}
+
+/**
  * True when a main-grid cell is this project.
  *
  * Exact names match first. Otherwise the cell counts when it is the project's
  * short stamp, or when the cell's short stamp is the project's full name
  * (`LFHA` ↔ `LFHA 2026`, `A2D Ph4` ↔ `A2Dominion 2026 - Ph4`, `Cornwall` ↔
- * `Cornwall 2026 Ph2`). If another Current/Upcoming project already owns that
- * text exactly, or more than one project shares the stamp, the alias is not used.
+ * `Cornwall 2026 Ph2`). A name of 12 characters or fewer keeps its year on the
+ * stamp, so "MTVH" also counts for "MTVH 2026" or "MTVH 20126" when that is
+ * the only project with that core. The same applies to Onward and Leeds.
+ * If another Current/Upcoming project already owns that text exactly, or more
+ * than one project shares the stamp or the core, the alias is not used.
  */
 export function programmeCellMatchesProject(
   cell: string,
@@ -861,6 +879,18 @@ export function programmeCellMatchesProject(
 
   if (cellStamp && cellStamp !== cellKey && cellStamp === projectKey) {
     const claimants = names.filter((name) => programmeCanon(name) === cellStamp);
+    return claimants.length === 1 && programmeCanon(claimants[0]) === projectKey;
+  }
+
+  const projectCore = programmeCore(projectName);
+  if (cellKey === projectCore && cellKey !== projectKey) {
+    const claimants = names.filter((name) => programmeCore(name) === cellKey);
+    return claimants.length === 1 && programmeCanon(claimants[0]) === projectKey;
+  }
+
+  const cellCore = programmeCore(cell);
+  if (cellCore === projectKey && cellCore !== cellKey) {
+    const claimants = names.filter((name) => programmeCore(name) === projectKey);
     return claimants.length === 1 && programmeCanon(claimants[0]) === projectKey;
   }
 
