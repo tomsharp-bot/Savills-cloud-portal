@@ -31,6 +31,7 @@ import {
   type StatusCountRow,
 } from "../lib/sample-status-counts.js";
 import { buildCurrentProjectTileStats, type ProjectTileStats } from "../lib/project-tile-stats.js";
+import { mapChoiceProjects, mapPinProjects, parseMapPosition, projectCanBePinned } from "../lib/project-map.js";
 import { ADMIN_EDIT_STOCK_COLS, STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "../lib/stock-columns.js";
 import { loadStockWindow } from "../lib/stock-query.js";
 import { stockKindFromTab } from "../lib/stock-page.js";
@@ -90,11 +91,14 @@ projectsRouter.get("/", async (req: Request, res: Response) => {
     tileStats = Object.fromEntries(buildCurrentProjectTileStats(boards.current, assets));
   }
 
+  const pinnable = [...boards.current, ...boards.upcoming];
   res.render("projects", {
     title: "Projects",
     user,
     boards,
     tileStats,
+    mapPins: mapPinProjects(pinnable),
+    mapChoices: mapChoiceProjects(pinnable),
     archiveTotal: archived.length,
     archiveLimit: ARCHIVE_BOARD_LIMIT,
     selectedId: String(req.query.selected || ""),
@@ -266,6 +270,35 @@ projectsRouter.post("/:id/delete", async (req: Request, res: Response) => {
   }
   await prisma.project.delete({ where: { id: src.id } });
   res.redirect("/projects?notice=" + encodeURIComponent("Deleted " + src.name));
+});
+
+projectsRouter.post("/:id/map", async (req: Request, res: Response) => {
+  if (!isAdmin(req.user!)) {
+    res.status(403).json({ error: "Admin only." });
+    return;
+  }
+  const project = await prisma.project.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, stage: true },
+  });
+  if (!project) {
+    res.status(404).json({ error: "Project not found." });
+    return;
+  }
+  if (!projectCanBePinned(project.stage)) {
+    res.status(400).json({ error: "Archived projects cannot be pinned." });
+    return;
+  }
+  const position = parseMapPosition(req.body.x, req.body.y);
+  if (!position) {
+    res.status(400).json({ error: "Choose a point on the map." });
+    return;
+  }
+  await prisma.project.update({
+    where: { id: project.id },
+    data: { mapX: position.x, mapY: position.y },
+  });
+  res.json({ ok: true, id: project.id, name: project.name, mapX: position.x, mapY: position.y });
 });
 
 projectsRouter.post("/:id/stage", async (req: Request, res: Response) => {
