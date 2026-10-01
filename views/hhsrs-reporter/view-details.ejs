@@ -10,6 +10,7 @@
   <div class="vd-pair">
     <div class="vd-col">
       <div class="vd-bar">Surveyor entry</div>
+      <% if (details.surveyDate) { %><p class="vd-when">Survey date <%= details.surveyDate %></p><% } %>
       <div class="vd-box">
         <dl class="vd-fields">
           <div><dt>Project</dt><dd><%= show(details.projectName) %></dd></div>
@@ -36,6 +37,7 @@
     <div class="vd-col">
       <div class="vd-bar">Email sent</div>
       <% if (details.sent) { %>
+        <% if (details.sent.when) { %><p class="vd-when"><%= details.sent.when %></p><% } %>
         <article class="vd-email">
           <% if (details.sent.subject) { %><header class="vd-head"><%= details.sent.subject %></header><% } %>
           <div class="vd-sheet">
@@ -62,6 +64,7 @@
       <% } %>
       <% (details.corrections || []).forEach(function (email) { %>
         <div class="vd-bar">Correction</div>
+        <% if (email.when) { %><p class="vd-when"><%= email.when %></p><% } %>
         <article class="vd-email">
           <% if (email.subject) { %><header class="vd-head"><%= email.subject %></header><% } %>
           <div class="vd-sheet">

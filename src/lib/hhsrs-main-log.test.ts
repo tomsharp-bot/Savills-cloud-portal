@@ -47,31 +47,48 @@ function sortItem(
 }
 
 describe("HHSRS main log arrangement", () => {
-  it("puts a correction directly under its original, newest group first", () => {
+  it("keeps an amended case on one row, newest activity first", () => {
     const items = [
       sortItem("email:orig", "original", "2026-09-24T13:32:00.000Z"),
       sortItem("email:corr", "correction", "2026-09-25T09:12:00.000Z", "email:orig"),
+      sortItem("email:again", "correction", "2026-09-26T09:12:00.000Z", "email:orig"),
       sortItem("email:new", "original", "2026-09-28T08:42:00.000Z"),
       sortItem("case:quiet", "not_sent", "2026-09-23T10:00:00.000Z"),
     ];
     const arranged = arrangeMainLog(items, new Set(["email:orig"]), 1, 50);
-    assert.deepEqual(arranged.pageKeys, ["email:new", "email:orig", "email:corr", "case:quiet"]);
+    assert.deepEqual(arranged.pageKeys, ["email:new", "email:orig", "case:quiet"]);
+    assert.equal(arranged.pageKeys.includes("email:corr"), false);
+    assert.equal(arranged.pageKeys.includes("email:again"), false);
     assert.equal(arranged.flags.get("email:orig")?.showCorrectedNote, true);
-    assert.equal(arranged.flags.get("email:orig")?.hasCorrBelow, true);
+    assert.equal(arranged.flags.get("email:orig")?.hasCorrBelow, false);
     assert.equal(arranged.flags.get("email:new")?.showCorrectedNote, false);
-    assert.equal(arranged.total, 4);
+    assert.equal(arranged.total, 3);
   });
 
-  it("keeps a group together when the page would otherwise split it", () => {
+  it("counts an amended case as one row when paging", () => {
     const items = [
       sortItem("email:a", "original", "2026-09-28T08:00:00.000Z"),
       sortItem("email:b", "original", "2026-09-24T08:00:00.000Z"),
       sortItem("email:c", "correction", "2026-09-25T08:00:00.000Z", "email:b"),
+      sortItem("email:d", "correction", "2026-09-26T08:00:00.000Z", "email:b"),
     ];
     const arranged = arrangeMainLog(items, new Set(["email:b"]), 1, 2);
-    assert.deepEqual(arranged.pages[0], ["email:a"]);
-    assert.deepEqual(arranged.pages[1], ["email:b", "email:c"]);
-    assert.equal(arranged.pageCount, 2);
+    assert.deepEqual(arranged.pageKeys, ["email:a", "email:b"]);
+    assert.equal(arranged.total, 2);
+    assert.equal(arranged.pageCount, 1);
+    assert.equal(arranged.flags.get("email:b")?.showCorrectedNote, true);
+    assert.equal(arranged.flags.get("email:b")?.hasCorrBelow, false);
+  });
+
+  it("keeps one row when the filter only matches corrections", () => {
+    const items = [
+      sortItem("email:c1", "correction", "2026-09-25T08:00:00.000Z", "email:missing"),
+      sortItem("email:c2", "correction", "2026-09-26T08:00:00.000Z", "email:missing"),
+    ];
+    const arranged = arrangeMainLog(items, new Set(), 1, 50);
+    assert.deepEqual(arranged.pageKeys, ["email:c2"]);
+    assert.equal(arranged.flags.get("email:c2")?.showCorrectedNote, true);
+    assert.equal(arranged.total, 1);
   });
 
   it("drops not-sent rows from an original-only filter and corrections from a not-sent filter", () => {
@@ -97,8 +114,12 @@ describe("HHSRS main log arrangement", () => {
       sortItem("email:other", "original", "2026-09-25T08:00:00.000Z", null, { project: "Alpha", by: "Sam" }),
     ];
     const arranged = arrangeMainLog(items, new Set(["email:orig"]), 1, 50);
-    assert.deepEqual(arranged.pageKeys, ["email:orig", "email:corr", "email:other"]);
+    assert.deepEqual(arranged.pageKeys, ["email:orig", "email:other"]);
     assert.equal(arranged.flags.get("email:orig")?.showCorrectedNote, true);
+    const sorted = arrangeMainLog(items, new Set(["email:orig"]), 1, 50, { key: "by", dir: "asc" });
+    assert.deepEqual(sorted.pageKeys, ["email:other", "email:orig"]);
+    assert.equal(sorted.flags.get("email:orig")?.showCorrectedNote, true);
+    assert.equal(sorted.pageKeys.includes("email:corr"), false);
   });
 
   it("sorts sent as a real date, not as dd/mm text, and reverses on the other direction", () => {
@@ -423,12 +444,11 @@ describe("HHSRS main log filters", () => {
     });
 
     const all = await loadMainLog({ q: stamp });
-    assert.deepEqual(
-      all.entries.map((row) => row.key),
-      [`email:${original.id}`, `email:${correction.id}`, `case:${quiet.id}`]
-    );
+    assert.deepEqual(all.entries.map((row) => row.key), [`email:${original.id}`, `case:${quiet.id}`]);
+    assert.equal(all.total, 2);
     assert.equal(all.entries[0].lineAddress.includes("ZZ1"), false);
     assert.equal(all.flags.get(`email:${original.id}`)?.showCorrectedNote, true);
+    assert.equal(all.flags.get(`email:${correction.id}`)?.showCorrectedNote, undefined);
 
     const corrections = await loadMainLog({ q: stamp, type: "correction" });
     assert.deepEqual(corrections.entries.map((row) => row.kind), ["correction"]);
@@ -440,15 +460,16 @@ describe("HHSRS main log filters", () => {
 
     const day = await loadMainLog({ q: stamp, from: "2026-09-25", to: "2026-09-25" });
     assert.deepEqual(day.entries.map((row) => row.key), [`email:${correction.id}`]);
+    assert.equal(day.flags.get(`email:${correction.id}`)?.showCorrectedNote, true);
 
     const byName = await loadMainLog({ q: stamp, sort: "by", dir: "asc" });
-    assert.deepEqual(byName.entries.map((row) => row.sentBy), ["Alex Surveyor", "Carly Farrell", "Tom Sharp"]);
+    assert.deepEqual(byName.entries.map((row) => row.sentBy), ["Alex Surveyor", "Carly Farrell"]);
     const byNameDesc = await loadMainLog({ q: stamp, sort: "by", dir: "desc" });
-    assert.deepEqual(byNameDesc.entries.map((row) => row.sentBy), ["Tom Sharp", "Carly Farrell", "Alex Surveyor"]);
+    assert.deepEqual(byNameDesc.entries.map((row) => row.sentBy), ["Carly Farrell", "Alex Surveyor"]);
     const oldest = await loadMainLog({ q: stamp, sort: "sent", dir: "asc" });
-    assert.deepEqual(oldest.entries.map((row) => row.key), [`case:${quiet.id}`, `email:${original.id}`, `email:${correction.id}`]);
+    assert.deepEqual(oldest.entries.map((row) => row.key), [`case:${quiet.id}`, `email:${original.id}`]);
     const newest = await loadMainLog({ q: stamp, sort: "sent", dir: "desc" });
-    assert.deepEqual(newest.entries.map((row) => row.key), [`email:${correction.id}`, `email:${original.id}`, `case:${quiet.id}`]);
+    assert.deepEqual(newest.entries.map((row) => row.key), [`email:${original.id}`, `case:${quiet.id}`]);
 
     const app = createApp({ basePath: "" });
     const login = await request(app, "POST", "/login", {
@@ -476,6 +497,24 @@ describe("HHSRS main log filters", () => {
     assert.match(html, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=surveyor&amp;dir=asc"`));
     assert.match(html, />Reference</);
     assert.doesNotMatch(html, /<th>Sent<\/th>|<th>Hazard<\/th>/);
+    const table = html.slice(html.indexOf('id="main-log-table"'));
+    const tbody = table.slice(table.indexOf("<tbody>"), table.indexOf("</tbody>"));
+    assert.equal((tbody.match(/<tr/g) || []).length, 2);
+    assert.equal((tbody.match(/Amended/g) || []).length, 1);
+    assert.doesNotMatch(tbody, /Use flat 5/);
+
+    const detailsPage = await request(app, "GET", `/HHSRSreporter/main-log/${sentCase.id}/details`, { cookie });
+    assert.equal(detailsPage.status, 200);
+    const detailsHtml = detailsPage.body.toString("utf8");
+    const surveyor = detailsHtml.slice(detailsHtml.indexOf("Surveyor entry"), detailsHtml.indexOf("Email sent"));
+    const sentCard = detailsHtml.slice(detailsHtml.indexOf("Email sent"), detailsHtml.indexOf(">Correction<"));
+    const correctionCard = detailsHtml.slice(detailsHtml.indexOf(">Correction<"));
+    assert.match(surveyor, /Survey date 23\/09\/2026/);
+    assert.doesNotMatch(surveyor, /25\/09\/2026 10:12/);
+    assert.match(sentCard, /24\/09\/2026 14:32/);
+    assert.doesNotMatch(sentCard, /25\/09\/2026 10:12/);
+    assert.match(correctionCard, /25\/09\/2026 10:12/);
+    assert.match(correctionCard, /Use flat 5/);
 
     const sorted = await request(app, "GET", `/HHSRSreporter/main-log?q=${stamp}&sort=project&dir=asc`, { cookie });
     const sortedHtml = sorted.body.toString("utf8");
@@ -515,5 +554,15 @@ describe("HHSRS main log filters", () => {
     const quietSheet = quietBook.getWorksheet("Main Log");
     assert.equal(quietSheet?.getRow(5).getCell(4).value, "Not sent from portal");
     assert.equal(quietSheet?.rowCount, 5);
+
+    const allFile = await request(app, "GET", `/HHSRSreporter/main-log/export.xlsx?q=${stamp}`, { cookie });
+    const allBook = new ExcelJS.Workbook();
+    await allBook.xlsx.load(allFile.body as unknown as ExcelJS.Buffer);
+    const allSheet = allBook.getWorksheet("Main Log");
+    assert.equal(allSheet?.rowCount, 6);
+    assert.equal(allSheet?.getRow(5).getCell(4).value, "Original");
+    assert.equal(allSheet?.getRow(5).getCell(7).value, "Amended");
+    assert.equal(allSheet?.getRow(6).getCell(4).value, "Not sent from portal");
+    assert.doesNotMatch(JSON.stringify(allSheet?.getRow(6).values), /Use flat 5/);
   });
 });

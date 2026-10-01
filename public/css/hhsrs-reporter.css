@@ -3038,6 +3038,18 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-tag.c { background: #f0b429; color: #3d2600; }
 .ml-tag.n { background: #e5e7eb; color: #374151; }
 .ml-corr-note { display: block; font-size: 0.72rem; color: #7a4b00; font-weight: 600; margin-top: 3px; white-space: nowrap; }
+.ml-page .ml-amended {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: #e7edf3;
+  color: #314052;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: nowrap;
+}
 .ml-table tr.is-corr td { background: #fff4d6; }
 .ml-table tr.is-corr td:first-child { box-shadow: inset 4px 0 0 #f0b429; }
 .ml-table tr.has-corr td { border-bottom-color: transparent; }
@@ -3458,6 +3470,7 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
   font-weight: 600;
 }
 .vd-sub { margin: 0 0 0.85rem; color: var(--muted); }
+.vd-when { margin: -0.2rem 0 0.55rem; color: var(--muted); font-size: 0.85rem; }
 .hhsrs-reporter .vd-page .vd-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; width: 100%; }
 .hhsrs-reporter .vd-page .vd-col { min-width: 0; }
 .vd-box, .vd-email { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; }

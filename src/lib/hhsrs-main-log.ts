@@ -1,7 +1,7 @@
 /**
- * Main Log: one row per portal send, plus cases marked actioned without a send.
- * Corrections sit under the original they correct. Filters are applied in the
- * database; the page only renders one slice.
+ * Main Log: one row per case, plus cases marked actioned without a send.
+ * A correction does not add a second line. The case row carries an Amended note.
+ * Filters are applied in the database; the page only renders one slice.
  */
 import ExcelJS from "exceljs";
 import type { Prisma } from "@prisma/client";
@@ -370,8 +370,50 @@ function compareSortItems(a: SortItem, b: SortItem, sort: MainLogSort): number {
 }
 
 /**
- * Default: groups, newest activity first. A correction stays under its original when both match.
- * A column sort orders each visible row by that column and does not keep the group glued together.
+ * One row per case. Corrections of a case that is already listed are dropped.
+ * Several corrections with no original in this result become the latest one.
+ * Amended keys are that case row. Activity keeps a recent amendment near the top
+ * of the default order without changing the row's own sent time.
+ */
+export function collapseCaseRows(items: SortItem[]): {
+  rows: SortItem[];
+  amended: Set<string>;
+  activity: Map<string, number>;
+} {
+  const byKey = new Map(items.map((item) => [item.key, item]));
+  const hidden = new Set<string>();
+  const amended = new Set<string>();
+  const activity = new Map<string, number>();
+  const orphans = new Map<string, SortItem[]>();
+
+  for (const item of items) {
+    if (item.kind !== "correction") continue;
+    const parent = item.correctsKey ? byKey.get(item.correctsKey) : undefined;
+    if (parent && parent.kind !== "correction") {
+      hidden.add(item.key);
+      amended.add(parent.key);
+      activity.set(parent.key, Math.max(activity.get(parent.key) || 0, item.at, parent.at));
+      continue;
+    }
+    const groupKey = item.correctsKey || item.key;
+    const list = orphans.get(groupKey) || [];
+    list.push(item);
+    orphans.set(groupKey, list);
+  }
+
+  for (const list of orphans.values()) {
+    const sorted = list.slice().sort((a, b) => b.at - a.at || a.key.localeCompare(b.key));
+    amended.add(sorted[0].key);
+    activity.set(sorted[0].key, sorted[0].at);
+    for (const extra of sorted.slice(1)) hidden.add(extra.key);
+  }
+
+  return { rows: items.filter((item) => !hidden.has(item.key)), amended, activity };
+}
+
+/**
+ * Default: one row per case, newest activity first. A correction does not take its own line.
+ * A column sort orders those same rows and still leaves the correction off the list.
  */
 export function arrangeMainLog(
   items: SortItem[],
@@ -380,10 +422,12 @@ export function arrangeMainLog(
   pageSize: number,
   sort?: MainLogSort | null
 ): ArrangedLog {
-  const byKey = new Map(items.map((item) => [item.key, item]));
+  const collapsed = collapseCaseRows(items);
+  const visible = collapsed.rows;
+  const byKey = new Map(visible.map((item) => [item.key, item]));
   let ordered: Array<{ seq: SortItem[] }>;
   if (sort) {
-    ordered = items
+    ordered = visible
       .slice()
       .sort((a, b) => compareSortItems(a, b, sort))
       .map((item) => ({ seq: [item] }));
@@ -397,7 +441,7 @@ export function arrangeMainLog(
       }
       return rows;
     };
-    for (const item of items) {
+    for (const item of visible) {
       if (item.kind === "correction" && item.correctsKey && byKey.has(item.correctsKey)) bucket(item.correctsKey).push(item);
       else bucket(item.key).push(item);
     }
@@ -405,8 +449,9 @@ export function arrangeMainLog(
       .map((rows) => {
         const head = rows.filter((row) => row.kind !== "correction").sort((a, b) => a.at - b.at);
         const tail = rows.filter((row) => row.kind === "correction").sort((a, b) => a.at - b.at);
-        const seq = [...head, ...tail];
-        return { seq, latest: Math.max(...seq.map((row) => row.at)) };
+        const seq = head.length ? head : tail.slice(-1);
+        const times = seq.map((row) => Math.max(row.at, collapsed.activity.get(row.key) || 0));
+        return { seq, latest: Math.max(...times) };
       })
       .sort((a, b) => b.latest - a.latest || a.seq[0].key.localeCompare(b.seq[0].key));
   }
@@ -427,18 +472,15 @@ export function arrangeMainLog(
   const safePage = Math.min(Math.max(1, page), pageCount);
   const pageKeys = pages[safePage - 1] || [];
   const flags = new Map<string, { showCorrectedNote: boolean; hasCorrBelow: boolean }>();
-  pageKeys.forEach((key, index) => {
+  pageKeys.forEach((key) => {
     const item = byKey.get(key);
-    const next = byKey.get(pageKeys[index + 1] || "");
-    const hasCorrBelow = Boolean(next && next.kind === "correction" && next.correctsKey === key);
     flags.set(key, {
-      showCorrectedNote: sort
-        ? hasCorrBelow
-        : Boolean(item && item.kind === "original" && correctedKeys.has(key)),
-      hasCorrBelow,
+      showCorrectedNote:
+        collapsed.amended.has(key) || Boolean(item && item.kind === "original" && correctedKeys.has(key)),
+      hasCorrBelow: false,
     });
   });
-  return { pageKeys, pages, page: safePage, pageCount, total: items.length, flags };
+  return { pageKeys, pages, page: safePage, pageCount, total: visible.length, flags };
 }
 
 export function pageForKey(pages: string[][], key: string): number {
@@ -955,7 +997,7 @@ export async function buildMainLogWorkbook(input: MainLogExcelInput): Promise<Bu
       mainLogTypeLabel(entry.kind),
       correction && entry.originalSentAt ? formatLondonDateTime(entry.originalSentAt) : null,
       correction ? entry.correctionReason || null : null,
-      correction ? entry.correctionNote || null : null,
+      correction ? entry.correctionNote || null : entry.corrections.length ? "Amended" : null,
       entry.projectName || null,
       entry.uprn || null,
       entry.lineAddress || null,
