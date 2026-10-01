@@ -451,12 +451,15 @@ describe("HHSRS correction send", () => {
         item.mail.html,
         composeEmailHtml(item.prepared.text, names, `cid:${SIGNATURE_LOGO_CID}`, item.prepared.messageHtml, {
           subject: item.mail.subject,
-          photos: (item.mail.inlinePhotos || []).map((photo) => ({ src: `cid:${photo.cid}`, name: photo.filename })),
         })
       );
-      const printAt = item.mail.html.indexOf("Before printing, think about the environment");
-      const photoAt = item.mail.html.indexOf("cid:hhsrs-photo-0@savillshousing.co.uk");
-      assert.ok(printAt >= 0 && photoAt > printAt, "case photos sit under the signature");
+      assert.ok(item.mail.html.includes("Before printing, think about the environment"));
+      assert.equal((item.mail.html.match(/<img\b/gi) || []).length, 1);
+      assert.doesNotMatch(item.mail.html, /cid:hhsrs-photo-/);
+      assert.ok(item.mail.attachments.length > 0);
+      for (const file of item.mail.attachments) {
+        assert.equal(item.mail.html.includes(file.filename), false);
+      }
       assert.match(item.mail.html, /background:#e7edf3/);
       assert.match(item.mail.html, /HHSRS Reporting Team/);
       assert.match(item.mail.html, /HHSRS@savillshousing\.co\.uk/);
@@ -468,6 +471,9 @@ describe("HHSRS correction send", () => {
       assert.match(item.mail.subject, /^CORRECTION: /);
     }
 
+    assert.deepEqual(address.mail.attachments.map((file) => file.filename), ["bedroom-ceiling.jpg"]);
+    assert.deepEqual(photos.mail.attachments.map((file) => file.filename), ["kitchen.jpg"]);
+    assert.deepEqual(hazard.mail.attachments.map((file) => file.filename), ["bedroom-ceiling.jpg"]);
     assert.match(address.mail.html, /<b>15 Example Street, London<\/b>/);
     assert.doesNotMatch(address.mail.text, /<b>/);
     assert.doesNotMatch(photos.mail.text, /The correct photos are now attached/);

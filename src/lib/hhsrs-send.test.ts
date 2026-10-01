@@ -20,7 +20,7 @@ import {
   type SendCommit,
   type SentEmailRecord,
 } from "./hhsrs-send.js";
-import { imapSentFolder } from "./hhsrs-send-transport.js";
+import { imapSentFolder, sendMailboxMessage } from "./hhsrs-send-transport.js";
 import { projectDraft } from "./hhsrs-reporter-draft.js";
 
 const base = {
@@ -328,11 +328,9 @@ describe("HHSRS portal send and Main Log record", () => {
     assert.match(mail.html, /cid:savills-logo@savillshousing\.co\.uk/);
     assert.match(mail.html, /background:#e7edf3/);
     assert.match(mail.html, /background:#f7f9fb/);
-    const printAt = mail.html.indexOf("Before printing, think about the environment");
-    const photoAt = mail.html.indexOf("cid:hhsrs-photo-0@savillshousing.co.uk");
-    assert.ok(printAt >= 0 && photoAt > printAt, "photos are pictures under the signature");
-    assert.ok(mail.html.indexOf("cid:hhsrs-photo-1@savillshousing.co.uk") > photoAt);
-    assert.equal((mail.inlinePhotos || []).length, 2);
+    assert.ok(mail.html.includes("Before printing, think about the environment"));
+    assert.equal((mail.html.match(/<img\b/gi) || []).length, 1);
+    assert.doesNotMatch(mail.html, /cid:hhsrs-photo-/);
     assert.doesNotMatch(mail.html, /sample-photo-1\.jpg|sample-photo-2\.jpg/);
     assert.doesNotMatch(mail.html, /font-size:11px/);
     assert.match(mail.html, /width:53px;height:53px;object-fit:contain/);
@@ -396,5 +394,49 @@ describe("HHSRS portal send and Main Log record", () => {
     assert.match(resent.record.body, /• Survey date: 28\/09\/2026/);
     assert.match(correction.sent[0].text, /• Survey date: 28\/09\/2026/);
     assert.doesNotMatch(correction.sent[0].text, /2026-09-28/);
+  });
+
+  it("sends case photos as file attachments and leaves them out of the body", async () => {
+    const previousMock = process.env.HHSRS_SEND_MOCK;
+    const previousEnv = process.env.NODE_ENV;
+    process.env.HHSRS_SEND_MOCK = "1";
+    if (previousEnv === "production") process.env.NODE_ENV = "test";
+    try {
+      const box = harness();
+      const result = await box.deliver();
+      assert.equal(result.ok, true);
+      const mail = box.sent[0];
+      assert.deepEqual(
+        mail.attachments.map((file) => file.filename),
+        ["sample-photo-1.jpg", "sample-photo-2.jpg"]
+      );
+      assert.equal((mail.html.match(/<img\b/gi) || []).length, 1);
+      assert.match(mail.html, /cid:savills-logo@savillshousing\.co\.uk/);
+      assert.doesNotMatch(mail.html, /cid:hhsrs-photo-/);
+      assert.doesNotMatch(mail.html, /sample-photo-/);
+      const sent = await sendMailboxMessage(mail);
+      const raw = sent.raw.toString("utf8");
+      const unfolded = raw.replace(/=\r\n/g, "");
+      assert.match(unfolded, /cid:savills-logo@savillshousing\.co\.uk/);
+      assert.doesNotMatch(unfolded, /cid:hhsrs-photo-/);
+      assert.doesNotMatch(unfolded, /<img[^>]+sample-photo-/);
+      assert.equal(raw.match(/Content-Disposition:\s*inline/gi)?.length, 1);
+      assert.equal(raw.match(/Content-Disposition:\s*attachment/gi)?.length, 2);
+      assert.match(raw, /Content-ID:\s*<savills-logo@savillshousing\.co\.uk>/i);
+      assert.doesNotMatch(raw, /Content-ID:\s*<hhsrs-photo-/i);
+      for (const filename of ["sample-photo-1.jpg", "sample-photo-2.jpg"]) {
+        const at = raw.indexOf(filename);
+        assert.ok(at >= 0, filename);
+        const part = raw.slice(Math.max(0, at - 500), at + filename.length);
+        assert.match(part, /Content-Disposition:\s*attachment/i);
+        assert.doesNotMatch(part, /Content-Disposition:\s*inline/i);
+        assert.doesNotMatch(part, /Content-ID:/i);
+      }
+    } finally {
+      if (previousMock === undefined) delete process.env.HHSRS_SEND_MOCK;
+      else process.env.HHSRS_SEND_MOCK = previousMock;
+      if (previousEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousEnv;
+    }
   });
 });
