@@ -724,6 +724,35 @@ describe("projectWeeksOnGrid", () => {
     assert.equal(programmeCellMatchesProject("Hello Project Alpha", "Hello Project Alpha", longNames), true);
   });
 
+  it("counts a shorter week-cell name for the one project that adds a year or number", () => {
+    const catalogue = ["MTVH 20126", "Onward 2026", "Leeds 2026", "Leeds North 2026"];
+    assert.equal(programmeShortLabel("MTVH 20126"), "MTVH 20126");
+    assert.equal(programmeShortLabel("Onward 2026"), "Onward 2026");
+    assert.equal(programmeShortLabel("Leeds 2026"), "Leeds 2026");
+    assert.equal(programmeCellMatchesProject("MTVH", "MTVH 20126", catalogue), true);
+    assert.equal(programmeCellMatchesProject("MTVH", "MTVH 2026", ["MTVH 2026"]), true);
+    assert.equal(programmeCellMatchesProject("Onward", "Onward 2026", catalogue), true);
+    assert.equal(programmeCellMatchesProject("Onward 2026", "Onward", ["Onward"]), true);
+    assert.equal(programmeCellMatchesProject("Leeds", "Leeds 2026", catalogue), true);
+    assert.equal(programmeCellMatchesProject("Leeds", "Leeds North 2026", catalogue), false);
+    assert.equal(programmeCellMatchesProject("North", "Leeds North 2026", catalogue), false);
+    assert.equal(programmeCellMatchesProject("Onward", "Onward 2026", ["Onward 2026", "Onward 2027"]), false);
+    assert.equal(programmeCellMatchesProject("Onward", "Onward 2027", ["Onward 2026", "Onward 2027"]), false);
+    assert.equal(programmeCellMatchesProject("Holiday", "MTVH 20126", catalogue), false);
+    assert.equal(programmeCellMatchesProject("LFHA 2025", "LFHA 2026", ["LFHA 2026"]), false);
+    const people = [
+      { weeks: ["MTVH", "Onward", "Leeds", "Leeds North"], active: true },
+      { weeks: ["MTVH", "MTVH", "Onward 2026", "Leeds"], active: true },
+      { weeks: ["MTVH", "Onward", "Leeds", "Holiday"], active: false },
+    ];
+    assert.equal(projectWeeksOnGrid("MTVH 20126", people, catalogue), 3);
+    assert.equal(projectWeeksOnGrid("Onward 2026", people, catalogue), 2);
+    assert.equal(projectWeeksOnGrid("Leeds 2026", people, catalogue), 2);
+    assert.equal(projectWeeksOnGrid("Leeds North 2026", people, catalogue), 1);
+    assert.equal(approxSurveysOnGrid("MTVH 20126", people, catalogue), 120);
+    assert.equal(approxSurveysOnGrid("Leeds 2026", people, catalogue), 80);
+  });
+
   it("uses the same stamp match in the browser script", () => {
     const script = readFileSync(join(process.cwd(), "public/js/programme.js"), "utf8");
     const start = script.indexOf("var SHORT_LABELS");
@@ -741,6 +770,12 @@ describe("projectWeeksOnGrid", () => {
       { cell: "LFHA 2025", project: "LFHA 2026", catalogue: ["LFHA 2026"] },
       { cell: "Holiday", project: "Onward", catalogue: ["Onward"] },
       { cell: "Onward", project: "Onward", catalogue: ["Onward", "LFHA 2026"] },
+      { cell: "MTVH", project: "MTVH 20126", catalogue: ["MTVH 20126", "Onward 2026", "Leeds 2026"] },
+      { cell: "MTVH", project: "MTVH 2026", catalogue: ["MTVH 2026"] },
+      { cell: "Onward", project: "Onward 2026", catalogue: ["Onward 2026", "Leeds 2026"] },
+      { cell: "Leeds", project: "Leeds 2026", catalogue: ["Leeds 2026", "Leeds North 2026"] },
+      { cell: "Leeds", project: "Leeds North 2026", catalogue: ["Leeds 2026", "Leeds North 2026"] },
+      { cell: "Onward", project: "Onward 2026", catalogue: ["Onward 2026", "Onward 2027"] },
     ];
     for (const row of cases) {
       assert.equal(
@@ -862,6 +897,10 @@ describe("job tile colours", () => {
     assert.notDeepEqual(other, jobTileColor("MTVH", catalogue));
     assert.deepEqual(jobTileColor("Holiday", catalogue), jobTileColor("  Holiday  ", catalogue));
     assert.notDeepEqual(jobTileColor("Onward", catalogue), holiday);
+    assert.deepEqual(jobTileColor("MTVH", ["MTVH 20126"]), jobTileColor("MTVH 20126", ["MTVH 20126"]));
+    assert.deepEqual(jobTileColor("Onward", ["Onward 2026"]), jobTileColor("Onward 2026", ["Onward 2026"]));
+    assert.deepEqual(jobTileColor("Leeds", ["Leeds 2026"]), jobTileColor("Leeds 2026", ["Leeds 2026"]));
+    assert.notDeepEqual(jobTileColor("Leeds", ["Leeds 2026", "Leeds North 2026"]), jobTileColor("Leeds North 2026", ["Leeds 2026", "Leeds North 2026"]));
     assert.notDeepEqual(jobTileColor("Vico", ["Vico", "Vico 2026"]), jobTileColor("Vico 2026", ["Vico", "Vico 2026"]));
   });
 

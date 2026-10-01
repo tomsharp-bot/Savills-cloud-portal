@@ -122,6 +122,17 @@
     return canon(shortLabel(String(name || "").replace(/[\u2013\u2014\u2212]/g, "-")));
   }
 
+  // Keep in step with programmeCore() in src/lib/programme.ts.
+  function programmeCore(name) {
+    return programmeCanon(name)
+      .replace(/\b20\d{2}\b/g, " ")
+      .replace(/[-_/.,()]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/(?:\s+\d{2,})+$/g, "")
+      .trim();
+  }
+
   function programmeCellMatches(cell, projectName, catalogue) {
     var cellKey = programmeCanon(cell);
     var projectKey = programmeCanon(projectName);
@@ -152,6 +163,20 @@
         return programmeCanon(name) === cellStamp;
       });
       return nameClaimants.length === 1 && programmeCanon(nameClaimants[0]) === projectKey;
+    }
+    var projectCore = programmeCore(projectName);
+    if (cellKey === projectCore && cellKey !== projectKey) {
+      var coreClaimants = claimantsFor(function (name) {
+        return programmeCore(name) === cellKey;
+      });
+      return coreClaimants.length === 1 && programmeCanon(coreClaimants[0]) === projectKey;
+    }
+    var cellCore = programmeCore(cell);
+    if (cellCore === projectKey && cellCore !== cellKey) {
+      var shortClaimants = claimantsFor(function (name) {
+        return programmeCore(name) === projectKey;
+      });
+      return shortClaimants.length === 1 && programmeCanon(shortClaimants[0]) === projectKey;
     }
     return false;
   }
