@@ -35,9 +35,12 @@ import {
   siteFormProjectFlags,
   siteFormRatingChoices,
   siteFormSectionState,
+  DAMP_MOULD_CHOICES,
   siteFormShowsCallReference,
+  siteFormShowsDampMouldChoice,
   siteFormShowsSuspectedCause,
   siteFormShowsWindowRestrictor,
+  buildThanksSummary,
   reporterCaseDetailExtras,
   surveyorDetailLines,
   WINDOW_RESTRICTOR_CATEGORY,
@@ -331,25 +334,25 @@ describe("validateHhsrsForm", () => {
       ["Call reference", "Window restrictors missing", "Location", "Window material", "Any other details"]
     );
 
-    const low = validateHhsrsForm({ ...valid, rating: "Low", clientCallReference: "CR-9" }, mtvh);
+    const low = validateHhsrsForm({ ...valid, rating: "Low", clientCallReference: "CR-9", dampMouldChoice: "Damp" }, mtvh);
     assert.equal(low.ok, true);
     if (low.ok) assert.equal(low.data.clientCallReference, "");
-    const significant = validateHhsrsForm({ ...valid, rating: "High - Significant risk" }, mtvh);
+    const significant = validateHhsrsForm({ ...valid, rating: "High - Significant risk", dampMouldChoice: "Mould" }, mtvh);
     assert.equal(significant.ok, true);
     const emergencyMissing = validateHhsrsForm({ ...valid, rating: "High - Emergency risk" }, mtvh);
     assert.equal(emergencyMissing.ok, false);
     const emergency = validateHhsrsForm(
-      { ...valid, rating: "High - Emergency risk", clientCallReference: "CR-9" },
+      { ...valid, rating: "High - Emergency risk", clientCallReference: "CR-9", dampMouldChoice: "Damp" },
       mtvh
     );
     assert.equal(emergency.ok, true);
     if (emergency.ok) assert.equal(emergency.data.clientCallReference, "CR-9");
     const unreached = validateHhsrsForm(
-      { ...valid, rating: "High - Emergency risk", callUnreached: true, callRefBlankReason: "No answer" },
+      { ...valid, rating: "High - Emergency risk", callUnreached: true, callRefBlankReason: "No answer", dampMouldChoice: "Mould" },
       mtvh
     );
     assert.equal(unreached.ok, true);
-    const caused = validateHhsrsForm({ ...valid, suspectedCause: "leak", vulnerabilities: "x" }, mtvh);
+    const caused = validateHhsrsForm({ ...valid, suspectedCause: "leak", vulnerabilities: "x", dampMouldChoice: "Both damp and mould" }, mtvh);
     assert.equal(caused.ok, true);
     if (caused.ok) {
       assert.equal(caused.data.suspectedCause, "");
@@ -399,6 +402,111 @@ describe("validateHhsrsForm", () => {
     if (otherProject.ok) assert.equal(otherProject.data.restrictorMaterial, "");
   });
 
+  it("asks MTVH for one damp or mould choice only on the damp and mould category", () => {
+    const mtvh = { id: "mtvh", name: "MTVH 2026" };
+    const damp = { ...valid, category: "Damp & Mould Growth", rating: "Medium" };
+    assert.deepEqual([...DAMP_MOULD_CHOICES], ["Damp", "Mould", "Both damp and mould"]);
+    assert.equal(siteFormShowsDampMouldChoice("MTVH 2026", "Damp & Mould Growth"), true);
+    assert.equal(siteFormShowsDampMouldChoice("MTVH Pilot 2026", "Damp and mould"), true);
+    assert.equal(siteFormShowsDampMouldChoice("MTVH 2026", "Electrical Hazards"), false);
+    assert.equal(siteFormShowsDampMouldChoice("MTVH 2026", "Falling Between Levels"), false);
+    assert.equal(siteFormShowsDampMouldChoice("Gateway 2026", "Damp & Mould Growth"), false);
+    assert.equal(siteFormShowsDampMouldChoice("Vico 2026", "Damp & Mould Growth"), false);
+    assert.equal(siteFormShowsDampMouldChoice("Onward 2026", "Damp & Mould Growth"), false);
+
+    assert.equal(siteFormSectionState(damp, "MTVH 2026").hazard, false);
+    const missing = validateHhsrsForm(damp, mtvh);
+    assert.equal(missing.ok, false);
+    if (!missing.ok) assert.equal(missing.errors.dampMouldChoice, "Select damp, mould, or both.");
+    const invalid = validateHhsrsForm({ ...damp, dampMouldChoice: "Damp and mould" }, mtvh);
+    assert.equal(invalid.ok, false);
+    if (!invalid.ok) assert.equal(invalid.errors.dampMouldChoice, "Select damp, mould, or both.");
+
+    for (const choice of DAMP_MOULD_CHOICES) {
+      const result = validateHhsrsForm({ ...damp, dampMouldChoice: `  ${choice}  ` }, mtvh);
+      assert.equal(result.ok, true, choice);
+      if (result.ok) assert.equal(result.data.dampMouldChoice, choice);
+      assert.equal(siteFormSectionState({ ...damp, dampMouldChoice: choice }, "MTVH 2026").hazard, true);
+    }
+
+    const otherHazard = validateHhsrsForm(
+      { ...damp, category: "Electrical Hazards", dampMouldChoice: "Both damp and mould" },
+      mtvh
+    );
+    assert.equal(otherHazard.ok, true);
+    if (otherHazard.ok) assert.equal(otherHazard.data.dampMouldChoice, "");
+    assert.equal(siteFormSectionState({ ...damp, category: "Electrical Hazards" }, "MTVH 2026").hazard, true);
+
+    const otherProject = validateHhsrsForm({ ...damp, dampMouldChoice: "Mould" }, project);
+    assert.equal(otherProject.ok, true);
+    if (otherProject.ok) assert.equal(otherProject.data.dampMouldChoice, "");
+    assert.equal(readHhsrsValues({ dampMouldChoice: " Both damp and mould " }).dampMouldChoice, "Both damp and mould");
+    assert.equal(readHhsrsValues({ dampMouldChoice: "ticks" }).dampMouldChoice, "");
+
+    const shown = reporterCaseDetailExtras({
+      projectName: "MTVH 2026",
+      category: "Damp & Mould Growth",
+      dampMouldChoice: "Mould",
+    });
+    assert.equal(shown.dampMould, true);
+    const storedAfterChange = reporterCaseDetailExtras({
+      projectName: "MTVH 2026",
+      category: "Excess Cold",
+      dampMouldChoice: "Damp",
+    });
+    assert.equal(storedAfterChange.dampMould, true);
+    const hiddenProject = reporterCaseDetailExtras({
+      projectName: "Gateway 2026",
+      category: "Damp & Mould Growth",
+      dampMouldChoice: "Both damp and mould",
+    });
+    assert.equal(hiddenProject.dampMould, false);
+    const hiddenHazard = reporterCaseDetailExtras({
+      projectName: "MTVH 2026",
+      category: "Electrical Hazards",
+    });
+    assert.equal(hiddenHazard.dampMould, false);
+    assert.deepEqual(
+      surveyorDetailLines({
+        projectName: "MTVH 2026",
+        category: "Damp & Mould Growth",
+        dampMouldChoice: "Both damp and mould",
+        otherDetails: "Ceiling",
+      }).map((line) => `${line.label}: ${line.value}`),
+      ["Damp or mould: Both damp and mould", "Any other details: Ceiling"]
+    );
+    assert.equal(
+      surveyorDetailLines({
+        projectName: "Vico 2026",
+        category: "Damp & Mould Growth",
+        dampMouldChoice: "Mould",
+        vulnerabilities: "Elderly resident",
+      }).some((line) => line.label === "Damp or mould"),
+      false
+    );
+
+    const thanks = buildThanksSummary(
+      {
+        projectName: "MTVH 2026",
+        fullAddress: "1 High Street",
+        postcode: "EX1 1AA",
+        uprn: "1001",
+        surveyorName: "Alex Surveyor",
+        surveyDate: "2026-09-20",
+        category: "Damp & Mould Growth",
+        rating: "Medium",
+        comment: "Visible mould.",
+        dampMouldChoice: "Damp",
+        photoPaths: [],
+      },
+      (name) => name
+    );
+    assert.deepEqual(
+      thanks.notes.map((note) => note.label),
+      ["Damp or mould"]
+    );
+  });
+
   it("keeps Leeds, Cornwall and BPHA on the ordinary site form", () => {
     const names = ["Leeds Fed HA 2026", "LFHA (Leeds)", "Cornwall 2026", "BPHA", "BPHA 2026 ACQ"];
     for (const name of names) {
@@ -412,6 +520,7 @@ describe("validateHhsrsForm", () => {
       assert.equal(siteFormShowsCallReference(name, "High - Emergency risk"), false, name);
       assert.equal(siteFormShowsCallReference(name, "Severe"), false, name);
       assert.equal(siteFormShowsWindowRestrictor(name, "Falling Between Levels"), false, name);
+      assert.equal(siteFormShowsDampMouldChoice(name, "Damp & Mould Growth"), false, name);
       const rating = siteFormRatingChoices(name).includes("Severe") ? "Severe" : "Medium";
       const result = validateHhsrsForm(
         {
@@ -428,6 +537,7 @@ describe("validateHhsrsForm", () => {
         assert.equal(result.data.clientCallReference, "");
         assert.equal(result.data.suspectedCause, "");
         assert.equal(result.data.vulnerabilities, "");
+        assert.equal(result.data.dampMouldChoice, "");
       }
     }
     assert.equal(siteFormProjectFlags("Saxon Weald 2026 Phase 4").saxon, true);
@@ -440,7 +550,10 @@ describe("validateHhsrsForm", () => {
     assert.equal(devon.ok, true);
     if (devon.ok) assert.equal(devon.data.otherDetails, "");
 
-    const mtvh = validateHhsrsForm(blankDetails, { id: "mtvh", name: "MTVH 2026" });
+    const mtvh = validateHhsrsForm(
+      { ...blankDetails, dampMouldChoice: "Damp" },
+      { id: "mtvh", name: "MTVH 2026" }
+    );
     assert.equal(mtvh.ok, true);
     if (mtvh.ok) {
       assert.equal(mtvh.data.projectName, "MTVH 2026");
@@ -450,7 +563,7 @@ describe("validateHhsrsForm", () => {
     }
 
     const phase = validateHhsrsForm(
-      { ...blankDetails, clientCallReference: "" },
+      { ...blankDetails, clientCallReference: "", dampMouldChoice: "Mould" },
       { id: "mtvh-p1", name: "MTVH Phase 1 2026" }
     );
     assert.equal(phase.ok, true);
@@ -701,7 +814,27 @@ describe("stock UPRN address", () => {
       },
       "MTVH 2026"
     );
-    assert.equal(mtvh.extras, true);
+    assert.equal(mtvh.hazard, false);
+    assert.equal(mtvh.extras, false);
+    const mtvhChosen = siteFormSectionState(
+      {
+        ...emptyHhsrsValues(),
+        projectId: "p",
+        surveyDate: "2026-09-20",
+        surveyorName: "Alex Surveyor",
+        uprn: "1001",
+        fullAddress: "1 High Street",
+        postcode: "EX1 1AA",
+        addressConfirmed: true,
+        category: "Damp & Mould Growth",
+        rating: "Low",
+        comment: "Damp patch.",
+        dampMouldChoice: "Both damp and mould",
+      },
+      "MTVH 2026"
+    );
+    assert.equal(mtvhChosen.hazard, true);
+    assert.equal(mtvhChosen.extras, true);
     const onward = siteFormSectionState(
       {
         ...emptyHhsrsValues(),
@@ -806,6 +939,14 @@ describe("HHSRS site form project option flags", () => {
     const hazard = html.slice(html.indexOf('id="step-hazard"'), html.indexOf('id="extra-box"'));
     assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
     assert.match(html, /id="restrictor-box"[^>]*hidden/);
+    assert.match(html, /id="damp-mould-box"[^>]*hidden/);
+    const dampBox = html.slice(html.indexOf('id="damp-mould-box"'), html.indexOf('id="restrictor-box"'));
+    assert.match(dampBox, /role="radiogroup"/);
+    assert.match(dampBox, /type="radio"[^>]*name="dampMouldChoice"[^>]*value="Damp"/);
+    assert.match(dampBox, /type="radio"[^>]*value="Mould"/);
+    assert.match(dampBox, /type="radio"[^>]*value="Both damp and mould"/);
+    assert.doesNotMatch(dampBox, /type="checkbox"/);
+    assert.match(dampBox, /disabled/);
     assert.match(html, /class="restrictor-locs"/);
     assert.match(html, /How many window restrictors are missing \*/);
     assert.match(html, /inputmode="numeric"/);
@@ -834,6 +975,12 @@ describe("HHSRS site form project option flags", () => {
     assert.match(flowJs, /tag === "TEXTAREA"/);
     assert.match(flowJs, /function syncCauseBox/);
     assert.match(flowJs, /function syncRestrictorBox/);
+    assert.match(flowJs, /function syncDampMouldBox/);
+    assert.match(flowJs, /function dampMouldShown/);
+    assert.match(flowJs, /mtvhSelected\(\) && dampSelected\(\)/);
+    const dampFn = flowJs.slice(flowJs.indexOf("function syncDampMouldBox"), flowJs.indexOf("function syncCallsBox"));
+    assert.match(dampFn, /box\.hidden = !show/);
+    assert.match(dampFn, /inputs\[i\]\.disabled = !show/);
     assert.match(flowJs, /Falling Between Levels/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsAlways"));
     assert.doesNotMatch(hazardFn, /suspectedCause/);
@@ -853,6 +1000,7 @@ describe("HHSRS site form project option flags", () => {
       reviewOptions
     );
     assert.doesNotMatch(String(blankReview), /Suspected cause/);
+    assert.doesNotMatch(String(blankReview), /Damp or mould/);
     const keptReview = ejs.render(
       reviewTemplate,
       {
@@ -870,6 +1018,78 @@ describe("HHSRS site form project option flags", () => {
     );
     assert.match(html, /data-jump=""/);
     assert.match(html, /viewport-fit=cover/);
+  });
+});
+
+describe("MTVH damp and mould choice on the surveyor form", () => {
+  function renderChoice(project: { id: string; mtvh?: boolean; vulnerabilities?: boolean }, category: string) {
+    const template = readFileSync(join(process.cwd(), "views/hhsrs-site-form/form.ejs"), "utf8");
+    const values = { ...emptyHhsrsValues(), projectId: project.id, category };
+    return ejs.render(
+      template,
+      {
+        title: "New issue",
+        hhsrsUrl,
+        minPhotos: HHSRS_MIN_PHOTOS,
+        maxPhotos: HHSRS_MAX_PHOTOS,
+        maxFileBytes: HHSRS_MAX_FILE_BYTES,
+        maxFileMb: HHSRS_MAX_FILE_MB,
+        photoHint: hhsrsPhotoHint(),
+        formError: "",
+        errors: {},
+        values,
+        draft: null,
+        surveyors: [{ id: "s1", name: "Alex Surveyor" }],
+        categories: HHSRS_CATEGORIES,
+        ratings: HHSRS_SITE_FORM_NEW_RATINGS,
+        callBlankReasons: CALL_REF_BLANK_REASONS,
+        steps: siteFormSectionState(values, project.mtvh ? "MTVH 2026" : "Gateway 2026"),
+        jump: "",
+        dampMouldChoices: DAMP_MOULD_CHOICES,
+        projects: [
+          {
+            id: project.id,
+            name: project.mtvh ? "MTVH 2026" : "Gateway 2026",
+            flags: {
+              calls: false,
+              onward: false,
+              saxon: false,
+              online: false,
+              vulnerabilities: Boolean(project.vulnerabilities),
+              mtvh: Boolean(project.mtvh),
+              ratingScheme: "NEW",
+            },
+          },
+        ],
+      },
+      { filename: join(process.cwd(), "views/hhsrs-site-form/form.ejs") }
+    );
+  }
+
+  function choiceBox(html: string) {
+    return html.slice(html.indexOf('id="damp-mould-box"'), html.indexOf('id="restrictor-box"'));
+  }
+
+  it("shows the single required choice only for MTVH damp and mould", () => {
+    const shown = choiceBox(renderChoice({ id: "mtvh", mtvh: true }, "Damp & Mould Growth"));
+    assert.doesNotMatch(shown, /\shidden/);
+    assert.match(shown, /Damp or mould \*/);
+    assert.match(shown, /type="radio"[^>]*name="dampMouldChoice"[^>]*value="Damp"[^>]*required/);
+    assert.match(shown, /value="Mould"/);
+    assert.match(shown, /value="Both damp and mould"/);
+    assert.doesNotMatch(shown, /type="checkbox"/);
+    assert.doesNotMatch(shown, /disabled/);
+
+    const otherHazard = choiceBox(renderChoice({ id: "mtvh", mtvh: true }, "Electrical Hazards"));
+    assert.match(otherHazard, /id="damp-mould-box"[^>]*hidden/);
+    assert.match(otherHazard, /disabled/);
+
+    const otherProject = choiceBox(renderChoice({ id: "gw" }, "Damp & Mould Growth"));
+    assert.match(otherProject, /id="damp-mould-box"[^>]*hidden/);
+    assert.match(otherProject, /disabled/);
+
+    const vico = choiceBox(renderChoice({ id: "vico", vulnerabilities: true }, "Damp & Mould Growth"));
+    assert.match(vico, /id="damp-mould-box"[^>]*hidden/);
   });
 });
 

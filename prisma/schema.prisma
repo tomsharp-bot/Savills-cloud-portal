@@ -360,6 +360,8 @@ model HhsrsSiteSubmission {
   restrictorMissingCount String  @default("")
   restrictorLocations    String  @default("")
   restrictorMaterial     String  @default("")
+  /// MTVH damp and mould only: Damp, Mould, or Both damp and mould. Empty otherwise.
+  dampMouldChoice        String  @default("")
   escalation           String    @default("")
   onwardTopic          String    @default("")
   cat1Confirmed        Boolean   @default(false)

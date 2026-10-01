@@ -417,8 +417,18 @@
     return false;
   }
 
+  function dampMouldShown() {
+    return mtvhSelected() && dampSelected();
+  }
+
+  function dampMouldDone() {
+    if (!dampMouldShown()) return true;
+    var picked = document.querySelector('#damp-mould-box input[name="dampMouldChoice"]:checked');
+    return !!(picked && !picked.disabled);
+  }
+
   function hazardDone() {
-    return Boolean(val("category") && val("rating") && val("comment") && restrictorDone());
+    return Boolean(val("category") && val("rating") && val("comment") && restrictorDone() && dampMouldDone());
   }
 
   function callsAlways() {
@@ -472,6 +482,7 @@
     syncCallsBox();
     syncCauseBox();
     syncRestrictorBox();
+    syncDampMouldBox();
   }
 
   function ratingScheme() {
@@ -525,6 +536,18 @@
       if (inputs[i].id === "restrictorMissingCount" || inputs[i].id === "restrictorMaterial") {
         inputs[i].required = show;
       }
+    }
+  }
+
+  function syncDampMouldBox() {
+    var box = $("damp-mould-box");
+    var show = dampMouldShown();
+    if (box) box.hidden = !show;
+    if (!box) return;
+    var inputs = box.querySelectorAll('input[name="dampMouldChoice"]');
+    for (var i = 0; i < inputs.length; i++) {
+      inputs[i].disabled = !show;
+      inputs[i].required = show && i === 0;
     }
   }
 
@@ -698,6 +721,11 @@
       updateFlow({ announce: false });
     });
   });
+  document.querySelectorAll('#damp-mould-box input[name="dampMouldChoice"]').forEach(function (choice) {
+    choice.addEventListener("change", function () {
+      updateFlow({ announce: true });
+    });
+  });
 
   var callBox = $("callUnreached");
   if (callBox) {
@@ -866,6 +894,16 @@
       var el = nodes[i];
       if (el.type === "checkbox") {
         if (!el.checked && !el.disabled && !(el.closest && el.closest("[hidden]"))) return true;
+        continue;
+      }
+      if (el.type === "radio") {
+        if (el.disabled || (el.closest && el.closest("[hidden]")) || !el.required) continue;
+        var group = form.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
+        var picked = false;
+        for (var r = 0; r < group.length; r++) {
+          if (group[r].checked) picked = true;
+        }
+        if (!picked) return true;
         continue;
       }
       if (el.disabled || (el.closest && el.closest("[hidden]"))) continue;
@@ -1125,6 +1163,9 @@
     if (callUnreached) callUnreached.checked = false;
     document.querySelectorAll('#restrictor-box input[name="restrictorLocations"]').forEach(function (box) {
       box.checked = false;
+    });
+    document.querySelectorAll('#damp-mould-box input[name="dampMouldChoice"]').forEach(function (choice) {
+      choice.checked = false;
     });
     updateFlow({ announce: false });
     var submit = form && form.querySelector('button[type="submit"]');

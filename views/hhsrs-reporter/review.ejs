@@ -13,7 +13,9 @@
   const caseNotNeeded = isFilled && row.status === "not_needed";
   const detailExtras = typeof caseDetailExtras !== "undefined" && caseDetailExtras
     ? caseDetailExtras
-    : { calls: false, otherDetails: false, vulnerabilities: false, cause: false, restrictors: false, surveyDate: false };
+    : { calls: false, otherDetails: false, vulnerabilities: false, cause: false, restrictors: false, dampMould: false, surveyDate: false };
+  const dampMouldChoices = typeof dampMouldChoiceOptions !== "undefined" ? dampMouldChoiceOptions : ["Damp", "Mould", "Both damp and mould"];
+  const currentDampMould = isFilled ? String(row.dampMouldChoice || "") : "";
   const restrictorMaterials = ["PVC", "Timber", "Metal"];
   const currentMaterial = isFilled ? String(row.restrictorMaterial || "") : "";
 %>
@@ -211,6 +213,19 @@
           <div class="project-extra" data-extra="other_details" <%= detailExtras.otherDetails ? "" : "hidden" %>>
             <label for="rv-other-details">Any other details</label>
             <textarea id="rv-other-details" name="otherDetails" style="min-height:72px" placeholder="Optional details from the surveyor"><%= isFilled ? row.otherDetails : "" %></textarea>
+          </div>
+
+          <div class="project-extra" data-extra="damp_mould" <%= detailExtras.dampMould ? "" : "hidden" %>>
+            <label for="rv-damp-mould">Damp or mould</label>
+            <select id="rv-damp-mould" name="dampMouldChoice" <%= detailExtras.dampMould ? "" : "disabled" %>>
+              <option value="">Select…</option>
+              <% dampMouldChoices.forEach((choice) => { %>
+                <option value="<%= choice %>" <%= currentDampMould === choice ? "selected" : "" %>><%= choice %></option>
+              <% }) %>
+              <% if (currentDampMould && !dampMouldChoices.includes(currentDampMould)) { %>
+                <option value="<%= currentDampMould %>" selected><%= currentDampMould %></option>
+              <% } %>
+            </select>
           </div>
 
           <div class="project-extra" data-extra="restrictors" <%= detailExtras.restrictors ? "" : "hidden" %>>

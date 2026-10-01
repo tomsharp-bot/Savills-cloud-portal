@@ -18,7 +18,9 @@ import {
   safeId,
   safeStoredName,
   appendCasePhotos,
+  canonicalDampMouldChoice,
   canonicalRestrictorLocations,
+  DAMP_MOULD_CHOICES,
   discardAppendedCasePhotos,
   normalizeUprn,
   reporterCaseDetailExtras,
@@ -458,6 +460,7 @@ hhsrsReporterRouter.get("/review", async (req: Request, res: Response) => {
     callBlankReasons: CALL_REF_BLANK_REASONS,
     callBlank: { reason: "", note: "" },
     caseDetailExtras: reporterCaseDetailExtras({ projectName: "" }),
+    dampMouldChoiceOptions: DAMP_MOULD_CHOICES,
     onwardTopics: ONWARD_TOPICS,
     matchedProject: null,
     mode: "blank",
@@ -543,6 +546,7 @@ async function renderReview(
     callBlankReasons: CALL_REF_BLANK_REASONS,
     callBlank: splitCallNotes(row.callNotes || ""),
     caseDetailExtras: reporterCaseDetailExtras(row),
+    dampMouldChoiceOptions: DAMP_MOULD_CHOICES,
     onwardTopics: ONWARD_TOPICS,
     matchedProject: matched,
     mode: "filled",
@@ -1509,6 +1513,9 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
       : {}),
     ...(Object.prototype.hasOwnProperty.call(posted, "restrictorMaterial")
       ? { restrictorMaterial: String(posted.restrictorMaterial ?? "").trim() }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(posted, "dampMouldChoice")
+      ? { dampMouldChoice: canonicalDampMouldChoice(posted.dampMouldChoice) }
       : {}),
   };
 

@@ -35,6 +35,8 @@
           <% const showCause = !!(flags.vulnerabilities && /damp/i.test(String(values.category || "")) && /mould|mold/i.test(String(values.category || ""))); %>
           <% const showCalls = !!(flags.calls || (flags.mtvh && values.rating === "High - Emergency risk")); %>
           <% const showRestrictor = !!(flags.mtvh && values.category === "Falling Between Levels"); %>
+          <% const showDampMould = !!(flags.mtvh && /damp/i.test(String(values.category || "")) && /mould|mold/i.test(String(values.category || ""))); %>
+          <% const dampMouldChoiceOptions = typeof dampMouldChoices !== "undefined" ? dampMouldChoices : ["Damp", "Mould", "Both damp and mould"]; %>
           <% const restrictorLocationOptions = typeof restrictorLocations !== "undefined" ? restrictorLocations : ["Hall", "Kitchen", "Lounge", "Other GF", "Landing", "Bedroom 1", "Bedroom 2", "Bedroom 3", "Bathroom"]; %>
           <% const restrictorMaterialOptions = typeof restrictorMaterials !== "undefined" ? restrictorMaterials : ["PVC", "Timber", "Metal"]; %>
           <% const chosenLocations = new Set(String(values.restrictorLocations || "").split(",").map((part) => part.trim())); %>
@@ -154,6 +156,16 @@
                     </select>
                     <% if (errors.rating) { %><p class="field-error"><%= errors.rating %></p><% } %>
                   </div>
+                </div>
+
+                <div id="damp-mould-box" <%= showDampMould ? "" : "hidden" %>>
+                  <p class="restrictor-label" id="damp-mould-label">Damp or mould *</p>
+                  <div class="damp-mould-choices" role="radiogroup" aria-labelledby="damp-mould-label">
+                    <% dampMouldChoiceOptions.forEach((choice, index) => { %>
+                      <label class="hhsrs-check"><input type="radio" name="dampMouldChoice" value="<%= choice %>" <%= values.dampMouldChoice === choice ? "checked" : "" %> <%= showDampMould ? (index === 0 ? "required" : "") : "disabled" %> /><span><%= choice %></span></label>
+                    <% }) %>
+                  </div>
+                  <% if (errors.dampMouldChoice) { %><p class="field-error"><%= errors.dampMouldChoice %></p><% } %>
                 </div>
 
                 <div id="restrictor-box" class="restrictor-box" <%= showRestrictor ? "" : "hidden" %>>
