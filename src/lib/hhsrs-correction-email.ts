@@ -6,6 +6,7 @@
  */
 import { correctionSubject, type CorrectionReason } from "./hhsrs-find.js";
 import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
+import { amendmentRatingChoices, officeCategoryChoices } from "./hhsrs-reporter-projects.js";
 import { escapeHtml, stripTrailingSignature } from "./hhsrs-signature.js";
 
 /** First line of an amended resend. Do not add the reason or the old "this corrects" sentence. */
@@ -282,13 +283,24 @@ export function readAmendmentFields(body: Record<string, unknown>): AmendmentFie
   };
 }
 
-/** Keep a legacy value that is already on the sent email. New picks must be from the set lists. */
-export function amendmentListError(previous: AmendmentFields, next: AmendmentFields): string {
-  if (next.hazard !== previous.hazard && !isHhsrsCategory(next.hazard)) {
-    return "Choose a hazard from the list.";
+/**
+ * Keep a value that is already on the sent email.
+ * A new pick must be on that project's list. With no project, the check stays the shared lists.
+ */
+export function amendmentListError(
+  previous: AmendmentFields,
+  next: AmendmentFields,
+  projectName = ""
+): string {
+  if (next.hazard !== previous.hazard) {
+    const allowed = projectName ? officeCategoryChoices(projectName).includes(next.hazard) : isHhsrsCategory(next.hazard);
+    if (!allowed) return "Choose a hazard from the list.";
   }
-  if (next.rating !== previous.rating && !isHhsrsSiteFormRating(next.rating)) {
-    return "Choose a rating from the list.";
+  if (next.rating !== previous.rating) {
+    const allowed = projectName
+      ? amendmentRatingChoices(projectName).includes(next.rating)
+      : isHhsrsSiteFormRating(next.rating);
+    if (!allowed) return "Choose a rating from the list.";
   }
   return "";
 }

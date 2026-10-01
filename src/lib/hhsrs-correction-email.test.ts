@@ -602,5 +602,20 @@ describe("HHSRS amend and resend", () => {
     assert.equal(amendmentListError(previous, { ...previous, rating: "Extreme" }), "Choose a rating from the list.");
     assert.equal(amendmentListError(previous, { ...previous, hazard: "Excess Cold", rating: "Low" }), "");
     assert.equal(amendmentListError(previous, previous), "");
+    assert.equal(
+      amendmentListError(previous, { ...previous, hazard: "Falls on level" }, "Gateway 2026"),
+      "Choose a hazard from the list."
+    );
+    assert.equal(
+      amendmentListError(previous, { ...previous, rating: "Slight" }, "Gateway 2026"),
+      "Choose a rating from the list."
+    );
+    assert.equal(amendmentListError(previous, { ...previous, hazard: "Excess Cold", rating: "Low" }, "MTVH 2026"), "");
+    assert.equal(amendmentListError(previous, { ...previous, hazard: "Falls on level", rating: "Slight" }, "Onward 2026"), "");
+    assert.equal(
+      amendmentListError(previous, { ...previous, hazard: "Fire & Explosions" }, "Vico 2026"),
+      "Choose a hazard from the list."
+    );
+    assert.equal(amendmentListError(previous, previous, "Onward 2026"), "");
   });
 });

@@ -3,12 +3,7 @@ import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { formatDocDate } from "../lib/dates.js";
-import {
-  HHSRS_CATEGORIES,
-  HHSRS_RATINGS,
-  HHSRS_SITE_FORM_RATINGS,
-  isHhsrsRating,
-} from "../lib/hhsrs-categories.js";
+import { HHSRS_CATEGORIES, HHSRS_LEGACY_CATEGORIES, HHSRS_RATINGS } from "../lib/hhsrs-categories.js";
 import {
   CALL_REF_BLANK_REASONS,
   HHSRS_MAX_PHOTOS,
@@ -54,6 +49,9 @@ import {
 } from "../lib/hhsrs-reporter.js";
 import {
   HHSRS_PORTAL_NAME_ALIASES,
+  amendmentRatingChoices,
+  officeCategoryChoices,
+  officeRatingChoices,
   RATING_OPTIONS,
   SITE_FORM_PUBLIC_URL,
   hhsrsProjectSettings,
@@ -201,17 +199,20 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
   res.locals.claimRowClass = (row: { claimedBy?: string | null; claimedAt?: Date | string | null }) =>
     claimRowClass(claimView(row).status);
   res.locals.siteFormPublicUrl = SITE_FORM_PUBLIC_URL;
+  res.locals.categoryOptions = { NEW: HHSRS_CATEGORIES, OLD: HHSRS_LEGACY_CATEGORIES };
   res.locals.logoUrl = SIGNATURE_LOGO_PUBLIC_PATH;
   // Logo is served from portal static; prefer baseUrl when available.
   if (typeof res.locals.baseUrl === "function") {
     res.locals.logoUrl = res.locals.baseUrl(SIGNATURE_LOGO_PUBLIC_PATH);
     res.locals.reporterCssUrl = res.locals.baseUrl("/css/hhsrs-reporter.css");
     res.locals.reporterJsUrl = res.locals.baseUrl("/js/hhsrs-reporter.js");
+    res.locals.hazardListsJsUrl = res.locals.baseUrl("/js/hhsrs-hazard-lists.js");
     res.locals.portalHomeUrl = res.locals.baseUrl("/admin");
     res.locals.logoutUrl = res.locals.baseUrl("/logout");
   } else {
     res.locals.reporterCssUrl = "/css/hhsrs-reporter.css";
     res.locals.reporterJsUrl = "/js/hhsrs-reporter.js";
+    res.locals.hazardListsJsUrl = "/js/hhsrs-hazard-lists.js";
     res.locals.portalHomeUrl = "/admin";
     res.locals.logoutUrl = "/logout";
   }
@@ -843,8 +844,8 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
         extras: parsed.extras,
         prose: parsed.prose,
         previousSubject: latest.subject,
-        categories: withCurrent(HHSRS_CATEGORIES, parsed.fields.hazard),
-        ratings: withCurrent(HHSRS_SITE_FORM_RATINGS, parsed.fields.rating),
+        categories: withCurrent(officeCategoryChoices(picked.projectName), parsed.fields.hazard),
+        ratings: withCurrent(amendmentRatingChoices(picked.projectName), parsed.fields.rating),
         photos: sentPhotos.map((photo, index) => ({
           ...photo,
           caption: photo.caption || photo.name || `Photo ${index + 1}`,
@@ -1472,8 +1473,9 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   }
   const ctx = await reviewContext(row.id);
   const update = readReporterUpdate(req.body || {});
-  // Site-form ratings stay Low/Medium/High; allow keeping an existing non-standard value.
-  if (!isHhsrsRating(update.rating) && update.rating !== row.rating) {
+  // A new rating must be on this project's list. The rating already stored on the case stays valid.
+  const allowedRatings = officeRatingChoices(row.projectName);
+  if (!allowedRatings.includes(update.rating) && update.rating !== row.rating) {
     await renderReview(req, res, row, {
       ...ctx,
       flashErr: "Select a valid rating for this case.",

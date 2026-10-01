@@ -363,7 +363,7 @@ export async function sendCaseEmail(args: {
     if (!previousEmail) return { ok: false, error: "Not sent yet." };
     const previousFields = parseSentEmail(previousEmail.body).fields;
     const nextFields = readAmendmentFields(args.body);
-    const listError = amendmentListError(previousFields, nextFields);
+    const listError = amendmentListError(previousFields, nextFields, args.row.projectName);
     if (listError) return { ok: false, error: listError };
     amendmentMail = buildAmendmentEmail({
       previousBody: previousEmail.body,

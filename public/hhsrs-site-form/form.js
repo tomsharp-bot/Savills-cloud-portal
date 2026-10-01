@@ -455,6 +455,7 @@
       var name = opt && project && val("projectId") ? String(opt.textContent || "").trim() : "";
       label.textContent = name ? "· " + name : "";
     }
+    syncCategoryOptions();
     syncRatingOptions();
     var flags = {
       saxon: !!(opt && opt.getAttribute("data-saxon") === "1"),
@@ -472,6 +473,30 @@
     syncCallsBox();
     syncCauseBox();
     syncRestrictorBox();
+  }
+
+  function syncCategoryOptions() {
+    var select = $("category");
+    var lists = window.HHSRS_SITE_CATEGORIES;
+    if (!select || !lists) return;
+    var scheme = ratingScheme();
+    var list = lists[scheme] || lists.NEW || [];
+    if (!list.length || select.getAttribute("data-scheme") === scheme) return;
+    var current = select.value;
+    while (select.options.length) select.remove(0);
+    var placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select a category";
+    select.appendChild(placeholder);
+    for (var i = 0; i < list.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = list[i];
+      opt.textContent = list[i];
+      if (list[i] === current) opt.selected = true;
+      select.appendChild(opt);
+    }
+    if (list.indexOf(current) === -1) select.value = "";
+    select.setAttribute("data-scheme", scheme);
   }
 
   function ratingScheme() {

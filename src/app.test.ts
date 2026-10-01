@@ -304,6 +304,14 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.doesNotMatch(ratingSelect, /value="High"/);
     assert.doesNotMatch(ratingSelect, /Severe|Slight|Moderate/);
     assert.doesNotMatch(ratingSelect, /High – severe risk/);
+    const categorySelect = form.body.slice(
+      form.body.indexOf('<select id="category"'),
+      form.body.indexOf("</select>", form.body.indexOf('<select id="category"'))
+    );
+    assert.match(categorySelect, /Damp &amp; Mould Growth/);
+    assert.doesNotMatch(categorySelect, /Falls on level/);
+    assert.match(form.body, /Falls associated with baths etc/);
+    assert.match(form.body, /data-rating-scheme="OLD"/);
     assert.match(form.body, /id="restrictor-box"[^>]*hidden/);
     assert.match(form.body, /class="restrictor-locs"/);
     assert.match(form.body, /data-vulnerabilities="1"/);
@@ -532,6 +540,7 @@ describe("HHSRS site form at domain-root paths", () => {
       {
         ...hhsrsReviewFields(),
         projectId: "hhsrs-demo-vico",
+        category: "Damp / Mould Growth",
         rating: "Moderate",
         clientCallReference: "CR-44",
         vulnerabilities: "Elderly resident",
