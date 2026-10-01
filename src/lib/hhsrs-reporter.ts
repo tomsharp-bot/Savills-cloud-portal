@@ -1,5 +1,10 @@
 import type { HhsrsSiteSubmission } from "@prisma/client";
-import { draftFromSubmission, type SubmissionDraftInput } from "./hhsrs-reporter-draft.js";
+import {
+  draftFromSubmission,
+  onwardRatingIsCategory1,
+  templateId,
+  type SubmissionDraftInput,
+} from "./hhsrs-reporter-draft.js";
 import { matchDemoProject, resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import { composeCallNotes, isCallRefBlankReason } from "./hhsrs-site-form.js";
 
@@ -146,6 +151,12 @@ function postedFlag(value: unknown, fallback: boolean): boolean {
   return value === true || value === "true" || value === "1" || value === "on";
 }
 
+/** Onward category 1 follows the rating. Other projects keep the stored or posted flag. */
+function category1ForReview(projectName: string, rating: string, posted: unknown, fallback: boolean): boolean {
+  if (templateId(projectName) === "Onward") return onwardRatingIsCategory1(rating);
+  return postedFlag(posted, fallback);
+}
+
 function postedPhotoCount(body: Record<string, unknown>, fallback: number): number {
   if (body.photoCount === undefined || body.photoCount === null || body.photoCount === "") return fallback;
   const n = Number(body.photoCount);
@@ -187,7 +198,7 @@ export function mergeReviewDraftFields(
       vulnerabilities: postedString(body, "vulnerabilities"),
       escalation: postedString(body, "escalation"),
       onwardTopic: postedString(body, "onwardTopic"),
-      cat1Confirmed: postedFlag(body.cat1Confirmed, false),
+      cat1Confirmed: category1ForReview(postedProject, postedRating, body.cat1Confirmed, false),
       otherDetails: postedString(body, "otherDetails"),
       restrictorMissingCount: postedString(body, "restrictorMissingCount"),
       restrictorLocations: postedString(body, "restrictorLocations"),
@@ -226,7 +237,12 @@ export function mergeReviewDraftFields(
     vulnerabilities: body.vulnerabilities === undefined ? row.vulnerabilities : postedString(body, "vulnerabilities"),
     escalation: body.escalation === undefined ? row.escalation : postedString(body, "escalation"),
     onwardTopic: body.onwardTopic === undefined ? row.onwardTopic : postedString(body, "onwardTopic"),
-    cat1Confirmed: postedFlag(body.cat1Confirmed, row.cat1Confirmed),
+    cat1Confirmed: category1ForReview(
+      projectUnchanged ? row.projectName : postedProject,
+      postedRating || row.rating,
+      body.cat1Confirmed,
+      row.cat1Confirmed
+    ),
     otherDetails: body.otherDetails === undefined ? row.otherDetails || "" : postedString(body, "otherDetails"),
     restrictorMissingCount:
       body.restrictorMissingCount === undefined

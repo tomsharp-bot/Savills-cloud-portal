@@ -10,6 +10,7 @@ import { isHhsrsCategory, isHhsrsRating, isHhsrsSiteFormRating } from "./hhsrs-c
 import { prisma } from "./prisma.js";
 import { createSubmissionWithReference } from "./hhsrs-reference.js";
 import { persistBufferPhotos, submissionDir, HHSRS_MAX_FILE_BYTES, HHSRS_MAX_PHOTOS, hhsrsPhotoSizeError, isAllowedImageName } from "./hhsrs-site-form.js";
+import { onwardRatingIsCategory1, onwardSendBlock, templateId } from "./hhsrs-reporter-draft.js";
 import { checkSendRequest, isTickChecked, smtpPasswordSet } from "./hhsrs-send.js";
 import { SitePhotoError, type SitePhotoStorage } from "./hhsrs-site-photos.js";
 
@@ -94,6 +95,8 @@ export async function createOfficeCaseAndSend(args: {
   if (!isHhsrsRating(rating) && !isHhsrsSiteFormRating(rating)) {
     return { ok: false, error: "Choose a rating from the list." };
   }
+  const onwardBlock = onwardSendBlock(projectName, rating, isTickChecked(args.body.agreeSurveyorRating));
+  if (onwardBlock) return { ok: false, error: onwardBlock };
 
   const photoError = officePhotoError(args.files);
   if (photoError) return { ok: false, error: photoError };
@@ -150,6 +153,7 @@ export async function createOfficeCaseAndSend(args: {
           emailSubject: subject,
           emailBody,
           lastEditedBy: args.createdBy,
+          ...(templateId(project.name) === "Onward" ? { cat1Confirmed: onwardRatingIsCategory1(rating) } : {}),
         },
       })
     );

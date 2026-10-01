@@ -6,6 +6,10 @@ import {
   draftFromSubmission,
   formatAddress,
   prepareClientEmailBody,
+  onwardRatingIsCategory1,
+  onwardSendBlock,
+  ONWARD_AGREE_RATING_ERROR,
+  ONWARD_NOT_HIGH_ERROR,
   projectDraft,
   templateId,
 } from "./hhsrs-reporter-draft.js";
@@ -107,6 +111,53 @@ describe("HHSRS Reporter projectDraft", () => {
     assert.doesNotMatch(draft.body, /One of our surveyors has visited/);
     assert.doesNotMatch(draft.body, /Attached is a photo/);
     assert.doesNotMatch(draft.body, /on the HHSRS/);
+  });
+
+  it("treats an Onward High rating as category 1 and leaves other projects alone", () => {
+    assert.equal(onwardRatingIsCategory1("High"), true);
+    assert.equal(onwardRatingIsCategory1("High - Emergency Risk"), true);
+    assert.equal(onwardRatingIsCategory1("High - Emergency risk"), true);
+    assert.equal(onwardRatingIsCategory1("High - Severe Risk"), true);
+    assert.equal(onwardRatingIsCategory1("High - Significant risk"), true);
+    assert.equal(onwardRatingIsCategory1("Severe"), false);
+    assert.equal(onwardRatingIsCategory1("Severe – emergency risk"), false);
+    assert.equal(onwardRatingIsCategory1("Moderate"), false);
+    assert.equal(onwardSendBlock("Vico 2026", "High", false), "");
+    assert.equal(onwardSendBlock("MTVH 2026", "High - Emergency risk", false), "");
+    assert.equal(onwardSendBlock("Onward 2026", "High - Emergency Risk", false), ONWARD_AGREE_RATING_ERROR);
+    assert.equal(onwardSendBlock("Onward 2026", "Severe", true), ONWARD_NOT_HIGH_ERROR);
+    assert.equal(onwardSendBlock("Onward 2026", "High - Severe Risk", true), "");
+
+    const high = projectDraft(
+      {
+        ...base,
+        project: "Onward 2026",
+        rating: "High - Emergency Risk",
+        cat1Confirmed: false,
+        onwardTopic: "Electrical",
+        callStatus: "Not yet called",
+        description: "Exposed wire to hallway ceiling",
+      },
+      []
+    );
+    assert.match(high.subject, /HHSRS CAT1 \(Electrical\)/);
+
+    assert.throws(
+      () =>
+        projectDraft(
+          {
+            ...base,
+            project: "Onward 2026",
+            rating: "Severe",
+            cat1Confirmed: true,
+            onwardTopic: "Electrical",
+            callStatus: "Not yet called",
+            description: "Exposed wire to hallway ceiling",
+          },
+          []
+        ),
+      (err: unknown) => err instanceof DraftError && (err as Error).message === ONWARD_NOT_HIGH_ERROR
+    );
   });
 
   it("builds an Onward CAT1 draft when required fields are present", () => {
@@ -553,6 +604,46 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.doesNotMatch(vicoNoCause.body, /Why the call reference is blank/);
     assert.doesNotMatch(vicoNoCause.body, /No answer/);
     assert.doesNotMatch(vicoNoCause.body, /Any other details/);
+  });
+
+  it("stores an Onward High rating as category 1 without a confirmation box", () => {
+    const row = {
+      projectName: "Onward 2026",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      uprn: "100123",
+      surveyDate: "2026-09-20",
+      category: "Electrical Hazards",
+      rating: "Moderate",
+      comment: "Exposed wire.",
+      clientDescription: "",
+      clientCallReference: "",
+      callOutcome: "Not yet called",
+      callNotes: "",
+      workOrder: "",
+      suspectedCause: "",
+      includeCause: true,
+      vulnerabilities: "",
+      escalation: "",
+      onwardTopic: "Electrical",
+      cat1Confirmed: false,
+      photoPaths: [],
+    };
+    const high = mergeReviewDraftFields(row, { rating: "High - Emergency Risk" });
+    assert.equal(high.cat1Confirmed, true);
+    assert.equal(high.rating, "High - Emergency Risk");
+    const severe = mergeReviewDraftFields(row, { rating: "Severe", cat1Confirmed: "true" });
+    assert.equal(severe.cat1Confirmed, false);
+    const vico = mergeReviewDraftFields(
+      { ...row, projectName: "Vico 2026", rating: "High", cat1Confirmed: false },
+      { rating: "High", cat1Confirmed: "true" }
+    );
+    assert.equal(vico.cat1Confirmed, true);
+    const mtvh = mergeReviewDraftFields(
+      { ...row, projectName: "MTVH Pilot 2026", rating: "High - Significant risk", cat1Confirmed: false },
+      { rating: "High - Significant risk" }
+    );
+    assert.equal(mtvh.cat1Confirmed, false);
   });
 
   it("uses stored restrictor and other-detail answers when Generate email does not repost them", () => {

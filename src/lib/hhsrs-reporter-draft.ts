@@ -163,6 +163,31 @@ const NAMED_TEMPLATES: readonly TemplateId[] = [
   "Standard",
 ];
 
+/**
+ * Onward category 1 is a High rating.
+ * That includes the High ratings the surveyor form stores, such as
+ * "High - Emergency Risk" and "High - Severe Risk". Severe is not High.
+ */
+export function onwardRatingIsCategory1(rating: string): boolean {
+  const text = String(rating || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[–—]/g, "-")
+    .replace(/\s+/g, " ");
+  return text === "high" || text.startsWith("high ") || text.startsWith("high-");
+}
+
+export const ONWARD_AGREE_RATING_ERROR = "Tick that you agree with the surveyor's rating.";
+export const ONWARD_NOT_HIGH_ERROR = "Onward stores a High rating as category 1. This rating is not High.";
+
+/** Empty when this send can go ahead. Onward must agree, and only a High rating is category 1. */
+export function onwardSendBlock(projectName: string, rating: string, agreed: boolean): string {
+  if (templateId(projectName) !== "Onward") return "";
+  if (!agreed) return ONWARD_AGREE_RATING_ERROR;
+  if (!onwardRatingIsCategory1(rating)) return ONWARD_NOT_HIGH_ERROR;
+  return "";
+}
+
 /** Email template for a portal project name. Roster templates are mapped by the shared resolver. */
 export function templateId(project: string): TemplateId {
   const raw = String(project || "").trim();
@@ -796,10 +821,8 @@ export function baseProjectDraft(data: DraftCase, photos: string[]): { subject: 
       `${prefix} - HHSRS - ` + (year && year[0] === "2025" ? "UPRN " : "") + uprn + " - " + address;
   }
   if (template === "Onward") {
-    if (!data.cat1Confirmed) {
-      throw new DraftError(
-        "Confirm Category 1 from the survey information before using Onward’s CAT1 subject. Severe alone is not treated as confirmation."
-      );
+    if (!onwardRatingIsCategory1(rating)) {
+      throw new DraftError(ONWARD_NOT_HIGH_ERROR);
     }
     const uprn = (data.uprn || "").trim();
     const topic = data.onwardTopic || "";

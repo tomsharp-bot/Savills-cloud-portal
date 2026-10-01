@@ -166,20 +166,14 @@
           </div>
 
           <div class="project-extra" data-extra="onward" hidden>
-            <div class="field-row">
-              <div>
-                <label for="rv-onward-topic">Onward subject hazard</label>
-                <select id="rv-onward-topic" name="onwardTopic">
-                  <option value="">Select…</option>
-                  <% onwardTopics.forEach((t) => { %>
-                    <option value="<%= t %>" <%= isFilled && row.onwardTopic === t ? "selected" : "" %>><%= t %></option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="check-row" style="margin-top:1.55rem">
-                <input id="rv-cat1" name="cat1Confirmed" type="checkbox" value="true" <%= isFilled && row.cat1Confirmed ? "checked" : "" %> />
-                <label for="rv-cat1" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--text)">Category 1 confirmed (for CAT1 subject)</label>
-              </div>
+            <div>
+              <label for="rv-onward-topic">Onward subject hazard</label>
+              <select id="rv-onward-topic" name="onwardTopic">
+                <option value="">Select…</option>
+                <% onwardTopics.forEach((t) => { %>
+                  <option value="<%= t %>" <%= isFilled && row.onwardTopic === t ? "selected" : "" %>><%= t %></option>
+                <% }) %>
+              </select>
             </div>
           </div>
 
@@ -265,6 +259,12 @@
             </div>
           </div>
         </fieldset>
+        <div class="project-extra onward-agree" data-extra="onward" hidden>
+          <div class="check-row">
+            <input id="rv-agree-rating" name="agreeSurveyorRating" type="checkbox" value="1" />
+            <label for="rv-agree-rating" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--text)">I agree with the surveyor's rating</label>
+          </div>
+        </div>
         <div class="case-actions">
           <div class="generate-email-row case-save-row">
             <% if (isFilled) { %>

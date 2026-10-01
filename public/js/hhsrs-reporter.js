@@ -115,6 +115,16 @@
     return el ? String(el.value || "").replace(/^\s+|\s+$/g, "") : "";
   }
 
+  function onwardCase() {
+    var node = document.querySelector('#rv-case-form .project-extra[data-extra="onward"]');
+    return !!(node && !node.hidden);
+  }
+
+  function agreedSurveyorRating() {
+    var box = $("rv-agree-rating");
+    return !!(box && box.checked);
+  }
+
   function setExtraVisibility(projectCfg) {
     var extras = (projectCfg && projectCfg.extras) || {};
     var site = (projectCfg && projectCfg.siteForm) || {};
@@ -159,6 +169,7 @@
       }
     }
     syncCallRefFields();
+    if (typeof syncSendButton === "function") syncSendButton();
     var note = $("rv-online-form-note");
     if (note && extras.online_form) {
       var haz = (($("rv-hazard") && $("rv-hazard").value) || "").toLowerCase();
@@ -714,7 +725,6 @@
       includeCause: !!($("rv-include-cause") && $("rv-include-cause").checked),
       vulnerabilities: ($("rv-vulnerabilities") && $("rv-vulnerabilities").value) || "",
       onwardTopic: ($("rv-onward-topic") && $("rv-onward-topic").value) || "",
-      cat1Confirmed: !!($("rv-cat1") && $("rv-cat1").checked),
       workOrder: ($("rv-work-order") && $("rv-work-order").value) || "",
       otherDetails: ($("rv-other-details") && $("rv-other-details").value) || "",
       restrictorMissingCount: ($("rv-restrictor-count") && $("rv-restrictor-count").value) || "",
@@ -798,7 +808,7 @@
     if ($("rv-call-reason")) $("rv-call-reason").value = "";
     if ($("rv-onward-topic")) $("rv-onward-topic").value = "";
     if ($("rv-survey-date") && $("rv-survey-date").type !== "text") $("rv-survey-date").value = "";
-    if ($("rv-cat1")) $("rv-cat1").checked = false;
+    if ($("rv-agree-rating")) $("rv-agree-rating").checked = false;
     if ($("rv-include-cause")) $("rv-include-cause").checked = true;
     if ($("rv-rating")) $("rv-rating").value = "";
     if ($("rv-project")) $("rv-project").value = "";
@@ -874,7 +884,7 @@
   var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
   var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
   var REVIEW_SENT_CLEAR_KEY = "hhsrs-review-sent-clear";
-  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"];
+  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"];
   var REVIEW_EMAIL_FIELD_IDS = ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"];
   var reviewDraftSaveTimer = null;
   var resumeCleared = false;
@@ -1947,6 +1957,11 @@
       line.textContent = "Add a subject or body first.";
       return;
     }
+    if (onwardCase() && !agreedSurveyorRating()) {
+      btn.disabled = true;
+      line.textContent = "Tick that you agree with the surveyor's rating.";
+      return;
+    }
     if (!cfg.caseId) {
       var project = ($("rv-project") && String($("rv-project").value || "").trim()) || "";
       var address = ($("rv-address") && String($("rv-address").value || "").trim()) || "";
@@ -1994,6 +2009,8 @@
       el.addEventListener("input", syncSendButton);
       el.addEventListener("change", syncSendButton);
     });
+    var agreeRating = $("rv-agree-rating");
+    if (agreeRating) agreeRating.addEventListener("change", syncSendButton);
     syncSendButton();
     var ck = $("ck-overlay");
     if (!btn || !ck || (!cfg.findResend && cfg.send && cfg.send.sent)) return;
@@ -2140,6 +2157,7 @@
         fd.append("uprn", val("rv-uprn"));
         fd.append("hazard", val("rv-hazard"));
         fd.append("rating", val("rv-rating"));
+        if (onwardCase()) fd.append("agreeSurveyorRating", agreedSurveyorRating() ? "1" : "");
         fd.append("surveyor", val("rv-surveyor"));
         fd.append("surveyDate", val("rv-survey-date"));
         fd.append("notes", val("rv-notes"));
@@ -2181,6 +2199,18 @@
       $("rv-send-body").value = bodyEl ? String(bodyEl.value || "").replace(/\s+$/, "") : "";
       var holder = $("rv-send-photo-fields");
       holder.innerHTML = "";
+      if (onwardCase()) {
+        var agreeInput = document.createElement("input");
+        agreeInput.type = "hidden";
+        agreeInput.name = "agreeSurveyorRating";
+        agreeInput.value = agreedSurveyorRating() ? "1" : "";
+        holder.appendChild(agreeInput);
+        var ratingInput = document.createElement("input");
+        ratingInput.type = "hidden";
+        ratingInput.name = "rating";
+        ratingInput.value = val("rv-rating");
+        holder.appendChild(ratingInput);
+      }
       tickedPhotos().forEach(function (p) {
         var input = document.createElement("input");
         input.type = "hidden";

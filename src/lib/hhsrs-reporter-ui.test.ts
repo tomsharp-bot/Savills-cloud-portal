@@ -273,6 +273,15 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(caseFields.includes("Escalation category"), false);
     assert.equal(caseFields.includes('id="rv-escalation"'), false);
     assert.match(caseFields, /<label for="rv-rating">Rating<\/label>/);
+    const onwardExtra = caseFields.slice(caseFields.indexOf('data-extra="onward"'), caseFields.indexOf('data-extra="cause"'));
+    assert.doesNotMatch(onwardExtra, /rv-cat1|Category 1 confirmed/);
+    assert.match(onwardExtra, /id="rv-onward-topic"/);
+    assert.doesNotMatch(caseFields.slice(0, caseFields.indexOf('data-extra="onward"')), /rv-agree-rating/);
+    const fieldsetClose = review.indexOf("</fieldset>", review.indexOf('id="rv-case-fields"'));
+    const agreeAt = review.indexOf('id="rv-agree-rating"');
+    assert.ok(agreeAt > fieldsetClose, "the rating tick stays outside the locked case details");
+    assert.match(review.slice(agreeAt, agreeAt + 500), /I agree with the surveyor's rating/);
+    assert.match(readFileSync("public/js/hhsrs-reporter.js", "utf8"), /Tick that you agree with the surveyor's rating/);
     assert.ok(photosAt > 0 && generateAt > photosAt);
     assert.ok(emailPhotosAt > generateAt && downloadAt > emailPhotosAt);
     assert.equal(review.slice(photosAt, generateAt).includes("btn-download-photos"), false);

@@ -27,7 +27,7 @@ import {
   surveyorDetailLines,
 } from "../lib/hhsrs-site-form.js";
 import { copyLoggedHhsrsPhotos } from "../lib/hhsrs-completed-photos.js";
-import { ONWARD_TOPICS } from "../lib/hhsrs-reporter-draft.js";
+import { onwardSendBlock, onwardRatingIsCategory1, ONWARD_TOPICS, templateId } from "../lib/hhsrs-reporter-draft.js";
 import {
   HHSRS_ACTIONED_STATUSES,
   HHSRS_CALL_OUTCOMES,
@@ -1535,7 +1535,8 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
     vulnerabilities: Object.prototype.hasOwnProperty.call(posted, "vulnerabilities") ? update.vulnerabilities : row.vulnerabilities,
     escalation: update.escalation,
     onwardTopic: Object.prototype.hasOwnProperty.call(posted, "onwardTopic") ? update.onwardTopic : row.onwardTopic,
-    cat1Confirmed: update.cat1Confirmed,
+    cat1Confirmed:
+      templateId(row.projectName) === "Onward" ? onwardRatingIsCategory1(update.rating) : update.cat1Confirmed,
     internalNotes: update.internalNotes,
     status: statusForReviewSave(row.status, update.status),
     lastEditedBy: editor,
@@ -1623,6 +1624,24 @@ async function deliverCaseEmail(
   });
 }
 
+/** Onward only. A High rating is stored as category 1. Send stays blocked until the rating tick is checked. */
+async function storeOnwardCategory1(
+  row: { id: string; projectName: string; rating: string; cat1Confirmed: boolean },
+  body: Record<string, unknown>
+): Promise<string> {
+  if (templateId(row.projectName) !== "Onward") return "";
+  const postedRating = String(body.rating ?? "").trim();
+  const rating = postedRating || row.rating;
+  const block = onwardSendBlock(row.projectName, rating, isTickChecked(body.agreeSurveyorRating));
+  if (block) return block;
+  const data: { cat1Confirmed: boolean; rating?: string } = { cat1Confirmed: true };
+  if (postedRating && postedRating !== row.rating) data.rating = postedRating;
+  if (!row.cat1Confirmed || data.rating) {
+    await prisma.hhsrsSiteSubmission.update({ where: { id: row.id }, data });
+  }
+  return "";
+}
+
 async function handleSend(req: Request, res: Response, id: string): Promise<void> {
   const loaded = await loadCase(id);
   if (!loaded) {
@@ -1642,11 +1661,14 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
     res.redirect(HHSRS_REPORTER_PATH);
     return;
   }
-  const result = await deliverCaseEmail(
-    req,
-    row,
-    (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>
-  );
+  const sendBody = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const onwardBlock = await storeOnwardCategory1(row, sendBody);
+  if (onwardBlock) {
+    flashErr(req, onwardBlock);
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+    return;
+  }
+  const result = await deliverCaseEmail(req, row, sendBody);
   if (!result.ok) {
     flashErr(req, result.error);
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);

@@ -575,14 +575,30 @@ describe("HHSRS client email admin and send", { concurrency: 1 }, () => {
       const clearedPayload = JSON.parse(clearedDraft.body) as { to: string };
       assert.equal(clearedPayload.to, "");
       await prisma.hhsrsSiteSubmission.update({ where: { id: row.id }, data: { projectName: "Onward 2026" } });
-      const blockedSend = await request(app, "POST", `/HHSRSreporter/review/${row.id}/send`, {
+      const unticked = await request(app, "POST", `/HHSRSreporter/review/${row.id}/send`, {
         cookie,
         body: formBody({ checked: "1", to: "", cc: "", bcc: "" }),
+      });
+      const untickedPage = await request(app, "GET", unticked.location || `/HHSRSreporter/review/${row.id}`, {
+        cookie: unticked.setCookie.length ? cookieHeader(unticked.setCookie) : cookie,
+      });
+      assert.match(untickedPage.body, /Tick that you agree with the surveyor/);
+      assert.equal(
+        (await prisma.hhsrsSiteSubmission.findUnique({ where: { id: row.id } }))?.cat1Confirmed,
+        false
+      );
+      const blockedSend = await request(app, "POST", `/HHSRSreporter/review/${row.id}/send`, {
+        cookie: unticked.setCookie.length ? cookieHeader(unticked.setCookie) : cookie,
+        body: formBody({ checked: "1", agreeSurveyorRating: "1", to: "", cc: "", bcc: "" }),
       });
       const blockedPage = await request(app, "GET", blockedSend.location || `/HHSRSreporter/review/${row.id}`, {
         cookie: blockedSend.setCookie.length ? cookieHeader(blockedSend.setCookie) : cookie,
       });
       assert.match(blockedPage.body, /Add a To address\./);
+      assert.equal(
+        (await prisma.hhsrsSiteSubmission.findUnique({ where: { id: row.id } }))?.cat1Confirmed,
+        true
+      );
 
       await prisma.hhsrsClientEmail.delete({ where: { projectName: "Onward 2026" } });
       const codeDraft = await clientRecipientsForProject("Onward 2026");

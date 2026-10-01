@@ -1335,6 +1335,7 @@ a.linkish.active, .linkish.active {
   color: #5c6b7a;
 }
 .project-extra[hidden], .project-extra[hidden] { display: none !important; }
+.hhsrs-reporter .onward-agree { margin: 0.85rem 0 0; }
 #rv-call-blank[hidden] { display: none !important; }
 .cornwall-form-note {
   margin: 0.75rem 0 0;
