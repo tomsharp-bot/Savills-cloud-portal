@@ -173,8 +173,8 @@
     return !!(admins || adminCanonSet())[canon(name)];
   }
 
-  // Distinct week columns on the main grid. Matches projectWeeksOnGrid on the server.
-  // Two people in the same week count as one tile. One tile ≈ 40 surveys.
+  // Tiles on the main grid. Matches projectWeeksOnGrid on the server.
+  // Each filled cell counts, including two people in the same week. One tile ≈ 40 surveys.
   var SURVEYS_PER_WEEK = 40;
 
   function projectCatalogue() {
@@ -189,18 +189,18 @@
   function weeksOccupied(projectName) {
     if (!programmeCanon(projectName)) return 0;
     var catalogue = projectCatalogue();
-    var seen = {};
+    var count = 0;
     function scan(list) {
       (list || []).forEach(function (person) {
         if (!isApplied(person.name)) return;
-        (person.weeks || []).forEach(function (val, wi) {
-          if (programmeCellMatches(val, projectName, catalogue)) seen[wi] = true;
+        (person.weeks || []).forEach(function (val) {
+          if (programmeCellMatches(val, projectName, catalogue)) count += 1;
         });
       });
     }
     scan(DATA.rows);
     scan(DATA.admins);
-    return Object.keys(seen).length;
+    return count;
   }
 
   function refreshWeekCounts() {
@@ -213,8 +213,7 @@
   }
 
   function isAgencyFlag(flag) {
-    var f = String(flag || "").trim().toUpperCase();
-    return f === "F" || f === "E";
+    return String(flag || "").trim().length > 0;
   }
 
   function listedIn(people, name) {
@@ -248,7 +247,11 @@
     if (Object.prototype.hasOwnProperty.call(map, name)) return !!map[name];
     return true;
   }
-  function isTicked(name) { return mapGet(tickMap, name); }
+  function isTicked(name) {
+    if (!name) return true;
+    if (Object.prototype.hasOwnProperty.call(tickMap, name)) return !!tickMap[name];
+    return listedIn(DATA.rows || [], name) || listedIn(DATA.admins || [], name);
+  }
   function isApplied(name) { return mapGet(appliedMap, name); }
   function setTick(name, on, silent) {
     if (!name) return;
@@ -262,14 +265,24 @@
     });
   }
 
+  var lastPools = { agency: [], team: [] };
+
   function boardBody() {
+    var pools = lastPools || { agency: [], team: [] };
+    var surveyors = (DATA.rows || []).map(function (r) {
+      return { name: r.name, flag: r.flag || "", weeks: r.weeks || [] };
+    });
+    (pools.agency || []).concat(pools.team || []).forEach(function (person) {
+      if (listedIn(surveyors, person.name) || isAdminName(person.name)) return;
+      if (!Object.prototype.hasOwnProperty.call(tickMap, person.name)) tickMap[person.name] = false;
+      if (!Object.prototype.hasOwnProperty.call(appliedMap, person.name)) appliedMap[person.name] = false;
+      surveyors.push({ name: person.name, flag: person.flag || "", weeks: person.weeks || [] });
+    });
     return {
       weeks: (DATA.weeks || []).slice(),
       ticks: tickMap,
       applied: appliedMap,
-      surveyors: (DATA.rows || []).map(function (r) {
-        return { name: r.name, flag: r.flag || "", weeks: r.weeks || [] };
-      }),
+      surveyors: surveyors,
       admins: (DATA.admins || []).map(function (r) {
         return { name: r.name, flag: r.flag || "", weeks: r.weeks || [] };
       })
@@ -389,24 +402,22 @@
     people.forEach(function (p) {
       var li = document.createElement("li");
       if (p.fromGrid) li.classList.add("from-grid");
-      if (p.fromGrid) {
-        var hit = document.createElement("label");
-        hit.className = "active-hit pool-active-hit";
-        var cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.className = "active-cb pool-active-cb";
-        cb.checked = isTicked(p.name);
-        cb.disabled = !canEdit;
-        cb.dataset.name = p.name;
-        cb.title = "Active — tick then hit Refresh to return to the board";
-        cb.setAttribute("aria-label", "Active: " + p.name);
-        if (canEdit) cb.addEventListener("change", function () {
-          setTick(p.name, cb.checked);
-          scheduleSave();
-        });
-        hit.appendChild(cb);
-        li.appendChild(hit);
-      }
+      var hit = document.createElement("label");
+      hit.className = "active-hit pool-active-hit";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "active-cb pool-active-cb";
+      cb.checked = isTicked(p.name);
+      cb.disabled = !canEdit;
+      cb.dataset.name = p.name;
+      cb.title = "Active — tick then hit Refresh to return to the main table";
+      cb.setAttribute("aria-label", "Active: " + p.name);
+      if (canEdit) cb.addEventListener("change", function () {
+        setTick(p.name, cb.checked);
+        scheduleSave();
+      });
+      hit.appendChild(cb);
+      li.appendChild(hit);
       var flag = document.createElement("span");
       flag.className = "flag" + (p.flag ? " on" : "");
       flag.textContent = p.flag || "·";
@@ -420,12 +431,18 @@
     });
   }
 
+  function shownOnMain(name) {
+    return (listedIn(DATA.rows || [], name) || listedIn(DATA.admins || [], name)) && isApplied(name);
+  }
+
   function rebuildPools() {
     var admins = adminCanonSet();
-    var agency = seedAgency.map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
+    var agency = seedAgency
+      .filter(function (p) { return !shownOnMain(p.name); })
+      .map(function (p) { return { flag: p.flag || "", name: p.name, weeks: (p.weeks || []).slice(), fromGrid: false }; });
     var team = seedTeam
-      .filter(function (p) { return !isAdminName(p.name, admins) && !listedIn(agency, p.name); })
-      .map(function (p) { return { flag: p.flag || "", name: p.name, fromGrid: false }; });
+      .filter(function (p) { return !shownOnMain(p.name) && !isAdminName(p.name, admins) && !listedIn(agency, p.name); })
+      .map(function (p) { return { flag: p.flag || "", name: p.name, weeks: (p.weeks || []).slice(), fromGrid: false }; });
     agency = dedupePeople(agency);
     team = dedupePeople(team);
     var seenA = {};
@@ -436,7 +453,7 @@
       if (isApplied(person.name)) return;
       var key = canon(person.name);
       if (!key || seenA[key] || seenT[key]) return;
-      var entry = { flag: person.flag || "", name: person.name, fromGrid: true };
+      var entry = { flag: person.flag || "", name: person.name, weeks: (person.weeks || []).slice(), fromGrid: true };
       if (isAgencyFlag(person.flag)) {
         agency.push(entry);
         seenA[key] = true;
@@ -452,9 +469,10 @@
     });
     agency = dedupePeople(agency);
     team = dedupePeople(team);
+    lastPools = { agency: agency, team: team };
     fillPool("agencyPool", agency);
     fillPool("teamPool", team);
-    return { agency: agency, team: team };
+    return lastPools;
   }
 
   var thead = document.querySelector("#matrix thead");
@@ -553,6 +571,8 @@
   }
 
   function jobTileColor(text, catalogue) {
+    var raw = String(text || "").replace(/\s+/g, " ").trim();
+    if (/holiday|festive|leave|annual leave|bank holiday/i.test(raw)) return { background: "#eeeeee", color: "#c62828" };
     var value = jobTileColorKey(text, catalogue);
     var hash = jobTileHash(value);
     var hue = (hash * 163) % 360;
@@ -673,10 +693,7 @@
     tbody.innerHTML = "";
     rowStore = [];
     var poolState = rebuildPools();
-    var agencyOnBoard = {};
-    (poolState.agency || []).forEach(function (person) { agencyOnBoard[canon(person.name)] = true; });
     (DATA.rows || []).forEach(function (row, i) {
-      if (agencyOnBoard[canon(row.name)]) return;
       if (isApplied(row.name)) appendPersonRow(row, { rowIndex: i });
     });
     appendAdminHeader();
@@ -687,11 +704,24 @@
     refreshWeekCounts();
   }
 
+  function ensureBoardRow(person) {
+    if (listedIn(DATA.rows || [], person.name) || isAdminName(person.name)) return;
+    var weeks = (person.weeks || []).slice();
+    while (weeks.length < (DATA.weeks || []).length) weeks.push("");
+    DATA.rows.push({ name: person.name, flag: person.flag || "", weeks: weeks });
+  }
+
   function applyTicksToBoard() {
     readTicksFromDomIntoMap();
-    appliedMap = Object.assign({}, tickMap);
+    var pools = lastPools || { agency: [], team: [] };
+    (pools.agency || []).concat(pools.team || []).forEach(function (person) {
+      if (isTicked(person.name)) ensureBoardRow(person);
+    });
     (DATA.rows || []).forEach(function (r) { appliedMap[r.name] = isTicked(r.name); });
     (DATA.admins || []).forEach(function (a) { appliedMap[a.name] = isTicked(a.name); });
+    (pools.agency || []).concat(pools.team || []).forEach(function (person) {
+      if (!listedIn(DATA.rows || [], person.name)) appliedMap[person.name] = false;
+    });
     dirty = true;
   }
 
@@ -728,7 +758,7 @@
     }
     list.forEach(function (p) {
       var tr = document.createElement("tr");
-      var cls = classForName(p.project);
+      var tone = jobTileColor(p.project, projectCatalogue());
       var occupied = opts.weeks ? weeksOccupied(p.project) : 0;
       var weeksCell = opts.weeks
         ? '<td class="num nr-weeks" data-project="' + esc(p.project) + '">' + occupied + "</td>"
@@ -738,7 +768,7 @@
         ? "Starts from Project Progress survey types — click to edit"
         : "Survey types from Project Progress";
       tr.innerHTML =
-        '<td><span class="pill ' + cls + '">' + esc(p.project) + "</span></td>" +
+        '<td><span class="pill" style="background:' + tone.background + ";color:" + tone.color + '">' + esc(p.project) + "</span></td>" +
         '<td class="num">' + esc(String(p.numbers == null ? "" : p.numbers)) + "</td>" +
         '<td><span class="scope-edit" contenteditable="' + (canEdit ? "true" : "false") + '" spellcheck="false" data-project-id="' + esc(p.id) + '" title="' + esc(scopeTitle) + '">' + esc(p.surveyTypes || "") + "</span></td>" +
         '<td class="lead" title="Project manager from Project Progress">' + esc(p.lead || "") + "</td>" +
