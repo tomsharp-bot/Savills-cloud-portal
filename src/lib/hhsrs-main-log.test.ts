@@ -10,6 +10,7 @@ import {
   buildMainLogWorkbook,
   describeMainLogFilters,
   loadMainLog,
+  mainLogEmailKind,
   mainLogEmailWhere,
   mainLogNotSentWhere,
   parseMainLogFilters,
@@ -89,6 +90,64 @@ describe("HHSRS main log arrangement", () => {
     assert.deepEqual(arranged.pageKeys, ["email:c2"]);
     assert.equal(arranged.flags.get("email:c2")?.showCorrectedNote, true);
     assert.equal(arranged.total, 1);
+  });
+
+  it("keeps one row when the correction link is missing but both sends are the same case", () => {
+    const items = [
+      sortItem("email:orig", "original", "2026-09-24T13:32:00.000Z", null, { caseKey: "case-1" }),
+      sortItem("email:amend", "correction", "2026-09-25T09:12:00.000Z", null, { caseKey: "case-1" }),
+      sortItem("email:other", "original", "2026-09-28T08:42:00.000Z", null, { caseKey: "case-2" }),
+    ];
+    const arranged = arrangeMainLog(items, new Set(), 1, 50);
+    assert.deepEqual(arranged.pageKeys, ["email:other", "email:orig"]);
+    assert.equal(arranged.pageKeys.includes("email:amend"), false);
+    assert.equal(arranged.flags.get("email:orig")?.showCorrectedNote, true);
+    assert.equal(arranged.flags.get("email:other")?.showCorrectedNote, false);
+    assert.equal(arranged.total, 2);
+    const sorted = arrangeMainLog(items, new Set(), 1, 50, { key: "sent", dir: "desc" });
+    assert.deepEqual(sorted.pageKeys, ["email:other", "email:orig"]);
+    assert.equal(sorted.flags.get("email:orig")?.showCorrectedNote, true);
+  });
+
+  it("keeps one row when a later correction points at the previous correction", () => {
+    const items = [
+      sortItem("email:orig", "original", "2026-09-24T13:32:00.000Z", null, { caseKey: "case-1" }),
+      sortItem("email:first", "correction", "2026-09-25T09:12:00.000Z", "email:orig", { caseKey: "case-1" }),
+      sortItem("email:second", "correction", "2026-09-26T09:12:00.000Z", "email:first", { caseKey: "case-1" }),
+    ];
+    const arranged = arrangeMainLog(items, new Set(), 1, 50);
+    assert.deepEqual(arranged.pageKeys, ["email:orig"]);
+    assert.equal(arranged.flags.get("email:orig")?.showCorrectedNote, true);
+    assert.equal(arranged.total, 1);
+  });
+
+  it("keeps one row when the amendment was stored as another original on the same case", () => {
+    const items = [
+      sortItem("email:orig", "original", "2026-09-24T13:32:00.000Z", null, { caseKey: "case-1" }),
+      sortItem("email:again", "original", "2026-09-25T09:12:00.000Z", null, { caseKey: "case-1" }),
+    ];
+    const arranged = arrangeMainLog(items, new Set(), 1, 50);
+    assert.deepEqual(arranged.pageKeys, ["email:orig"]);
+    assert.equal(arranged.flags.get("email:orig")?.showCorrectedNote, true);
+    assert.equal(arranged.total, 1);
+  });
+
+  it("does not merge corrections that belong to different cases", () => {
+    const items = [
+      sortItem("email:a", "original", "2026-09-24T08:00:00.000Z", null, { caseKey: "case-a" }),
+      sortItem("email:b", "correction", "2026-09-25T08:00:00.000Z", null, { caseKey: "case-b" }),
+    ];
+    const arranged = arrangeMainLog(items, new Set(), 1, 50);
+    assert.deepEqual(arranged.pageKeys, ["email:b", "email:a"]);
+    assert.equal(arranged.flags.get("email:b")?.showCorrectedNote, true);
+    assert.equal(arranged.flags.get("email:a")?.showCorrectedNote, false);
+  });
+
+  it("treats a correction subject or a stored link as a correction", () => {
+    assert.equal(mainLogEmailKind({ kind: "original", subject: "HHSRS hazard" }), "original");
+    assert.equal(mainLogEmailKind({ kind: "correction", correctsEmailId: null }), "correction");
+    assert.equal(mainLogEmailKind({ kind: "original", correctsEmailId: null, subject: "CORRECTION: HHSRS hazard" }), "correction");
+    assert.equal(mainLogEmailKind({ kind: "original", correctsEmailId: "email-1", subject: "HHSRS hazard" }), "correction");
   });
 
   it("drops not-sent rows from an original-only filter and corrections from a not-sent filter", () => {
@@ -436,6 +495,36 @@ describe("HHSRS main log filters", () => {
         correctsEmailId: original.id,
       },
     });
+    const unlinked = await prisma.hhsrsSentEmail.create({
+      data: {
+        submissionId: sentCase.id,
+        sentAt: new Date("2026-09-25T08:00:00.000Z"),
+        sentBy: "Tom Sharp",
+        from: "Savills HHSRS <hhsrs@savillshousing.co.uk>",
+        to: "repairs@savillshousing.co.uk",
+        subject: "CORRECTION: HHSRS hazard",
+        body: "Unlinked amendment",
+        photoNames: [`${stamp}.jpg`],
+        kind: "correction",
+        correctionReason: "Wrong details",
+        correctionNote: "The link was not stored.",
+        correctsEmailId: null,
+      },
+    });
+    const mislabeled = await prisma.hhsrsSentEmail.create({
+      data: {
+        submissionId: sentCase.id,
+        sentAt: new Date("2026-09-27T11:00:00.000Z"),
+        sentBy: "Tom Sharp",
+        from: "Savills HHSRS <hhsrs@savillshousing.co.uk>",
+        to: "repairs@savillshousing.co.uk",
+        subject: "CORRECTION: HHSRS hazard",
+        body: "Stored as another original",
+        photoNames: [`${stamp}.jpg`],
+        kind: "original",
+        correctsEmailId: null,
+      },
+    });
     t.after(async () => {
       await prisma.hhsrsSentEmail.deleteMany({ where: { submissionId: { in: [sentCase.id, quiet.id] } } });
       await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: { in: [sentCase.id, quiet.id] } } });
@@ -449,6 +538,12 @@ describe("HHSRS main log filters", () => {
     assert.equal(all.entries[0].lineAddress.includes("ZZ1"), false);
     assert.equal(all.flags.get(`email:${original.id}`)?.showCorrectedNote, true);
     assert.equal(all.flags.get(`email:${correction.id}`)?.showCorrectedNote, undefined);
+    assert.equal(all.entries.some((row) => row.key === `email:${unlinked.id}`), false);
+    assert.equal(all.entries.some((row) => row.key === `email:${mislabeled.id}`), false);
+
+    const originalDay = await loadMainLog({ q: stamp, from: "2026-09-24", to: "2026-09-24" });
+    assert.deepEqual(originalDay.entries.map((row) => row.key), [`email:${original.id}`]);
+    assert.equal(originalDay.flags.get(`email:${original.id}`)?.showCorrectedNote, true);
 
     const corrections = await loadMainLog({ q: stamp, type: "correction" });
     assert.deepEqual(corrections.entries.map((row) => row.kind), ["correction"]);
