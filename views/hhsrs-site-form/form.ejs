@@ -216,9 +216,6 @@
                   <p class="hhsrs-hint" id="saxon-damp-note">Saxon Weald: all damp and mould is phoned in. Email only if Severe, and include the call reference.</p>
                 </div>
 
-                <label for="otherDetails">Any other details <span class="optional">(optional)</span></label>
-                <textarea id="otherDetails" name="otherDetails" rows="4" enterkeyhint="next" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
-                <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
                 <div id="suspected-cause-box" <%= showCause ? "" : "hidden" %>>
                   <label for="suspectedCause">Suspected cause *</label>
                   <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || "" %>" class="<%= errors.suspectedCause ? 'is-invalid' : '' %>" <%= showCause ? "required" : "disabled" %> />
@@ -229,7 +226,6 @@
               <div class="info-box flow-step" id="step-photos" data-flow="photos" <%= steps.extras ? "" : "hidden" %>>
                 <fieldset class="hhsrs-photos">
                   <p class="box-title">Photos <span class="optional">(min <%= minPhotos %>, max <%= maxPhotos %>)</span></p>
-                  <p class="hhsrs-hint"><%= photoHint %></p>
                   <p id="photo-status" class="find-status" aria-live="polite"></p>
                   <% if (errors.photos) { %><p class="field-error"><%= errors.photos %></p><% } %>
                   <div id="existing-photos" class="photo-grid">
