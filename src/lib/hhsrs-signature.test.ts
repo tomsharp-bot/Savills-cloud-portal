@@ -144,13 +144,11 @@ describe("HHSRS email signature", () => {
         filename: "a4a6fb82-7a49-4f8e-9262-e41674058ece.jpg",
         content: Buffer.from("jpeg-bytes"),
         contentType: "image/jpeg",
-        cid: "hhsrs-photo-0@savillshousing.co.uk",
       }];
-      const html = composeEmailHtml("Dear Sir/Madam,\n\nPlease find details.", names, `cid:${SIGNATURE_LOGO_CID}`, undefined, {
-        photos: [{ src: `cid:${photos[0].cid}`, name: photos[0].filename }],
-      });
+      const html = composeEmailHtml("Dear Sir/Madam,\n\nPlease find details.", names, `cid:${SIGNATURE_LOGO_CID}`);
       assert.doesNotMatch(html, /a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg/);
       assert.doesNotMatch(html, /font-size:11px/);
+      assert.equal((html.match(/<img\b/gi) || []).length, 1);
       const sent = await sendMailboxMessage({
         fromName: "Savills HHSRS",
         fromAddress: "hhsrs@savillshousing.co.uk",
@@ -162,7 +160,6 @@ describe("HHSRS email signature", () => {
         html,
         messageId: "<sig-test@savillshousing.co.uk>",
         attachments: photos,
-        inlinePhotos: photos,
       });
       const raw = sent.raw.toString("utf8");
       const unfolded = raw.replace(/=\r\n/g, "");
@@ -179,8 +176,15 @@ describe("HHSRS email signature", () => {
       assert.match(raw, new RegExp(`Content-ID:\\s*<${SIGNATURE_LOGO_CID}>`, "i"));
       assert.match(raw, /Content-Disposition:\s*inline/i);
       assert.match(raw, /filename="?a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg"?/i);
-      assert.doesNotMatch(raw, /Content-Disposition:\s*attachment/i);
+      assert.match(raw, /Content-Disposition:\s*attachment/i);
+      assert.doesNotMatch(unfolded, /cid:hhsrs-photo-/);
       assert.doesNotMatch(unfolded, />a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg</);
+      const photoNameAt = raw.indexOf("a4a6fb82-7a49-4f8e-9262-e41674058ece.jpg");
+      assert.ok(photoNameAt >= 0);
+      const photoPart = raw.slice(photoNameAt, photoNameAt + 400);
+      assert.match(photoPart, /Content-Disposition:\s*attachment/i);
+      assert.doesNotMatch(photoPart, /Content-Disposition:\s*inline/i);
+      assert.doesNotMatch(photoPart, /Content-ID:/i);
       const logoStart = signatureLogoBytes().toString("base64").slice(0, 48);
       assert.equal(raw.includes(logoStart), true);
       assert.equal(photos.length, 1);

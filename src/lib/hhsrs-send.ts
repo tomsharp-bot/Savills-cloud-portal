@@ -4,7 +4,7 @@
  * The mailbox password is never read, returned, or logged by this module.
  */
 import { randomUUID } from "node:crypto";
-import { SIGNATURE_LOGO_CID, composeEmailHtml, composeEmailText, inlinePhotoCid } from "./hhsrs-signature.js";
+import { SIGNATURE_LOGO_CID, composeEmailHtml, composeEmailText } from "./hhsrs-signature.js";
 
 export const DEFAULT_ALLOW_DOMAIN = "savillshousing.co.uk";
 export const TEST_MODE_BANNER = "Test mode: only Savills addresses can receive emails.";
@@ -256,8 +256,6 @@ export type OutboundAttachment = {
   contentType: string;
 };
 
-export type InlineEmailPhoto = OutboundAttachment & { cid: string };
-
 export type OutboundEmail = {
   fromName: string;
   fromAddress: string;
@@ -268,10 +266,8 @@ export type OutboundEmail = {
   text: string;
   html: string;
   messageId: string;
-  /** Case photo bytes. Sent inline in the body, not as file attachments. */
+  /** Case photo bytes. Sent as file attachments, not shown in the body. */
   attachments: OutboundAttachment[];
-  /** Those photos, referenced from the HTML card under the signature. Not the signature logo. */
-  inlinePhotos?: InlineEmailPhoto[];
 };
 
 export type DeliverInput = {
@@ -334,10 +330,6 @@ export async function deliverPortalEmail(
     firstName: String(input.senderFirstName || "").trim(),
     fullName: String(input.senderFullName || "").trim(),
   };
-  const inlinePhotos: InlineEmailPhoto[] = input.attachments.map((file, index) => ({
-    ...file,
-    cid: inlinePhotoCid(index),
-  }));
 
   try {
     const record = await deps.exclusive(async () => {
@@ -352,11 +344,9 @@ export async function deliverPortalEmail(
         text: composeEmailText(body, signatureNames),
         html: composeEmailHtml(body, signatureNames, `cid:${SIGNATURE_LOGO_CID}`, input.messageHtml, {
           subject,
-          photos: inlinePhotos.map((photo) => ({ src: `cid:${photo.cid}`, name: photo.filename })),
         }),
         messageId,
         attachments: input.attachments,
-        inlinePhotos,
       };
       const sent = await deps.sendMail(mail);
       let sentCopySaved = false;

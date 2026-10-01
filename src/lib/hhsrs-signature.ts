@@ -172,16 +172,6 @@ function plainToHtml(text: string): string {
   return escapeHtml(text).replace(/\r\n/g, "\n").replace(/\n/g, "<br>\n");
 }
 
-export type EmailCardPhoto = {
-  src: string;
-  name: string;
-};
-
-/** Content-ID for a case photo shown in the email body. Not the signature logo. */
-export function inlinePhotoCid(index: number): string {
-  return `hhsrs-photo-${index}@savillshousing.co.uk`;
-}
-
 /**
  * Drop a signature that was stored on an older send, so the card can add
  * the short live signature once, under the message.
@@ -221,17 +211,6 @@ export function emailBodyToHtml(body: string): string {
   return parts.join("");
 }
 
-function emailPhotoTable(photos: readonly EmailCardPhoto[]): string {
-  if (!photos.length) return "";
-  const cells = photos
-    .map((photo) => {
-      const src = escapeHtml(photo.src);
-      return `<td style="padding:0 10px 0 0;vertical-align:top;"><img src="${src}" alt="" width="96" height="72" style="width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #d5dee8;display:block;" /></td>`;
-    })
-    .join("");
-  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px;border-collapse:collapse;"><tr>${cells}</tr></table>`;
-}
-
 export function composeEmailText(body: string, names: Pick<SenderSignature, "firstName" | "fullName">): string {
   const typed = String(body || "").replace(/\s+$/, "");
   const signature = renderSignatureText(names);
@@ -241,14 +220,15 @@ export function composeEmailText(body: string, names: Pick<SenderSignature, "fir
 
 /**
  * Client email: the same grey card as Find and resend.
- * Photos are pictures under the signature, with no filename caption. The short signature has no personal name and no NOTICE.
+ * Case photos are file attachments and are not shown in this body.
+ * The short signature has no personal name and no NOTICE.
  */
 export function composeEmailHtml(
   body: string,
   names: Pick<SenderSignature, "firstName" | "fullName">,
   logoSrc: string,
   messageHtml?: string,
-  options?: { subject?: string; photos?: readonly EmailCardPhoto[] }
+  options?: { subject?: string }
 ): string {
   const typed = String(body || "").replace(/\s+$/, "");
   const inner = messageHtml !== undefined ? messageHtml : typed ? plainToHtml(typed) : "";
@@ -260,13 +240,12 @@ export function composeEmailHtml(
   const heading = subject
     ? `<h2 style="display:inline-block;margin:14px 16px;padding:8px 14px;border-radius:10px;font-size:16px;font-weight:800;letter-spacing:-0.02em;color:#0b1f33;background:#d0d8e6;border-bottom:1px solid #b8c2d4;border-left:5px solid #0b1f33;"><b style="font-weight:800;">${escapeHtml(subject)}</b></h2>`
     : "";
-  const photos = emailPhotoTable(options?.photos || []);
   const card =
     `<div style="background:#e7edf3;padding:18px;">` +
     `<div style="background:#ffffff;border:1px solid #0b1f33;border-radius:12px;overflow:hidden;">` +
     heading +
     `<div style="margin:0 16px 16px;background:#f7f9fb;border:1px solid #d5dee8;border-radius:10px;padding:14px 16px;font-family:Calibri,Aptos,Arial,sans-serif;font-size:14px;line-height:1.5;color:#0b1f33;">` +
-    `${message}${renderSignatureHtml(names, logoSrc)}${photos}` +
+    `${message}${renderSignatureHtml(names, logoSrc)}` +
     `</div></div></div>`;
   return `<!DOCTYPE html><html lang="en-GB"><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">${card}</body></html>`;
 }
