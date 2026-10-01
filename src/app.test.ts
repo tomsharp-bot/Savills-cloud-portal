@@ -291,7 +291,8 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /id="suspected-cause-box"[^>]*hidden/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = form.body.slice(form.body.indexOf('id="extra-box"'), form.body.indexOf('id="step-photos"'));
-    assert.match(extras, /Any other details <span class="optional">\(optional\)<\/span>/);
+    assert.doesNotMatch(extras, /id="otherDetails"/);
+    assert.doesNotMatch(extras, /Any other details/);
     assert.match(extras, /id="suspectedCause"/);
     const ratingSelect = form.body.slice(
       form.body.indexOf('<select id="rating"'),
@@ -304,6 +305,14 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.doesNotMatch(ratingSelect, /value="High"/);
     assert.doesNotMatch(ratingSelect, /Severe|Slight|Moderate/);
     assert.doesNotMatch(ratingSelect, /High – severe risk/);
+    const categorySelect = form.body.slice(
+      form.body.indexOf('<select id="category"'),
+      form.body.indexOf("</select>", form.body.indexOf('<select id="category"'))
+    );
+    assert.match(categorySelect, /Damp &amp; Mould Growth/);
+    assert.doesNotMatch(categorySelect, /Falls on level/);
+    assert.match(form.body, /Falls associated with baths etc/);
+    assert.match(form.body, /data-rating-scheme="OLD"/);
     assert.match(form.body, /id="restrictor-box"[^>]*hidden/);
     assert.match(form.body, /class="restrictor-locs"/);
     assert.match(form.body, /data-vulnerabilities="1"/);
@@ -316,14 +325,16 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /Couldn't get through/);
     assert.match(form.body, /No answer/);
     assert.match(form.body, /Engaged\/busy/);
-    assert.match(form.body, /Any other details <span class="optional">\(optional\)<\/span>/);
-    assert.doesNotMatch(form.body, /Any other details \*/);
-    assert.doesNotMatch(form.body, /id="otherDetails"[^>]*\brequired\b/);
+    assert.doesNotMatch(form.body, /Any other details/);
+    assert.doesNotMatch(form.body, /id="otherDetails"/);
     assert.match(form.body, /min 1, max 4/);
     assert.doesNotMatch(form.body, /Photos are optional/);
     assert.match(form.body, /action="\/HHSRS-site-form\/review"/);
-    assert.match(form.body, /3000px/);
-    assert.match(form.body, /25 MB/);
+    assert.doesNotMatch(form.body, /3000px/);
+    assert.doesNotMatch(form.body, /25 MB/);
+    assert.doesNotMatch(form.body, /gently resized/);
+    assert.match(form.body, /id="photos"/);
+    assert.match(form.body, /Add photos/);
     assert.match(form.body, /accept="image\/\*"/);
     assert.doesNotMatch(form.body, /capture=/);
     assert.match(form.body, /data-max-file-mb="40"/);
@@ -532,6 +543,7 @@ describe("HHSRS site form at domain-root paths", () => {
       {
         ...hhsrsReviewFields(),
         projectId: "hhsrs-demo-vico",
+        category: "Damp / Mould Growth",
         rating: "Moderate",
         clientCallReference: "CR-44",
         vulnerabilities: "Elderly resident",

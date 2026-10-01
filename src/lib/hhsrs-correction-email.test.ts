@@ -62,7 +62,7 @@ describe("HHSRS correction email wording", () => {
     assert.equal(
       prepared.text,
       [
-        "Please disregard our previous email, due to an error. See correct details below.",
+        "This notification has been adjusted after review. Please disregard the previous notification.",
         "",
         "Hi all,",
         "",
@@ -76,7 +76,7 @@ describe("HHSRS correction email wording", () => {
     );
     assert.equal(
       prepared.text.split("\n")[0],
-      "Please disregard our previous email, due to an error. See correct details below."
+      "This notification has been adjusted after review. Please disregard the previous notification."
     );
     assert.doesNotMatch(prepared.text, /This corrects/);
     assert.match(bulletLine(prepared.messageHtml, "Address"), /<b>15 Example Street, London<\/b>/);
@@ -103,7 +103,7 @@ describe("HHSRS correction email wording", () => {
     assert.equal(
       prepared.text,
       [
-        "Please disregard our previous email, due to an error. See correct details below.",
+        "This notification has been adjusted after review. Please disregard the previous notification.",
         "",
         "The photo was incorrect.",
         "",
@@ -111,7 +111,7 @@ describe("HHSRS correction email wording", () => {
       ].join("\n")
     );
     const lines = htmlLines(prepared.messageHtml);
-    assert.equal(lines[0], "Please disregard our previous email, due to an error. See correct details below.");
+    assert.equal(lines[0], "This notification has been adjusted after review. Please disregard the previous notification.");
     assert.equal(lines[2], "The photo was incorrect.");
     assert.doesNotMatch(prepared.text, /The correct photos are now attached/);
     assert.doesNotMatch(lines[0], /bedroom|kitchen|\.jpg|ceiling/i);
@@ -121,7 +121,7 @@ describe("HHSRS correction email wording", () => {
     assert.equal(bulletLine(prepared.messageHtml, "Hazard").includes("<b>"), false);
     assert.doesNotMatch(prepared.text, /was wrong/i);
     assert.doesNotMatch(prepared.messageHtml, /\*\*/);
-    assert.equal((prepared.text.match(/Please disregard our previous email/g) || []).length, 1);
+    assert.equal((prepared.text.match(/This notification has been adjusted after review/g) || []).length, 1);
   });
 
   it("uses the photo sentence when the reason is Missing photo and the file names are unchanged", () => {
@@ -133,7 +133,7 @@ describe("HHSRS correction email wording", () => {
     });
     assert.equal(
       prepared.text.split("\n")[0],
-      "Please disregard our previous email, due to an error. See correct details below."
+      "This notification has been adjusted after review. Please disregard the previous notification."
     );
     assert.doesNotMatch(prepared.text, /The photo was incorrect/);
     assert.doesNotMatch(prepared.messageHtml, /The photo was incorrect/);
@@ -186,7 +186,7 @@ describe("HHSRS correction email wording", () => {
       assert.equal(
         prepared.text.split("\n").slice(0, 4).join("\n"),
         [
-          "Please disregard our previous email, due to an error. See correct details below.",
+          "This notification has been adjusted after review. Please disregard the previous notification.",
           "",
           "The photo was incorrect.",
           "",
@@ -212,7 +212,7 @@ describe("HHSRS correction email wording", () => {
     assert.equal(
       prepared.text,
       [
-        "Please disregard our previous email, due to an error. See correct details below.",
+        "This notification has been adjusted after review. Please disregard the previous notification.",
         "",
         "Hi all,",
         "",
@@ -224,7 +224,7 @@ describe("HHSRS correction email wording", () => {
         "• Survey date: 28/09/2026",
       ].join("\n")
     );
-    assert.match(prepared.text, /Please disregard our previous email, due to an error\. See correct details below\./);
+    assert.match(prepared.text, /This notification has been adjusted after review\. Please disregard the previous notification\./);
     assert.doesNotMatch(prepared.messageHtml, /This corrects the hazard/);
     assert.match(bulletLine(prepared.messageHtml, "Hazard"), /<b>Excess Cold<\/b>/);
     for (const label of ["Address", "UPRN", "Rating", "Site notes", "Survey date"]) {
@@ -248,7 +248,7 @@ describe("HHSRS correction email wording", () => {
     });
     assert.equal(
       prepared.text.split("\n")[0],
-      "Please disregard our previous email, due to an error. See correct details below."
+      "This notification has been adjusted after review. Please disregard the previous notification."
     );
     assert.doesNotMatch(prepared.text, /housing@example\.com/);
     assert.doesNotMatch(prepared.messageHtml, /which is now/);
@@ -270,7 +270,7 @@ describe("HHSRS correction email wording", () => {
     });
     assert.equal(
       prepared.text.split("\n")[0],
-      "Please disregard our previous email, due to an error. See correct details below."
+      "This notification has been adjusted after review. Please disregard the previous notification."
     );
     assert.match(prepared.text, /• UPRN: 100099988877/);
     assert.match(prepared.text, /• Cause: Failed pointing\./);
@@ -291,7 +291,7 @@ describe("HHSRS correction email wording", () => {
     });
     assert.equal(
       prepared.text.split("\n")[0],
-      "Please disregard our previous email, due to an error. See correct details below."
+      "This notification has been adjusted after review. Please disregard the previous notification."
     );
     assert.doesNotMatch(prepared.text, /Survey date should be 27\/09\/2026/);
     assert.doesNotMatch(prepared.text, /This corrects/);
@@ -310,7 +310,7 @@ describe("HHSRS correction email wording", () => {
     });
     assert.equal(
       prepared.text.split("\n")[0],
-      "Please disregard our previous email, due to an error. See correct details below."
+      "This notification has been adjusted after review. Please disregard the previous notification."
     );
     assert.match(prepared.text, /• Survey date: 27\/09\/2026/);
     assert.doesNotMatch(prepared.text, /Called in by the client/);
@@ -332,7 +332,7 @@ describe("HHSRS correction email wording", () => {
       reason: "Wrong address",
     });
     assert.equal(stripCorrectionIntro(first.text), replaceBullet(ORIGINAL, "Address", "15 Example Street, London"));
-    const openings = second.text.split("Please disregard our previous email, due to an error.").length - 1;
+    const openings = second.text.split("This notification has been adjusted after review. Please disregard the previous notification.").length - 1;
     assert.equal(openings, 1);
     assert.match(second.text, /• Address: 16 Example Street, London/);
     assert.doesNotMatch(second.text, /15 Example Street/);
@@ -451,12 +451,15 @@ describe("HHSRS correction send", () => {
         item.mail.html,
         composeEmailHtml(item.prepared.text, names, `cid:${SIGNATURE_LOGO_CID}`, item.prepared.messageHtml, {
           subject: item.mail.subject,
-          photos: (item.mail.inlinePhotos || []).map((photo) => ({ src: `cid:${photo.cid}`, name: photo.filename })),
         })
       );
-      const printAt = item.mail.html.indexOf("Before printing, think about the environment");
-      const photoAt = item.mail.html.indexOf("cid:hhsrs-photo-0@savillshousing.co.uk");
-      assert.ok(printAt >= 0 && photoAt > printAt, "case photos sit under the signature");
+      assert.ok(item.mail.html.includes("Before printing, think about the environment"));
+      assert.equal((item.mail.html.match(/<img\b/gi) || []).length, 1);
+      assert.doesNotMatch(item.mail.html, /cid:hhsrs-photo-/);
+      assert.ok(item.mail.attachments.length > 0);
+      for (const file of item.mail.attachments) {
+        assert.equal(item.mail.html.includes(file.filename), false);
+      }
       assert.match(item.mail.html, /background:#e7edf3/);
       assert.match(item.mail.html, /HHSRS Reporting Team/);
       assert.match(item.mail.html, /HHSRS@savillshousing\.co\.uk/);
@@ -464,10 +467,13 @@ describe("HHSRS correction send", () => {
       assert.match(item.mail.html, new RegExp(`cid:${SIGNATURE_LOGO_CID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
       assert.doesNotMatch(item.mail.html, /\*\*/);
       assert.doesNotMatch(item.mail.text, /was wrong/i);
-      assert.match(item.mail.text, /Please disregard our previous email, due to an error\. See correct details below\./);
+      assert.match(item.mail.text, /This notification has been adjusted after review\. Please disregard the previous notification\./);
       assert.match(item.mail.subject, /^CORRECTION: /);
     }
 
+    assert.deepEqual(address.mail.attachments.map((file) => file.filename), ["bedroom-ceiling.jpg"]);
+    assert.deepEqual(photos.mail.attachments.map((file) => file.filename), ["kitchen.jpg"]);
+    assert.deepEqual(hazard.mail.attachments.map((file) => file.filename), ["bedroom-ceiling.jpg"]);
     assert.match(address.mail.html, /<b>15 Example Street, London<\/b>/);
     assert.doesNotMatch(address.mail.text, /<b>/);
     assert.doesNotMatch(photos.mail.text, /The correct photos are now attached/);
@@ -496,11 +502,11 @@ describe("HHSRS amend and resend", () => {
     assert.match(built.subject, /^CORRECTION: /);
     assert.match(
       built.text,
-      /^Please disregard our previous email, due to an error\. See correct details below\.\n\nHi all,/
+      /^This notification has been adjusted after review\. Please disregard the previous notification\.\n\nHHSRS notification/
     );
     assert.doesNotMatch(built.text, /Wrong hazard\. It is Excess Cold/);
-    assert.match(built.messageHtml, /<li>Hazard: <b>Excess Cold<\/b><\/li>/);
-    assert.match(built.messageHtml, /<li>Rating: <b>Low<\/b><\/li>/);
+    assert.match(built.messageHtml, /<li>Hazard category: <b>Excess Cold<\/b><\/li>/);
+    assert.match(built.messageHtml, /<li>Hazard rating: <b>Low<\/b><\/li>/);
     assert.match(built.messageHtml, /<li>Address: 14 Example Street, London<\/li>/);
     assert.equal(built.messageHtml.includes("<li>Address: <b>"), false);
     assert.doesNotMatch(built.text, /NOTICE:|Tom Sharp/);
@@ -527,9 +533,9 @@ describe("HHSRS amend and resend", () => {
     });
     assert.equal(second.subject.startsWith("CORRECTION: CORRECTION:"), false);
     assert.match(second.subject, /^CORRECTION: /);
-    assert.match(second.messageHtml, /<li>Hazard: Excess Cold<\/li>/);
-    assert.match(second.messageHtml, /<li>Rating: <b>Moderate<\/b><\/li>/);
-    assert.equal((second.text.match(/Please disregard our previous email/g) || []).length, 1);
+    assert.match(second.messageHtml, /<li>Hazard category: Excess Cold<\/li>/);
+    assert.match(second.messageHtml, /<li>Hazard rating: <b>Moderate<\/b><\/li>/);
+    assert.equal((second.text.match(/This notification has been adjusted after review/g) || []).length, 1);
   });
 
   it("adds the photo line on an amendment only when the photo set changes", () => {
@@ -545,7 +551,7 @@ describe("HHSRS amend and resend", () => {
     assert.doesNotMatch(unchanged.messageHtml, /The photo was incorrect/);
     assert.match(
       unchanged.text,
-      /^Please disregard our previous email, due to an error\. See correct details below\.\n\nHi all,/
+      /^This notification has been adjusted after review\. Please disregard the previous notification\.\n\nHHSRS notification/
     );
 
     const removed = buildAmendmentEmail({
@@ -567,13 +573,13 @@ describe("HHSRS amend and resend", () => {
     for (const built of [removed, added]) {
       assert.match(
         built.text,
-        /^Please disregard our previous email, due to an error\. See correct details below\.\n\nThe photo was incorrect\.\n\nHi all,/
+        /^This notification has been adjusted after review\. Please disregard the previous notification\.\n\nThe photo was incorrect\.\n\nHHSRS notification/
       );
       assert.match(
         built.messageHtml,
-        /^<p>Please disregard our previous email, due to an error\. See correct details below\.<\/p><p><b>The photo was incorrect\.<\/b><\/p><p>Hi all,<\/p>/
+        /^<p>This notification has been adjusted after review\. Please disregard the previous notification\.<\/p><p><b>The photo was incorrect\.<\/b><\/p><p>HHSRS notification<\/p>/
       );
-      assert.equal((built.text.match(/Please disregard our previous email/g) || []).length, 1);
+      assert.equal((built.text.match(/This notification has been adjusted after review/g) || []).length, 1);
       assert.equal((built.text.match(/The photo was incorrect\./g) || []).length, 1);
       assert.doesNotMatch(built.text, /Removed the wrong photo|Added a replacement|kitchen\.jpg|wrong\.jpg/);
       assert.equal(parseSentEmail(built.text).prose.includes("The photo was incorrect."), false);
@@ -588,7 +594,7 @@ describe("HHSRS amend and resend", () => {
       nextPhotos: ["keep.jpg"],
     });
     assert.doesNotMatch(again.text, /The photo was incorrect/);
-    assert.equal((again.text.match(/Please disregard our previous email/g) || []).length, 1);
+    assert.equal((again.text.match(/This notification has been adjusted after review/g) || []).length, 1);
   });
 
   it("rejects a hazard or rating that is not on the set list", () => {
@@ -596,5 +602,20 @@ describe("HHSRS amend and resend", () => {
     assert.equal(amendmentListError(previous, { ...previous, rating: "Extreme" }), "Choose a rating from the list.");
     assert.equal(amendmentListError(previous, { ...previous, hazard: "Excess Cold", rating: "Low" }), "");
     assert.equal(amendmentListError(previous, previous), "");
+    assert.equal(
+      amendmentListError(previous, { ...previous, hazard: "Falls on level" }, "Gateway 2026"),
+      "Choose a hazard from the list."
+    );
+    assert.equal(
+      amendmentListError(previous, { ...previous, rating: "Slight" }, "Gateway 2026"),
+      "Choose a rating from the list."
+    );
+    assert.equal(amendmentListError(previous, { ...previous, hazard: "Excess Cold", rating: "Low" }, "MTVH 2026"), "");
+    assert.equal(amendmentListError(previous, { ...previous, hazard: "Falls on level", rating: "Slight" }, "Onward 2026"), "");
+    assert.equal(
+      amendmentListError(previous, { ...previous, hazard: "Fire & Explosions" }, "Vico 2026"),
+      "Choose a hazard from the list."
+    );
+    assert.equal(amendmentListError(previous, previous, "Onward 2026"), "");
   });
 });

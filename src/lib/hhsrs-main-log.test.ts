@@ -604,9 +604,9 @@ describe("HHSRS main log filters", () => {
     assert.doesNotMatch(tbody, /Use flat 5/);
     assert.match(table, />Actioned</);
     assert.match(table, />By</);
-    assert.match(tbody, /<td class="ml-actioned"><b>24\/09\/2026<\/b><\/td>/);
-    assert.match(tbody, /<td class="ml-actioned-by"><b>Carly Farrell<\/b><\/td>/);
-    assert.match(tbody, /<td class="ml-actioned-by"><b>Alex Surveyor<\/b><\/td>/);
+    assert.match(tbody, /<td class="col-actioned ml-actioned"><b>24\/09\/2026<\/b><\/td>/);
+    assert.match(tbody, /<td class="col-by ml-actioned-by"><b>Carly Farrell<\/b><\/td>/);
+    assert.match(tbody, /<td class="col-by ml-actioned-by"><b>Alex Surveyor<\/b><\/td>/);
     assert.match(tbody, /<strong>Flat 3<\/strong>/);
     assert.match(tbody, /class="ml-addr-full">Flat 3, 40 /);
     assert.doesNotMatch(tbody, /<strong>Flat 3, 40 /);
@@ -628,12 +628,12 @@ describe("HHSRS main log filters", () => {
     const sortedHtml = sorted.body.toString("utf8");
     assert.equal(sorted.status, 200);
     assert.match(sortedHtml, /aria-sort="ascending"/);
-    assert.match(sortedHtml, /class="is-sorted"/);
+    assert.match(sortedHtml, /class="col-proj is-sorted"/);
     assert.match(sortedHtml, /Sorted A to Z\. Click to reverse\./);
     assert.match(sortedHtml, /▲/);
     assert.match(sortedHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=project&amp;dir=desc"`));
     assert.match(sortedHtml, new RegExp(`href="/HHSRSreporter/main-log\\?q=${stamp}&amp;sort=received&amp;dir=asc"`));
-    const projectTh = sortedHtml.match(/<th class="is-sorted"[\s\S]*?<\/th>/);
+    const projectTh = sortedHtml.match(/<th class="col-proj is-sorted"[\s\S]*?<\/th>/);
     assert.ok(projectTh);
     assert.match(projectTh[0], />Project<span class="ml-sort-ind"/);
 

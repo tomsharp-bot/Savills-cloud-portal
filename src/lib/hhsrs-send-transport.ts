@@ -53,13 +53,12 @@ async function compileRaw(mail: OutboundEmail, keepBcc: boolean): Promise<Buffer
     attachments: [
       // Inline signature logo. Not one of the case photos.
       signatureLogoAttachment(),
-      // Case photos sit in the body only. A file attachment makes Outlook preview each picture again above the message.
-      ...(mail.inlinePhotos || []).map((file) => ({
+      // Case photos are file attachments only. They are not embedded in the body.
+      ...mail.attachments.map((file) => ({
         filename: file.filename,
         content: file.content,
         contentType: file.contentType,
-        cid: file.cid,
-        contentDisposition: "inline" as const,
+        contentDisposition: "attachment" as const,
       })),
     ],
   });
