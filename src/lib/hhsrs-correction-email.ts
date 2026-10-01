@@ -12,6 +12,9 @@ import { escapeHtml, stripTrailingSignature } from "./hhsrs-signature.js";
 export const CORRECTION_OPENING_LINE =
   "Please disregard our previous email, due to an error. See correct details below.";
 
+/** Second line, only when the attached photo set differs from the previous email. */
+export const CORRECTION_PHOTO_LINE = "The photo was incorrect.";
+
 export type CorrectionCopyInput = {
   previousBody: string;
   nextBody: string;
@@ -38,13 +41,42 @@ function normalizeNewlines(value: string): string {
 }
 
 const OPENING_LINE = /^Please disregard our previous email\b/i;
+const PHOTO_LINE = /^The photo was incorrect\.\n*/;
+
+/** True when a photo was removed or a different photo was added. Order does not matter. */
+export function correctionPhotoSetChanged(
+  previous: readonly string[] | null | undefined,
+  next: readonly string[] | null | undefined
+): boolean {
+  const names = (list: readonly string[] | null | undefined) => {
+    const set = new Set<string>();
+    for (const name of list || []) {
+      const trimmed = String(name || "").trim();
+      if (trimmed) set.add(trimmed);
+    }
+    return set;
+  };
+  const before = names(previous);
+  const after = names(next);
+  if (before.size !== after.size) return true;
+  for (const name of before) {
+    if (!after.has(name)) return true;
+  }
+  return false;
+}
+
+function dropLeadingPhotoLine(text: string): string {
+  const match = text.match(PHOTO_LINE);
+  if (!match) return text;
+  return text.slice(match[0].length).replace(/^\n+/, "");
+}
 
 function withoutOpening(text: string): string {
   const greeting = text.match(/^(Hi all,)\n+/i);
   const rest = greeting ? text.slice(greeting[0].length).replace(/^\n+/, "") : text;
   if (!OPENING_LINE.test(rest)) return text;
   const blank = rest.search(/\n\s*\n/);
-  const after = blank === -1 ? "" : rest.slice(blank).replace(/^\n\s*\n/, "").replace(/^\n+/, "");
+  const after = dropLeadingPhotoLine(blank === -1 ? "" : rest.slice(blank).replace(/^\n\s*\n/, "").replace(/^\n+/, ""));
   if (!greeting) return after;
   return after ? `${greeting[1]}\n\n${after}` : greeting[1];
 }
@@ -53,7 +85,7 @@ function withoutOpening(text: string): string {
 export function stripCorrectionIntro(body: string): string {
   const text = normalizeNewlines(body);
   const lead = text.match(/^(Please disregard our previous email\b[^\n]*)\n*/i);
-  if (lead) return withoutOpening(text.slice(lead[0].length).replace(/^\n+/, ""));
+  if (lead) return withoutOpening(dropLeadingPhotoLine(text.slice(lead[0].length).replace(/^\n+/, "")));
   return withoutOpening(text);
 }
 
@@ -126,7 +158,11 @@ export function prepareCorrectionEmail(input: CorrectionCopyInput): PreparedCorr
   }
 
   const greeting = nextBody.match(/^(Hi all,)\n+([\s\S]*)$/i);
-  const lines: Line[] = [{ runs: [{ text: CORRECTION_OPENING_LINE }] }, { runs: [{ text: "" }] }];
+  const lines: Line[] = [{ runs: [{ text: CORRECTION_OPENING_LINE }] }];
+  if (correctionPhotoSetChanged(input.previousPhotos, input.nextPhotos)) {
+    lines.push({ runs: [{ text: "" }] }, { runs: [{ text: CORRECTION_PHOTO_LINE }] });
+  }
+  lines.push({ runs: [{ text: "" }] });
   const pushRest = (rest: string) => {
     if (!rest) return;
     for (const line of rest.split("\n")) lines.push(contentLine(line, changedKeys));
@@ -284,6 +320,8 @@ export function buildAmendmentEmail(input: {
   previousSubject: string;
   next: AmendmentFields;
   amendment: string;
+  previousPhotos?: readonly string[];
+  nextPhotos?: readonly string[];
 }): BuiltAmendmentEmail {
   const parsed = parseSentEmail(input.previousBody);
   const previous = parsed.fields;
@@ -297,9 +335,14 @@ export function buildAmendmentEmail(input: {
   };
   const amendment = tidy(input.amendment);
   const intro = CORRECTION_OPENING_LINE;
-  const textLines = [intro, "", "Hi all,", ""];
+  const photoLine = correctionPhotoSetChanged(input.previousPhotos, input.nextPhotos);
+  const textLines = [intro];
+  if (photoLine) textLines.push("", CORRECTION_PHOTO_LINE);
+  textLines.push("", "Hi all,", "");
   for (const line of parsed.prose) textLines.push(line, "");
-  const htmlBits = [`<p>${escapeHtml(intro)}</p>`, `<p>Hi all,</p>`];
+  const htmlBits = [`<p>${escapeHtml(intro)}</p>`];
+  if (photoLine) htmlBits.push(`<p>${escapeHtml(CORRECTION_PHOTO_LINE)}</p>`);
+  htmlBits.push(`<p>Hi all,</p>`);
   for (const line of parsed.prose) htmlBits.push(`<p>${escapeHtml(line)}</p>`);
   const bullets: string[] = [];
   const htmlItems: string[] = [];

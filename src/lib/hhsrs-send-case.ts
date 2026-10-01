@@ -380,9 +380,17 @@ export async function sendCaseEmail(args: {
   let body = prepareClientEmailBody(args.row.projectName, String(args.body.body ?? ""));
   let messageHtml: string | undefined;
   if (amendmentMail) {
-    subject = amendmentMail.subject;
-    body = amendmentMail.text;
-    messageHtml = amendmentMail.messageHtml;
+    const withPhotos = buildAmendmentEmail({
+      previousBody: previousEmail?.body ?? "",
+      previousSubject: previousEmail?.subject ?? "",
+      next: amendmentMail.next,
+      amendment: String(args.body.amendment || ""),
+      previousPhotos: previousEmail?.photoNames ?? [],
+      nextPhotos: picked.names,
+    });
+    subject = withPhotos.subject;
+    body = withPhotos.text;
+    messageHtml = withPhotos.messageHtml;
   } else if (correction) {
     const prepared = prepareCorrectionEmail({
       previousBody: previousEmail?.body ?? "",

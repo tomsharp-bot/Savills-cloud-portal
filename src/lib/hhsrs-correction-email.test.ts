@@ -11,6 +11,8 @@ import { correctionSubject } from "./hhsrs-find.js";
 import { deliverPortalEmail, type OutboundEmail, type SendCommit, type SentEmailRecord } from "./hhsrs-send.js";
 import { SIGNATURE_LOGO_CID, composeEmailHtml, composeEmailText } from "./hhsrs-signature.js";
 
+const NAMES = { firstName: "", fullName: "" };
+
 const SUBJECT = "CORRECTION: MTVH 2026 - HHSRS – 14 Example Street, London";
 const PREVIOUS_SUBJECT = "MTVH 2026 - HHSRS – 14 Example Street, London";
 
@@ -103,18 +105,23 @@ describe("HHSRS correction email wording", () => {
       [
         "Please disregard our previous email, due to an error. See correct details below.",
         "",
+        "The photo was incorrect.",
+        "",
         ORIGINAL,
       ].join("\n")
     );
-    const intro = htmlLines(prepared.messageHtml)[0];
-    assert.equal(intro, "Please disregard our previous email, due to an error. See correct details below.");
+    const lines = htmlLines(prepared.messageHtml);
+    assert.equal(lines[0], "Please disregard our previous email, due to an error. See correct details below.");
+    assert.equal(lines[2], "The photo was incorrect.");
     assert.doesNotMatch(prepared.text, /The correct photos are now attached/);
-    assert.doesNotMatch(intro, /bedroom|kitchen|\.jpg|ceiling/i);
+    assert.doesNotMatch(lines[0], /bedroom|kitchen|\.jpg|ceiling/i);
+    assert.doesNotMatch(lines[2], /bedroom|kitchen|\.jpg|ceiling/i);
     assert.doesNotMatch(prepared.text, /• Photo/);
     assert.equal(bulletLine(prepared.messageHtml, "Address").includes("<b>"), false);
     assert.equal(bulletLine(prepared.messageHtml, "Hazard").includes("<b>"), false);
     assert.doesNotMatch(prepared.text, /was wrong/i);
     assert.doesNotMatch(prepared.messageHtml, /\*\*/);
+    assert.equal((prepared.text.match(/Please disregard our previous email/g) || []).length, 1);
   });
 
   it("uses the photo sentence when the reason is Missing photo and the file names are unchanged", () => {
@@ -128,8 +135,70 @@ describe("HHSRS correction email wording", () => {
       prepared.text.split("\n")[0],
       "Please disregard our previous email, due to an error. See correct details below."
     );
+    assert.doesNotMatch(prepared.text, /The photo was incorrect/);
+    assert.doesNotMatch(prepared.messageHtml, /The photo was incorrect/);
     assert.doesNotMatch(prepared.text, /The correct photos are now attached/);
     assert.doesNotMatch(prepared.text, /bedroom-ceiling/);
+  });
+
+  it("adds the photo line only when the photo set changes", () => {
+    const removed = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      previousPhotos: ["keep.jpg", "wrong.jpg"],
+      nextPhotos: ["keep.jpg"],
+      reason: "Other",
+    });
+    const added = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      previousPhotos: ["keep.jpg"],
+      nextPhotos: ["keep.jpg", "replacement.jpg"],
+      reason: "Other",
+    });
+    const replaced = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      previousPhotos: ["wrong.jpg"],
+      nextPhotos: ["replacement.jpg"],
+      reason: "Other",
+    });
+    const reordered = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      previousPhotos: ["keep.jpg", "wrong.jpg"],
+      nextPhotos: ["wrong.jpg", "keep.jpg"],
+      reason: "Other",
+    });
+    const blank = prepareCorrectionEmail({
+      ...base,
+      previousBody: ORIGINAL,
+      nextBody: ORIGINAL,
+      previousPhotos: [],
+      nextPhotos: ["  "],
+      reason: "Other",
+    });
+    for (const prepared of [removed, added, replaced]) {
+      assert.equal(
+        prepared.text.split("\n").slice(0, 4).join("\n"),
+        [
+          "Please disregard our previous email, due to an error. See correct details below.",
+          "",
+          "The photo was incorrect.",
+          "",
+        ].join("\n")
+      );
+      assert.match(prepared.text, /\nHi all,/);
+      assert.equal((prepared.text.match(/The photo was incorrect\./g) || []).length, 1);
+      assert.doesNotMatch(prepared.messageHtml, /<b>The photo was incorrect\.<\/b>/);
+      assert.equal(parseSentEmail(prepared.text).prose.includes("The photo was incorrect."), false);
+    }
+    assert.doesNotMatch(reordered.text, /The photo was incorrect/);
+    assert.doesNotMatch(blank.text, /The photo was incorrect/);
   });
 
   it("corrects a hazard and bolds only that value", () => {
@@ -281,6 +350,15 @@ describe("HHSRS correction email wording", () => {
     assert.doesNotMatch(prepared.messageHtml, /which is now/);
     assert.doesNotMatch(prepared.messageHtml, /<north>/);
   });
+
+  it("renders the correction subject with a bold tag, not only an h2 weight", () => {
+    const html = composeEmailHtml("Hi all,", NAMES, `cid:${SIGNATURE_LOGO_CID}`, "<p>Hi all,</p>", {
+      subject: SUBJECT,
+    });
+    assert.match(html, new RegExp(`<b[^>]*>${SUBJECT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</b>`));
+    assert.match(html, /<h2\b[^>]*>\s*<b\b/);
+    assert.doesNotMatch(html, /<h2\b[^>]*>\s*CORRECTION:/);
+  });
 });
 
 describe("HHSRS correction send", () => {
@@ -393,6 +471,11 @@ describe("HHSRS correction send", () => {
     assert.match(address.mail.html, /<b>15 Example Street, London<\/b>/);
     assert.doesNotMatch(address.mail.text, /<b>/);
     assert.doesNotMatch(photos.mail.text, /The correct photos are now attached/);
+    assert.match(photos.mail.text, /The photo was incorrect\./);
+    assert.doesNotMatch(address.mail.text, /The photo was incorrect/);
+    assert.doesNotMatch(hazard.mail.text, /The photo was incorrect/);
+    assert.match(photos.mail.html, /<h2\b[^>]*>\s*<b\b[^>]*>CORRECTION:/);
+    assert.doesNotMatch(photos.mail.html, /<h2\b[^>]*>\s*CORRECTION:/);
     assert.doesNotMatch(photos.mail.text, /kitchen\.jpg|bedroom-ceiling/);
     assert.match(hazard.mail.html, /<b>Excess Cold<\/b>/);
     assert.match(hazard.mail.text, /• Address: 14 Example Street, London/);
@@ -447,6 +530,65 @@ describe("HHSRS amend and resend", () => {
     assert.match(second.messageHtml, /<li>Hazard: Excess Cold<\/li>/);
     assert.match(second.messageHtml, /<li>Rating: <b>Moderate<\/b><\/li>/);
     assert.equal((second.text.match(/Please disregard our previous email/g) || []).length, 1);
+  });
+
+  it("adds the photo line on an amendment only when the photo set changes", () => {
+    const unchanged = buildAmendmentEmail({
+      previousBody: ORIGINAL,
+      previousSubject: PREVIOUS_SUBJECT,
+      next: previous,
+      amendment: "Checked the photos.",
+      previousPhotos: ["keep.jpg", "wrong.jpg"],
+      nextPhotos: ["wrong.jpg", "keep.jpg"],
+    });
+    assert.doesNotMatch(unchanged.text, /The photo was incorrect/);
+    assert.doesNotMatch(unchanged.messageHtml, /The photo was incorrect/);
+    assert.match(
+      unchanged.text,
+      /^Please disregard our previous email, due to an error\. See correct details below\.\n\nHi all,/
+    );
+
+    const removed = buildAmendmentEmail({
+      previousBody: ORIGINAL,
+      previousSubject: PREVIOUS_SUBJECT,
+      next: previous,
+      amendment: "Removed the wrong photo.",
+      previousPhotos: ["keep.jpg", "wrong.jpg"],
+      nextPhotos: ["keep.jpg"],
+    });
+    const added = buildAmendmentEmail({
+      previousBody: ORIGINAL,
+      previousSubject: PREVIOUS_SUBJECT,
+      next: previous,
+      amendment: "Added a replacement.",
+      previousPhotos: ["keep.jpg"],
+      nextPhotos: ["keep.jpg", "kitchen.jpg"],
+    });
+    for (const built of [removed, added]) {
+      assert.match(
+        built.text,
+        /^Please disregard our previous email, due to an error\. See correct details below\.\n\nThe photo was incorrect\.\n\nHi all,/
+      );
+      assert.match(
+        built.messageHtml,
+        /^<p>Please disregard our previous email, due to an error\. See correct details below\.<\/p><p>The photo was incorrect\.<\/p><p>Hi all,<\/p>/
+      );
+      assert.equal((built.text.match(/Please disregard our previous email/g) || []).length, 1);
+      assert.equal((built.text.match(/The photo was incorrect\./g) || []).length, 1);
+      assert.doesNotMatch(built.text, /Removed the wrong photo|Added a replacement|kitchen\.jpg|wrong\.jpg/);
+      assert.equal(parseSentEmail(built.text).prose.includes("The photo was incorrect."), false);
+    }
+
+    const again = buildAmendmentEmail({
+      previousBody: removed.text,
+      previousSubject: removed.subject,
+      next: previous,
+      amendment: "Address only.",
+      previousPhotos: ["keep.jpg"],
+      nextPhotos: ["keep.jpg"],
+    });
+    assert.doesNotMatch(again.text, /The photo was incorrect/);
+    assert.equal((again.text.match(/Please disregard our previous email/g) || []).length, 1);
   });
 
   it("rejects a hazard or rating that is not on the set list", () => {

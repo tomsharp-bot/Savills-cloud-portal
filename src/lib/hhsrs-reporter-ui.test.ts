@@ -789,6 +789,7 @@ describe("HHSRS Reporter UI helpers", () => {
   it("keeps Find and resend off the side email panel", () => {
     const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
     const js = readFileSync("public/js/hhsrs-find.js", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
     const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
     assert.doesNotMatch(find, /fr-drawer/);
     assert.match(find, /Email resent and correction logged/);
@@ -822,6 +823,11 @@ describe("HHSRS Reporter UI helpers", () => {
     }
     assert.doesNotMatch(find, /<figcaption>/);
     assert.match(js, /Please disregard our previous email, due to an error\. See correct details below\./);
+    assert.match(js, /The photo was incorrect\./);
+    assert.match(js, /if \(photosChanged\(\)\) html \+= "<p>The photo was incorrect\.<\/p>"/);
+    assert.match(js, /title\.innerHTML = "<b>" \+ esc\(subject\) \+ "<\/b>"/);
+    assert.match(find, /id="fr-preview-subject"><b><%= amend\.subject %><\/b><\/h2>/);
+    assert.match(css, /#fr-preview-subject b \{[^}]*font-weight:\s*800/);
     assert.match(js, /CORRECTION: /);
     assert.match(route, /resentNotice: justSent/);
   });

@@ -3385,6 +3385,7 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
   border: 0;
   border-bottom: 1px solid var(--border);
 }
+#fr-preview-subject b { font-weight: 800; }
 .sent-sec { margin: 0 0 8px; }
 .sent-parties, .vd-parties {
   margin: 0 16px 10px;
