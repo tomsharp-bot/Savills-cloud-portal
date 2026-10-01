@@ -5,12 +5,15 @@ import { join } from "node:path";
 import ejs from "ejs";
 import {
   HHSRS_CATEGORIES,
+  HHSRS_LEGACY_CATEGORIES,
+  HHSRS_ONWARD_VICO_RATINGS,
   HHSRS_SITE_FORM_NEW_RATINGS,
   HHSRS_SITE_FORM_RATINGS,
   isHhsrsCategory,
   isHhsrsRating,
   isHhsrsSiteFormRating,
 } from "./hhsrs-categories.js";
+import { amendmentRatingChoices, officeCategoryChoices, officeRatingChoices, RATING_OPTIONS } from "./hhsrs-reporter-projects.js";
 import {
   composeCallNotes,
   splitCallNotes,
@@ -32,6 +35,7 @@ import {
   listKeepPhotoNames,
   normalizeUprn,
   readHhsrsValues,
+  siteFormCategoryChoices,
   siteFormProjectFlags,
   siteFormRatingChoices,
   siteFormSectionState,
@@ -82,6 +86,31 @@ describe("HHSRS categories", () => {
     ]);
     assert.equal(HHSRS_CATEGORIES.includes("Falling Between Levels" as (typeof HHSRS_CATEGORIES)[number]), true);
     assert.equal(WINDOW_RESTRICTOR_CATEGORY, "Falling Between Levels");
+    assert.equal(HHSRS_LEGACY_CATEGORIES.length, 29);
+    assert.equal(new Set(HHSRS_LEGACY_CATEGORIES).size, 29);
+    assert.equal(HHSRS_LEGACY_CATEGORIES[0], "Falls associated with baths etc");
+    assert.equal(HHSRS_LEGACY_CATEGORIES[15], "Damp / Mould Growth");
+    assert.equal(HHSRS_LEGACY_CATEGORIES[28], "Overcrowding");
+    assert.deepEqual(siteFormCategoryChoices("Onward 2026"), HHSRS_LEGACY_CATEGORIES);
+    assert.deepEqual(siteFormCategoryChoices("Onward"), HHSRS_LEGACY_CATEGORIES);
+    assert.deepEqual(siteFormCategoryChoices("Vico 2026"), HHSRS_LEGACY_CATEGORIES);
+    assert.deepEqual(siteFormCategoryChoices("Vico 2026 8k"), HHSRS_LEGACY_CATEGORIES);
+    assert.deepEqual(siteFormCategoryChoices("Gateway 2026"), HHSRS_CATEGORIES);
+    assert.deepEqual(siteFormCategoryChoices("Cornwall 2026 Ph2"), HHSRS_CATEGORIES);
+    assert.deepEqual(siteFormCategoryChoices("Saxon Weald 2026 Phase 4"), HHSRS_CATEGORIES);
+    assert.deepEqual(siteFormCategoryChoices("MTVH 2026"), HHSRS_CATEGORIES);
+    assert.deepEqual(siteFormRatingChoices("Onward 2026"), HHSRS_ONWARD_VICO_RATINGS);
+    assert.deepEqual(siteFormRatingChoices("Vico 2026"), HHSRS_ONWARD_VICO_RATINGS);
+    assert.deepEqual(siteFormRatingChoices("Gateway 2026"), HHSRS_SITE_FORM_NEW_RATINGS);
+    assert.deepEqual(siteFormRatingChoices("Cornwall 2026"), HHSRS_SITE_FORM_NEW_RATINGS);
+    assert.equal(siteFormRatingChoices("Saxon Weald 2026 Phase 4").includes("Severe"), false);
+    assert.deepEqual(officeCategoryChoices("Onward"), HHSRS_LEGACY_CATEGORIES);
+    assert.deepEqual(officeCategoryChoices("Gateway 2026"), HHSRS_CATEGORIES);
+    assert.deepEqual(officeRatingChoices("Vico 2026"), HHSRS_ONWARD_VICO_RATINGS);
+    assert.deepEqual(officeRatingChoices("MTVH 2026"), RATING_OPTIONS.NEW);
+    assert.deepEqual(RATING_OPTIONS.NEW, ["Low", "Medium", "High", "High – emergency risk", "High – severe risk"]);
+    assert.deepEqual(amendmentRatingChoices("Onward 2026"), HHSRS_ONWARD_VICO_RATINGS);
+    assert.deepEqual(amendmentRatingChoices("Gateway 2026"), HHSRS_SITE_FORM_NEW_RATINGS);
     assert.equal(isHhsrsSiteFormRating("High - Emergency Risk"), true);
     assert.equal(isHhsrsSiteFormRating("High - Emergency risk"), true);
     assert.equal(isHhsrsSiteFormRating("High - Significant risk"), true);
@@ -168,10 +197,27 @@ describe("validateHhsrsForm", () => {
     const significant = validateHhsrsForm({ ...valid, rating: "High - Significant risk" }, project);
     assert.equal(significant.ok, true);
     const severeOnOld = validateHhsrsForm(
-      { ...valid, rating: "Severe", clientCallReference: "CR-1" },
+      { ...valid, category: "Electrical Hazards", rating: "Severe", clientCallReference: "CR-1" },
       { id: "onward", name: "Onward 2026" }
     );
     assert.equal(severeOnOld.ok, true);
+    const legacyCategory = validateHhsrsForm(
+      { ...valid, category: "Falls on level", rating: "Slight", clientCallReference: "CR-1" },
+      { id: "onward", name: "Onward 2026" }
+    );
+    assert.equal(legacyCategory.ok, true);
+    const newCategoryOnOnward = validateHhsrsForm(
+      { ...valid, category: "Damp & Mould Growth", rating: "Moderate", clientCallReference: "CR-1" },
+      { id: "onward", name: "Onward 2026" }
+    );
+    assert.equal(newCategoryOnOnward.ok, false);
+    const lowOnOnward = validateHhsrsForm(
+      { ...valid, category: "Fire", rating: "Low", clientCallReference: "CR-1" },
+      { id: "onward", name: "Onward 2026" }
+    );
+    assert.equal(lowOnOnward.ok, false);
+    const legacyOnGateway = validateHhsrsForm({ ...valid, category: "Falls on level", rating: "Slight" }, project);
+    assert.equal(legacyOnGateway.ok, false);
     const stranger = validateHhsrsForm(valid, project, { surveyorNames: ["Pat Jones"] });
     assert.equal(stranger.ok, false);
     if (!stranger.ok) assert.equal(stranger.errors.surveyorName, "Select a surveyor from Personnel.");
@@ -215,7 +261,7 @@ describe("validateHhsrsForm", () => {
 
   it("does not store Category 1 from the site form, and flags Saxon and call extras", () => {
     const onward = validateHhsrsForm(
-      { ...valid, cat1Confirmed: true, clientCallReference: "CR-9" },
+      { ...valid, category: "Electrical Hazards", rating: "Moderate", cat1Confirmed: true, clientCallReference: "CR-9" },
       { id: "proj-1", name: "Onward 2026" }
     );
     assert.equal(onward.ok, true);
@@ -253,7 +299,7 @@ describe("validateHhsrsForm", () => {
       assert.equal(withVuln.data.suspectedCause, "");
     }
     const dampMissing = validateHhsrsForm(
-      { ...electrical, category: "Damp & Mould Growth", vulnerabilities: "Elderly resident" },
+      { ...electrical, category: "Damp / Mould Growth", vulnerabilities: "Elderly resident" },
       vico
     );
     assert.equal(dampMissing.ok, false);
@@ -261,7 +307,7 @@ describe("validateHhsrsForm", () => {
     const damp = validateHhsrsForm(
       {
         ...electrical,
-        category: "Damp & Mould Growth",
+        category: "Damp / Mould Growth",
         vulnerabilities: "Elderly resident",
         suspectedCause: "  Leaking gutter  ",
       },
@@ -455,7 +501,8 @@ describe("validateHhsrsForm", () => {
     );
     assert.equal(phase.ok, true);
 
-    const onwardMissing = validateHhsrsForm(blankDetails, { id: "onward", name: "Onward 2026" });
+    const onwardBlank = { ...blankDetails, category: "Electrical Hazards", rating: "Moderate" };
+    const onwardMissing = validateHhsrsForm(onwardBlank, { id: "onward", name: "Onward 2026" });
     assert.equal(onwardMissing.ok, false);
     if (!onwardMissing.ok) {
       assert.equal(onwardMissing.errors.otherDetails, undefined);
@@ -463,7 +510,7 @@ describe("validateHhsrsForm", () => {
     }
 
     const onwardWithRef = validateHhsrsForm(
-      { ...blankDetails, clientCallReference: "CR-9" },
+      { ...onwardBlank, clientCallReference: "CR-9" },
       { id: "onward", name: "Onward 2026" }
     );
     assert.equal(onwardWithRef.ok, true);
@@ -472,29 +519,30 @@ describe("validateHhsrsForm", () => {
 
   it("requires a call reference, or a blank reason (free text only when Other)", () => {
     const onward = { id: "proj-1", name: "Onward 2026" };
-    const missing = validateHhsrsForm(valid, onward);
+    const onwardValues = { ...valid, category: "Electrical Hazards", rating: "Moderate" };
+    const missing = validateHhsrsForm(onwardValues, onward);
     assert.equal(missing.ok, false);
     if (!missing.ok) {
       assert.match(String(missing.errors.clientCallReference), /why it is blank/);
     }
 
-    const withRef = validateHhsrsForm({ ...valid, clientCallReference: "CR-9" }, onward);
+    const withRef = validateHhsrsForm({ ...onwardValues, clientCallReference: "CR-9" }, onward);
     assert.equal(withRef.ok, true);
     if (withRef.ok) assert.equal(withRef.data.cat1Confirmed, false);
 
-    const tickedBlank = validateHhsrsForm({ ...valid, callUnreached: true }, onward);
+    const tickedBlank = validateHhsrsForm({ ...onwardValues, callUnreached: true }, onward);
     assert.equal(tickedBlank.ok, false);
     if (!tickedBlank.ok) assert.equal(tickedBlank.errors.callRefBlankReason, "Select why the call reference is blank.");
 
     const otherBlank = validateHhsrsForm(
-      { ...valid, callUnreached: true, callRefBlankReason: "Other", callUnreachedNote: "  " },
+      { ...onwardValues, callUnreached: true, callRefBlankReason: "Other", callUnreachedNote: "  " },
       onward
     );
     assert.equal(otherBlank.ok, false);
     if (!otherBlank.ok) assert.equal(otherBlank.errors.callUnreachedNote, "Say why the call reference is blank.");
 
     const noAnswer = validateHhsrsForm(
-      { ...valid, callUnreached: true, callRefBlankReason: "No answer" },
+      { ...onwardValues, callUnreached: true, callRefBlankReason: "No answer" },
       onward
     );
     assert.equal(noAnswer.ok, true);
@@ -507,7 +555,7 @@ describe("validateHhsrsForm", () => {
     }
 
     const busyNote = validateHhsrsForm(
-      { ...valid, callUnreached: true, callRefBlankReason: "Engaged/busy", callUnreachedNote: "Line stayed busy" },
+      { ...onwardValues, callUnreached: true, callRefBlankReason: "Engaged/busy", callUnreachedNote: "Line stayed busy" },
       onward
     );
     assert.equal(busyNote.ok, true);
@@ -528,7 +576,7 @@ describe("validateHhsrsForm", () => {
     }
 
     const unreached = validateHhsrsForm(
-      { ...valid, callUnreached: true, callRefBlankReason: "Other", callUnreachedNote: "Voicemail full." },
+      { ...onwardValues, callUnreached: true, callRefBlankReason: "Other", callUnreachedNote: "Voicemail full." },
       onward
     );
     assert.equal(unreached.ok, true);
@@ -546,7 +594,7 @@ describe("validateHhsrsForm", () => {
     }
 
     const refAndSkip = validateHhsrsForm(
-      { ...valid, clientCallReference: "CR-9", callUnreached: true, callRefBlankReason: "No answer" },
+      { ...onwardValues, clientCallReference: "CR-9", callUnreached: true, callRefBlankReason: "No answer" },
       onward
     );
     assert.equal(refAndSkip.ok, true);

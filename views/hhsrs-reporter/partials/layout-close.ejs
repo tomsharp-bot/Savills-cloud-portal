@@ -17,6 +17,7 @@
     base: <%- JSON.stringify(reporterBase) %>,
     demoProjects: <%- JSON.stringify(typeof demoProjects !== 'undefined' ? demoProjects : null) %>,
     ratingOptions: <%- JSON.stringify(typeof ratingOptions !== 'undefined' ? ratingOptions : null) %>,
+    categoryOptions: <%- JSON.stringify(typeof categoryOptions !== 'undefined' ? categoryOptions : null) %>,
     initialProject: <%- JSON.stringify(typeof reviewProjectValue !== 'undefined' ? reviewProjectValue : '') %>,
     mode: <%- JSON.stringify(typeof mode !== 'undefined' ? mode : activeNav) %>,
     caseId: <%- JSON.stringify(typeof row !== 'undefined' && row ? row.id : '') %>,
@@ -41,5 +42,6 @@
 <script src="<%= baseUrl('/js/hhsrs-pending-alerts.js') %>" defer></script>
 <script src="<%= baseUrl('/js/date-search-year.js') %>" defer></script>
 <script src="<%= reporterJsUrl %>" defer></script>
+<script src="<%= hazardListsJsUrl %>" defer></script>
 </body>
 </html>
