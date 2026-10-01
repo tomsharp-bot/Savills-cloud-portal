@@ -10,7 +10,7 @@ import { Prisma, type HhsrsSiteSubmission, type Prisma as PrismaTypes } from "@p
 import { closeOpenSubmissionFromEarliestEmail } from "./hhsrs-close-sent.js";
 import { prisma } from "./prisma.js";
 import { claimHeldMessage, otherClaimer } from "./hhsrs-claims.js";
-import { isActionedStatus, isWaitingStatus, photoNames } from "./hhsrs-reporter.js";
+import { isWaitingStatus, photoNames } from "./hhsrs-reporter.js";
 import {
   readSiteFormPhotoBytes,
   siteFormPhotoKey,
@@ -197,7 +197,12 @@ async function earliestSentEmail(tx: Tx, submissionId: string) {
  * Insert the original send only when the case update matches.
  * One statement, so a saved email cannot leave the case in Pending.
  */
-async function insertOriginalAndClose(tx: Tx, submissionId: string, commit: SendCommit): Promise<SentEmailRecord> {
+async function insertOriginalAndClose(
+  tx: Tx,
+  submissionId: string,
+  commit: SendCommit,
+  lease: string
+): Promise<SentEmailRecord> {
   const id = randomUUID();
   const rows = await tx.$queryRaw<Array<Parameters<typeof toRecord>[0]>>`
     WITH updated AS (
@@ -211,9 +216,11 @@ async function insertOriginalAndClose(tx: Tx, submissionId: string, commit: Send
         "lastEditedBy" = ${commit.sentBy},
         "claimedBy" = '',
         "claimedAt" = NULL,
+        "sendLease" = '',
         "updatedAt" = CURRENT_TIMESTAMP
       WHERE "id" = ${submissionId}
         AND "emailSentAt" IS NULL
+        AND "sendLease" = ${lease}
         AND "status" IS DISTINCT FROM 'not_needed'
       RETURNING "id"
     )
@@ -306,29 +313,186 @@ async function insertCorrectionAndClose(
   return toRecord(created);
 }
 
+const SEND_IN_PROGRESS = "A send is already in progress for this case.";
+const SEND_LOG_FAILED = "The email went out, but the Main Log did not save. Open the case again to record it.";
+const SEND_LEASE_PAD = 16;
+
+/** True while this send still owns the case. An expired lease can be taken over. */
+export function sendLeaseActive(value: string | null | undefined, now = Date.now()): boolean {
+  const stamp = String(value || "").split(":")[0];
+  if (!/^[0-9]+$/.test(stamp)) return false;
+  return Number(stamp) > now;
+}
+
+function newSendLease(now = Date.now()): string {
+  return `${String(now + 2 * 60 * 1000).padStart(SEND_LEASE_PAD, "0")}:${randomUUID()}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type LockedSendRow = { emailSentAt: Date | null; status: string; claimedBy: string; sendLease: string };
+
+async function lockSendRow(tx: Tx, submissionId: string): Promise<LockedSendRow | null> {
+  const rows = await tx.$queryRaw<LockedSendRow[]>`
+    SELECT "emailSentAt", "status", "claimedBy", "sendLease"
+    FROM "HhsrsSiteSubmission"
+    WHERE "id" = ${submissionId}
+    FOR UPDATE
+  `;
+  return rows[0] || null;
+}
+
+async function clearSendLease(submissionId: string, lease: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "HhsrsSiteSubmission"
+    SET "sendLease" = ''
+    WHERE "id" = ${submissionId} AND "sendLease" = ${lease}
+  `;
+}
+
 /** The mailbox send already happened. Write the Main Log row and take the case off Pending. */
-async function recoverOriginalSend(submissionId: string, commit: SendCommit): Promise<SentEmailRecord | null> {
+async function writeOriginalLog(submissionId: string, commit: SendCommit, lease: string): Promise<SentEmailRecord | null> {
   try {
     return await prisma.$transaction(
       async (tx) => {
-        const locked = await tx.$queryRaw<Array<{ id: string }>>`
-          SELECT "id" FROM "HhsrsSiteSubmission" WHERE "id" = ${submissionId} FOR UPDATE
-        `;
-        if (!locked.length) return null;
+        const locked = await lockSendRow(tx, submissionId);
+        if (!locked) return null;
         const existing = await earliestSentEmail(tx, submissionId);
         if (existing) {
           await closeOpenSubmissionFromEarliestEmail(tx, submissionId);
+          await tx.$executeRaw`
+            UPDATE "HhsrsSiteSubmission"
+            SET "sendLease" = ''
+            WHERE "id" = ${submissionId} AND "sendLease" = ${lease}
+          `;
           return toRecord(existing);
         }
-        return insertOriginalAndClose(tx, submissionId, commit);
+        return insertOriginalAndClose(tx, submissionId, commit, lease);
       },
-      { maxWait: 15_000, timeout: 60_000 }
+      { maxWait: 15_000, timeout: 20_000 }
     );
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error(`HHSRS send log retry failed for ${submissionId}: ${detail}`);
     return null;
   }
+}
+
+type ReservedSend =
+  | { kind: "go" }
+  | { kind: "already"; record: SentEmailRecord }
+  | { kind: "busy" }
+  | { kind: "blocked"; error: string }
+  | { kind: "missing" };
+
+/** Commit the claim and the send lease before any email leaves the building. */
+async function reserveOriginalSend(submissionId: string, actor: string, lease: string): Promise<ReservedSend> {
+  return prisma.$transaction(
+    async (tx) => {
+      const locked = await lockSendRow(tx, submissionId);
+      if (!locked) return { kind: "missing" };
+      if (locked.status === "not_needed") {
+        return {
+          kind: "blocked",
+          error: "This case is in Duplicates & Errors. Move it back to Pending before sending.",
+        };
+      }
+      const existing = await earliestSentEmail(tx, submissionId);
+      if (locked.emailSentAt || existing) {
+        if (existing) {
+          await closeOpenSubmissionFromEarliestEmail(tx, submissionId);
+          return { kind: "already", record: toRecord(existing) };
+        }
+        return { kind: "blocked", error: "Already sent. Can't be sent again." };
+      }
+      if (!isWaitingStatus(locked.status)) return { kind: "blocked", error: "Already sent. Can't be sent again." };
+      const owner = otherClaimer(locked.claimedBy, actor);
+      if (owner) return { kind: "blocked", error: claimHeldMessage(owner) };
+      if (!actor) return { kind: "blocked", error: "Sign in again before sending this case." };
+      if (sendLeaseActive(locked.sendLease) && locked.sendLease !== lease) return { kind: "busy" };
+      const nowText = String(Date.now()).padStart(SEND_LEASE_PAD, "0");
+      const updated = await tx.$executeRaw`
+        UPDATE "HhsrsSiteSubmission"
+        SET
+          "claimedBy" = ${actor},
+          "claimedAt" = COALESCE("claimedAt", CURRENT_TIMESTAMP),
+          "sendLease" = ${lease},
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = ${submissionId}
+          AND "emailSentAt" IS NULL
+          AND "status" IN ('new', 'in_review', 'email_ready')
+          AND btrim(${actor}) <> ''
+          AND (
+            btrim("claimedBy") = ''
+            OR lower(btrim("claimedBy")) = lower(${actor})
+          )
+          AND CASE
+            WHEN "sendLease" = '' THEN TRUE
+            WHEN "sendLease" = ${lease} THEN TRUE
+            WHEN split_part("sendLease", ':', 1) ~ '^[0-9]+$'
+              THEN split_part("sendLease", ':', 1) <= ${nowText}
+            ELSE TRUE
+          END
+      `;
+      if (Number(updated) !== 1) return { kind: "busy" };
+      return { kind: "go" };
+    },
+    { maxWait: 15_000, timeout: 20_000 }
+  );
+}
+
+/**
+ * One original send. The lease is committed before the mailbox send, so a second
+ * person cannot send. The Main Log row is written after the mailbox accepts it,
+ * in its own transaction, so a rolled-back mailbox transaction cannot drop the log.
+ */
+async function finishOriginalSend(
+  submissionId: string,
+  actor: string,
+  run: () => Promise<SendCommit>
+): Promise<SentEmailRecord> {
+  const deadline = Date.now() + 60_000;
+  const lease = newSendLease();
+  while (Date.now() < deadline) {
+    const reserved = await reserveOriginalSend(submissionId, actor, lease);
+    if (reserved.kind === "already") return reserved.record;
+    if (reserved.kind === "blocked") throw new PortalSendError(reserved.error);
+    if (reserved.kind === "missing") throw new PortalSendError("Case not found.");
+    if (reserved.kind === "busy") {
+      await sleep(150);
+      const logged = await prisma.hhsrsSentEmail.findFirst({
+        where: { submissionId },
+        orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+      });
+      if (logged) {
+        await closeOpenSubmissionFromEarliestEmail(prisma, submissionId);
+        return toRecord(logged);
+      }
+      continue;
+    }
+    let mailed: SendCommit | null = null;
+    try {
+      mailed = await run();
+      let saved: SentEmailRecord | null = null;
+      for (let attempt = 0; attempt < 3 && !saved; attempt += 1) {
+        saved = await writeOriginalLog(submissionId, mailed, lease);
+        if (!saved) await sleep(200);
+      }
+      if (!saved) throw new PortalSendError(SEND_LOG_FAILED);
+      return saved;
+    } catch (err) {
+      if (!mailed) {
+        await clearSendLease(submissionId, lease).catch(() => undefined);
+        throw err;
+      }
+      const saved = await writeOriginalLog(submissionId, mailed, lease);
+      if (saved) return saved;
+      throw err instanceof PortalSendError ? err : new PortalSendError(SEND_LOG_FAILED);
+    }
+  }
+  throw new PortalSendError(SEND_IN_PROGRESS);
 }
 
 export async function sendCaseEmail(args: {
@@ -462,60 +626,25 @@ export async function sendCaseEmail(args: {
       sendMail: transport.sendMail,
       appendToSent: transport.appendToSent,
       exclusive: async (run) => {
-        let mailed: SendCommit | null = null;
-        try {
-          const record = await prisma.$transaction(
-            async (tx) => {
-              const locked = await tx.$queryRaw<Array<{ emailSentAt: Date | null; status: string; claimedBy: string }>>`
-                SELECT "emailSentAt", "status", "claimedBy" FROM "HhsrsSiteSubmission" WHERE "id" = ${submissionId} FOR UPDATE
-              `;
-              if (!locked.length) throw new PortalSendError("Case not found.");
-              if (!correction && locked[0].status === "not_needed") {
-                throw new PortalSendError(
-                  "This case is in Duplicates & Errors. Move it back to Pending before sending."
-                );
-              }
-              if (correction) {
-                const anchor = await earliestSentEmail(tx, submissionId);
-                if (!anchor) throw new PortalSendError("Not sent yet.");
-                const commit: SendCommit = await run();
-                return insertCorrectionAndClose(tx, submissionId, commit, anchor, {
-                  reason: correctionReason,
-                  note: correctionNote,
-                });
-              }
-              const existing = await earliestSentEmail(tx, submissionId);
-              if (locked[0].emailSentAt || existing) {
-                if (existing) {
-                  await closeOpenSubmissionFromEarliestEmail(tx, submissionId);
-                  return toRecord(existing);
-                }
-                throw new PortalSendError("Already sent. Can't be sent again.");
-              }
-              if (isWaitingStatus(locked[0].status)) {
-                const owner = otherClaimer(locked[0].claimedBy, args.actor || args.sentBy);
-                if (owner) throw new PortalSendError(claimHeldMessage(owner));
-              }
-              const commit: SendCommit = await run();
-              mailed = commit;
-              return insertOriginalAndClose(tx, submissionId, commit);
-            },
-            { maxWait: 15_000, timeout: 60_000 }
-          );
-          const fresh = await prisma.hhsrsSiteSubmission.findUnique({
-            where: { id: submissionId },
-            select: { status: true, emailSentAt: true },
-          });
-          if (fresh && (!fresh.emailSentAt || !isActionedStatus(fresh.status))) {
-            await closeOpenSubmissionFromEarliestEmail(prisma, submissionId);
-          }
-          return record;
-        } catch (err) {
-          if (!mailed) throw err;
-          const recovered = await recoverOriginalSend(submissionId, mailed);
-          if (!recovered) throw err;
-          return recovered;
+        if (!correction) {
+          const actor = String(args.actor || args.sentBy || "").trim();
+          return finishOriginalSend(submissionId, actor, run);
         }
+        return prisma.$transaction(
+          async (tx) => {
+            const locked = await lockSendRow(tx, submissionId);
+            if (!locked) throw new PortalSendError("Case not found.");
+            if (sendLeaseActive(locked.sendLease)) throw new PortalSendError(SEND_IN_PROGRESS);
+            const anchor = await earliestSentEmail(tx, submissionId);
+            if (!anchor) throw new PortalSendError("Not sent yet.");
+            const commit: SendCommit = await run();
+            return insertCorrectionAndClose(tx, submissionId, commit, anchor, {
+              reason: correctionReason,
+              note: correctionNote,
+            });
+          },
+          { maxWait: 15_000, timeout: 60_000 }
+        );
       },
     }
   );

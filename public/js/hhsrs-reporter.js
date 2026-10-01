@@ -389,6 +389,10 @@
     return !!(cfg.send && cfg.send.sent);
   }
 
+  function claimViewLocked() {
+    return !!(cfg && cfg.claimLocked);
+  }
+
   function lockSentEmailFields() {
     var nodes = document.querySelectorAll(
       ".email-draft-panel.is-sent-lock .field-locked, .email-draft-panel.is-sent-lock .field-with-copy, .email-draft-panel.is-sent-lock .attach-block, .email-draft-panel.is-sent-lock .email-photo-tools"
@@ -434,6 +438,15 @@
 
   function applyProjectChange(opts) {
     opts = opts || {};
+    if (claimViewLocked()) {
+      var lockedFields = $("rv-case-fields");
+      var lockedGen = document.querySelector("#rv-email-generate-row");
+      var lockedBtn = $("btn-generate-email");
+      if (lockedFields) lockedFields.inert = true;
+      if (lockedGen) lockedGen.inert = true;
+      if (lockedBtn) lockedBtn.disabled = true;
+      return;
+    }
     var sent = sentStage();
     var name = ($("rv-project") && $("rv-project").value) || "";
     var projectCfg = matchProject(name);
@@ -952,6 +965,7 @@
   }
 
   function generateEmail() {
+    if (claimViewLocked()) return;
     var name = ($("rv-project") && $("rv-project").value) || "";
     var note = $("rv-generate-note");
     var btn = $("btn-generate-email");
@@ -1232,6 +1246,10 @@
   var createBtn = $("btn-create-plain-email");
   if (createBtn) {
     createBtn.addEventListener("click", function (e) {
+      if (claimViewLocked()) {
+        e.preventDefault();
+        return;
+      }
       var onBlank = cfg.mode !== "filled" && $("rv-project");
       var dirty = onBlank ? blankDraftHasContent() : reviewDraftHasContent(readReviewDrafts().blank);
       if (dirty && !window.confirm("Start a new email? Your unsent draft will be cleared.")) {
@@ -1690,7 +1708,7 @@
 
   function saveReviewDraftNow() {
     reviewDraftSaveTimer = null;
-    if (skipDraftSave || !$("hhsrs-body") || (cfg.send && cfg.send.sent)) return;
+    if (claimViewLocked() || skipDraftSave || !$("hhsrs-body") || (cfg.send && cfg.send.sent)) return;
     var key = reviewDraftKey();
     if (!resumeCleared) setReviewLastKey(key);
     var draft = collectReviewDraft();
@@ -1799,7 +1817,7 @@
   }
 
   function restoreReviewDraft(key) {
-    if (cfg.send && cfg.send.sent) {
+    if (claimViewLocked() || (cfg.send && cfg.send.sent)) {
       setReviewDraftStatus(false);
       return false;
     }
@@ -2107,6 +2125,12 @@
     var btn = $("btn-send-email");
     var line = $("rv-send-line");
     if (!btn || !line) return;
+    if (claimViewLocked()) {
+      btn.disabled = true;
+      line.hidden = false;
+      line.textContent = "This case is claimed. Only the person who claimed it can send it.";
+      return;
+    }
     if (!cfg.findResend && cfg.send && cfg.send.sent) return;
     if (!cfg.findResend && btn.getAttribute("data-not-needed") === "1") {
       btn.disabled = true;
@@ -2261,7 +2285,7 @@
       return esc(trimmed).replace(/\n/g, "<br>\n");
     }
     function openCheck() {
-      if (btn.disabled || sending) return;
+      if (claimViewLocked() || btn.disabled || sending) return;
       var photos = tickedPhotos();
       var h = "";
       var test = $("ck-test");

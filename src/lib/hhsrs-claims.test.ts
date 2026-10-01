@@ -37,7 +37,8 @@ describe("HHSRS case claims", () => {
   it("uses the signed-in name for a new claim", () => {
     assert.equal(claimerLabel({ name: "Tom Sharp", username: "tsharp" }), "Tom Sharp");
     assert.equal(claimerLabel({ name: "", username: "phil.m" }), "phil.m");
-    assert.equal(claimerLabel(null), "someone");
+    assert.equal(claimerLabel(null), "");
+    assert.equal(claimerLabel({ name: "", username: "", id: "user-1" }), "user-1");
   });
 
   it("keeps a claim with that person, including a stale one, until they abandon it", () => {
@@ -47,6 +48,7 @@ describe("HHSRS case claims", () => {
     assert.equal(otherClaimer("Phil Moon", "Peter May"), "Phil Moon");
     assert.equal(otherClaimer("Phil Moon", ""), "Phil Moon");
     assert.match(claimHeldMessage("Phil Moon"), /claimed by Phil Moon/);
-    assert.match(claimHeldMessage("Phil Moon"), /abandon the claim/);
+    assert.match(claimHeldMessage("Phil Moon"), /edit or send/);
+    assert.match(claimHeldMessage("Phil Moon"), /abandon the claim or send it/);
   });
 });
