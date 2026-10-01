@@ -89,15 +89,17 @@
     return null;
   }
 
+  function caseRatingList(scheme) {
+    if (cfg.mode === "filled" && scheme !== "OLD") {
+      return ["Low", "Medium", "High - Emergency risk", "High - Significant risk"];
+    }
+    return (RATING_OPTIONS[scheme] || RATING_OPTIONS.NEW).slice();
+  }
+
   function fillRatingOptions(scheme, preferred) {
     var sel = $("rv-rating");
     if (!sel) return;
-    var opts = (RATING_OPTIONS[scheme] || RATING_OPTIONS.NEW).slice();
-    if (cfg.mode === "filled") {
-      ["High - Emergency risk", "High - Significant risk"].forEach(function (r) {
-        if (opts.indexOf(r) < 0) opts.push(r);
-      });
-    }
+    var opts = caseRatingList(scheme);
     var cur = preferred != null ? preferred : sel.value;
     sel.innerHTML = '<option value="">Select…</option>';
     opts.forEach(function (r) {
@@ -124,12 +126,13 @@
     return {
       rating: fieldText("rv-rating"),
       baseline: surveyorValue("rating"),
+      project: matchProject(($("rv-project") && $("rv-project").value) || ""),
     };
   }
 
   function officeDroppedNow() {
     var now = officeRatingNow();
-    return isOfficeHigh(now.baseline) && isOfficeLowMedium(now.rating);
+    return officeDropped(now.project, now.baseline, now.rating);
   }
 
   /** Clear or restore before visibility is read, so a drop hides the extras and switching back shows the surveyor's answers. */
@@ -203,14 +206,41 @@
   var officeClearedExtras = false;
   var HIGH_ONLY_LINE = /^•\s*(?:how many window restrictors are missing|number of window restrictors missing|window restrictors missing|window material|locations?)\s*:/i;
 
-  function isOfficeHigh(rating) {
-    var text = String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+  function ratingText(rating) {
+    return String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+  }
+
+  function usesSevereScale(projectCfg) {
+    return !!(projectCfg && projectCfg.ratingScheme === "OLD");
+  }
+
+  function isNewHigh(rating) {
+    var text = ratingText(rating);
     return text === "high - emergency risk" || text === "high - significant risk";
   }
 
-  function isOfficeLowMedium(rating) {
-    var text = String(rating || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+  function isNewLower(rating) {
+    var text = ratingText(rating);
     return text === "low" || text === "medium";
+  }
+
+  function officeDropped(projectCfg, fromRating, toRating) {
+    if (isNewHigh(fromRating) && isNewLower(toRating)) return true;
+    return usesSevereScale(projectCfg) && ratingText(fromRating) === "severe" && (ratingText(toRating) === "slight" || ratingText(toRating) === "moderate");
+  }
+
+  function officeRaised(projectCfg, fromRating, toRating) {
+    if (isNewLower(fromRating) && isNewHigh(toRating)) return true;
+    return usesSevereScale(projectCfg) && (ratingText(fromRating) === "slight" || ratingText(fromRating) === "moderate") && ratingText(toRating) === "severe";
+  }
+
+  function officeHighNow(projectCfg, rating) {
+    if (isNewHigh(rating)) return true;
+    return usesSevereScale(projectCfg) && ratingText(rating) === "severe";
+  }
+
+  function raiseWord(projectCfg, rating) {
+    return usesSevereScale(projectCfg) && ratingText(rating) === "severe" ? "Severe" : "High";
   }
 
   function surveyorValue(key) {
@@ -295,8 +325,9 @@
     }
     var rating = fieldText("rv-rating");
     var baseline = surveyorValue("rating");
-    var dropped = isOfficeHigh(baseline) && isOfficeLowMedium(rating);
-    var raised = isOfficeLowMedium(baseline) && isOfficeHigh(rating);
+    var projectCfg = matchProject(($("rv-project") && $("rv-project").value) || "");
+    var dropped = officeDropped(projectCfg, baseline, rating);
+    var raised = officeRaised(projectCfg, baseline, rating);
     var ratingChanged = officeRatingSeen !== null && officeRatingSeen !== rating;
     officeRatingSeen = rating;
     if (dropped) stripHighExtrasFromDraft();
@@ -309,11 +340,10 @@
     if (dropped && restrictors) {
       restrictors.hidden = true;
       setExtraInputs(restrictors, true);
-    } else if (restrictors && (raised || (isOfficeHigh(rating) && surveyorHadRestrictors))) {
+    } else if (restrictors && (raised || (officeHighNow(projectCfg, rating) && surveyorHadRestrictors))) {
       restrictors.hidden = false;
       setExtraInputs(restrictors, false);
     }
-    var projectCfg = matchProject(($("rv-project") && $("rv-project").value) || "");
     var wantsCall = raised && projectCollectsCallReference(projectCfg, rating);
     var calls = extraBlock("calls");
     if (wantsCall && calls) {
@@ -333,17 +363,17 @@
     if (note) {
       if (raised && (missingCount || missingMaterial || missingLocations || missingCall)) {
         note.dataset.office = "rating";
-        note.textContent = "Raised to High, so the office fills the extra details. Red stars mean they are still needed. Send stays off until they are filled.";
+        note.textContent = "Raised to " + raiseWord(projectCfg, rating) + ", so the office fills the extra details. Red stars mean they are still needed. Send stays off until they are filled.";
       } else if (dropped) {
         note.dataset.office = "rating";
-        note.textContent = "Dropped below High, so the extra High details are not needed.";
+        note.textContent = "Dropped below " + raiseWord(projectCfg, baseline) + ", so the extra details are not needed.";
       } else if (note.dataset.office === "rating") {
         note.textContent = "";
         delete note.dataset.office;
       }
     }
     if (missingCount || missingMaterial || missingLocations || missingCall) {
-      officeHoldMessage = "Raised to High. Fill the extra details before sending.";
+      officeHoldMessage = "Raised to " + raiseWord(projectCfg, rating) + ". Fill the extra details before sending.";
     }
     if (ratingChanged) markEmailStale();
   }
@@ -2041,6 +2071,7 @@
       scheduleHideAttPop();
     });
     document.addEventListener("click", function (e) {
+      if (e.target.closest && e.target.closest("#main-log-table .photo-att-icon")) return;
       var btn = e.target.closest && e.target.closest(".photo-att-icon");
       if (btn) {
         e.preventDefault();

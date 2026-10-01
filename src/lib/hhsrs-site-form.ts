@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  HHSRS_CATEGORIES,
+  HHSRS_LEGACY_CATEGORIES,
+  HHSRS_ONWARD_VICO_RATINGS,
   HHSRS_SITE_FORM_NEW_RATINGS,
-  HHSRS_SITE_FORM_RATINGS,
-  isHhsrsCategory,
 } from "./hhsrs-categories.js";
 import { resolveHhsrsProject } from "./hhsrs-reporter-projects.js";
 import {
@@ -412,10 +413,15 @@ export function surveyorDetailLines(input: {
   return lines;
 }
 
-/** Rating dropdown for the surveyor form. Old-scheme projects keep the existing list. */
+/** Category dropdown for the surveyor form. Onward and Vico use the old 29. */
+export function siteFormCategoryChoices(projectName: string): readonly string[] {
+  return siteFormProjectFlags(projectName).ratingScheme === "OLD" ? HHSRS_LEGACY_CATEGORIES : HHSRS_CATEGORIES;
+}
+
+/** Rating dropdown for the surveyor form. Onward and Vico use Slight, Moderate, Severe. */
 export function siteFormRatingChoices(projectName: string): readonly string[] {
   return siteFormProjectFlags(projectName).ratingScheme === "OLD"
-    ? HHSRS_SITE_FORM_RATINGS
+    ? HHSRS_ONWARD_VICO_RATINGS
     : HHSRS_SITE_FORM_NEW_RATINGS;
 }
 
@@ -748,8 +754,9 @@ export function validateHhsrsForm(
   else if (options.surveyorNames && !options.surveyorNames.includes(values.surveyorName)) {
     errors.surveyorName = "Select a surveyor from Personnel.";
   }
+  const categoryChoices = siteFormCategoryChoices(activeProject?.name || "");
   if (!values.category) errors.category = "Select an HHSRS category.";
-  else if (!isHhsrsCategory(values.category)) errors.category = "Select a valid HHSRS category.";
+  else if (!categoryChoices.includes(values.category)) errors.category = "Select a valid HHSRS category.";
   const ratingChoices = siteFormRatingChoices(activeProject?.name || "");
   if (!values.rating) errors.rating = "Select a rating.";
   else if (!ratingChoices.includes(values.rating)) errors.rating = "Select a rating from the list.";

@@ -20,8 +20,7 @@
   var chosen = [];
   var lastProject = "";
   var lastFocusedStep = "";
-  // Phone flow stops on Extra details after Comment. The optional Extra details box
-  // must not count as finished, and must not keep Hazard as the current step.
+  // Phone flow stops on Extra details after Comment when that section still has a field.
   var extrasPassed = false;
 
   function $(id) {
@@ -96,9 +95,7 @@
     }, 40);
     var field = fieldId ? $(fieldId) : null;
     var noKeyboard = field && (field.tagName === "SELECT" || /^(date|checkbox|radio)$/i.test(field.type || ""));
-    // Extra details is optional, but the phone keyboard Next has to be on that box when the section opens.
-    var openOptional = field && field.id === "otherDetails";
-    if (field && (noKeyboard || openOptional) && !field.disabled && !field.readOnly) {
+    if (field && noKeyboard && !field.disabled && !field.readOnly) {
       window.setTimeout(function () {
         try {
           field.focus({ preventScroll: true });
@@ -455,6 +452,7 @@
       var name = opt && project && val("projectId") ? String(opt.textContent || "").trim() : "";
       label.textContent = name ? "· " + name : "";
     }
+    syncCategoryOptions();
     syncRatingOptions();
     var flags = {
       saxon: !!(opt && opt.getAttribute("data-saxon") === "1"),
@@ -472,6 +470,30 @@
     syncCallsBox();
     syncCauseBox();
     syncRestrictorBox();
+  }
+
+  function syncCategoryOptions() {
+    var select = $("category");
+    var lists = window.HHSRS_SITE_CATEGORIES;
+    if (!select || !lists) return;
+    var scheme = ratingScheme();
+    var list = lists[scheme] || lists.NEW || [];
+    if (!list.length || select.getAttribute("data-scheme") === scheme) return;
+    var current = select.value;
+    while (select.options.length) select.remove(0);
+    var placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select a category";
+    select.appendChild(placeholder);
+    for (var i = 0; i < list.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = list[i];
+      opt.textContent = list[i];
+      if (list[i] === current) opt.selected = true;
+      select.appendChild(opt);
+    }
+    if (list.indexOf(current) === -1) select.value = "";
+    select.setAttribute("data-scheme", scheme);
   }
 
   function ratingScheme() {
@@ -562,12 +584,26 @@
     }
   }
 
+  function extrasHasField() {
+    return callsShown() || vicoSelected() || causeShown();
+  }
+
+  function saxonNoteShown() {
+    var saxon = document.querySelector('.project-extra[data-extra="saxon"]');
+    return !!(saxon && !saxon.hidden);
+  }
+
+  function extrasSectionShown() {
+    return extrasHasField() || saxonNoteShown();
+  }
+
   function extrasFocusId() {
     if (callsShown()) {
       return $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
     }
     if (vicoSelected()) return "vulnerabilities";
-    return "otherDetails";
+    if (causeShown()) return "suspectedCause";
+    return "";
   }
 
   function updateFlow(opts) {
@@ -611,7 +647,8 @@
     showStep(stepProp, false);
     if (!narrow) {
       showStep(stepHaz, false);
-      showStep(stepEx, false);
+      if (extrasSectionShown()) showStep(stepEx, false);
+      else hideStep(stepEx);
       showStep(stepPh, false);
       if (actions) actions.hidden = false;
       setCurrent(stepVisit);
@@ -644,9 +681,11 @@
       return;
     }
 
-    showStep(stepEx, announce);
+    if (extrasSectionShown()) showStep(stepEx, announce);
+    else hideStep(stepEx);
     // Stay on Extra details until the surveyor leaves that section. Hazard still opens it.
-    if (!extrasDone() || !extrasPassed) {
+    // With no remaining field in the section, it does not hold the surveyor.
+    if (extrasHasField() && (!extrasDone() || !extrasPassed)) {
       hideStep(stepPh);
       if (actions) actions.hidden = true;
       setCurrent(stepEx);
@@ -676,7 +715,7 @@
     }
   }
 
-  ["projectId", "surveyDate", "surveyorName", "category", "rating", "comment", "clientCallReference", "callRefBlankReason", "callUnreachedNote", "otherDetails", "vulnerabilities", "suspectedCause", "restrictorMissingCount", "restrictorMaterial"].forEach(function (id) {
+  ["projectId", "surveyDate", "surveyorName", "category", "rating", "comment", "clientCallReference", "callRefBlankReason", "callUnreachedNote", "vulnerabilities", "suspectedCause", "restrictorMissingCount", "restrictorMaterial"].forEach(function (id) {
     var el = $(id);
     if (!el) return;
     el.addEventListener("change", function () {
@@ -1084,7 +1123,6 @@
     "rating",
     "comment",
     "clientCallReference",
-    "otherDetails",
     "callUnreachedNote",
     "callRefBlankReason",
     "vulnerabilities",

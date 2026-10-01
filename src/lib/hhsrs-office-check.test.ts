@@ -41,8 +41,62 @@ describe("office rating check", () => {
     assert.equal(isOfficeHighRating("High - Severe Risk"), false);
     assert.equal(isOfficeHighRating("High"), false);
     assert.equal(isOfficeHighRating("Severe"), false);
+    assert.equal(isOfficeHighRating("Severe", "Gateway 2026"), false);
+    assert.equal(isOfficeHighRating("Severe", "Onward 2026"), true);
     assert.equal(isOfficeHighRating("Medium"), false);
     assert.equal(isOfficeHighRating("Low"), false);
+  });
+
+  it("on Onward and Vico, raises to Severe and drops Severe to Moderate or Slight", () => {
+    assert.equal(officeRaisedToHigh("Slight", "Severe", "Onward 2026"), true);
+    assert.equal(officeRaisedToHigh("Moderate", "Severe", "Vico 2026"), true);
+    assert.equal(officeRaisedToHigh("Slight", "Severe", "Gateway 2026"), false);
+    assert.equal(officeDroppedHighRating("Severe", "Moderate", "Onward 2026"), true);
+    assert.equal(officeDroppedHighRating("Severe", "Slight", "Vico 2026"), true);
+    assert.equal(officeDroppedHighRating("Severe", "Moderate", "Gateway 2026"), false);
+    assert.equal(officeDroppedHighRating("Severe", "Medium", "Onward 2026"), false);
+    const cleared = restrictorsAfterOfficeDecision({
+      projectName: "Onward 2026",
+      baselineRating: "Severe",
+      nextRating: "Slight",
+      current: {
+        restrictorMissingCount: "2",
+        restrictorLocations: "Hall",
+        restrictorMaterial: "PVC",
+      },
+      posted: {
+        restrictorMissingCount: "2",
+        restrictorLocations: "Hall",
+        restrictorMaterial: "PVC",
+      },
+    });
+    assert.deepEqual(cleared, {
+      restrictorMissingCount: "",
+      restrictorLocations: "",
+      restrictorMaterial: "",
+    });
+    const onward = officeDecisionFields({
+      projectName: "Onward 2026",
+      baseline: {
+        rating: "Moderate",
+        clientCallReference: "",
+        callOutcome: "",
+        callNotes: "",
+        restrictorMissingCount: "",
+        restrictorLocations: "",
+        restrictorMaterial: "",
+      },
+      nextRating: "Severe",
+      current: {
+        restrictorMissingCount: "",
+        restrictorLocations: "",
+        restrictorMaterial: "",
+        clientCallReference: "",
+      },
+    });
+    assert.equal(onward.find((item) => item.key === "clientCallReference")?.star, true);
+    assert.equal(onward.find((item) => item.key === "restrictorMissingCount")?.star, true);
+    assert.equal(officeSendBlocked(onward), true);
   });
 
   it("clears the High-only extras when High is dropped to Medium or Low", () => {
@@ -272,10 +326,16 @@ describe("office check on case details", () => {
     assert.match(js, /function syncOfficeCheck/);
     assert.match(js, /High - Emergency risk/);
     assert.match(js, /High - Significant risk/);
+    assert.match(js, /scheme !== "OLD"/);
+    assert.match(review, /scheme === "OLD"/);
+    assert.match(review, /ratingOptions\.OLD/);
     assert.match(review, /High - Emergency risk/);
     assert.match(review, /High - Significant risk/);
-    assert.match(js, /Raised to High/);
-    assert.match(js, /Dropped below High/);
+    assert.doesNotMatch(review, /officeHighRatings/);
+    assert.doesNotMatch(js, /opts\.push\(r\)/);
+    assert.match(js, /Raised to /);
+    assert.match(js, /function raiseWord/);
+    assert.match(js, /Dropped below /);
     assert.match(js, /Add the decision, then press Dismiss hazard again/);
     assert.match(log, /panel\.kind === "dismissed"/);
     assert.match(log, /Viewed by/);

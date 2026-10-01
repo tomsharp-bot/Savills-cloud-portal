@@ -214,6 +214,7 @@ export function mergeReviewDraftFields(
   });
   const nextRating = postedRating || row.rating;
   const restrictors = restrictorsAfterOfficeDecision({
+    projectName: row.projectName,
     baselineRating: baseline.rating,
     nextRating,
     current: {

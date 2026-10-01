@@ -125,10 +125,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(draft.to, "");
     assert.equal(draft.cc, "");
     assert.match(draft.subject, /Demo Housing - HHSRS/);
-    assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
+    assert.match(draft.body, /• Comments: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
-    assert.match(draft.body, /• Hazard: Electrical Hazards/);
-    assert.match(draft.body, /• Rating: High/);
+    assert.match(draft.body, /• Hazard category: Electrical Hazards/);
+    assert.match(draft.body, /• Hazard rating: High/);
     assert.doesNotMatch(draft.body, /Escalation/);
     assert.match(draft.body, /• Survey date: 20\/09\/2026/);
     assert.doesNotMatch(draft.body, /2026-09-20/);
@@ -156,8 +156,12 @@ describe("HHSRS Reporter UI helpers", () => {
     const attemptedDraft = draftEmailFromReviewFields(attempted);
     assert.equal(attemptedDraft.to, "");
     assert.equal(attemptedDraft.cc, "");
-    assert.match(attemptedDraft.body, /• Onward call: Voicemail full/);
+    assert.match(
+      attemptedDraft.body,
+      /• Call reference: We were unable to contact the Onward Call Centre to report the issue\./
+    );
     assert.doesNotMatch(attemptedDraft.body, /couldn't get through/i);
+    assert.doesNotMatch(attemptedDraft.body, /Voicemail full/);
 
     const edited = mergeReviewDraftFields(row, {
       notes: "Loose socket in the kitchen.",
@@ -561,7 +565,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(also, /partials\/pending-issues-table/);
     assert.doesNotMatch(waiting, /<thead>/);
     assert.doesNotMatch(also, /<thead>/);
-    const head = table.slice(table.indexOf("<th>Reference</th>"), table.indexOf("</thead>"));
+    const head = table.slice(table.indexOf('<th class="col-ref">Reference</th>'), table.indexOf("</thead>"));
     const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
     assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
     assert.match(table, /row\.reference/);
@@ -752,13 +756,13 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(view, /panel\.photoCount/);
     assert.match(view, /class="panel"/);
     assert.doesNotMatch(view, /<th>Sent<\/th>|<th>To<\/th>/);
-    assert.match(css, /\.ml-page \.pending-issues-table \.photo-att-count\.is-shown \{[^}]*font-size:\s*0\.8125rem/);
+    assert.match(css, /\.ml-page \.pending-issues-table \.photo-att-count\.is-shown \{[^}]*font-size:\s*0\.75rem/);
     const photoCell = readFileSync("views/hhsrs-reporter/partials/photo-att-cell.ejs", "utf8");
     assert.match(photoCell, /showPhotoCount/);
     assert.match(photoCell, /photo-att-count is-shown/);
-    assert.match(css, /\.ml-page \.pending-issues-table \{[^}]*font-size:\s*0\.8125rem/);
-    assert.match(css, /\.ml-page \.pending-issues-table thead th \{[^}]*font-size:\s*0\.6875rem/);
-    assert.match(css, /\.ml-page \.pending-issues-table \.ref-chip \{[^}]*font-size:\s*12\.5px/);
+    assert.match(css, /\.ml-page \.pending-issues-table \{[^}]*font-size:\s*0\.75rem/);
+    assert.match(css, /\.ml-page \.pending-issues-table thead th \{[^}]*font-size:\s*0\.625rem/);
+    assert.match(css, /\.ml-page \.pending-issues-table \.ref-chip \{[^}]*font-size:\s*11px/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
     assert.match(css, /\.hhsrs-reporter \.pending-issues-table col\.c-act \{ width: auto; \}/);
   });
@@ -784,13 +788,52 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(css, /\.pending-issues-table\.is-noref \.addr-cell > strong \{[^}]*white-space:\s*nowrap/s);
     assert.doesNotMatch(css, /\.pending-issues-table\.is-noref \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/s);
     assert.doesNotMatch(css, /#last-actioned-table tbody td:nth-child\(6\)[^{]*\{[^}]*text-overflow:\s*ellipsis/);
-    assert.match(css, /\.ml-page \.ml-amended \{[^}]*display:\s*block/);
+    assert.match(css, /\.ml-page \.ml-amended \{[^}]*display:\s*inline-block/);
     assert.match(main, /amendedNote: row\.correctedNote \? "Amended" : ""/);
     assert.match(table, /class="ml-amended"/);
     assert.doesNotMatch(pending, /amendedNote/);
     assert.doesNotMatch(find, /amendedNote|ml-amended/);
     assert.match(css, /\.find-split \{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; \}/);
     assert.match(find, /class="find-split/);
+  });
+
+  it("shows who actioned a Main Log row without changing the other lists", () => {
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const mainJs = readFileSync("public/js/hhsrs-main-log.js", "utf8");
+    const reporterJs = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const filters = main.slice(main.indexOf('id="ml-filters"'), main.indexOf('class="ml-bar"'));
+    assert.match(main, /pendingShowActioned:\s*true/);
+    assert.match(main, /pendingAddressFirstLine:\s*true/);
+    assert.match(main, /id="ml-photo-full"/);
+    assert.match(main, /placeholder="Reference, UPRN or address"/);
+    assert.match(filters, /name="q"/);
+    assert.match(filters, /name="project"/);
+    assert.match(filters, /name="by"/);
+    assert.doesNotMatch(pending, /pendingShowActioned|pendingAddressFirstLine/);
+    assert.doesNotMatch(find, /pendingShowActioned|pendingAddressFirstLine/);
+    assert.doesNotMatch(review, /pendingShowActioned|pendingAddressFirstLine/);
+    assert.match(table, /const showActioned = typeof pendingShowActioned !== "undefined" && pendingShowActioned === true/);
+    assert.match(table, /if \(addressFirstLine\)/);
+    assert.match(table, /<strong><%= row\.fullAddress %><\/strong>/);
+    assert.match(table, /class="col-actioned ml-actioned"/);
+    assert.match(table, /class="col-by ml-actioned-by"/);
+    const head = table.slice(table.indexOf('<th class="col-ref">Reference</th>'), table.indexOf("</thead>"));
+    const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
+    assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
+    assert.match(css, /\.ml-page \.pending-issues-table thead th,\s*\.ml-page \.pending-issues-table tbody td \{[^}]*white-space:\s*nowrap/);
+    assert.match(css, /\.ml-page \.pending-issues-table thead th,\s*\.ml-page \.pending-issues-table tbody td \{[^}]*padding:\s*0\.28rem 0\.22rem/);
+    assert.match(css, /\.ml-photo-full img \{[^}]*width:\s*min\(960px, 92vw\)/);
+    assert.match(css, /\.ml-photo-full img \{[^}]*height:\s*min\(680px, 86vh\)/);
+    assert.match(mainJs, /fullImg\.addEventListener\("mouseleave", closeFullPhoto\)/);
+    assert.match(mainJs, /if \(event\.target === full\) closeFullPhoto\(\)/);
+    const click = reporterJs.slice(reporterJs.indexOf('e.target.closest("#main-log-table .photo-att-icon")'));
+    assert.match(click, /#main-log-table \.photo-att-icon"\)\) return;/);
+    assert.ok(click.indexOf("return;") < click.indexOf("e.preventDefault()"));
   });
 
   it("drops the reference column on Pending Issues and keeps it on the review page and other lists", () => {
@@ -810,7 +853,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(also, /pendingShowReference:\s*false/);
     assert.doesNotMatch(find, /pendingShowReference:\s*false/);
     assert.doesNotMatch(main, /pendingShowReference:\s*false/);
-    assert.match(table, /<th>Reference<\/th>/);
+    assert.match(table, /<th class="col-ref">Reference<\/th>/);
     assert.match(table, /if \(showReference\)/);
     assert.match(review, /Review &amp; Create<% if \(isFilled && row\.reference\)/);
     assert.match(review, /id="rv-case-heading">Case Details<% if \(isFilled && row\.reference\)/);
@@ -819,13 +862,20 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(main, /panel\.reference/);
     assert.match(find, /selected\.reference/);
 
-    assert.match(css, /#not-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
-    assert.match(css, /#waiting-table \{[^}]*table-layout:\s*fixed/);
-    assert.match(css, /#waiting-table \{[^}]*width:\s*100%/);
-    assert.match(css, /#waiting-table \{[^}]*min-width:\s*0/);
-    assert.match(css, /#waiting-table thead th,\s*\.hhsrs-reporter #waiting-table tbody td \{[^}]*white-space:\s*nowrap/);
-    assert.match(css, /#waiting-table \.addr-cell > strong \{[^}]*white-space:\s*nowrap/);
-    assert.match(css, /#waiting-table \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(css, /#not-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
+    assert.doesNotMatch(css, /#not-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
+    assert.doesNotMatch(css, /#waiting-table \{[^}]*table-layout:\s*fixed/);
+    assert.doesNotMatch(css, /#waiting-table \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(css, /\.pending-issues-table th\.col-rate,\s*\.hhsrs-reporter \.pending-issues-table td\.col-rate \{[^}]*min-width:\s*13rem/);
+    assert.match(css, /\.pending-issues-table th\.col-when,\s*\.hhsrs-reporter \.pending-issues-table td\.col-when \{[^}]*min-width:\s*18rem/);
+    assert.match(css, /\.pending-issues-table th\.col-uprn,\s*\.hhsrs-reporter \.pending-issues-table td\.col-uprn \{[^}]*min-width:\s*9\.5rem/);
+    assert.match(css, /\.pending-issues-table \.addr-cell > strong \{[^}]*width:\s*max-content/);
+    assert.match(css, /\.pending-issues-table \.addr-cell > strong \{[^}]*white-space:\s*nowrap/);
+    assert.doesNotMatch(css, /\.pending-issues-table \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(table, /class="col-rate <%= ratingDisplayClass\(row\.rating\) %>" title="<%= row\.rating %>"/);
+    assert.match(css, /\.filter-bar input \{ min-width: 180px; flex: 1; \}/);
+    assert.match(css, /\.find-search \{ display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; \}/);
+    assert.match(css, /\.ml-search \{ flex: 1 1 180px; min-width: 180px; \}/);
     assert.match(css, /#last-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
     assert.match(css, /#last-actioned-table \{ width: max-content; min-width: 100%; \}/);
     assert.doesNotMatch(css, /#last-actioned-table \{[^}]*table-layout:\s*fixed/);
@@ -893,7 +943,7 @@ describe("HHSRS Reporter UI helpers", () => {
       assert.doesNotMatch(file, /fr-photo-drop|fr-photo-checked|photosChecked|photoSelection/);
     }
     assert.doesNotMatch(find, /<figcaption>/);
-    assert.match(js, /Please disregard our previous email, due to an error\. See correct details below\./);
+    assert.match(js, /This notification has been adjusted after review\. Please disregard the previous notification\./);
     assert.match(js, /The photo was incorrect\./);
     assert.match(js, /if \(photosChanged\(\)\) html \+= "<p><b>The photo was incorrect\.<\/b><\/p>"/);
     assert.match(js, /title\.innerHTML = "<b>" \+ esc\(subject\) \+ "<\/b>"/);

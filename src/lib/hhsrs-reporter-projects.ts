@@ -4,7 +4,17 @@
  * The names shown and stored are portal Project.name values; resolveHhsrsProject
  * maps these roster settings onto that name.
  */
+import {
+  HHSRS_CATEGORIES,
+  HHSRS_LEGACY_CATEGORIES,
+  HHSRS_ONWARD_VICO_RATINGS,
+  HHSRS_SITE_FORM_NEW_RATINGS,
+} from "./hhsrs-categories.js";
 
+/**
+ * OLD is Onward and Vico only: the old 29 categories, and Slight, Moderate, Severe.
+ * Every other project is NEW and keeps the lists already in the product.
+ */
 export type RatingScheme = "NEW" | "OLD";
 
 export type ProjectExtras = {
@@ -133,7 +143,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Cornwall 2026 Ph2",
     template: "Cornwall",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE, online_form: true },
     to: [],
     cc: [],
@@ -157,7 +167,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Saxon Weald 2026 Phase 4",
     template: "Standard",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE, calls: true },
     to: [],
     cc: [],
@@ -217,7 +227,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Saxon Weald 2025 Phase 3",
     template: "Standard",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE },
     to: [],
     cc: [],
@@ -229,7 +239,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Bristol Council 2025",
     template: "Bristol",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE },
     to: [],
     cc: [],
@@ -241,7 +251,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Flagship 2026",
     template: "Standard",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE },
     to: [],
     cc: [],
@@ -253,7 +263,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Southern Housing 2026 Blks",
     template: "Standard",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE },
     to: [],
     cc: [],
@@ -265,7 +275,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "BPHA 2026 Blocks x4",
     template: "BPHA",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE },
     to: [],
     cc: [],
@@ -277,7 +287,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Luton 2026 Appts",
     template: "Standard",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE },
     to: [],
     cc: [],
@@ -289,7 +299,7 @@ export const HHSRS_PROJECT_ROSTER: ReporterRosterProject[] = [
   {
     name: "Radius 2025 Phase 1",
     template: "Standard",
-    ratingScheme: "OLD",
+    ratingScheme: "NEW",
     extras: { ...NONE },
     to: [],
     cc: [],
@@ -307,7 +317,7 @@ export const REPORTER_DEMO_PROJECTS: ReporterProjectDemo[] = HHSRS_PROJECT_ROSTE
 
 export const RATING_OPTIONS: Record<RatingScheme, string[]> = {
   NEW: ["Low", "Medium", "High", "High – emergency risk", "High – severe risk"],
-  OLD: ["Slight", "Moderate", "Severe", "Severe – emergency risk", "Severe"],
+  OLD: [...HHSRS_ONWARD_VICO_RATINGS],
 };
 
 function findRoster(name: string): ReporterProjectDemo | null {
@@ -487,6 +497,26 @@ export function hhsrsProjectSettings(portalName: string): ReporterProjectDemo {
       calls: Boolean(roster?.extras.calls),
     },
   };
+}
+
+/** Categories a project may newly pick. Saved values outside the list are left on the case. */
+export function officeCategoryChoices(projectName: string): readonly string[] {
+  return hhsrsProjectSettings(projectName).ratingScheme === "OLD" ? HHSRS_LEGACY_CATEGORIES : HHSRS_CATEGORIES;
+}
+
+/** Ratings the office Review page may newly pick. The new-scheme list is unchanged. */
+export function officeRatingChoices(projectName: string): readonly string[] {
+  return hhsrsProjectSettings(projectName).ratingScheme === "OLD" ? HHSRS_ONWARD_VICO_RATINGS : RATING_OPTIONS.NEW;
+}
+
+/**
+ * Ratings Find and resend may newly pick.
+ * Other projects keep the site form's current new ratings, which have no plain High.
+ */
+export function amendmentRatingChoices(projectName: string): readonly string[] {
+  return hhsrsProjectSettings(projectName).ratingScheme === "OLD"
+    ? HHSRS_ONWARD_VICO_RATINGS
+    : HHSRS_SITE_FORM_NEW_RATINGS;
 }
 
 /**

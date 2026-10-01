@@ -1296,7 +1296,13 @@ describe("UPRN duplicates in the database", () => {
     const waiting = pending.body.slice(pending.body.indexOf('id="waiting-table"'), pending.body.indexOf('id="last-actioned"'));
     assert.match(waiting, new RegExp(`12 High Street ${stamp}`));
     assert.match(waiting, new RegExp(`Flat 4 ${stamp}`));
-    assert.equal(waiting.includes(`1 Quay Lane ${stamp}`), false);
+    const quay = waiting.split("<tr").find((part) => part.includes(`1 Quay Lane ${stamp}`));
+    assert.ok(quay);
+    assert.match(quay, /\bpending-dupe\b/);
+    assert.match(quay, /pending-dupe-tag">Dupe</);
+    const quayAddress = quay.match(/<td class="addr-cell[^"]*">[\s\S]*?<\/td>/);
+    assert.ok(quayAddress);
+    assert.doesNotMatch(quayAddress[0], /Dupe/);
 
     const [stillEarliest, stillMiddle, stillLatest] = await Promise.all([
       prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: earliest.id } }),

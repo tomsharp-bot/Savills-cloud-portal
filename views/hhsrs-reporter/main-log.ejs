@@ -14,6 +14,9 @@
       category: row.hazard,
       rating: row.rating,
       createdAt: row.createdAt,
+      addressLine: row.addressLine,
+      actionedOn: row.whenDate,
+      actionedBy: row.sentBy,
       href: row.href,
       rowClass: row.selected ? "is-sel" : "",
       amendedNote: row.correctedNote ? "Amended" : "",
@@ -117,6 +120,8 @@
         pendingTableId: "main-log-table",
         pendingFoot: filters.sort ? "" : "Newest first",
         pendingShowPhotoCount: true,
+        pendingShowActioned: true,
+        pendingAddressFirstLine: true,
         pendingAction: "details",
         pendingSortColumns: sortColumns
       }) %>
@@ -194,6 +199,10 @@
   </div>
 </aside>
 <% } %>
+
+<div id="ml-photo-full" class="ml-photo-full" hidden>
+  <img alt="" />
+</div>
 
 <script src="<%= mainLogJsUrl %>"></script>
 <%- include("partials/layout-close") %>

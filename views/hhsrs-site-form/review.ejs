@@ -82,7 +82,9 @@
                 <% if (String(draft.vulnerabilities || "").trim()) { %>
                   <div><dt>Vulnerabilities</dt><dd class="prewrap"><%= draft.vulnerabilities %></dd></div>
                 <% } %>
-                <div><dt>Any other details</dt><dd class="prewrap"><%= draft.otherDetails || "—" %></dd></div>
+                <% if (String(draft.otherDetails || "").trim()) { %>
+                  <div><dt>Any other details</dt><dd class="prewrap"><%= draft.otherDetails %></dd></div>
+                <% } %>
               </dl>
             </section>
 

@@ -3,13 +3,7 @@ import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { formatDocDate } from "../lib/dates.js";
-import {
-  HHSRS_CATEGORIES,
-  HHSRS_RATINGS,
-  HHSRS_SITE_FORM_RATINGS,
-  isHhsrsRating,
-  isHhsrsSiteFormRating,
-} from "../lib/hhsrs-categories.js";
+import { HHSRS_CATEGORIES, HHSRS_LEGACY_CATEGORIES, HHSRS_RATINGS } from "../lib/hhsrs-categories.js";
 import {
   CALL_REF_BLANK_REASONS,
   HHSRS_MAX_PHOTOS,
@@ -54,6 +48,8 @@ import {
 } from "../lib/hhsrs-reporter.js";
 import {
   HHSRS_PORTAL_NAME_ALIASES,
+  amendmentRatingChoices,
+  officeCategoryChoices,
   RATING_OPTIONS,
   SITE_FORM_PUBLIC_URL,
   hhsrsProjectSettings,
@@ -70,8 +66,13 @@ import {
   type ProjectOverview,
 } from "../lib/hhsrs-reporter-overview.js";
 import { pendingAlertSummary } from "../lib/hhsrs-pending-alerts.js";
-import { pendingIssueListArgs, withoutOpenCase } from "../lib/hhsrs-pending-list.js";
-import { claimRowClass, claimView, claimerLabel, type ClaimView } from "../lib/hhsrs-claims.js";
+import {
+  mergePendingDuplicates,
+  pendingDuplicateListArgs,
+  pendingIssueListArgs,
+  withoutOpenCase,
+} from "../lib/hhsrs-pending-list.js";
+import { claimHeldMessage, claimRowClass, claimView, claimerLabel, otherClaimer, type ClaimView } from "../lib/hhsrs-claims.js";
 import { isAdmin, type AuthedUser } from "../lib/access.js";
 import {
   fromAddressFromEnv,
@@ -81,6 +82,7 @@ import {
   senderNamesFromLogin,
   sentBannerText,
 } from "../lib/hhsrs-send.js";
+import { closeOpenSubmissionFromEarliestEmail } from "../lib/hhsrs-close-sent.js";
 import {
   listSentEmails,
   originalSentEmail,
@@ -110,6 +112,7 @@ import {
   type ClientEmailFlash,
 } from "../lib/hhsrs-client-emails.js";
 import {
+  addressFirstLine,
   buildMainLogWorkbook,
   casePhotoViews,
   correctionLinkLine,
@@ -134,6 +137,7 @@ import {
   baselineSurveyorCheck,
   officeDecisionFields,
   officeDroppedHighRating,
+  officeRaiseWord,
   officeSendBlocked,
   omitClearedHighExtras,
   restrictorsAfterOfficeDecision,
@@ -209,17 +213,20 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
   res.locals.claimRowClass = (row: { claimedBy?: string | null; claimedAt?: Date | string | null }) =>
     claimRowClass(claimView(row).status);
   res.locals.siteFormPublicUrl = SITE_FORM_PUBLIC_URL;
+  res.locals.categoryOptions = { NEW: HHSRS_CATEGORIES, OLD: HHSRS_LEGACY_CATEGORIES };
   res.locals.logoUrl = SIGNATURE_LOGO_PUBLIC_PATH;
   // Logo is served from portal static; prefer baseUrl when available.
   if (typeof res.locals.baseUrl === "function") {
     res.locals.logoUrl = res.locals.baseUrl(SIGNATURE_LOGO_PUBLIC_PATH);
     res.locals.reporterCssUrl = res.locals.baseUrl("/css/hhsrs-reporter.css");
     res.locals.reporterJsUrl = res.locals.baseUrl("/js/hhsrs-reporter.js");
+    res.locals.hazardListsJsUrl = res.locals.baseUrl("/js/hhsrs-hazard-lists.js");
     res.locals.portalHomeUrl = res.locals.baseUrl("/admin");
     res.locals.logoutUrl = res.locals.baseUrl("/logout");
   } else {
     res.locals.reporterCssUrl = "/css/hhsrs-reporter.css";
     res.locals.reporterJsUrl = "/js/hhsrs-reporter.js";
+    res.locals.hazardListsJsUrl = "/js/hhsrs-hazard-lists.js";
     res.locals.portalHomeUrl = "/admin";
     res.locals.logoutUrl = "/logout";
   }
@@ -406,8 +413,9 @@ hhsrsReporterRouter.get("/pending-alerts.json", async (_req: Request, res: Respo
 
 /* ---------- Pending Issues ---------- */
 hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
-  const [waitingRows, actionedRows, summary] = await Promise.all([
+  const [waitingOnly, duplicateRows, actionedRows, summary] = await Promise.all([
     prisma.hhsrsSiteSubmission.findMany(pendingIssueListArgs()),
+    prisma.hhsrsSiteSubmission.findMany(pendingDuplicateListArgs()),
     prisma.hhsrsSiteSubmission.findMany({
       where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } },
       orderBy: [{ emailSentAt: "desc" }, { updatedAt: "desc" }],
@@ -415,6 +423,7 @@ hhsrsReporterRouter.get("/", async (req: Request, res: Response) => {
     }),
     loadSummary(),
   ]);
+  const waitingRows = mergePendingDuplicates(waitingOnly, duplicateRows);
   const flash = takeFlash(req);
   res.render("hhsrs-reporter/pending", {
     ...shellLocals({ activeNav: "pending", summary, flashOk: flash.ok, flashErr: flash.err }),
@@ -600,6 +609,32 @@ function reviewCaseClaimRequested(req: Request): boolean {
   return value === "1" || (Array.isArray(value) && value.includes("1"));
 }
 
+/** Waiting cases only. A sent case is no longer locked. */
+function heldClaim(row: { status: string; claimedBy?: string | null }, actor: string): string {
+  if (!isWaitingStatus(row.status)) return "";
+  return otherClaimer(row.claimedBy, actor);
+}
+
+/** A logged send must leave Pending even when the case row was left waiting. */
+async function closeIfAlreadyLogged(
+  row: NonNullable<Awaited<ReturnType<typeof loadCase>>>
+): Promise<NonNullable<Awaited<ReturnType<typeof loadCase>>>> {
+  if (!isWaitingStatus(row.status)) return row;
+  const logged = await originalSentEmail(row.id);
+  if (logged) {
+    await closeOpenSubmissionFromEarliestEmail(prisma, row.id);
+    return (await loadCase(row.id)) || row;
+  }
+  if (row.emailSentAt) {
+    await prisma.hhsrsSiteSubmission.updateMany({
+      where: { id: row.id, status: { in: [...HHSRS_WAITING_STATUSES] } },
+      data: { status: "email_sent", claimedBy: "", claimedAt: null },
+    });
+    return (await loadCase(row.id)) || row;
+  }
+  return row;
+}
+
 hhsrsReporterRouter.get("/review/stock-lookup", async (req: Request, res: Response) => {
   const projectName = String(req.query.project || "").trim();
   const uprn = normalizeUprn(String(req.query.uprn || ""));
@@ -656,7 +691,15 @@ hhsrsReporterRouter.get("/review/:id", async (req: Request, res: Response) => {
     res.status(404).send("Case not found.");
     return;
   }
-  const row = reviewCaseClaimRequested(req) ? await claimIfOpen(loaded, claimerLabel(req.user)) : loaded;
+  const closed = await closeIfAlreadyLogged(loaded);
+  const actor = claimerLabel(req.user);
+  const row = reviewCaseClaimRequested(req) ? await claimIfOpen(closed, actor) : closed;
+  const owner = heldClaim(row, actor);
+  if (owner) {
+    flashErr(req, claimHeldMessage(owner));
+    res.redirect(HHSRS_REPORTER_PATH);
+    return;
+  }
   const ctx = await reviewContext(row.id);
   await renderReview(req, res, row, ctx);
 });
@@ -818,8 +861,8 @@ hhsrsReporterRouter.get("/find", async (req: Request, res: Response) => {
         extras: parsed.extras,
         prose: parsed.prose,
         previousSubject: latest.subject,
-        categories: withCurrent(HHSRS_CATEGORIES, parsed.fields.hazard),
-        ratings: withCurrent(HHSRS_SITE_FORM_RATINGS, parsed.fields.rating),
+        categories: withCurrent(officeCategoryChoices(picked.projectName), parsed.fields.hazard),
+        ratings: withCurrent(amendmentRatingChoices(picked.projectName), parsed.fields.rating),
         photos: sentPhotos.map((photo, index) => ({
           ...photo,
           caption: photo.caption || photo.name || `Photo ${index + 1}`,
@@ -1015,7 +1058,7 @@ function mainLogHref(filters: MainLogFilters, patch: Partial<MainLogFilters> = {
 }
 
 function mainLogSortTitle(key: MainLogSortKey, label: string, active: boolean, dir: MainLogFilters["dir"]): string {
-  if (!active) return `Sort by ${label}`;
+  if (!active) return key === "by" ? "Sort by who actioned it" : `Sort by ${label}`;
   if (key === "sent" || key === "received") return dir === "desc" ? "Sorted newest first. Click to reverse." : "Sorted oldest first. Click to reverse.";
   if (key === "photos") return dir === "desc" ? "Sorted most first. Click to reverse." : "Sorted fewest first. Click to reverse.";
   return dir === "desc" ? "Sorted Z to A. Click to reverse." : "Sorted A to Z. Click to reverse.";
@@ -1068,6 +1111,7 @@ hhsrsReporterRouter.get("/main-log", async (req: Request, res: Response) => {
       ...entry,
       href: mainLogHref(filters, { open: entry.key }),
       selected: filters.open === entry.key,
+      addressLine: addressFirstLine(entry.fullAddress),
       whenDate: formatLondonDateTime(entry.at).split(" ")[0],
       whenTime: formatLondonDateTime(entry.at).split(" ")[1],
       typeLabel: mainLogTypeLabel(entry.kind),
@@ -1445,10 +1489,17 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
     res.status(404).send("Case not found.");
     return;
   }
+  const owner = heldClaim(row, claimerLabel(req.user));
+  if (owner) {
+    flashErr(req, claimHeldMessage(owner));
+    res.redirect(HHSRS_REPORTER_PATH);
+    return;
+  }
   const ctx = await reviewContext(row.id);
   const update = readReporterUpdate(req.body || {});
-  // Site-form ratings, including High - Emergency risk and High - Significant risk, are valid office choices.
-  if (!isHhsrsRating(update.rating) && !isHhsrsSiteFormRating(update.rating) && update.rating !== row.rating) {
+  // A new rating must be on this project's list. The rating already stored on the case stays valid.
+  const allowedRatings = amendmentRatingChoices(row.projectName);
+  if (!allowedRatings.includes(update.rating) && update.rating !== row.rating) {
     await renderReview(req, res, row, {
       ...ctx,
       flashErr: "Select a valid rating for this case.",
@@ -1497,6 +1548,7 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
   const editor = req.user?.name || req.user?.username || "";
   const baseline = baselineSurveyorCheck(row.surveyorCheck, row);
   const restrictors = restrictorsAfterOfficeDecision({
+    projectName: row.projectName,
     baselineRating: baseline.rating,
     nextRating: update.rating,
     current: row,
@@ -1607,6 +1659,7 @@ async function deliverCaseEmail(
     hasReporterAccess: Boolean(req.user && isAdmin(req.user)),
     body: sendBody,
     storage: sitePhotoStorageFromApp(req.app),
+    actor: claimerLabel(req.user),
   });
 }
 
@@ -1621,7 +1674,8 @@ async function prepareOfficeSend(
   if (!Object.prototype.hasOwnProperty.call(body, "rating")) return { ok: true, row, body };
   const nextRating = String(body.rating ?? "").trim();
   if (!nextRating) return { ok: true, row, body };
-  if (!isHhsrsRating(nextRating) && !isHhsrsSiteFormRating(nextRating) && nextRating !== row.rating) {
+  const allowedRatings = amendmentRatingChoices(row.projectName);
+  if (!allowedRatings.includes(nextRating) && nextRating !== row.rating) {
     return { ok: false, error: "Select a valid rating for this case." };
   }
   const baseline = baselineSurveyorCheck(row.surveyorCheck, row);
@@ -1629,6 +1683,7 @@ async function prepareOfficeSend(
     Object.prototype.hasOwnProperty.call(body, key)
   );
   const restrictors = restrictorsAfterOfficeDecision({
+    projectName: row.projectName,
     baselineRating: baseline.rating,
     nextRating,
     current: row,
@@ -1651,10 +1706,11 @@ async function prepareOfficeSend(
     current: { ...restrictors, clientCallReference },
   });
   if (officeSendBlocked(needs)) {
-    return { ok: false, error: "Raised to High. Fill the extra details before sending." };
+    const word = officeRaiseWord(row.projectName, nextRating);
+    return { ok: false, error: `Raised to ${word}. Fill the extra details before sending.` };
   }
   const surveyorCheck = surveyorCheckToStore(row.surveyorCheck, row);
-  const dropped = officeDroppedHighRating(baseline.rating, nextRating);
+  const dropped = officeDroppedHighRating(baseline.rating, nextRating, row.projectName);
   const outgoing = dropped ? omitClearedHighExtras(String(body.body ?? "")) : String(body.body ?? "");
   await prisma.hhsrsSiteSubmission.update({
     where: { id: row.id },
@@ -1672,9 +1728,22 @@ async function prepareOfficeSend(
 }
 
 async function handleSend(req: Request, res: Response, id: string): Promise<void> {
-  const row = await loadCase(id);
-  if (!row) {
+  const loaded = await loadCase(id);
+  if (!loaded) {
     res.status(404).send("Case not found.");
+    return;
+  }
+  const row = await closeIfAlreadyLogged(loaded);
+  if (isWaitingStatus(loaded.status) && !isWaitingStatus(row.status)) {
+    flashOk(req, REVIEW_SENT_CONFIRMATION);
+    await archiveLoggedPhotos(req, row.id);
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+    return;
+  }
+  const owner = heldClaim(row, claimerLabel(req.user));
+  if (owner) {
+    flashErr(req, claimHeldMessage(owner));
+    res.redirect(HHSRS_REPORTER_PATH);
     return;
   }
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
@@ -1818,6 +1887,17 @@ async function handleDismiss(req: Request, res: Response, id: string): Promise<v
 }
 
 async function handleNotNeeded(req: Request, res: Response, id: string): Promise<void> {
+  const existing = await loadCase(id);
+  if (!existing) {
+    res.status(404).send("Case not found.");
+    return;
+  }
+  const owner = heldClaim(existing, claimerLabel(req.user));
+  if (owner) {
+    flashErr(req, claimHeldMessage(owner));
+    res.redirect(HHSRS_REPORTER_PATH);
+    return;
+  }
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
   const result = await moveCaseToNotNeeded({
     id,
@@ -1954,9 +2034,16 @@ async function handleAbandon(req: Request, res: Response, id: string): Promise<v
     res.status(404).send("Case not found.");
     return;
   }
-  if (isWaitingStatus(row.status)) {
-    await prisma.hhsrsSiteSubmission.update({
-      where: { id: row.id },
+  const actor = claimerLabel(req.user);
+  const owner = heldClaim(row, actor);
+  if (owner) {
+    flashErr(req, claimHeldMessage(owner));
+    res.redirect(HHSRS_REPORTER_PATH);
+    return;
+  }
+  if (isWaitingStatus(row.status) && String(row.claimedBy || "").trim()) {
+    await prisma.hhsrsSiteSubmission.updateMany({
+      where: { id: row.id, claimedBy: row.claimedBy, status: { in: [...HHSRS_WAITING_STATUSES] } },
       data: { claimedBy: "", claimedAt: null },
     });
   }

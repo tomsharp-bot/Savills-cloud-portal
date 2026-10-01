@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { CLAIM_STALE_MS, claimRowClass, claimView, claimerLabel, isQuietClaim } from "./hhsrs-claims.js";
+import { CLAIM_STALE_MS, claimHeldMessage, claimRowClass, claimView, claimerLabel, isQuietClaim, otherClaimer } from "./hhsrs-claims.js";
 
 describe("HHSRS case claims", () => {
   const now = new Date("2026-09-24T12:00:00Z");
@@ -38,5 +38,15 @@ describe("HHSRS case claims", () => {
     assert.equal(claimerLabel({ name: "Tom Sharp", username: "tsharp" }), "Tom Sharp");
     assert.equal(claimerLabel({ name: "", username: "phil.m" }), "phil.m");
     assert.equal(claimerLabel(null), "someone");
+  });
+
+  it("keeps a claim with that person, including a stale one, until they abandon it", () => {
+    assert.equal(otherClaimer("", "Phil Moon"), "");
+    assert.equal(otherClaimer("Phil Moon", "Phil Moon"), "");
+    assert.equal(otherClaimer("Phil Moon", "phil moon"), "");
+    assert.equal(otherClaimer("Phil Moon", "Peter May"), "Phil Moon");
+    assert.equal(otherClaimer("Phil Moon", ""), "Phil Moon");
+    assert.match(claimHeldMessage("Phil Moon"), /claimed by Phil Moon/);
+    assert.match(claimHeldMessage("Phil Moon"), /abandon the claim/);
   });
 });

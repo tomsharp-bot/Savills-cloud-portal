@@ -6,6 +6,7 @@
  * reference only when that project collects one.
  */
 import { projectRequiresCallReference } from "./hhsrs-reporter-draft.js";
+import { hhsrsProjectSettings } from "./hhsrs-reporter-projects.js";
 import { canonicalRestrictorLocations, siteFormShowsCallReference } from "./hhsrs-site-form.js";
 
 export type SurveyorCheck = {
@@ -32,23 +33,53 @@ export type OfficeFieldNeed = {
   filled: boolean;
 };
 
-const OFFICE_HIGH = new Set(["high - emergency risk", "high - significant risk"]);
-
-export function isOfficeHighRating(rating: string): boolean {
-  return OFFICE_HIGH.has(String(rating || "").trim().toLowerCase());
+function ratingText(rating: string): string {
+  return String(rating || "").trim().toLowerCase();
 }
 
-export function isOfficeMediumOrLow(rating: string): boolean {
-  const text = String(rating || "").trim().toLowerCase();
+/** Onward and Vico. Their list is Slight, Moderate, and Severe. */
+export function projectUsesSevereScale(projectName: string): boolean {
+  return hhsrsProjectSettings(projectName).ratingScheme === "OLD";
+}
+
+function isNewSchemeHigh(rating: string): boolean {
+  const text = ratingText(rating);
+  return text === "high - emergency risk" || text === "high - significant risk";
+}
+
+function isNewSchemeLower(rating: string): boolean {
+  const text = ratingText(rating);
   return text === "low" || text === "medium";
 }
 
-export function officeDroppedHighRating(fromRating: string, toRating: string): boolean {
-  return isOfficeHighRating(fromRating) && isOfficeMediumOrLow(toRating);
+function isSevere(rating: string): boolean {
+  return ratingText(rating) === "severe";
 }
 
-export function officeRaisedToHigh(fromRating: string, toRating: string): boolean {
-  return isOfficeMediumOrLow(fromRating) && isOfficeHighRating(toRating);
+function isSlightOrModerate(rating: string): boolean {
+  const text = ratingText(rating);
+  return text === "slight" || text === "moderate";
+}
+
+/** The two High wordings. Severe counts only on Onward and Vico. Plain High does not. */
+export function isOfficeHighRating(rating: string, projectName = ""): boolean {
+  if (isNewSchemeHigh(rating)) return true;
+  return projectUsesSevereScale(projectName) && isSevere(rating);
+}
+
+export function isOfficeMediumOrLow(rating: string, projectName = ""): boolean {
+  if (isNewSchemeLower(rating)) return true;
+  return projectUsesSevereScale(projectName) && isSlightOrModerate(rating);
+}
+
+export function officeDroppedHighRating(fromRating: string, toRating: string, projectName = ""): boolean {
+  if (isNewSchemeHigh(fromRating) && isNewSchemeLower(toRating)) return true;
+  return projectUsesSevereScale(projectName) && isSevere(fromRating) && isSlightOrModerate(toRating);
+}
+
+export function officeRaisedToHigh(fromRating: string, toRating: string, projectName = ""): boolean {
+  if (isNewSchemeLower(fromRating) && isNewSchemeHigh(toRating)) return true;
+  return projectUsesSevereScale(projectName) && isSlightOrModerate(fromRating) && isSevere(toRating);
 }
 
 /** A project with a call-reference field. MTVH only when the rating is High - Emergency risk. */
@@ -103,12 +134,13 @@ export function emptyRestrictors(): RestrictorFields {
 }
 
 export function restrictorsAfterOfficeDecision(input: {
+  projectName?: string;
   baselineRating: string;
   nextRating: string;
   current: RestrictorFields;
   posted: Partial<RestrictorFields> | null;
 }): RestrictorFields {
-  if (officeDroppedHighRating(input.baselineRating, input.nextRating)) return emptyRestrictors();
+  if (officeDroppedHighRating(input.baselineRating, input.nextRating, input.projectName || "")) return emptyRestrictors();
   const posted = input.posted;
   return {
     restrictorMissingCount:
@@ -143,7 +175,7 @@ export function officeDecisionFields(input: {
   nextRating: string;
   current: RestrictorFields & { clientCallReference: string };
 }): OfficeFieldNeed[] {
-  if (!officeRaisedToHigh(input.baseline.rating, input.nextRating)) return [];
+  if (!officeRaisedToHigh(input.baseline.rating, input.nextRating, input.projectName)) return [];
   const needs: OfficeFieldNeed[] = [];
   const push = (
     key: OfficeFieldNeed["key"],
@@ -173,6 +205,10 @@ export function officeDecisionFields(input: {
 
 export function officeSendBlocked(needs: readonly OfficeFieldNeed[]): boolean {
   return needs.some((item) => item.star && !item.filled);
+}
+
+export function officeRaiseWord(projectName: string, nextRating: string): "Severe" | "High" {
+  return projectUsesSevereScale(projectName) && isSevere(nextRating) ? "Severe" : "High";
 }
 
 const HIGH_ONLY_LINE =

@@ -123,10 +123,14 @@
               <select id="rv-rating" name="rating" <%= isFilled ? "required" : "" %>>
                 <option value="">Select…</option>
                 <%
-                  const ratingList = (matchedProject && ratingOptions[matchedProject.ratingScheme]) || ratings;
+                  const scheme = matchedProject ? matchedProject.ratingScheme : "";
+                  const ratingList = !isFilled
+                    ? ((scheme && ratingOptions[scheme]) || ratings)
+                    : (scheme === "OLD"
+                        ? (ratingOptions.OLD || ["Slight", "Moderate", "Severe"])
+                        : ["Low", "Medium", "High - Emergency risk", "High - Significant risk"]);
                   const currentRating = isFilled ? row.rating : "";
-                  const officeHighRatings = isFilled ? ["High - Emergency risk", "High - Significant risk"] : [];
-                  const opts = Array.from(new Set([...(ratingList || []), ...officeHighRatings, currentRating].filter(Boolean)));
+                  const opts = Array.from(new Set([...(ratingList || []), currentRating].filter(Boolean)));
                   opts.forEach((r) => {
                 %>
                   <option value="<%= r %>" <%= currentRating === r ? "selected" : "" %>><%= r %></option>

@@ -136,7 +136,7 @@
                 <div class="field-row">
                   <div>
                     <label for="category">HHSRS category *</label>
-                    <select id="category" name="category" required class="<%= errors.category ? 'is-invalid' : '' %>">
+                    <select id="category" name="category" required data-scheme="<%= flags.ratingScheme === "OLD" ? "OLD" : "NEW" %>" class="<%= errors.category ? 'is-invalid' : '' %>">
                       <option value="">Select a category</option>
                       <% categories.forEach((c) => { %>
                         <option value="<%= c %>" <%= values.category === c ? "selected" : "" %>><%= c %></option>
@@ -216,9 +216,6 @@
                   <p class="hhsrs-hint" id="saxon-damp-note">Saxon Weald: all damp and mould is phoned in. Email only if Severe, and include the call reference.</p>
                 </div>
 
-                <label for="otherDetails">Any other details <span class="optional">(optional)</span></label>
-                <textarea id="otherDetails" name="otherDetails" rows="4" enterkeyhint="next" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
-                <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
                 <div id="suspected-cause-box" <%= showCause ? "" : "hidden" %>>
                   <label for="suspectedCause">Suspected cause *</label>
                   <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || "" %>" class="<%= errors.suspectedCause ? 'is-invalid' : '' %>" <%= showCause ? "required" : "disabled" %> />
@@ -229,7 +226,6 @@
               <div class="info-box flow-step" id="step-photos" data-flow="photos" <%= steps.extras ? "" : "hidden" %>>
                 <fieldset class="hhsrs-photos">
                   <p class="box-title">Photos <span class="optional">(min <%= minPhotos %>, max <%= maxPhotos %>)</span></p>
-                  <p class="hhsrs-hint"><%= photoHint %></p>
                   <p id="photo-status" class="find-status" aria-live="polite"></p>
                   <% if (errors.photos) { %><p class="field-error"><%= errors.photos %></p><% } %>
                   <div id="existing-photos" class="photo-grid">
@@ -261,9 +257,13 @@
     </div>
   </div>
   <script>
+    window.HHSRS_SITE_CATEGORIES = <%- JSON.stringify({
+      NEW: typeof siteNewCategories !== "undefined" ? siteNewCategories : [],
+      OLD: typeof siteOldCategories !== "undefined" ? siteOldCategories : []
+    }) %>;
     window.HHSRS_SITE_RATINGS = <%- JSON.stringify({
       NEW: typeof siteNewRatings !== "undefined" ? siteNewRatings : ["Low", "Medium", "High - Emergency risk", "High - Significant risk"],
-      OLD: typeof siteOldRatings !== "undefined" ? siteOldRatings : ["Low", "Medium", "Slight", "Moderate", "Severe", "High - Emergency Risk", "High - Severe Risk"]
+      OLD: typeof siteOldRatings !== "undefined" ? siteOldRatings : ["Slight", "Moderate", "Severe"]
     }) %>;
     window.HHSRS_RESTRICTOR_CATEGORY = "Falling Between Levels";
     window.HHSRS_EMERGENCY_RATING = "High - Emergency risk";

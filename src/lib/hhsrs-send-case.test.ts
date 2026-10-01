@@ -1,7 +1,15 @@
+process.env.DATABASE_URL ||=
+  "postgresql://portal:portal@127.0.0.1:5432/savills_cloud_portal?schema=public";
+process.env.SESSION_SECRET ||= "test-session-secret";
+
 import { readFileSync } from "node:fs";
+import http from "node:http";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { AddressInfo } from "node:net";
+import type { Express } from "express";
 import { prisma } from "./prisma.js";
+import { hashPassword } from "./passwords.js";
 import { HHSRS_ACTIONED_STATUSES, HHSRS_WAITING_STATUSES } from "./hhsrs-reporter.js";
 import { CLOSE_OPEN_SENT_SUBMISSIONS_SQL, closeSubmissionsLeftOpenAfterSend } from "./hhsrs-close-sent.js";
 import { sendCaseEmail } from "./hhsrs-send-case.js";
@@ -285,5 +293,271 @@ describe("HHSRS send closes the case", () => {
     const stillWaiting = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: waiting.id } });
     assert.equal(stillWaiting.status, "new");
     assert.equal(stillWaiting.emailSentAt, null);
+  });
+
+  it("lets only the claimer send, logs that send once, and takes the case off Pending", async (t) => {
+    if (!(await dbReady())) {
+      t.skip("Postgres is not available");
+      return;
+    }
+    const stamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const ids: string[] = [];
+    const previousPassword = process.env.HHSRS_SMTP_PASSWORD;
+    process.env.HHSRS_SMTP_PASSWORD = "test-only-not-a-real-password";
+    t.after(async () => {
+      if (ids.length) {
+        await prisma.hhsrsSentEmail.deleteMany({ where: { submissionId: { in: ids } } });
+        await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: { in: ids } } });
+      }
+      if (previousPassword === undefined) delete process.env.HHSRS_SMTP_PASSWORD;
+      else process.env.HHSRS_SMTP_PASSWORD = previousPassword;
+    });
+
+    const claimed = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        ...caseData(`${stamp}-claim`),
+        reference: `LOCK-${stamp}`.slice(0, 24),
+        uprn: `58227${stamp}`.slice(0, 32),
+        claimedBy: "Phil Moon",
+        claimedAt: new Date(),
+      },
+    });
+    ids.push(claimed.id);
+    const blockedMail: OutboundEmail[] = [];
+    const blocked = await sendCaseEmail({
+      row: claimed,
+      sentBy: "Peter May",
+      actor: "Peter May",
+      hasReporterAccess: true,
+      body: { checked: "1", to: "repairs@savillshousing.co.uk", subject: "Do not send", body: "No" },
+      transport: {
+        sendMail: async (mail) => {
+          blockedMail.push(mail);
+          return { messageId: "<blocked@savillshousing.co.uk>", raw: Buffer.from("raw") };
+        },
+        appendToSent: async () => undefined,
+      },
+    });
+    assert.equal(blocked.ok, false);
+    if (!blocked.ok) assert.match(blocked.error, /claimed by Phil Moon/);
+    assert.equal(blockedMail.length, 0);
+    const stillClaimed = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: claimed.id } });
+    assert.equal(stillClaimed.status, "new");
+    assert.equal(stillClaimed.claimedBy, "Phil Moon");
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { submissionId: claimed.id } }), 0);
+    assert.equal(
+      await prisma.hhsrsSiteSubmission.count({
+        where: { id: claimed.id, status: { in: [...HHSRS_WAITING_STATUSES] } },
+      }),
+      1
+    );
+
+    const sent: OutboundEmail[] = [];
+    const transport = {
+      sendMail: async (mail: OutboundEmail) => {
+        sent.push(mail);
+        return { messageId: `<once-${sent.length}@savillshousing.co.uk>`, raw: Buffer.from("raw") };
+      },
+      appendToSent: async () => undefined,
+    };
+    const [first, second] = await Promise.all([
+      sendCaseEmail({
+        row: claimed,
+        sentBy: "Phil Moon",
+        actor: "Phil Moon",
+        hasReporterAccess: true,
+        body: { checked: "1", to: "repairs@savillshousing.co.uk", subject: "Logged once", body: "Repair this." },
+        transport,
+      }),
+      sendCaseEmail({
+        row: claimed,
+        sentBy: "Phil Moon",
+        actor: "Phil Moon",
+        hasReporterAccess: true,
+        body: { checked: "1", to: "repairs@savillshousing.co.uk", subject: "Logged once", body: "Repair this." },
+        transport,
+      }),
+    ]);
+    assert.equal(first.ok, true);
+    assert.equal(second.ok, true);
+    assert.equal(sent.length, 1);
+    const closed = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: claimed.id } });
+    assert.equal(closed.status, "email_sent");
+    assert.ok(closed.emailSentAt);
+    assert.equal(closed.claimedBy, "");
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { submissionId: claimed.id } }), 1);
+    assert.equal(
+      await prisma.hhsrsSiteSubmission.count({
+        where: { id: claimed.id, status: { in: [...HHSRS_WAITING_STATUSES] } },
+      }),
+      0
+    );
+    assert.equal(
+      await prisma.hhsrsSiteSubmission.count({
+        where: { id: claimed.id, status: { in: [...HHSRS_ACTIONED_STATUSES] } },
+      }),
+      1
+    );
+
+    const stale = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        ...caseData(`${stamp}-stale`),
+        claimedBy: "Phil Moon",
+        claimedAt: new Date(Date.now() - 7 * 60 * 60 * 1000),
+      },
+    });
+    ids.push(stale.id);
+    const staleMail: OutboundEmail[] = [];
+    const staleBlocked = await sendCaseEmail({
+      row: stale,
+      sentBy: "Peter May",
+      actor: "Peter May",
+      hasReporterAccess: true,
+      body: { checked: "1", to: "repairs@savillshousing.co.uk", subject: "No", body: "No" },
+      transport: {
+        sendMail: async (mail) => {
+          staleMail.push(mail);
+          return { messageId: "<stale@savillshousing.co.uk>", raw: Buffer.from("raw") };
+        },
+        appendToSent: async () => undefined,
+      },
+    });
+    assert.equal(staleBlocked.ok, false);
+    assert.equal(staleMail.length, 0);
+    const staleRow = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: stale.id } });
+    assert.equal(staleRow.status, "new");
+    assert.equal(staleRow.claimedBy, "Phil Moon");
+  });
+});
+
+type Hit = { status: number; location: string; body: string; setCookie: string[] };
+
+function request(app: Express, method: string, url: string, opts: { body?: string; cookie?: string } = {}): Promise<Hit> {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      const headers: Record<string, string | number> = {};
+      if (opts.body) {
+        headers["content-type"] = "application/x-www-form-urlencoded";
+        headers["content-length"] = Buffer.byteLength(opts.body);
+      }
+      if (opts.cookie) headers.cookie = opts.cookie;
+      const req = http.request({ host: "127.0.0.1", port, path: url, method, headers }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          server.close();
+          resolve({
+            status: res.statusCode || 0,
+            location: String(res.headers.location || ""),
+            body: Buffer.concat(chunks).toString("utf8"),
+            setCookie: ([] as string[]).concat(res.headers["set-cookie"] || []),
+          });
+        });
+      });
+      req.on("error", (err) => {
+        server.close();
+        reject(err);
+      });
+      req.end(opts.body);
+    });
+  });
+}
+
+function cookieHeader(setCookie: string[], previous = ""): string {
+  const next = new Map<string, string>();
+  for (const part of previous.split(";").map((item) => item.trim()).filter(Boolean)) {
+    const name = part.split("=")[0];
+    if (name) next.set(name, part);
+  }
+  for (const item of setCookie) {
+    const part = item.split(";")[0];
+    const name = part.split("=")[0];
+    if (name) next.set(name, part);
+  }
+  return [...next.values()].join("; ");
+}
+
+describe("claimed HHSRS case on the reporter", () => {
+  it("does not let a second person open, send, or abandon it", async (t) => {
+    if (!(await dbReady())) {
+      t.skip("Postgres is not available");
+      return;
+    }
+    const admin = await prisma.user.findFirst({ where: { username: "phil.m", role: "admin" } });
+    if (!admin) {
+      t.skip("Seeded admin is not available");
+      return;
+    }
+    const stamp = `${Date.now().toString().slice(-6)}${Math.random().toString(16).slice(2, 6)}`;
+    const username = `lock${stamp}`;
+    const other = await prisma.user.create({
+      data: {
+        username,
+        name: "Peter May",
+        role: "admin",
+        passwordHash: await hashPassword("LockTest2468"),
+      },
+    });
+    const row = await prisma.hhsrsSiteSubmission.create({
+      data: {
+        ...caseData(`open-${stamp}`),
+        reference: `CLM-${stamp}`,
+        uprn: `58227${stamp}`,
+        claimedBy: "Phil Moon",
+        claimedAt: new Date(),
+      },
+    });
+    t.after(async () => {
+      await prisma.hhsrsSentEmail.deleteMany({ where: { submissionId: row.id } });
+      await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: row.id } });
+      await prisma.user.delete({ where: { id: other.id } }).catch(() => undefined);
+    });
+
+    const { createApp } = await import("../app.js");
+    const app = createApp({ basePath: "" });
+    const philLogin = await request(app, "POST", "/login", {
+      body: "username=phil.m&password=PhilMoon2468",
+    });
+    assert.equal(philLogin.status, 302);
+    const phil = cookieHeader(philLogin.setCookie);
+    const owner = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie: phil });
+    assert.equal(owner.status, 200);
+    assert.match(owner.body, /Abandon claim — return to pending/);
+    assert.match(owner.body, /id="btn-send-email"/);
+
+    const otherLogin = await request(app, "POST", "/login", {
+      body: `username=${encodeURIComponent(username)}&password=LockTest2468`,
+    });
+    assert.equal(otherLogin.status, 302);
+    let otherCookie = cookieHeader(otherLogin.setCookie);
+    const blocked = await request(app, "GET", `/HHSRSreporter/review/${row.id}?claim=1`, { cookie: otherCookie });
+    assert.equal(blocked.status, 302);
+    assert.equal(blocked.location, "/HHSRSreporter");
+    otherCookie = cookieHeader(blocked.setCookie, otherCookie);
+    const pending = await request(app, "GET", blocked.location, { cookie: otherCookie });
+    assert.equal(pending.status, 200);
+    assert.match(pending.body, /claimed by Phil Moon/);
+    assert.doesNotMatch(pending.body, /id="btn-send-email"/);
+
+    const send = await request(app, "POST", `/HHSRSreporter/review/${row.id}/send`, {
+      cookie: otherCookie,
+      body: "checked=1&to=repairs@savillshousing.co.uk&subject=No&body=No",
+    });
+    assert.equal(send.status, 302);
+    assert.equal(send.location, "/HHSRSreporter");
+    const abandon = await request(app, "POST", `/HHSRSreporter/review/${row.id}/abandon`, { cookie: otherCookie });
+    assert.equal(abandon.status, 302);
+    const stored = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
+    assert.equal(stored.status, "new");
+    assert.equal(stored.claimedBy, "Phil Moon");
+    assert.equal(stored.emailSentAt, null);
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { submissionId: row.id } }), 0);
+
+    const released = await request(app, "POST", `/HHSRSreporter/review/${row.id}/abandon`, { cookie: phil });
+    assert.equal(released.status, 302);
+    const open = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: row.id } });
+    assert.equal(open.claimedBy, "");
+    assert.equal(open.status, "new");
   });
 });

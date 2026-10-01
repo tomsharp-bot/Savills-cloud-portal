@@ -5,7 +5,12 @@ import multer from "multer";
 import { allowAddressLookup } from "../lib/ideal-postcodes.js";
 import { prisma } from "../lib/prisma.js";
 import { isProduction } from "../config.js";
-import { HHSRS_CATEGORIES, HHSRS_SITE_FORM_NEW_RATINGS, HHSRS_SITE_FORM_RATINGS } from "../lib/hhsrs-categories.js";
+import {
+  HHSRS_CATEGORIES,
+  HHSRS_LEGACY_CATEGORIES,
+  HHSRS_ONWARD_VICO_RATINGS,
+  HHSRS_SITE_FORM_NEW_RATINGS,
+} from "../lib/hhsrs-categories.js";
 import {
   ADDRESS_SOURCE_MANUAL,
   CALL_REF_BLANK_REASONS,
@@ -42,6 +47,7 @@ import {
   type StockAddressMatch,
   type StockLookupRow,
   validateHhsrsForm,
+  siteFormCategoryChoices,
   siteFormProjectFlags,
   siteFormRatingChoices,
   siteSubmissionCallFields,
@@ -272,10 +278,12 @@ function renderForm(
   const selected = projects.find((project) => project.id === opts.values.projectId);
   res.render("hhsrs-site-form/form", {
     title: "New issue — Savills HHSRS Site Reporting",
-    categories: HHSRS_CATEGORIES,
+    categories: siteFormCategoryChoices(selected?.name || ""),
     ratings: siteFormRatingChoices(selected?.name || ""),
+    siteNewCategories: HHSRS_CATEGORIES,
+    siteOldCategories: HHSRS_LEGACY_CATEGORIES,
     siteNewRatings: HHSRS_SITE_FORM_NEW_RATINGS,
-    siteOldRatings: HHSRS_SITE_FORM_RATINGS,
+    siteOldRatings: HHSRS_ONWARD_VICO_RATINGS,
     restrictorLocations: WINDOW_RESTRICTOR_LOCATIONS,
     restrictorMaterials: WINDOW_RESTRICTOR_MATERIALS,
     callBlankReasons: CALL_REF_BLANK_REASONS,
