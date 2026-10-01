@@ -831,6 +831,8 @@ describe("HHSRS site form project option flags", () => {
     const flowJs = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
     assert.match(flowJs, /function stepKeyboardNext/);
     assert.match(flowJs, /function isFreeText/);
+    assert.match(flowJs, /function moveOnFromSelect/);
+    assert.match(flowJs, /function selectReadyForNext/);
     assert.match(flowJs, /tag === "TEXTAREA"/);
     assert.match(flowJs, /function syncCauseBox/);
     assert.match(flowJs, /function syncRestrictorBox/);
