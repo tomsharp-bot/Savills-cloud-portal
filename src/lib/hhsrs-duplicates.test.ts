@@ -90,6 +90,8 @@ describe("not needed checks", () => {
     assert.match(page, /Click the later case to compare it with the one already sent\./);
     assert.match(page, /View duplicate/);
     assert.match(page, /Close duplicate/);
+    assert.match(page, /Not a duplicate/);
+    assert.match(page, /\/duplicates\/<%= item.id %>\/not-duplicate/);
     assert.match(page, /Amend and resend/);
     assert.match(page, /already sent/);
     assert.match(page, /Where the first is/);

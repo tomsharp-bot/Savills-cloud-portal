@@ -377,6 +377,8 @@ model HhsrsSiteSubmission {
   notNeededAt          DateTime?
   /// Moves and restores. Current fields are cleared on restore; this trail stays.
   notNeededLog         Json      @default("[]")
+  /// Office said this case is not a duplicate. Automatic UPRN filing leaves it alone.
+  notADuplicate        Boolean   @default(false)
   /// Office claim. Empty claimedBy means the case is open. Stale is derived from claimedAt — never auto-stolen.
   claimedBy            String    @default("")
   claimedAt            DateTime?

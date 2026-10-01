@@ -3242,7 +3242,8 @@ tr.is-new-log td { background: #f5f3ff; }
 .dup-compare dt { color: var(--muted); }
 .dup-compare dd { margin: 0; overflow-wrap: anywhere; }
 .dup-compare .diff { font-weight: 700; }
-.dup-compare .dup-foot { display: flex; justify-content: flex-end; margin: 14px 16px 0; }
+.dup-compare .dup-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin: 14px 16px 0; }
+.dup-compare .dup-foot form { display: contents; }
 @media (max-width: 800px) {
   .dup-compare .dup-pair.is-open { grid-template-columns: 1fr; }
 }

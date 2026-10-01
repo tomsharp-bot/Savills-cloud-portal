@@ -70,9 +70,14 @@
             <dt>Survey date</dt><dd<% if (item.diff.surveyDate) { %> class="diff"<% } %>><%= item.right.surveyDate %></dd>
           </dl>
         </div>
-        <% if (item.amendUrl) { %>
-          <div class="dup-foot"><a class="btn" href="<%= item.amendUrl %>">Amend and resend</a></div>
-        <% } %>
+        <div class="dup-foot">
+          <form method="post" action="<%= reporterBase %>/duplicates/<%= item.id %>/not-duplicate">
+            <button type="submit" class="btn">Not a duplicate</button>
+          </form>
+          <% if (item.amendUrl) { %>
+          <a class="btn" href="<%= item.amendUrl %>">Amend and resend</a>
+          <% } %>
+        </div>
       </article>
     </div>
   <% }) %>
