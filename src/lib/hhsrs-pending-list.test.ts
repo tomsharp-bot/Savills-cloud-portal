@@ -111,7 +111,7 @@ function references(html: string, tableId: string): string[] {
 function addresses(html: string, tableId: string): string[] {
   const body = tableSlice(html, tableId);
   const tbody = body.slice(body.indexOf("<tbody>"));
-  return [...tbody.matchAll(/<td class="addr-cell">\s*<strong>([^<]*)<\/strong>/g)].map((match) => match[1]);
+  return [...tbody.matchAll(/<td class="addr-cell[^"]*">\s*<strong>([^<]*)<\/strong>/g)].map((match) => match[1]);
 }
 
 function rowCount(html: string, tableId: string): number {

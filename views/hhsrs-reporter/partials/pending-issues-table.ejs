@@ -26,18 +26,18 @@
               <a class="ml-sort" href="<%= col.href %>" title="<%= col.title %>"><%= col.label %><% if (col.active) { %><span class="ml-sort-ind" aria-hidden="true"><%= col.dir === "desc" ? "▼" : "▲" %></span><% } %></a>
             </th>
           <% }) %>
-          <th></th>
+          <th class="col-act"></th>
         <% } else { %>
-          <% if (showReference) { %><th>Reference</th><% } %>
-          <th>Project</th>
-          <th>Address</th>
+          <% if (showReference) { %><th class="col-ref">Reference</th><% } %>
+          <th class="col-proj">Project</th>
+          <th class="col-addr">Address</th>
           <th class="photo-att-col" scope="col" title="Photos attached">Photos</th>
-          <th>UPRN</th>
-          <th>Surveyor</th>
-          <th>Category</th>
-          <th>Rating</th>
-          <th>Received</th>
-          <th></th>
+          <th class="col-uprn">UPRN</th>
+          <th class="col-surv">Surveyor</th>
+          <th class="col-cat">Category</th>
+          <th class="col-rate">Rating</th>
+          <th class="col-when">Received</th>
+          <th class="col-act"></th>
         <% } %>
       </tr>
     </thead>
@@ -47,23 +47,23 @@
         const claim = claimView(row);
       %>
         <tr class="<%= [showClaim ? claimRowClass(row) : "", row.href ? "find-result" : "", row.rowClass || ""].filter(Boolean).join(" ") %>" data-claim-status="<%= showClaim ? claim.status : "open" %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
-          <% if (showReference) { %><td><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td><% } %>
-          <td><span class="project-pill"><%= row.projectName %></span></td>
-          <td class="addr-cell">
+          <% if (showReference) { %><td class="col-ref"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td><% } %>
+          <td class="col-proj"><span class="project-pill"><%= row.projectName %></span></td>
+          <td class="addr-cell col-addr">
             <strong><%= row.fullAddress %></strong>
             <% if (row.amendedNote) { %><span class="ml-amended"><%= row.amendedNote %></span><% } %>
             <% if (showClaim) { %><%- include("claim-chip", { claimRow: claim }) %><% } %>
           </td>
           <%- include("photo-att-cell", { count: photoAttachmentCount(row.photoPaths), photoThumbs: reporterCasePhotos(row, reporterBase), showPhotoCount }) %>
-          <td><span style="color:var(--muted)"><%= row.uprn %></span></td>
-          <td><%= row.surveyorName %></td>
-          <td><%= row.category %></td>
-          <td class="<%= ratingDisplayClass(row.rating) %>"><%= row.rating %></td>
-          <td>
+          <td class="col-uprn"><span style="color:var(--muted)"><%= row.uprn %></span></td>
+          <td class="col-surv"><%= row.surveyorName %></td>
+          <td class="col-cat"><%= row.category %></td>
+          <td class="col-rate <%= ratingDisplayClass(row.rating) %>" title="<%= row.rating %>"><%= row.rating %></td>
+          <td class="col-when">
             <span class="<%= ago.urgent ? 'time-ago-urgent' : '' %>"><%= ago.relative %></span>
             <span class="time-ago-abs"><%= ago.absolute %></span>
           </td>
-          <td>
+          <td class="col-act">
             <% if (action === "amend") { %>
               <a class="btn-review-create" href="<%= row.amendUrl %>">Amend</a>
             <% } else if (action === "details") { %>
