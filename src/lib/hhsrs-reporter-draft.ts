@@ -8,7 +8,6 @@ import {
   formatHhsrsSurveyDate,
   reporterCaseDetailExtras,
   siteFormProjectFlags,
-  splitCallNotes,
 } from "./hhsrs-site-form.js";
 
 export class DraftError extends Error {
@@ -823,7 +822,7 @@ export function baseProjectDraft(data: DraftCase, photos: string[]): { subject: 
 
   callUpdate(data);
   void photos;
-  const lines = ["Hi all,", "", ...bulletBodyLines({ ...data, hazard, rating, description, address })];
+  const lines = ["HHSRS notification", "", ...bulletBodyLines({ ...data, hazard, rating, description, address })];
 
   return { subject, body: prepareClientEmailBody(data.project, lines.join("\n")) };
 }
@@ -835,6 +834,32 @@ function bullet(label: string, value: string): string {
 /** A client call reference belongs in the email only for projects that require one. */
 export function projectRequiresCallReference(projectName: string): boolean {
   return Boolean(resolveHhsrsProject(projectName).roster?.extras.calls);
+}
+
+/** MTVH has a call reference field even though its roster extras do not set calls. */
+function emailShowsCallReference(projectName: string): boolean {
+  return projectRequiresCallReference(projectName) || siteFormProjectFlags(projectName).mtvh;
+}
+
+/** Short client name in “the Onward Call Centre”, “the Vico Call Centre”, and so on. */
+function callCentreName(projectName: string): string {
+  if (siteFormProjectFlags(projectName).mtvh) return "MTVH";
+  switch (templateId(projectName)) {
+    case "Onward":
+      return "Onward";
+    case "Vico Homes":
+      return "Vico";
+    case "A2Dominion":
+      return "A2Dominion";
+    default: {
+      const roster = resolveHhsrsProject(projectName).roster?.name || String(projectName || "").trim();
+      return roster.replace(/\s+20\d{2}\b[\s\S]*$/i, "").trim() || "client";
+    }
+  }
+}
+
+function missedCallCentreLine(projectName: string): string {
+  return `We were unable to contact the ${callCentreName(projectName)} Call Centre to report the issue.`;
 }
 
 const WHY_CALL_REFERENCE_BLANK = /^•\s*Why the call reference is blank\s*:/i;
@@ -873,16 +898,16 @@ function surveyDateForEmail(value: string): string {
 
 /** Short client body. Subject, To, and Cc stay on the project templates. */
 function bulletBodyLines(data: DraftCase & { description: string; address: string }): string[] {
-  const lines: string[] = [
-    bullet("Address", data.address),
-  ];
+  const lines: string[] = [];
   const uprn = (data.uprn || "").trim();
   if (uprn) lines.push(bullet("UPRN", uprn));
-  lines.push(bullet("Hazard", data.hazard));
-  lines.push(bullet("Rating", data.rating || ""));
-  lines.push(bullet("Site notes", data.description));
+  if (data.address.trim()) lines.push(bullet("Address", data.address));
+  const survey = (data.surveyDate || "").trim();
+  if (survey) lines.push(bullet("Survey date", surveyDateForEmail(survey)));
+  if (data.hazard.trim()) lines.push(bullet("Hazard category", data.hazard));
+  if (data.description.trim()) lines.push(bullet("Comments", data.description));
+  if ((data.rating || "").trim()) lines.push(bullet("Hazard rating", data.rating || ""));
 
-  const needsCall = projectRequiresCallReference(data.project);
   const reference = (data.callRef || "").trim();
   const detailExtras = reporterCaseDetailExtras({
     projectName: data.project,
@@ -897,12 +922,10 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
     restrictorLocations: data.restrictorLocations,
     restrictorMaterial: data.restrictorMaterial,
   });
-  if (reference && detailExtras.calls) {
-    const label = templateId(data.project) === "Onward" ? "Onward call reference" : "Client call reference";
-    lines.push(bullet(label, reference));
+  if (emailShowsCallReference(data.project)) {
+    lines.push(bullet("Call reference", reference || missedCallCentreLine(data.project)));
   }
-  const survey = (data.surveyDate || "").trim();
-  if (survey) lines.push(bullet("Survey date", surveyDateForEmail(survey)));
+
   if (data.suspectedCause && data.includeCause !== false) {
     const cause = causeSentence(data.suspectedCause).replace(/^Suspected cause:\s*/i, "").replace(/\.$/, "");
     if (cause) lines.push(bullet("Cause", cause));
@@ -912,21 +935,6 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
   }
   if ((data.workOrder || "").trim()) lines.push(bullet("Work order", data.workOrder!.trim()));
 
-  if (needsCall && !reference) {
-    const blank = splitCallNotes(data.callNotes || "");
-    // A blank call reference is left out. Do not explain why it is blank.
-    if (!blank.reason) {
-      const onward = templateId(data.project) === "Onward";
-      const outcome = data.callStatus || "";
-      if (outcome === "Completed") {
-        const centre = onward ? "the Onward Call Centre" : "the contact centre";
-        lines.push(bullet(onward ? "Onward call" : "Call", `Called ${centre}. No reference supplied.`));
-      } else if (outcome === "Attempted" || outcome === "Not yet called") {
-        const prose = callUpdate(data).replace(/\s*(?:Onward Call Reference|Call reference):.*$/, "").trim();
-        if (prose) lines.push(bullet(onward ? "Onward call" : "Call", prose.replace(/\.$/, "")));
-      }
-    }
-  }
   if (detailExtras.otherDetails && (data.otherDetails || "").trim()) {
     lines.push(bullet("Any other details", data.otherDetails || ""));
   }
@@ -934,9 +942,9 @@ function bulletBodyLines(data: DraftCase & { description: string; address: strin
     const count = (data.restrictorMissingCount || "").trim();
     const locations = (data.restrictorLocations || "").trim();
     const material = (data.restrictorMaterial || "").trim();
-    if (count) lines.push(bullet("How many window restrictors are missing", count));
-    if (locations) lines.push(bullet("Location", locations));
+    if (count) lines.push(bullet("Number of window restrictors missing", count));
     if (material) lines.push(bullet("Window material", material));
+    if (locations) lines.push(bullet("Locations", locations));
   }
   return lines;
 }
@@ -962,10 +970,10 @@ export function projectDraft(data: DraftCase, photos: string[]): { subject: stri
   const lines = drafts[0].body.split("\n");
   const shared = new Set(lines.map((line) => line.trim()).filter(Boolean));
   for (const draft of drafts.slice(1)) {
-    const finding = draft.body.split("\n").filter((line) => /^• (?:Hazard|Rating|Site notes):/.test(line));
+    const finding = draft.body.split("\n").filter((line) => /^• (?:Hazard category|Hazard rating|Comments):/.test(line));
     if (finding.length) lines.push("", ...finding);
     for (const line of draft.body.split("\n")) {
-      if (!/^• /.test(line) || /^• (?:Address|UPRN|Hazard|Rating|Site notes):/.test(line)) continue;
+      if (!/^• /.test(line) || /^• (?:Address|UPRN|Hazard category|Hazard rating|Comments):/.test(line)) continue;
       if (shared.has(line.trim())) continue;
       shared.add(line.trim());
       lines.push(line);

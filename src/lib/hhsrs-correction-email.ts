@@ -8,9 +8,9 @@ import { correctionSubject, type CorrectionReason } from "./hhsrs-find.js";
 import { isHhsrsCategory, isHhsrsSiteFormRating } from "./hhsrs-categories.js";
 import { escapeHtml, stripTrailingSignature } from "./hhsrs-signature.js";
 
-/** First line of a correction. Do not add the reason or the old "this corrects" sentence. */
+/** First line of an amended resend. Do not add the reason or the old "this corrects" sentence. */
 export const CORRECTION_OPENING_LINE =
-  "Please disregard our previous email, due to an error. See correct details below.";
+  "This notification has been adjusted after review. Please disregard the previous notification.";
 
 /** Second line, only when the attached photo set differs from the previous email. */
 export const CORRECTION_PHOTO_LINE = "The photo was incorrect.";
@@ -40,7 +40,8 @@ function normalizeNewlines(value: string): string {
   return String(value || "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
 }
 
-const OPENING_LINE = /^Please disregard our previous email\b/i;
+const OPENING_LINE =
+  /^(?:Please disregard our previous email\b|This notification has been adjusted after review\b)/i;
 const PHOTO_LINE = /^The photo was incorrect\.\n*/;
 
 /** True when a photo was removed or a different photo was added. Order does not matter. */
@@ -84,7 +85,9 @@ function withoutOpening(text: string): string {
 /** Drop a previous correction opening so a later correction does not stack it. */
 export function stripCorrectionIntro(body: string): string {
   const text = normalizeNewlines(body);
-  const lead = text.match(/^(Please disregard our previous email\b[^\n]*)\n*/i);
+  const lead = text.match(
+    /^(?:Please disregard our previous email\b|This notification has been adjusted after review\b)[^\n]*\n*/i
+  );
   if (lead) return withoutOpening(dropLeadingPhotoLine(text.slice(lead[0].length).replace(/^\n+/, "")));
   return withoutOpening(text);
 }
@@ -204,8 +207,11 @@ const FIELD_KEYS: Record<string, keyof AmendmentFields> = {
   address: "address",
   uprn: "uprn",
   hazard: "hazard",
+  "hazard category": "hazard",
   rating: "rating",
+  "hazard rating": "rating",
   "site notes": "notes",
+  comments: "notes",
   "survey date": "surveyDate",
 };
 
@@ -216,6 +222,16 @@ const FIELD_LABELS: { key: keyof AmendmentFields; label: string }[] = [
   { key: "rating", label: "Rating" },
   { key: "notes", label: "Site notes" },
   { key: "surveyDate", label: "Survey date" },
+];
+
+/** Bullet order and labels for a rebuilt client email. The change note keeps FIELD_LABELS. */
+const EMAIL_BODY_FIELDS: { key: keyof AmendmentFields; label: string }[] = [
+  { key: "uprn", label: "UPRN" },
+  { key: "address", label: "Address" },
+  { key: "surveyDate", label: "Survey date" },
+  { key: "hazard", label: "Hazard category" },
+  { key: "notes", label: "Comments" },
+  { key: "rating", label: "Hazard rating" },
 ];
 
 function emptyFields(): AmendmentFields {
@@ -237,7 +253,7 @@ export function parseSentEmail(body: string): ParsedSentEmail {
     const match = line.match(/^•\s*([^:]+):\s*(.*)$/);
     if (!match) {
       const plain = line.trim();
-      if (!plain || /^hi all,$/i.test(plain) || OPENING_LINE.test(plain)) continue;
+      if (!plain || /^hi all,$/i.test(plain) || /^hhsrs notification$/i.test(plain) || OPENING_LINE.test(plain)) continue;
       prose.push(plain);
       continue;
     }
@@ -338,15 +354,15 @@ export function buildAmendmentEmail(input: {
   const photoLine = correctionPhotoSetChanged(input.previousPhotos, input.nextPhotos);
   const textLines = [intro];
   if (photoLine) textLines.push("", CORRECTION_PHOTO_LINE);
-  textLines.push("", "Hi all,", "");
+  textLines.push("", "HHSRS notification", "");
   for (const line of parsed.prose) textLines.push(line, "");
   const htmlBits = [`<p>${escapeHtml(intro)}</p>`];
   if (photoLine) htmlBits.push(`<p><b>${escapeHtml(CORRECTION_PHOTO_LINE)}</b></p>`);
-  htmlBits.push(`<p>Hi all,</p>`);
+  htmlBits.push(`<p>HHSRS notification</p>`);
   for (const line of parsed.prose) htmlBits.push(`<p>${escapeHtml(line)}</p>`);
   const bullets: string[] = [];
   const htmlItems: string[] = [];
-  for (const { key, label } of FIELD_LABELS) {
+  for (const { key, label } of EMAIL_BODY_FIELDS) {
     if (!includeField(previous[key], next[key])) continue;
     const value = next[key];
     bullets.push(`• ${label}: ${value}`);

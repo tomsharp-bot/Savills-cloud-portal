@@ -125,10 +125,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.equal(draft.to, "");
     assert.equal(draft.cc, "");
     assert.match(draft.subject, /Demo Housing - HHSRS/);
-    assert.match(draft.body, /• Site notes: Damaged light fitting in lounge\./);
+    assert.match(draft.body, /• Comments: Damaged light fitting in lounge\./);
     assert.doesNotMatch(draft.body, /The light fitting in the lounge is damaged/);
-    assert.match(draft.body, /• Hazard: Electrical Hazards/);
-    assert.match(draft.body, /• Rating: High/);
+    assert.match(draft.body, /• Hazard category: Electrical Hazards/);
+    assert.match(draft.body, /• Hazard rating: High/);
     assert.doesNotMatch(draft.body, /Escalation/);
     assert.match(draft.body, /• Survey date: 20\/09\/2026/);
     assert.doesNotMatch(draft.body, /2026-09-20/);
@@ -156,8 +156,12 @@ describe("HHSRS Reporter UI helpers", () => {
     const attemptedDraft = draftEmailFromReviewFields(attempted);
     assert.equal(attemptedDraft.to, "");
     assert.equal(attemptedDraft.cc, "");
-    assert.match(attemptedDraft.body, /• Onward call: Voicemail full/);
+    assert.match(
+      attemptedDraft.body,
+      /• Call reference: We were unable to contact the Onward Call Centre to report the issue\./
+    );
     assert.doesNotMatch(attemptedDraft.body, /couldn't get through/i);
+    assert.doesNotMatch(attemptedDraft.body, /Voicemail full/);
 
     const edited = mergeReviewDraftFields(row, {
       notes: "Loose socket in the kitchen.",
@@ -900,7 +904,7 @@ describe("HHSRS Reporter UI helpers", () => {
       assert.doesNotMatch(file, /fr-photo-drop|fr-photo-checked|photosChecked|photoSelection/);
     }
     assert.doesNotMatch(find, /<figcaption>/);
-    assert.match(js, /Please disregard our previous email, due to an error\. See correct details below\./);
+    assert.match(js, /This notification has been adjusted after review\. Please disregard the previous notification\./);
     assert.match(js, /The photo was incorrect\./);
     assert.match(js, /if \(photosChanged\(\)\) html \+= "<p><b>The photo was incorrect\.<\/b><\/p>"/);
     assert.match(js, /title\.innerHTML = "<b>" \+ esc\(subject\) \+ "<\/b>"/);

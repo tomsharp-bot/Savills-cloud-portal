@@ -300,7 +300,7 @@ describe("HHSRS Reporter auth and queue", () => {
       const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /Client Email Draft/);
-      assert.match(page.body, /• Site notes: Damaged light fitting in lounge/);
+      assert.match(page.body, /• Comments: Damaged light fitting in lounge/);
       assert.doesNotMatch(page.body, /The light fitting in the lounge is damaged/);
       assert.match(page.body, /Demo Housing - HHSRS/);
       assert.match(page.body, /Send and log/);
@@ -340,7 +340,7 @@ describe("HHSRS Reporter auth and queue", () => {
       const payload = JSON.parse(drafted.body) as { ok: boolean; subject: string; body: string };
       assert.equal(payload.ok, true);
       assert.match(payload.subject, /Demo Housing - HHSRS/);
-      assert.match(payload.body, /• Site notes: Damaged light fitting in lounge\./);
+      assert.match(payload.body, /• Comments: Damaged light fitting in lounge\./);
       assert.doesNotMatch(payload.body, /The light fitting in the lounge is damaged/);
     } finally {
       await prisma.hhsrsSiteSubmission.delete({ where: { id: row.id } });
@@ -374,7 +374,7 @@ describe("HHSRS Reporter auth and queue", () => {
       const page = await request(app, "GET", `/HHSRSreporter/review/${row.id}`, { cookie });
       assert.equal(page.status, 200);
       assert.match(page.body, /BPHA - HHSRS/);
-      assert.match(page.body, /• Site notes: Black mould in cupboard in hallway/);
+      assert.match(page.body, /• Comments: Black mould in cupboard in hallway/);
       assert.doesNotMatch(page.body, /There is mould in the cupboard in the hallway/);
       assert.doesNotMatch(page.body, /One of our surveyors has visited/);
       assert.doesNotMatch(page.body, /on the HHSRS/);
