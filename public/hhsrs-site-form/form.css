@@ -553,8 +553,7 @@ body.hhsrs-form-page {
 .hhsrs-form-page .info-box .field-row > div > label:first-child {
   margin-top: 0;
 }
-.hhsrs-form-page .info-box > .field-row + label:first-of-type,
-.hhsrs-form-page #extra-box > label[for="otherDetails"] {
+.hhsrs-form-page .info-box > .field-row + label:first-of-type {
   margin-top: 14px;
 }
 .hhsrs-form-page .hhsrs-form label.hhsrs-check {

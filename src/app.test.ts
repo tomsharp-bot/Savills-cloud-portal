@@ -291,7 +291,7 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /id="suspected-cause-box"[^>]*hidden/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = form.body.slice(form.body.indexOf('id="extra-box"'), form.body.indexOf('id="step-photos"'));
-    assert.match(extras, /Any other details <span class="optional">\(optional\)<\/span>/);
+    assert.doesNotMatch(extras, /otherDetails|Any other details/);
     assert.match(extras, /id="suspectedCause"/);
     const ratingSelect = form.body.slice(
       form.body.indexOf('<select id="rating"'),
@@ -316,8 +316,9 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /Couldn't get through/);
     assert.match(form.body, /No answer/);
     assert.match(form.body, /Engaged\/busy/);
-    assert.match(form.body, /Any other details <span class="optional">\(optional\)<\/span>/);
-    assert.doesNotMatch(form.body, /Any other details \*/);
+    assert.doesNotMatch(form.body, /Any other details/);
+    assert.doesNotMatch(form.body, /id="otherDetails"/);
+    assert.doesNotMatch(form.body, /name="otherDetails"/);
     assert.doesNotMatch(form.body, /id="otherDetails"[^>]*\brequired\b/);
     assert.match(form.body, /min 1, max 4/);
     assert.doesNotMatch(form.body, /Photos are optional/);
@@ -444,7 +445,7 @@ describe("HHSRS site form at domain-root paths", () => {
     );
     assert.match(
       css.body,
-      /\.hhsrs-form-page \.info-box > \.field-row \+ label:first-of-type,\s*\.hhsrs-form-page #extra-box > label\[for="otherDetails"\]\s*\{\s*margin-top:\s*14px;/
+      /\.hhsrs-form-page \.info-box > \.field-row \+ label:first-of-type\s*\{\s*margin-top:\s*14px;/
     );
     assert.match(
       css.body,
@@ -515,6 +516,18 @@ describe("HHSRS site form at domain-root paths", () => {
     const review = await request(app, "GET", reviewPost.location);
     assert.equal(review.status, 200);
     assert.match(review.body, /Review issue/);
+    const withoutOtherDetails = { ...hhsrsReviewFields() };
+    delete withoutOtherDetails.otherDetails;
+    const withoutUpload = multipartForm(withoutOtherDetails, [
+      { field: "photos", filename: "room.jpg", type: "image/jpeg", data: fakeJpeg(128) },
+    ]);
+    const withoutPost = await request(app, "POST", "/HHSRS-site-form/review", withoutUpload);
+    assert.equal(withoutPost.status, 302);
+    const withoutReview = await request(app, "GET", withoutPost.location);
+    assert.equal(withoutReview.status, 200);
+    assert.match(withoutReview.body, /Review issue/);
+    assert.doesNotMatch(withoutReview.body, /Any other details/);
+    assert.doesNotMatch(withoutReview.body, /otherDetails/);
     assert.match(review.body, /<dt>Survey date<\/dt><dd>20\/09\/2026<\/dd>/);
     assert.doesNotMatch(review.body, /2026-09-20/);
     assert.match(review.body, /Damp &amp; Mould Growth/);
@@ -547,6 +560,7 @@ describe("HHSRS site form at domain-root paths", () => {
       /<dt>Suspected cause<\/dt><dd class="prewrap">Leaking gutter above the bedroom<\/dd>/
     );
     assert.match(vicoReview.body, /<dt>Vulnerabilities<\/dt><dd class="prewrap">Elderly resident<\/dd>/);
+    assert.doesNotMatch(vicoReview.body, /Any other details/);
     const draftId = new URL(vicoPost.location, "http://local").searchParams.get("draft") || "";
     const edited = await request(app, "POST", "/HHSRS-site-form/edit", {
       body: `draftId=${encodeURIComponent(draftId)}`,
@@ -570,7 +584,9 @@ describe("HHSRS site form at domain-root paths", () => {
     const keptReview = await request(app, "GET", keptPost.location);
     assert.doesNotMatch(keptReview.body, /Suspected cause/);
     assert.match(keptReview.body, /Vulnerabilities/);
-    assert.match(review.body, /No access issues/);
+    assert.doesNotMatch(review.body, /No access issues/);
+    assert.doesNotMatch(review.body, /Any other details/);
+    assert.doesNotMatch(review.body, /id="otherDetails"/);
     assert.match(review.body, />Submit</);
     assert.match(review.body, />Edit</);
     assert.match(review.body, /Cancel and discard this issue/);

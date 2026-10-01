@@ -222,6 +222,10 @@ export type HhsrsFormValues = {
   comment: string;
   suspectedCause: string;
   clientCallReference: string;
+  /**
+   * No longer collected on the surveyor site form. New submissions store "".
+   * Text already stored on old cases stays, and Reporter can still show it.
+   */
   otherDetails: string;
   /**
    * No longer collected on the site form. Always false from this form.
@@ -624,7 +628,7 @@ export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues 
     comment: field("comment"),
     suspectedCause: field("suspectedCause"),
     clientCallReference: field("clientCallReference"),
-    otherDetails: field("otherDetails"),
+    otherDetails: "",
     cat1Confirmed: false,
     callUnreached: readFlag(body, "callUnreached"),
     callRefBlankReason,
@@ -809,7 +813,7 @@ export function validateHhsrsForm(
       restrictorMissingCount,
       restrictorLocations,
       restrictorMaterial,
-      otherDetails: String(values.otherDetails || "").trim(),
+      otherDetails: "",
       callUnreached: showCalls && skippedCall,
       callRefBlankReason: showCalls && skippedCall ? callReason : "",
       callUnreachedNote: showCalls && skippedCall ? callNote : "",

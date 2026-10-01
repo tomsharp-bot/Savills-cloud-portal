@@ -96,9 +96,7 @@
     }, 40);
     var field = fieldId ? $(fieldId) : null;
     var noKeyboard = field && (field.tagName === "SELECT" || /^(date|checkbox|radio)$/i.test(field.type || ""));
-    // Extra details is optional, but the phone keyboard Next has to be on that box when the section opens.
-    var openOptional = field && field.id === "otherDetails";
-    if (field && (noKeyboard || openOptional) && !field.disabled && !field.readOnly) {
+    if (field && noKeyboard && !field.disabled && !field.readOnly) {
       window.setTimeout(function () {
         try {
           field.focus({ preventScroll: true });
@@ -562,12 +560,17 @@
     }
   }
 
+  function extrasHasField() {
+    return callsShown() || vicoSelected() || causeShown();
+  }
+
   function extrasFocusId() {
     if (callsShown()) {
       return $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
     }
     if (vicoSelected()) return "vulnerabilities";
-    return "otherDetails";
+    if (causeShown()) return "suspectedCause";
+    return "";
   }
 
   function updateFlow(opts) {
@@ -646,7 +649,8 @@
 
     showStep(stepEx, announce);
     // Stay on Extra details until the surveyor leaves that section. Hazard still opens it.
-    if (!extrasDone() || !extrasPassed) {
+    // With no remaining field in the section, it does not hold the surveyor.
+    if (extrasHasField() && (!extrasDone() || !extrasPassed)) {
       hideStep(stepPh);
       if (actions) actions.hidden = true;
       setCurrent(stepEx);
@@ -676,7 +680,7 @@
     }
   }
 
-  ["projectId", "surveyDate", "surveyorName", "category", "rating", "comment", "clientCallReference", "callRefBlankReason", "callUnreachedNote", "otherDetails", "vulnerabilities", "suspectedCause", "restrictorMissingCount", "restrictorMaterial"].forEach(function (id) {
+  ["projectId", "surveyDate", "surveyorName", "category", "rating", "comment", "clientCallReference", "callRefBlankReason", "callUnreachedNote", "vulnerabilities", "suspectedCause", "restrictorMissingCount", "restrictorMaterial"].forEach(function (id) {
     var el = $(id);
     if (!el) return;
     el.addEventListener("change", function () {
@@ -1084,7 +1088,6 @@
     "rating",
     "comment",
     "clientCallReference",
-    "otherDetails",
     "callUnreachedNote",
     "callRefBlankReason",
     "vulnerabilities",
