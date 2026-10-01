@@ -1560,6 +1560,55 @@ body.hhsrs-reporter {
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8) > span {
   white-space: nowrap;
 }
+/* Pending Issues has no reference column. The one-line row fits the page. */
+.hhsrs-reporter #not-actioned .pending-issues-wrap {
+  overflow-x: hidden;
+}
+.hhsrs-reporter #waiting-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.hhsrs-reporter #waiting-table col.c-proj { width: 11%; }
+.hhsrs-reporter #waiting-table col.c-addr { width: 15%; }
+.hhsrs-reporter #waiting-table col.c-ph { width: 6%; }
+.hhsrs-reporter #waiting-table col.c-uprn { width: 11%; }
+.hhsrs-reporter #waiting-table col.c-surv { width: 10%; }
+.hhsrs-reporter #waiting-table col.c-cat { width: 10%; }
+.hhsrs-reporter #waiting-table col.c-rate { width: 8%; }
+.hhsrs-reporter #waiting-table col.c-when { width: 16%; }
+.hhsrs-reporter #waiting-table col.c-act { width: 13%; }
+.hhsrs-reporter #waiting-table thead th,
+.hhsrs-reporter #waiting-table tbody td {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hhsrs-reporter #waiting-table .project-pill,
+.hhsrs-reporter #waiting-table .claim-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.hhsrs-reporter #waiting-table .addr-cell > strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hhsrs-reporter #waiting-table td:last-child,
+.hhsrs-reporter #waiting-table th:last-child,
+.hhsrs-reporter #waiting-table td.photo-att-cell,
+.hhsrs-reporter #waiting-table th.photo-att-col {
+  overflow: visible;
+  text-overflow: clip;
+}
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
   overflow: visible;

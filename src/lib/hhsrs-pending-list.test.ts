@@ -108,6 +108,12 @@ function references(html: string, tableId: string): string[] {
   return [...tbody.matchAll(/class="ref-chip">([^<]*)</g)].map((match) => match[1]);
 }
 
+function addresses(html: string, tableId: string): string[] {
+  const body = tableSlice(html, tableId);
+  const tbody = body.slice(body.indexOf("<tbody>"));
+  return [...tbody.matchAll(/<td class="addr-cell">\s*<strong>([^<]*)<\/strong>/g)].map((match) => match[1]);
+}
+
 function rowCount(html: string, tableId: string): number {
   const body = tableSlice(html, tableId);
   const tbody = body.slice(body.indexOf("<tbody>"));
@@ -123,10 +129,11 @@ function badgeCount(html: string, sectionId: string): number {
   return Number(match[1]);
 }
 
-const PENDING_HEADERS = ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"];
+const LIST_HEADERS = ["Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"];
+const PENDING_HEADERS = ["Reference", ...LIST_HEADERS];
 
 describe("pending and review lists", () => {
-  it("shows the same waiting cases, with Reference first, except the open case", async (t) => {
+  it("shows the same waiting cases, without a Pending reference column, except the open case", async (t) => {
     if (!(await dbReady())) {
       t.skip("Postgres with seeded users is not available");
       return;
@@ -216,36 +223,45 @@ describe("pending and review lists", () => {
     const review = await request(app, "GET", "/HHSRSreporter/review", { cookie });
     assert.equal(pending.status, 200);
     assert.equal(review.status, 200);
-    assert.deepEqual(headers(pending.body, "waiting-table"), PENDING_HEADERS);
+    assert.deepEqual(headers(pending.body, "waiting-table"), LIST_HEADERS);
+    assert.equal(tableSlice(pending.body, "waiting-table").includes("ref-chip"), false);
+    assert.equal(tableSlice(pending.body, "waiting-table").includes(">Reference<"), false);
+    assert.deepEqual(headers(pending.body, "last-actioned-table"), LIST_HEADERS);
+    assert.equal(tableSlice(pending.body, "last-actioned-table").includes("ref-chip"), false);
     assert.deepEqual(headers(review.body, "rv-also-table"), PENDING_HEADERS);
 
-    const pendingRefs = references(pending.body, "waiting-table");
+    const pendingAddresses = addresses(pending.body, "waiting-table");
     const reviewRefs = references(review.body, "rv-also-table");
-    assert.deepEqual(reviewRefs, pendingRefs);
+    const reviewAddresses = addresses(review.body, "rv-also-table");
+    assert.deepEqual(reviewAddresses, pendingAddresses);
     assert.equal(rowCount(pending.body, "waiting-table"), badgeCount(pending.body, "not-actioned"));
     assert.equal(rowCount(review.body, "rv-also-table"), badgeCount(review.body, "rv-also-waiting"));
     assert.equal(badgeCount(pending.body, "not-actioned"), badgeCount(review.body, "rv-also-waiting"));
     for (const spec of waitingSpecs) {
       if (!spec.reference) continue;
-      assert.equal(pendingRefs.includes(spec.reference), true, spec.reference);
+      assert.equal(reviewRefs.includes(spec.reference), true, spec.reference);
+      assert.equal(pending.body.includes(spec.reference), false, spec.reference);
     }
     assert.match(tableSlice(pending.body, "waiting-table"), new RegExp(noRefAddress));
     assert.match(tableSlice(review.body, "rv-also-table"), new RegExp(noRefAddress));
     for (const reference of sentRefs) {
-      assert.equal(pendingRefs.includes(reference), false, reference);
       assert.equal(reviewRefs.includes(reference), false, reference);
+      assert.equal(tableSlice(pending.body, "last-actioned-table").includes(reference), false);
     }
 
     const opened = await request(app, "GET", `/HHSRSreporter/review/${open.id}`, { cookie });
     assert.equal(opened.status, 200);
+    assert.match(opened.body, new RegExp(`class="ref-chip">${open.reference}</span>`));
+    const caseHeading = opened.body.slice(opened.body.indexOf('id="rv-case-heading"'), opened.body.indexOf('id="rv-case-badge"'));
+    assert.match(caseHeading, new RegExp(open.reference || ""));
     const openedRefs = references(opened.body, "rv-also-table");
     assert.equal(openedRefs.includes(open.reference || ""), false);
     assert.deepEqual(
       openedRefs,
-      pendingRefs.filter((reference) => reference !== open.reference)
+      reviewRefs.filter((reference) => reference !== open.reference)
     );
     assert.equal(badgeCount(opened.body, "rv-also-waiting"), rowCount(opened.body, "rv-also-table"));
     assert.equal(rowCount(opened.body, "rv-also-table"), rowCount(pending.body, "waiting-table") - 1);
-    assert.equal(openedRefs.length, pendingRefs.length - 1);
+    assert.equal(openedRefs.length, reviewRefs.length - 1);
   });
 });

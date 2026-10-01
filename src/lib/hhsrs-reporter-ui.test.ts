@@ -579,7 +579,8 @@ describe("HHSRS Reporter UI helpers", () => {
     const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
     assert.match(last, /partials\/pending-issues-table/);
     assert.match(last, /pendingShowReference:\s*false/);
-    assert.doesNotMatch(waiting, /pendingShowReference:\s*false/);
+    assert.match(waiting, /pendingShowReference:\s*false/);
+    assert.doesNotMatch(also, /pendingShowReference:\s*false/);
     assert.match(table, /pendingShowReference !== false/);
     assert.match(table, /is-noref/);
     assert.doesNotMatch(last, /<thead>/);
@@ -790,6 +791,46 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(find, /amendedNote|ml-amended/);
     assert.match(css, /\.find-split \{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; \}/);
     assert.match(find, /class="find-split/);
+  });
+
+  it("drops the reference column on Pending Issues and keeps it on the review page and other lists", () => {
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const duplicates = readFileSync("src/lib/hhsrs-duplicate-compare.ts", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const waiting = pending.slice(pending.indexOf('id="not-actioned"'), pending.indexOf('id="last-actioned"'));
+    const last = pending.slice(pending.indexOf('id="last-actioned"'));
+    const also = review.slice(review.indexOf('id="rv-also-waiting"'), review.indexOf('id="rv-project-block"'));
+
+    assert.match(waiting, /pendingShowReference:\s*false/);
+    assert.match(last, /pendingShowReference:\s*false/);
+    assert.doesNotMatch(also, /pendingShowReference:\s*false/);
+    assert.doesNotMatch(find, /pendingShowReference:\s*false/);
+    assert.doesNotMatch(main, /pendingShowReference:\s*false/);
+    assert.match(table, /<th>Reference<\/th>/);
+    assert.match(table, /if \(showReference\)/);
+    assert.match(review, /Review &amp; Create<% if \(isFilled && row\.reference\)/);
+    assert.match(review, /id="rv-case-heading">Case Details<% if \(isFilled && row\.reference\)/);
+    assert.match(review, /class="ref-chip"><%= row\.reference %>/);
+    assert.match(duplicates, /caseLabel\(match\.reference\)/);
+    assert.match(main, /panel\.reference/);
+    assert.match(find, /selected\.reference/);
+
+    assert.match(css, /#not-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
+    assert.match(css, /#waiting-table \{[^}]*table-layout:\s*fixed/);
+    assert.match(css, /#waiting-table \{[^}]*width:\s*100%/);
+    assert.match(css, /#waiting-table \{[^}]*min-width:\s*0/);
+    assert.match(css, /#waiting-table thead th,\s*\.hhsrs-reporter #waiting-table tbody td \{[^}]*white-space:\s*nowrap/);
+    assert.match(css, /#waiting-table \.addr-cell > strong \{[^}]*white-space:\s*nowrap/);
+    assert.match(css, /#waiting-table \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(css, /#last-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
+    assert.match(css, /#last-actioned-table \{ width: max-content; min-width: 100%; \}/);
+    assert.doesNotMatch(css, /#last-actioned-table \{[^}]*table-layout:\s*fixed/);
+    assert.match(css, /\.hhsrs-reporter \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
+    assert.match(css, /\.ml-page \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
   });
 
   it("limits every date search year to 4 digits", () => {

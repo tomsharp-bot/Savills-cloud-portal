@@ -20,7 +20,7 @@
   <% if (!waitingRows.length) { %>
     <p class="empty" style="padding:1rem 1.1rem;">No pending site-form submissions. New cases from the surveyor form appear here.</p>
   <% } else { %>
-    <%- include("partials/pending-issues-table", { pendingRows: waitingRows, pendingTableId: "waiting-table", pendingShowPhotoCount: true }) %>
+    <%- include("partials/pending-issues-table", { pendingRows: waitingRows, pendingTableId: "waiting-table", pendingShowReference: false, pendingShowPhotoCount: true }) %>
   <% } %>
 </section>
 
