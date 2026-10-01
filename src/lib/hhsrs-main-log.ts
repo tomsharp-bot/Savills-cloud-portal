@@ -1,6 +1,7 @@
 /**
  * Main Log: one row per case, plus cases marked actioned without a send.
- * A correction does not add a second line. The case row carries an Amended note.
+ * A correction does not add a second line, even when correctsEmailId is missing.
+ * Sends for the same case are one row. That row carries an Amended note.
  * Filters are applied in the database; the page only renders one slice.
  */
 import ExcelJS from "exceljs";
@@ -129,6 +130,8 @@ export type MainLogEntry = {
   correctsKey: string | null;
   originalSentAt: Date | null;
   corrections: Array<{ key: string; at: Date; reason: string }>;
+  /** The row stands for a case that has a correction, including when the link is missing. */
+  amended?: boolean;
 };
 
 type SortItem = {
@@ -136,6 +139,8 @@ type SortItem = {
   kind: MainLogKind;
   at: number;
   correctsKey: string | null;
+  /** Submission id. Emails for one case share it. Not-sent rows omit it. */
+  caseKey?: string | null;
   ref?: string;
   project?: string;
   uprn?: string;
@@ -369,8 +374,43 @@ function compareSortItems(a: SortItem, b: SortItem, sort: MainLogSort): number {
   return b.at - a.at || a.key.localeCompare(b.key);
 }
 
+const CORRECTION_SUBJECT = /^correction\b/i;
+
 /**
- * One row per case. Corrections of a case that is already listed are dropped.
+ * A send is a correction when it is stored as one, when it points at another send,
+ * or when the subject is the correction subject. The case columns still come from
+ * the original submission, so an unlinked correction looks like a second copy of the case.
+ */
+export function mainLogEmailKind(row: {
+  kind?: string | null;
+  correctsEmailId?: string | null;
+  subject?: string | null;
+}): MainLogKind {
+  if (String(row.kind || "") === "correction" || row.correctsEmailId) return "correction";
+  if (CORRECTION_SUBJECT.test(String(row.subject || "").trim())) return "correction";
+  return "original";
+}
+
+function findGroup(parent: Map<string, string>, key: string): string {
+  let cur = key;
+  const seen = new Set<string>();
+  while (parent.get(cur) && parent.get(cur) !== cur && !seen.has(cur)) {
+    seen.add(cur);
+    cur = parent.get(cur) as string;
+  }
+  return cur;
+}
+
+function unionGroup(parent: Map<string, string>, a: string, b: string): void {
+  const left = findGroup(parent, a);
+  const right = findGroup(parent, b);
+  if (left !== right) parent.set(right, left);
+}
+
+/**
+ * One row per case. Emails that share a submission are one row, even when
+ * correctsEmailId is missing or points at a send that is not an original in this result.
+ * A correction with no case id still joins the original it names.
  * Several corrections with no original in this result become the latest one.
  * Amended keys are that case row. Activity keeps a recent amendment near the top
  * of the default order without changing the row's own sent time.
@@ -381,31 +421,58 @@ export function collapseCaseRows(items: SortItem[]): {
   activity: Map<string, number>;
 } {
   const byKey = new Map(items.map((item) => [item.key, item]));
+  const parent = new Map<string, string>();
+  for (const item of items) parent.set(item.key, item.key);
+
+  const caseAnchor = new Map<string, string>();
+  for (const item of items) {
+    if (item.kind === "not_sent" || !item.caseKey) continue;
+    const anchor = caseAnchor.get(item.caseKey);
+    if (anchor) unionGroup(parent, anchor, item.key);
+    else caseAnchor.set(item.caseKey, item.key);
+  }
+  for (const item of items) {
+    if (item.kind !== "correction" || !item.correctsKey) continue;
+    const linked = byKey.get(item.correctsKey);
+    if (linked) {
+      if (item.caseKey && linked.caseKey && item.caseKey !== linked.caseKey) continue;
+      unionGroup(parent, linked.key, item.key);
+    } else if (!item.caseKey) {
+      unionGroup(parent, item.correctsKey, item.key);
+    }
+  }
+
+  const groups = new Map<string, SortItem[]>();
+  for (const item of items) {
+    const root = findGroup(parent, item.key);
+    const list = groups.get(root) || [];
+    list.push(item);
+    groups.set(root, list);
+  }
+
   const hidden = new Set<string>();
   const amended = new Set<string>();
   const activity = new Map<string, number>();
-  const orphans = new Map<string, SortItem[]>();
-
-  for (const item of items) {
-    if (item.kind !== "correction") continue;
-    const parent = item.correctsKey ? byKey.get(item.correctsKey) : undefined;
-    if (parent && parent.kind !== "correction") {
-      hidden.add(item.key);
-      amended.add(parent.key);
-      activity.set(parent.key, Math.max(activity.get(parent.key) || 0, item.at, parent.at));
+  for (const list of groups.values()) {
+    if (list.length === 1) {
+      const only = list[0];
+      if (only.kind === "correction") {
+        amended.add(only.key);
+        activity.set(only.key, only.at);
+      }
       continue;
     }
-    const groupKey = item.correctsKey || item.key;
-    const list = orphans.get(groupKey) || [];
-    list.push(item);
-    orphans.set(groupKey, list);
-  }
-
-  for (const list of orphans.values()) {
-    const sorted = list.slice().sort((a, b) => b.at - a.at || a.key.localeCompare(b.key));
-    amended.add(sorted[0].key);
-    activity.set(sorted[0].key, sorted[0].at);
-    for (const extra of sorted.slice(1)) hidden.add(extra.key);
+    const corrections = list.filter((row) => row.kind === "correction");
+    const heads = list.filter((row) => row.kind !== "correction");
+    const pointed = new Set(corrections.map((row) => row.correctsKey).filter((key): key is string => Boolean(key)));
+    const linkedHeads = heads.filter((row) => pointed.has(row.key));
+    const pool = linkedHeads.length ? linkedHeads : heads;
+    const kept = pool.length
+      ? pool.slice().sort((a, b) => a.at - b.at || a.key.localeCompare(b.key))[0]
+      : corrections.slice().sort((a, b) => b.at - a.at || a.key.localeCompare(b.key))[0];
+    for (const row of list) if (row.key !== kept.key) hidden.add(row.key);
+    amended.add(kept.key);
+    activity.set(kept.key, Math.max(...list.map((row) => row.at)));
   }
 
   return { rows: items.filter((item) => !hidden.has(item.key)), amended, activity };
@@ -630,14 +697,59 @@ const emailInclude = {
   corrections: { select: { id: true, sentAt: true, correctionReason: true } },
 } as const;
 
-async function correctedKeySet(originalIds: string[]): Promise<Set<string>> {
-  if (!originalIds.length) return new Set();
-  const rows = await prisma.hhsrsSentEmail.findMany({
-    where: { kind: "correction", correctsEmailId: { in: originalIds } },
-    select: { correctsEmailId: true },
-    distinct: ["correctsEmailId"],
-  });
-  return new Set(rows.map((row) => `email:${row.correctsEmailId}`));
+/** Original rows whose case has a correction, including one that does not point back at them. */
+async function correctedKeySet(items: SortItem[]): Promise<Set<string>> {
+  const originals = items.filter((item) => item.kind === "original");
+  if (!originals.length) return new Set();
+  const originalIds = originals.map((item) => item.key.slice(6));
+  const submissionIds = [...new Set(originals.map((item) => item.caseKey).filter((id): id is string => Boolean(id)))];
+  const [linked, siblings] = await Promise.all([
+    prisma.hhsrsSentEmail.findMany({
+      where: { kind: "correction", correctsEmailId: { in: originalIds } },
+      select: { correctsEmailId: true },
+      distinct: ["correctsEmailId"],
+    }),
+    submissionIds.length
+      ? prisma.hhsrsSentEmail.findMany({
+          where: {
+            submissionId: { in: submissionIds },
+            NOT: { id: { in: originalIds } },
+            OR: [
+              { kind: "correction" },
+              { correctsEmailId: { not: null } },
+              { subject: { startsWith: "CORRECTION:", mode: "insensitive" } },
+            ],
+          },
+          select: { submissionId: true },
+          distinct: ["submissionId"],
+        })
+      : Promise.resolve([]),
+  ]);
+  const keys = new Set<string>();
+  for (const row of linked) if (row.correctsEmailId) keys.add(`email:${row.correctsEmailId}`);
+  const amendedCases = new Set(siblings.map((row) => row.submissionId));
+  for (const item of originals) {
+    if (item.caseKey && amendedCases.has(item.caseKey)) keys.add(item.key);
+  }
+  return keys;
+}
+
+function emailSortBase(row: {
+  id: string;
+  sentAt: Date;
+  kind: string;
+  correctsEmailId: string | null;
+  subject?: string | null;
+  submissionId: string;
+}): Pick<SortItem, "key" | "kind" | "at" | "correctsKey" | "caseKey"> {
+  const kind = mainLogEmailKind(row);
+  return {
+    key: `email:${row.id}`,
+    kind,
+    at: row.sentAt.getTime(),
+    correctsKey: kind === "correction" && row.correctsEmailId ? `email:${row.correctsEmailId}` : null,
+    caseKey: row.submissionId,
+  };
 }
 
 function columnValues(input: {
@@ -679,7 +791,7 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
       emailWhere
         ? prisma.hhsrsSentEmail.findMany({
             where: emailWhere,
-            select: { id: true, sentAt: true, kind: true, correctsEmailId: true },
+            select: { id: true, sentAt: true, kind: true, correctsEmailId: true, submissionId: true, subject: true },
           })
         : Promise.resolve([]),
       caseWhere
@@ -690,12 +802,7 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
         : Promise.resolve([]),
     ]);
     return [
-      ...emails.map((row) => ({
-        key: `email:${row.id}`,
-        kind: (row.kind === "correction" ? "correction" : "original") as MainLogKind,
-        at: row.sentAt.getTime(),
-        correctsKey: row.kind === "correction" && row.correctsEmailId ? `email:${row.correctsEmailId}` : null,
-      })),
+      ...emails.map((row) => emailSortBase(row)),
       ...cases.map((row) => ({
         key: `case:${row.id}`,
         kind: "not_sent" as const,
@@ -713,11 +820,13 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
             sentAt: true,
             kind: true,
             correctsEmailId: true,
+            subject: true,
             sentBy: true,
             to: true,
             photoNames: true,
             submission: {
               select: {
+                id: true,
                 reference: true,
                 projectName: true,
                 uprn: true,
@@ -757,12 +866,9 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
   ]);
   return [
     ...emails.map((row) => {
-      const kind = (row.kind === "correction" ? "correction" : "original") as MainLogKind;
+      const base = emailSortBase({ ...row, submissionId: row.submission.id });
       return {
-        key: `email:${row.id}`,
-        kind,
-        at: row.sentAt.getTime(),
-        correctsKey: row.kind === "correction" && row.correctsEmailId ? `email:${row.correctsEmailId}` : null,
+        ...base,
         ...columnValues({
           reference: row.submission.reference,
           projectName: row.submission.projectName,
@@ -774,7 +880,7 @@ async function listSortItems(filters: MainLogFilters): Promise<SortItem[]> {
           sentBy: row.sentBy,
           to: row.to,
           photos: row.photoNames,
-          kind,
+          kind: base.kind,
           surveyorName: row.submission.surveyorName,
           createdAt: row.submission.createdAt,
         }),
@@ -844,8 +950,7 @@ async function withPortalProjectMatch(filters: MainLogFilters): Promise<MainLogF
 export async function loadMainLog(query: Record<string, unknown>): Promise<LoadedMainLog> {
   const filters = await withPortalProjectMatch(parseMainLogFilters(query));
   const items = await listSortItems(filters);
-  const originalIds = items.filter((item) => item.kind === "original").map((item) => item.key.slice(6));
-  const corrected = await correctedKeySet(originalIds);
+  const corrected = await correctedKeySet(items);
   const sort = filters.sort ? { key: filters.sort, dir: filters.dir } : null;
   let arranged = arrangeMainLog(items, corrected, filters.page, MAIN_LOG_PAGE_SIZE, sort);
   if (filters.open && !filters.pageGiven) {
@@ -929,10 +1034,15 @@ async function unfilteredCount(): Promise<number> {
 export async function loadMainLogExport(query: Record<string, unknown>): Promise<{ filters: MainLogFilters; entries: MainLogEntry[] }> {
   const filters = await withPortalProjectMatch(parseMainLogFilters(query));
   const items = await listSortItems(filters);
+  const corrected = await correctedKeySet(items);
   const sort = filters.sort ? { key: filters.sort, dir: filters.dir } : null;
-  const arranged = arrangeMainLog(items, new Set(), 1, Math.max(items.length, 1), sort);
+  const arranged = arrangeMainLog(items, corrected, 1, Math.max(items.length, 1), sort);
   const hydrated = await hydrate(arranged.pages.flat());
-  const entries = arranged.pages.flat().map((key) => hydrated.get(key)).filter((row): row is MainLogEntry => Boolean(row));
+  const entries = arranged.pages
+    .flat()
+    .map((key) => hydrated.get(key))
+    .filter((row): row is MainLogEntry => Boolean(row))
+    .map((entry) => ({ ...entry, amended: Boolean(arranged.flags.get(entry.key)?.showCorrectedNote) }));
   return { filters, entries };
 }
 
@@ -997,7 +1107,7 @@ export async function buildMainLogWorkbook(input: MainLogExcelInput): Promise<Bu
       mainLogTypeLabel(entry.kind),
       correction && entry.originalSentAt ? formatLondonDateTime(entry.originalSentAt) : null,
       correction ? entry.correctionReason || null : null,
-      correction ? entry.correctionNote || null : entry.corrections.length ? "Amended" : null,
+      correction ? entry.correctionNote || null : entry.amended || entry.corrections.length ? "Amended" : null,
       entry.projectName || null,
       entry.uprn || null,
       entry.lineAddress || null,
