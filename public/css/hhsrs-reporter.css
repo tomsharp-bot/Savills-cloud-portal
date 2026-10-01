@@ -1501,28 +1501,32 @@ body.hhsrs-reporter {
 }
 .hhsrs-reporter .pending-issues-wrap {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
+/* Shared by Pending, Last 20, Main Log, and the other lists on this table.
+   Each column stays on one line. The table scrolls sideways instead of wrapping. */
 .hhsrs-reporter .pending-issues-table {
-  table-layout: fixed;
-  width: 100%;
-  min-width: 0;
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
 }
-.hhsrs-reporter .pending-issues-table col.c-ref { width: 10%; }
-.hhsrs-reporter .pending-issues-table col.c-proj { width: 11%; }
-.hhsrs-reporter .pending-issues-table col.c-addr { width: 14%; }
-.hhsrs-reporter .pending-issues-table col.c-ph { width: 6.5%; }
-.hhsrs-reporter .pending-issues-table col.c-uprn { width: 11%; }
-.hhsrs-reporter .pending-issues-table col.c-surv { width: 9%; }
-.hhsrs-reporter .pending-issues-table col.c-cat { width: 10%; }
-.hhsrs-reporter .pending-issues-table col.c-rate { width: 8%; }
-.hhsrs-reporter .pending-issues-table col.c-when { width: 8.5%; }
-.hhsrs-reporter .pending-issues-table col.c-act { width: 12%; }
+.hhsrs-reporter .pending-issues-table col.c-ref,
+.hhsrs-reporter .pending-issues-table col.c-proj,
+.hhsrs-reporter .pending-issues-table col.c-addr,
+.hhsrs-reporter .pending-issues-table col.c-ph,
+.hhsrs-reporter .pending-issues-table col.c-uprn,
+.hhsrs-reporter .pending-issues-table col.c-surv,
+.hhsrs-reporter .pending-issues-table col.c-cat,
+.hhsrs-reporter .pending-issues-table col.c-rate,
+.hhsrs-reporter .pending-issues-table col.c-when,
+.hhsrs-reporter .pending-issues-table col.c-act { width: auto; }
 .hhsrs-reporter .pending-issues-table thead th.photo-att-col { width: auto; }
 .hhsrs-reporter .pending-issues-table thead th,
 .hhsrs-reporter .pending-issues-table tbody td {
   padding: 0.45rem 0.32rem;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
 }
 .hhsrs-reporter .pending-issues-table thead th {
   letter-spacing: 0.03em;
@@ -1530,21 +1534,22 @@ body.hhsrs-reporter {
 .hhsrs-reporter .pending-issues-table .project-pill,
 .hhsrs-reporter .pending-issues-table .addr-cell,
 .hhsrs-reporter .pending-issues-table .addr-cell strong {
-  white-space: normal;
+  white-space: nowrap;
 }
-/* Last 20 drops the reference column. Give that width to the address and
-   keep the address itself on one line. Other tables still wrap. */
-.hhsrs-reporter .pending-issues-table.is-noref col.c-addr { width: 24%; }
-.hhsrs-reporter .pending-issues-table.is-noref td.addr-cell { overflow: hidden; }
+.hhsrs-reporter .pending-issues-table .time-ago-abs {
+  display: inline;
+  margin-left: 0.45rem;
+  white-space: nowrap;
+}
+/* Last 20 drops the reference column. The address still stays on one line. */
+.hhsrs-reporter .pending-issues-table.is-noref col.c-addr { width: auto; }
+.hhsrs-reporter .pending-issues-table.is-noref td.addr-cell { overflow: visible; }
 .hhsrs-reporter .pending-issues-table.is-noref .addr-cell > strong {
   display: block;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
 }
-.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: hidden; max-width: 100%; }
-.hhsrs-reporter #last-actioned-table { width: 100%; min-width: 0; }
+.hhsrs-reporter #last-actioned .pending-issues-wrap { overflow-x: auto; max-width: 100%; }
+.hhsrs-reporter #last-actioned-table { width: max-content; min-width: 100%; }
 .hhsrs-reporter #last-actioned-table thead th:nth-child(6),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(7),
 .hhsrs-reporter #last-actioned-table thead th:nth-child(8),
@@ -1553,11 +1558,6 @@ body.hhsrs-reporter {
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8),
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8) > span {
   white-space: nowrap;
-}
-.hhsrs-reporter #last-actioned-table tbody td:nth-child(6),
-.hhsrs-reporter #last-actioned-table tbody td:nth-child(7) {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
@@ -3039,7 +3039,8 @@ tr.is-new-log td { background: #f5f3ff; }
 .ml-tag.n { background: #e5e7eb; color: #374151; }
 .ml-corr-note { display: block; font-size: 0.72rem; color: #7a4b00; font-weight: 600; margin-top: 3px; white-space: nowrap; }
 .ml-page .ml-amended {
-  display: inline-block;
+  display: block;
+  width: fit-content;
   margin-top: 0.2rem;
   padding: 0.05rem 0.45rem;
   border-radius: 999px;
