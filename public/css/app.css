@@ -118,10 +118,15 @@ th{font-size:.54rem;text-transform:uppercase;color:var(--muted);background:#fafb
 .personnel-section{margin:0 0 32px;width:100%}
 .personnel-section h3{margin:0 0 8px;color:var(--navy);font-size:1.1rem}
 .personnel-section .sec-sub{margin:0 0 10px;color:var(--muted);font-size:.88rem}
-.personnel-table-wrap{width:100%;overflow-x:auto}
+.page-personnel{height:100vh;overflow:hidden}
+.page-personnel #screen-app{height:100vh;min-height:0;overflow:hidden}
+.page-personnel .main{min-height:0;overflow:auto;padding:0}
+.page-personnel .main > section{padding:20px 24px}
+.personnel-table-wrap{width:100%}
 .personnel-table{width:max-content;min-width:100%;table-layout:fixed;border-collapse:collapse;font-size:.82rem}
 .personnel-table th,.personnel-table td{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .personnel-table th{font-size:.68rem;text-transform:uppercase;color:var(--muted);background:#fafbfc}
+.personnel-table thead th{position:sticky;top:0;z-index:2;background:#fafbfc}
 .personnel-table input[type=text],.personnel-table input.agency-input,.personnel-table input.initials-input{width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:3px 5px;font-size:.8rem}
 .personnel-table .col-name{width:88px;max-width:88px}
 .personnel-table .col-sig{width:140px;max-width:180px}
