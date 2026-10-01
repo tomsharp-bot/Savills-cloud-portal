@@ -561,7 +561,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(also, /partials\/pending-issues-table/);
     assert.doesNotMatch(waiting, /<thead>/);
     assert.doesNotMatch(also, /<thead>/);
-    const head = table.slice(table.indexOf("<th>Reference</th>"), table.indexOf("</thead>"));
+    const head = table.slice(table.indexOf('<th class="col-ref">Reference</th>'), table.indexOf("</thead>"));
     const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
     assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
     assert.match(table, /row\.reference/);
@@ -810,7 +810,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.doesNotMatch(also, /pendingShowReference:\s*false/);
     assert.doesNotMatch(find, /pendingShowReference:\s*false/);
     assert.doesNotMatch(main, /pendingShowReference:\s*false/);
-    assert.match(table, /<th>Reference<\/th>/);
+    assert.match(table, /<th class="col-ref">Reference<\/th>/);
     assert.match(table, /if \(showReference\)/);
     assert.match(review, /Review &amp; Create<% if \(isFilled && row\.reference\)/);
     assert.match(review, /id="rv-case-heading">Case Details<% if \(isFilled && row\.reference\)/);
@@ -819,13 +819,20 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(main, /panel\.reference/);
     assert.match(find, /selected\.reference/);
 
-    assert.match(css, /#not-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
-    assert.match(css, /#waiting-table \{[^}]*table-layout:\s*fixed/);
-    assert.match(css, /#waiting-table \{[^}]*width:\s*100%/);
-    assert.match(css, /#waiting-table \{[^}]*min-width:\s*0/);
-    assert.match(css, /#waiting-table thead th,\s*\.hhsrs-reporter #waiting-table tbody td \{[^}]*white-space:\s*nowrap/);
-    assert.match(css, /#waiting-table \.addr-cell > strong \{[^}]*white-space:\s*nowrap/);
-    assert.match(css, /#waiting-table \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(css, /#not-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
+    assert.doesNotMatch(css, /#not-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*hidden/);
+    assert.doesNotMatch(css, /#waiting-table \{[^}]*table-layout:\s*fixed/);
+    assert.doesNotMatch(css, /#waiting-table \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(css, /\.pending-issues-table th\.col-rate,\s*\.hhsrs-reporter \.pending-issues-table td\.col-rate \{[^}]*min-width:\s*13rem/);
+    assert.match(css, /\.pending-issues-table th\.col-when,\s*\.hhsrs-reporter \.pending-issues-table td\.col-when \{[^}]*min-width:\s*18rem/);
+    assert.match(css, /\.pending-issues-table th\.col-uprn,\s*\.hhsrs-reporter \.pending-issues-table td\.col-uprn \{[^}]*min-width:\s*9\.5rem/);
+    assert.match(css, /\.pending-issues-table \.addr-cell > strong \{[^}]*width:\s*max-content/);
+    assert.match(css, /\.pending-issues-table \.addr-cell > strong \{[^}]*white-space:\s*nowrap/);
+    assert.doesNotMatch(css, /\.pending-issues-table \.addr-cell > strong \{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(table, /class="col-rate <%= ratingDisplayClass\(row\.rating\) %>" title="<%= row\.rating %>"/);
+    assert.match(css, /\.filter-bar input \{ min-width: 180px; flex: 1; \}/);
+    assert.match(css, /\.find-search \{ display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; \}/);
+    assert.match(css, /\.ml-search \{ flex: 1 1 180px; min-width: 180px; \}/);
     assert.match(css, /#last-actioned \.pending-issues-wrap \{[^}]*overflow-x:\s*auto/);
     assert.match(css, /#last-actioned-table \{ width: max-content; min-width: 100%; \}/);
     assert.doesNotMatch(css, /#last-actioned-table \{[^}]*table-layout:\s*fixed/);

@@ -70,15 +70,15 @@ export type MainLogSort = {
 
 /** Headings on the shared case list. Sent, recipient, and type stay sortable by URL. */
 export const MAIN_LOG_COLUMNS: ReadonlyArray<{ key: MainLogSortKey; label: string; className: string }> = [
-  { key: "ref", label: "Reference", className: "" },
-  { key: "project", label: "Project", className: "" },
-  { key: "address", label: "Address", className: "" },
+  { key: "ref", label: "Reference", className: "col-ref" },
+  { key: "project", label: "Project", className: "col-proj" },
+  { key: "address", label: "Address", className: "col-addr" },
   { key: "photos", label: "Photos", className: "photo-att-col" },
-  { key: "uprn", label: "UPRN", className: "" },
-  { key: "surveyor", label: "Surveyor", className: "" },
-  { key: "hazard", label: "Category", className: "" },
-  { key: "rating", label: "Rating", className: "" },
-  { key: "received", label: "Received", className: "" },
+  { key: "uprn", label: "UPRN", className: "col-uprn" },
+  { key: "surveyor", label: "Surveyor", className: "col-surv" },
+  { key: "hazard", label: "Category", className: "col-cat" },
+  { key: "rating", label: "Rating", className: "col-rate" },
+  { key: "received", label: "Received", className: "col-when" },
 ];
 
 export type MainLogFilters = {

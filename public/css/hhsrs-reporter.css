@@ -1523,7 +1523,7 @@ body.hhsrs-reporter {
 .hhsrs-reporter .pending-issues-table thead th.photo-att-col { width: auto; }
 .hhsrs-reporter .pending-issues-table thead th,
 .hhsrs-reporter .pending-issues-table tbody td {
-  padding: 0.45rem 0.32rem;
+  padding: 0.65rem 0.75rem;
   overflow-wrap: normal;
   word-break: normal;
   white-space: nowrap;
@@ -1535,6 +1535,33 @@ body.hhsrs-reporter {
 .hhsrs-reporter .pending-issues-table .addr-cell,
 .hhsrs-reporter .pending-issues-table .addr-cell strong {
   white-space: nowrap;
+}
+/* Short values keep a readable width. Long addresses grow the row and scroll. */
+.hhsrs-reporter .pending-issues-table th.col-ref,
+.hhsrs-reporter .pending-issues-table td.col-ref { min-width: 8rem; }
+.hhsrs-reporter .pending-issues-table th.col-proj,
+.hhsrs-reporter .pending-issues-table td.col-proj { min-width: 9rem; }
+.hhsrs-reporter .pending-issues-table th.col-addr,
+.hhsrs-reporter .pending-issues-table td.col-addr { min-width: 14rem; }
+.hhsrs-reporter .pending-issues-table th.col-uprn,
+.hhsrs-reporter .pending-issues-table td.col-uprn { min-width: 9.5rem; }
+.hhsrs-reporter .pending-issues-table th.col-surv,
+.hhsrs-reporter .pending-issues-table td.col-surv { min-width: 9rem; }
+.hhsrs-reporter .pending-issues-table th.col-cat,
+.hhsrs-reporter .pending-issues-table td.col-cat { min-width: 11rem; }
+.hhsrs-reporter .pending-issues-table th.col-rate,
+.hhsrs-reporter .pending-issues-table td.col-rate { min-width: 13rem; }
+.hhsrs-reporter .pending-issues-table th.col-when,
+.hhsrs-reporter .pending-issues-table td.col-when { min-width: 18rem; }
+.hhsrs-reporter .pending-issues-table th.col-act,
+.hhsrs-reporter .pending-issues-table td.col-act { min-width: 9.5rem; }
+.hhsrs-reporter .pending-issues-table .addr-cell > strong {
+  display: block;
+  width: max-content;
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
 }
 .hhsrs-reporter .pending-issues-table .time-ago-abs {
   display: inline;
@@ -1560,54 +1587,10 @@ body.hhsrs-reporter {
 .hhsrs-reporter #last-actioned-table tbody td:nth-child(8) > span {
   white-space: nowrap;
 }
-/* Pending Issues has no reference column. The one-line row fits the page. */
+/* Pending uses the same one-line row. A wide row scrolls sideways. */
 .hhsrs-reporter #not-actioned .pending-issues-wrap {
-  overflow-x: hidden;
-}
-.hhsrs-reporter #waiting-table {
-  table-layout: fixed;
-  width: 100%;
-  min-width: 0;
+  overflow-x: auto;
   max-width: 100%;
-}
-.hhsrs-reporter #waiting-table col.c-proj { width: 11%; }
-.hhsrs-reporter #waiting-table col.c-addr { width: 15%; }
-.hhsrs-reporter #waiting-table col.c-ph { width: 6%; }
-.hhsrs-reporter #waiting-table col.c-uprn { width: 11%; }
-.hhsrs-reporter #waiting-table col.c-surv { width: 10%; }
-.hhsrs-reporter #waiting-table col.c-cat { width: 10%; }
-.hhsrs-reporter #waiting-table col.c-rate { width: 8%; }
-.hhsrs-reporter #waiting-table col.c-when { width: 16%; }
-.hhsrs-reporter #waiting-table col.c-act { width: 13%; }
-.hhsrs-reporter #waiting-table thead th,
-.hhsrs-reporter #waiting-table tbody td {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hhsrs-reporter #waiting-table .project-pill,
-.hhsrs-reporter #waiting-table .claim-chip {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
-}
-.hhsrs-reporter #waiting-table .addr-cell > strong {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hhsrs-reporter #waiting-table td:last-child,
-.hhsrs-reporter #waiting-table th:last-child,
-.hhsrs-reporter #waiting-table td.photo-att-cell,
-.hhsrs-reporter #waiting-table th.photo-att-col {
-  overflow: visible;
-  text-overflow: clip;
 }
 .hhsrs-reporter .pending-issues-table td:last-child,
 .hhsrs-reporter .pending-issues-table th:last-child {
@@ -1986,7 +1969,14 @@ body.hhsrs-reporter {
   font-family: var(--font);
 }
 .hhsrs-reporter .pending-issues-table td.photo-att-cell,
-.hhsrs-reporter .pending-issues-table th.photo-att-col { overflow: visible; white-space: nowrap; }
+.hhsrs-reporter .pending-issues-table th.photo-att-col {
+  width: auto;
+  min-width: 5.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  overflow: visible;
+  white-space: nowrap;
+}
 .hhsrs-reporter #review-workspace { padding-bottom: 85vh; }
 .hhsrs-reporter #rv-project-block { scroll-margin-top: 0; }
 .hhsrs-reporter .review-project-first.panel { padding: 0; overflow: hidden; }
@@ -2938,7 +2928,7 @@ tr.is-new-log td { background: #f5f3ff; }
   font-size: 0.8125rem;
   font-family: var(--font);
   letter-spacing: normal;
-  padding: 0.45rem 0.32rem;
+  padding: 0.65rem 0.75rem;
   vertical-align: middle;
   overflow-wrap: normal;
   word-break: normal;
