@@ -11,6 +11,7 @@ import {
   isHhsrsRating,
   isHhsrsSiteFormRating,
 } from "./hhsrs-categories.js";
+import { HHSRS_PROJECT_ROSTER } from "./hhsrs-reporter-projects.js";
 import {
   composeCallNotes,
   splitCallNotes,
@@ -123,6 +124,7 @@ describe("validateHhsrsForm", () => {
     if (result.ok) {
       assert.equal(result.data.projectName, "Devon HA");
       assert.equal(result.data.clientCallReference, "");
+      assert.equal(result.data.otherDetails, "");
     }
   });
 
@@ -196,6 +198,7 @@ describe("validateHhsrsForm", () => {
     assert.equal(values.callUnreached, false);
     assert.match(todayLondonDate(), /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(readHhsrsValues({ cat1Confirmed: "true" }).cat1Confirmed, false);
+    assert.equal(readHhsrsValues({ otherDetails: "  No access issues.  " }).otherDetails, "");
     assert.equal(readHhsrsValues({ addressConfirmed: "on" }).addressConfirmed, true);
     assert.equal(readHhsrsValues({ uprn: " 1000 403 " }).uprn, "1000403");
     const legacy = readHhsrsValues({ callUnreached: "on", callUnreachedNote: " No answer " });
@@ -470,6 +473,46 @@ describe("validateHhsrsForm", () => {
     if (onwardWithRef.ok) assert.equal(onwardWithRef.data.otherDetails, "");
   });
 
+  it("does not show or require other details, and does not keep a posted value, for every project", () => {
+    const form = readFileSync(join(process.cwd(), "views/hhsrs-site-form/form.ejs"), "utf8");
+    const review = readFileSync(join(process.cwd(), "views/hhsrs-site-form/review.ejs"), "utf8");
+    const script = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
+    const route = readFileSync(join(process.cwd(), "src/routes/hhsrs-site-form.ts"), "utf8");
+    assert.doesNotMatch(form, /otherDetails/);
+    assert.doesNotMatch(form, /Any other details/);
+    assert.doesNotMatch(form, /id="otherDetails"[^>]*\brequired\b/);
+    assert.doesNotMatch(review, /Any other details/);
+    assert.doesNotMatch(review, /otherDetails/);
+    assert.doesNotMatch(script, /otherDetails/);
+    assert.match(route, /otherDetails:\s*""/);
+    assert.doesNotMatch(route, /otherDetails:\s*checked\.data\.otherDetails/);
+    assert.ok(HHSRS_PROJECT_ROSTER.length > 0);
+
+    for (const roster of HHSRS_PROJECT_ROSTER) {
+      const rating = siteFormRatingChoices(roster.name).includes("Medium")
+        ? "Medium"
+        : siteFormRatingChoices(roster.name)[0];
+      const category = "Damp & Mould Growth";
+      const flags = siteFormProjectFlags(roster.name);
+      const posted = {
+        ...valid,
+        rating,
+        category,
+        otherDetails: "Tenant was home.",
+        clientCallReference: siteFormShowsCallReference(roster.name, rating) ? "CR-1" : "",
+        vulnerabilities: flags.vulnerabilities ? "Elderly resident" : "",
+        suspectedCause: siteFormShowsSuspectedCause(roster.name, category) ? "Leaking gutter" : "",
+      };
+      const kept = validateHhsrsForm(posted, { id: "proj", name: roster.name });
+      assert.equal(kept.ok, true, roster.name);
+      if (kept.ok) assert.equal(kept.data.otherDetails, "", roster.name);
+
+      const omitted = validateHhsrsForm({ ...posted, otherDetails: "" }, { id: "proj", name: roster.name });
+      assert.equal(omitted.ok, true, `${roster.name} submits without other details`);
+      if (omitted.ok) assert.equal(omitted.data.otherDetails, "", roster.name);
+    }
+  });
+
   it("requires a call reference, or a blank reason (free text only when Other)", () => {
     const onward = { id: "proj-1", name: "Onward 2026" };
     const missing = validateHhsrsForm(valid, onward);
@@ -537,7 +580,7 @@ describe("validateHhsrsForm", () => {
       assert.equal(unreached.data.callUnreached, true);
       assert.equal(unreached.data.callRefBlankReason, "Other");
       assert.equal(unreached.data.callUnreachedNote, "Voicemail full.");
-      assert.equal(unreached.data.otherDetails, "No access issues.");
+      assert.equal(unreached.data.otherDetails, "");
       assert.deepEqual(siteSubmissionCallFields(unreached.data), {
         clientCallReference: "",
         callOutcome: "Attempted",
@@ -562,7 +605,7 @@ describe("validateHhsrsForm", () => {
     assert.equal(gateway.ok, true);
     if (gateway.ok) {
       assert.equal(gateway.data.callUnreached, false);
-      assert.equal(gateway.data.otherDetails, "No access issues.");
+      assert.equal(gateway.data.otherDetails, "");
       assert.deepEqual(siteSubmissionCallFields(gateway.data), {
         clientCallReference: "",
         callOutcome: "",
@@ -824,7 +867,8 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(html, /suspected-cause-hint/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = html.slice(html.indexOf('id="extra-box"'), html.indexOf('id="step-photos"'));
-    assert.match(extras, /id="otherDetails"[^>]*enterkeyhint="next"/);
+    assert.doesNotMatch(extras, /otherDetails|Any other details/);
+    assert.doesNotMatch(html, /id="otherDetails"|name="otherDetails"|Any other details/);
     assert.match(extras, /id="suspected-cause-box"[^>]*hidden/);
     assert.match(extras, /id="suspectedCause"/);
     assert.doesNotMatch(hazard, /data-extra=/);
@@ -837,7 +881,8 @@ describe("HHSRS site form project option flags", () => {
     assert.match(flowJs, /Falling Between Levels/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsAlways"));
     assert.doesNotMatch(hazardFn, /suspectedCause/);
-    assert.match(flowJs, /if \(!extrasDone\(\) \|\| !extrasPassed\)/);
+    assert.match(flowJs, /extrasHasField\(\) && \(!extrasDone\(\) \|\| !extrasPassed\)/);
+    assert.doesNotMatch(flowJs, /otherDetails/);
     const reviewDraft = {
       ...emptyHhsrsValues(),
       id: "draft-1",
@@ -853,6 +898,7 @@ describe("HHSRS site form project option flags", () => {
       reviewOptions
     );
     assert.doesNotMatch(String(blankReview), /Suspected cause/);
+    assert.doesNotMatch(String(blankReview), /Any other details|otherDetails/);
     const keptReview = ejs.render(
       reviewTemplate,
       {

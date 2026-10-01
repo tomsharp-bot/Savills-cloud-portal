@@ -216,9 +216,6 @@
                   <p class="hhsrs-hint" id="saxon-damp-note">Saxon Weald: all damp and mould is phoned in. Email only if Severe, and include the call reference.</p>
                 </div>
 
-                <label for="otherDetails">Any other details <span class="optional">(optional)</span></label>
-                <textarea id="otherDetails" name="otherDetails" rows="4" enterkeyhint="next" class="<%= errors.otherDetails ? 'is-invalid' : '' %>"><%= values.otherDetails %></textarea>
-                <% if (errors.otherDetails) { %><p class="field-error"><%= errors.otherDetails %></p><% } %>
                 <div id="suspected-cause-box" <%= showCause ? "" : "hidden" %>>
                   <label for="suspectedCause">Suspected cause *</label>
                   <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || "" %>" class="<%= errors.suspectedCause ? 'is-invalid' : '' %>" <%= showCause ? "required" : "disabled" %> />

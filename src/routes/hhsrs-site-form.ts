@@ -573,7 +573,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
             clientCallReference: call.clientCallReference,
             callOutcome: call.callOutcome,
             callNotes: call.callNotes,
-            otherDetails: checked.data.otherDetails,
+            otherDetails: "",
             cat1Confirmed: checked.data.cat1Confirmed,
             photoPaths: [],
             reference,
