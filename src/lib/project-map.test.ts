@@ -85,7 +85,10 @@ describe("Projects Progress UK map", () => {
     assert.match(widget, /position:\s*fixed/);
     assert.match(widget, /right:\s*12px/);
     assert.match(widget, /bottom:\s*12px/);
-    assert.match(css, /\.projects-page \.main\{[^}]*padding-right:\s*196px/);
+    assert.match(widget, /width:\s*326px/);
+    assert.match(css, /\.uk-map-canvas\{[^}]*width:\s*308px/);
+    assert.match(css, /\.uk-map-canvas\{[^}]*height:\s*415\.8px/);
+    assert.match(css, /\.projects-page \.main\{[^}]*padding-right:\s*350px/);
     assert.match(css, /\.uk-map-pin:hover \.uk-map-pin-label/);
     assert.match(css, /\.uk-map-pin-label\{[^}]*display:\s*none/);
 
