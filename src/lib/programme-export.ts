@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
-import { approxSurveysOnGrid, projectWeeksOnGrid } from "./programme.js";
+import { approxSurveysOnGrid, jobTileColor, projectWeeksOnGrid } from "./programme.js";
 
 const MAX_WEEKS = 200;
 const MAX_PEOPLE = 800;
@@ -299,10 +299,14 @@ function paintFor(name: string): Paint {
   return PAINT[classForName(name)] || PAINT["c-note"];
 }
 
-function weekLook(value: string): Look {
+function argbFromHex(hex: string): string {
+  return "FF" + hex.slice(1).toUpperCase();
+}
+
+function weekLook(value: string, catalogue: readonly string[]): Look {
   if (!value) return { bg: WHITE, fg: TEXT, align: "center" };
-  const paint = paintFor(value);
-  return { bg: paint.bg, fg: paint.fg, bold: paint.bold, italic: paint.italic, align: "center" };
+  const tone = jobTileColor(value, catalogue);
+  return { bg: argbFromHex(tone.background), fg: argbFromHex(tone.color), bold: true, align: "center" };
 }
 
 function projectLook(name: string): Look {
@@ -400,6 +404,8 @@ export async function buildProgrammeWorkbook(input: ProgrammeExportInput, now = 
   const filename = `${title}.xlsx`;
   const onBoard = input.people.filter((person) => person.active);
   const weekLabels = input.weeks.map(weekColumnLabel);
+  const upcoming = input.upcoming ?? [];
+  const catalogue = [...input.projects, ...upcoming].map((project) => project.project);
   // input.agency and input.team are still accepted by the parser; they are not written to a sheet.
 
   const wb = new ExcelJS.Workbook();
@@ -429,13 +435,11 @@ export async function buildProgrammeWorkbook(input: ProgrammeExportInput, now = 
     writeRow(
       programme,
       ["Yes", person.name, person.flag, ...person.weeks],
-      [...identity, ...person.weeks.map(weekLook)]
+      [...identity, ...person.weeks.map((week) => weekLook(week, catalogue))]
     );
   }
   setWidths(programme, [10, 24, 8, ...input.weeks.map(() => 14)]);
 
-  const upcoming = input.upcoming ?? [];
-  const catalogue = [...input.projects, ...upcoming].map((project) => project.project);
   writeProjectSheet(wb, "Current projects", input.projects, onBoard, catalogue);
   writeProjectSheet(wb, "Upcoming projects", upcoming, onBoard, catalogue);
 

@@ -883,6 +883,92 @@ export function programmeNotes(usingPersonnelAdmins: boolean): {
   };
 }
 
+export type JobTileColor = { background: string; color: string };
+
+function jobTileHash(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+function jobTileHslHex(hue: number, satPercent: number, lightPercent: number): string {
+  const s = satPercent / 100;
+  const l = lightPercent / 100;
+  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = hue / 60;
+  const x = chroma * (1 - Math.abs((hp % 2) - 1));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hp < 1) {
+    r = chroma;
+    g = x;
+  } else if (hp < 2) {
+    r = x;
+    g = chroma;
+  } else if (hp < 3) {
+    g = chroma;
+    b = x;
+  } else if (hp < 4) {
+    g = x;
+    b = chroma;
+  } else if (hp < 5) {
+    r = x;
+    b = chroma;
+  } else {
+    r = chroma;
+    b = x;
+  }
+  const m = l - chroma / 2;
+  const channel = (value: number) =>
+    Math.round(Math.max(0, Math.min(1, value + m)) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(r)}${channel(g)}${channel(b)}`;
+}
+
+/**
+ * Text the colour is based on.
+ * A week cell that is a Current or Upcoming project, or that project's short
+ * stamp, uses that project's name, so the top tile and the grid tile match.
+ * Holiday and any other label that is not one of those projects keeps its own text.
+ */
+export function jobTileColorKey(text: string, catalogue?: readonly string[]): string {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return "";
+  const names = (catalogue || []).map((name) => String(name || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+  const matched = new Map<string, string>();
+  for (const name of names) {
+    if (!programmeCellMatchesProject(value, name, names)) continue;
+    const key = programmeCanon(name);
+    if (!matched.has(key)) matched.set(key, name);
+  }
+  if (matched.size === 1) return [...matched.values()][0];
+  return value;
+}
+
+/**
+ * Colour shared by the top project tile and the week-grid tile.
+ * The key is hashed to a hue (step 163, so the draft jobs sit apart), then a
+ * light background and dark text of that hue. The same key always returns the
+ * same colour. A different key returns a different colour unless the hashes
+ * land on the same bucket.
+ */
+export function jobTileColor(text: string, catalogue?: readonly string[]): JobTileColor {
+  const value = jobTileColorKey(text, catalogue);
+  const hash = jobTileHash(value);
+  const hue = (hash * 163) % 360;
+  const sat = 52 + ((hash >>> 8) % 5) * 3;
+  const bgL = 76 + ((hash >>> 16) % 4) * 2;
+  return {
+    background: jobTileHslHex(hue, sat, bgL),
+    color: jobTileHslHex(hue, Math.min(78, sat + 12), 18),
+  };
+}
+
 export function jsonForScript(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }

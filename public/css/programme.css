@@ -284,6 +284,7 @@
   margin: 0;
   padding: 0;
 }
+/* Filled week tiles set background and color from the job text. Stamp chips keep the named classes below. */
 .programme .cell {
   display: block;
   min-width: 48px;
