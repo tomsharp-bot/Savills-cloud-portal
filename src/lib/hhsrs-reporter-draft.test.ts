@@ -467,6 +467,16 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
     assert.doesNotMatch(mtvh.body, /Internal notes/);
     assert.doesNotMatch(mtvh.body, /• Surveyor:/);
+    assert.doesNotMatch(mtvh.body, /Damp or mould/);
+    assert.doesNotMatch(mtvh.body, /Both damp and mould/);
+    const dampCase = draftFromSubmission({
+      ...shared,
+      projectName: "MTVH 2026",
+      category: "Damp & Mould Growth",
+      comment: "Visible mould in the bathroom.",
+    });
+    assert.doesNotMatch(dampCase.body, /Damp or mould/);
+    assert.doesNotMatch(dampCase.body, /Both damp and mould/);
 
     const without = draftFromSubmission({
       ...shared,

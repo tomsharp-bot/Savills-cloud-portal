@@ -37,9 +37,10 @@ const EXCEL_HEADERS = [
   "Photos",
   "Photo names",
   "Email text",
+  "Damp or mould",
 ] as const;
 
-const EXCEL_WIDTHS = [14, 12, 14, 22, 22, 18, 28, 18, 16, 36, 12, 28, 22, 18, 32, 32, 28, 22, 46, 10, 36, 60];
+const EXCEL_WIDTHS = [14, 12, 14, 22, 22, 18, 28, 18, 16, 36, 12, 28, 22, 18, 32, 32, 28, 22, 46, 10, 36, 60, 22];
 
 export type MainLogType = "" | "original" | "correction" | "not_sent";
 
@@ -123,6 +124,8 @@ export type MainLogEntry = {
   body: string;
   photoNames: string[];
   photoCount: number;
+  /** MTVH damp and mould answer. Blank for every other case. */
+  dampMouldChoice: string;
   submissionId: string;
   photoPaths: unknown;
   correctionReason: string;
@@ -584,6 +587,7 @@ type EmailRow = {
     photoPaths: unknown;
     surveyorName: string;
     createdAt: Date;
+    dampMouldChoice?: string | null;
   };
 };
 
@@ -605,6 +609,7 @@ type CaseRow = {
   updatedAt: Date;
   emailSubject: string;
   emailBody: string;
+  dampMouldChoice?: string | null;
 };
 
 function namesOf(value: unknown): string[] {
@@ -638,6 +643,7 @@ function emailEntry(row: EmailRow): MainLogEntry {
     body: row.body,
     photoNames: photos,
     photoCount: photos.length,
+    dampMouldChoice: String(row.submission.dampMouldChoice || "").trim(),
     submissionId: row.submission.id,
     photoPaths: row.submission.photoPaths,
     correctionReason: correction ? row.correctionReason : "",
@@ -681,6 +687,7 @@ function caseEntry(row: CaseRow): MainLogEntry {
     body: row.emailBody || "",
     photoNames: photos,
     photoCount: photos.length,
+    dampMouldChoice: String(row.dampMouldChoice || "").trim(),
     submissionId: row.id,
     photoPaths: row.photoPaths,
     correctionReason: "",
@@ -1123,6 +1130,7 @@ export async function buildMainLogWorkbook(input: MainLogExcelInput): Promise<Bu
       entry.photoCount,
       entry.photoNames.length ? entry.photoNames.join("; ") : null,
       entry.body.trim() ? entry.body : sent ? MISSING_EMAIL_BODY : null,
+      entry.dampMouldChoice || null,
     ];
     const row = sheet.addRow(values);
     row.font = { name: "Calibri", size: 11 };

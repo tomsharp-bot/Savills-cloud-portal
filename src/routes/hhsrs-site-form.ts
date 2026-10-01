@@ -45,6 +45,7 @@ import {
   siteFormProjectFlags,
   siteFormRatingChoices,
   siteSubmissionCallFields,
+  DAMP_MOULD_CHOICES,
   WINDOW_RESTRICTOR_LOCATIONS,
   WINDOW_RESTRICTOR_MATERIALS,
   validatePhotos,
@@ -278,6 +279,7 @@ function renderForm(
     siteOldRatings: HHSRS_SITE_FORM_RATINGS,
     restrictorLocations: WINDOW_RESTRICTOR_LOCATIONS,
     restrictorMaterials: WINDOW_RESTRICTOR_MATERIALS,
+    dampMouldChoices: DAMP_MOULD_CHOICES,
     callBlankReasons: CALL_REF_BLANK_REASONS,
     values: opts.values,
     errors: opts.errors || {},
@@ -430,6 +432,9 @@ hhsrsSiteFormRouter.post("/review", uploadPhotos, async (req: Request, res: Resp
   if (!Object.prototype.hasOwnProperty.call(body, "restrictorMaterial")) {
     values.restrictorMaterial = String(existing?.restrictorMaterial || "").trim();
   }
+  if (!Object.prototype.hasOwnProperty.call(body, "dampMouldChoice")) {
+    values.dampMouldChoice = String(existing?.dampMouldChoice || "").trim();
+  }
   const keep = existing ? keepRequestedPhotos(existing, listKeepPhotoNames(req.body || {})) : [];
   const incoming = filesOf(req);
   const photoError = uploadErrorOf(req) || validatePhotos(incoming, keep.length);
@@ -570,6 +575,7 @@ hhsrsSiteFormRouter.post("/submit", async (req: Request, res: Response) => {
             restrictorMissingCount: checked.data.restrictorMissingCount,
             restrictorLocations: checked.data.restrictorLocations,
             restrictorMaterial: checked.data.restrictorMaterial,
+            dampMouldChoice: checked.data.dampMouldChoice,
             clientCallReference: call.clientCallReference,
             callOutcome: call.callOutcome,
             callNotes: call.callNotes,

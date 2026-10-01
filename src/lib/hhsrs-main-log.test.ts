@@ -282,6 +282,7 @@ function excelEntry(patch: Partial<MainLogEntry> & Pick<MainLogEntry, "key" | "k
     body: "Original body",
     photoNames: ["stair.jpg"],
     photoCount: 1,
+    dampMouldChoice: "",
     submissionId: "sub",
     photoPaths: [],
     correctionReason: "",
@@ -309,6 +310,7 @@ describe("HHSRS main log workbook", () => {
           subject: "CORRECTION: HHSRS hazard",
           body: "Please use the new address",
           sentBy: "Tom Sharp",
+          dampMouldChoice: "Both damp and mould",
         }),
       ],
       filters,
@@ -323,7 +325,7 @@ describe("HHSRS main log workbook", () => {
     assert.match(String(sheet.getRow(2).getCell(1).value), /Exported .* by Tom Sharp/);
     assert.match(String(sheet.getRow(2).getCell(1).value), /MTVH 2026/);
     assert.match(String(sheet.getRow(2).getCell(1).value), /Original/);
-    const headers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].map(
+    const headers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].map(
       (col) => sheet.getRow(4).getCell(col).value
     );
     assert.deepEqual(headers, [
@@ -349,12 +351,15 @@ describe("HHSRS main log workbook", () => {
       "Photos",
       "Photo names",
       "Email text",
+      "Damp or mould",
     ]);
     assert.equal(sheet.getRow(5).getCell(4).value, "Original");
     assert.equal(sheet.getRow(5).getCell(10).value, "Flat 3, 40 Fictional Way, Sampleton");
     assert.equal(sheet.getRow(5).getCell(11).value, "ZZ1 3GH");
     assert.equal(sheet.getRow(5).getCell(15).value, "hhsrs@savillshousing.co.uk");
+    assert.equal(sheet.getRow(5).getCell(23).value, null);
     assert.equal(sheet.getRow(6).getCell(4).value, "Correction");
+    assert.equal(sheet.getRow(6).getCell(23).value, "Both damp and mould");
     assert.equal(sheet.getRow(6).getCell(6).value, "Wrong address");
     assert.match(String(sheet.getRow(6).getCell(5).value), /24\/09\/2026 14:32/);
     const fill = sheet.getRow(6).getCell(1).fill;

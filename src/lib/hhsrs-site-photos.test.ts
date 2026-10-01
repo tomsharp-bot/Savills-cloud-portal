@@ -116,6 +116,7 @@ function draftFor(id: string, photos: HhsrsPhoto[]): HhsrsDraft {
     restrictorMissingCount: "",
     restrictorLocations: "",
     restrictorMaterial: "",
+    dampMouldChoice: "",
     photos,
     createdAt: new Date().toISOString(),
   };

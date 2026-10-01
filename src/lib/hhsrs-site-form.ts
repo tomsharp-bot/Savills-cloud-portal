@@ -240,6 +240,8 @@ export type HhsrsFormValues = {
   restrictorMissingCount: string;
   restrictorLocations: string;
   restrictorMaterial: string;
+  /** MTVH damp and mould only. One of DAMP_MOULD_CHOICES, or empty. */
+  dampMouldChoice: string;
 };
 
 /** Which Extra details blocks apply to a live project name. */
@@ -303,6 +305,19 @@ export function siteFormShowsWindowRestrictor(projectName: string, category: str
   return siteFormProjectFlags(projectName).mtvh && String(category || "") === WINDOW_RESTRICTOR_CATEGORY;
 }
 
+/** Single choice on an MTVH damp and mould case. Hidden for every other project and hazard. */
+export const DAMP_MOULD_CHOICES = ["Damp", "Mould", "Both damp and mould"] as const;
+export type DampMouldChoice = (typeof DAMP_MOULD_CHOICES)[number];
+
+export function canonicalDampMouldChoice(value: unknown): string {
+  const text = String(value ?? "").trim();
+  return (DAMP_MOULD_CHOICES as readonly string[]).includes(text) ? text : "";
+}
+
+export function siteFormShowsDampMouldChoice(projectName: string, category: string): boolean {
+  return siteFormProjectFlags(projectName).mtvh && isDampMouldCategory(category);
+}
+
 export function canonicalRestrictorLocations(value: unknown): string {
   const parts = Array.isArray(value) ? value : String(value ?? "").split(",");
   const allowed = new Set<string>(WINDOW_RESTRICTOR_LOCATIONS);
@@ -331,6 +346,7 @@ export type ReporterCaseDetailExtras = {
   vulnerabilities: boolean;
   cause: boolean;
   restrictors: boolean;
+  dampMould: boolean;
   surveyDate: boolean;
 };
 
@@ -355,6 +371,7 @@ export function reporterCaseDetailExtras(input: {
   restrictorMissingCount?: string | null;
   restrictorLocations?: string | null;
   restrictorMaterial?: string | null;
+  dampMouldChoice?: string | null;
 }): ReporterCaseDetailExtras {
   const projectName = String(input.projectName || "").trim();
   const flags = siteFormProjectFlags(projectName);
@@ -373,6 +390,7 @@ export function reporterCaseDetailExtras(input: {
     vulnerabilities: flags.vulnerabilities,
     cause: flags.vulnerabilities && (siteFormShowsSuspectedCause(projectName, category) || detailFilled(input.suspectedCause)),
     restrictors: flags.mtvh && (siteFormShowsWindowRestrictor(projectName, category) || restrictorStored),
+    dampMould: flags.mtvh && (siteFormShowsDampMouldChoice(projectName, category) || detailFilled(input.dampMouldChoice)),
     surveyDate: detailFilled(input.surveyDate) || Boolean(roster?.extras.survey_date),
   };
 }
@@ -392,6 +410,7 @@ export function surveyorDetailLines(input: {
   restrictorMissingCount?: string | null;
   restrictorLocations?: string | null;
   restrictorMaterial?: string | null;
+  dampMouldChoice?: string | null;
 }): { label: string; value: string }[] {
   const extras = reporterCaseDetailExtras(input);
   const lines: { label: string; value: string }[] = [];
@@ -405,6 +424,7 @@ export function surveyorDetailLines(input: {
   }
   push(extras.vulnerabilities, "Vulnerabilities", input.vulnerabilities);
   push(extras.cause, "Suspected cause", input.suspectedCause);
+  push(extras.dampMould, "Damp or mould", input.dampMouldChoice);
   push(extras.restrictors, "Window restrictors missing", input.restrictorMissingCount);
   push(extras.restrictors, "Location", input.restrictorLocations);
   push(extras.restrictors, "Window material", input.restrictorMaterial);
@@ -499,6 +519,7 @@ export function buildThanksSummary(
     restrictorMissingCount?: string | null;
     restrictorLocations?: string | null;
     restrictorMaterial?: string | null;
+    dampMouldChoice?: string | null;
     photoPaths: unknown;
   },
   photoUrl: (fileName: string) => string
@@ -525,6 +546,8 @@ export function buildThanksSummary(
   if (cause) notes.push({ label: "Suspected cause", value: cause });
   const vulnerabilities = String(row.vulnerabilities || "").trim();
   if (vulnerabilities) notes.push({ label: "Vulnerabilities", value: vulnerabilities });
+  const dampMouldChoice = String(row.dampMouldChoice || "").trim();
+  if (dampMouldChoice) notes.push({ label: "Damp or mould", value: dampMouldChoice });
   const missingRestrictors = String(row.restrictorMissingCount || "").trim();
   if (missingRestrictors) {
     notes.push({ label: "Window restrictors missing", value: missingRestrictors });
@@ -596,6 +619,7 @@ export function emptyHhsrsValues(): HhsrsFormValues {
     restrictorMissingCount: "",
     restrictorLocations: "",
     restrictorMaterial: "",
+    dampMouldChoice: "",
   };
 }
 
@@ -633,6 +657,7 @@ export function readHhsrsValues(body: Record<string, unknown>): HhsrsFormValues 
     restrictorMissingCount: field("restrictorMissingCount"),
     restrictorLocations: canonicalRestrictorLocations(body.restrictorLocations),
     restrictorMaterial: field("restrictorMaterial"),
+    dampMouldChoice: canonicalDampMouldChoice(body.dampMouldChoice),
   };
 }
 
@@ -693,10 +718,13 @@ export function siteFormSectionState(
         canonicalRestrictorLocations(values.restrictorLocations) &&
         (WINDOW_RESTRICTOR_MATERIALS as readonly string[]).includes(String(values.restrictorMaterial || "").trim())
     );
+  const dampMouldOk =
+    !siteFormShowsDampMouldChoice(projectName, values.category) || Boolean(canonicalDampMouldChoice(values.dampMouldChoice));
   const hazard =
     property &&
     Boolean(String(values.category || "").trim() && String(values.rating || "").trim() && String(values.comment || "").trim()) &&
-    restrictorOk;
+    restrictorOk &&
+    dampMouldOk;
   const flags = siteFormProjectFlags(projectName);
   const showCalls = siteFormShowsCallReference(projectName, values.rating);
   let callOk = true;
@@ -759,6 +787,7 @@ export function validateHhsrsForm(
   const showCalls = siteFormShowsCallReference(projectName, values.rating);
   const showCause = siteFormShowsSuspectedCause(projectName, values.category);
   const showRestrictor = siteFormShowsWindowRestrictor(projectName, values.category);
+  const showDampMould = siteFormShowsDampMouldChoice(projectName, values.category);
   const callUnreached = Boolean(values.callUnreached);
   const callReason = String(values.callRefBlankReason || "").trim();
   const callNote = String(values.callUnreachedNote || "").trim();
@@ -792,6 +821,10 @@ export function validateHhsrsForm(
       errors.restrictorMaterial = "Select the window material.";
     }
   }
+  const dampMouldChoice = showDampMould ? canonicalDampMouldChoice(values.dampMouldChoice) : "";
+  if (showDampMould && !dampMouldChoice) {
+    errors.dampMouldChoice = "Select damp, mould, or both.";
+  }
   if (Object.keys(errors).length) return { ok: false, errors };
   return {
     ok: true,
@@ -809,6 +842,7 @@ export function validateHhsrsForm(
       restrictorMissingCount,
       restrictorLocations,
       restrictorMaterial,
+      dampMouldChoice,
       otherDetails: String(values.otherDetails || "").trim(),
       callUnreached: showCalls && skippedCall,
       callRefBlankReason: showCalls && skippedCall ? callReason : "",

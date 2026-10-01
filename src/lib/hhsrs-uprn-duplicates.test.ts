@@ -376,6 +376,7 @@ describe("UPRN duplicates in the database", () => {
       restrictorMissingCount: "",
       restrictorLocations: "",
       restrictorMaterial: "",
+      dampMouldChoice: "",
       photos: saved as HhsrsPhoto[],
       createdAt: new Date().toISOString(),
     };

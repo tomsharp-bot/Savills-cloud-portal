@@ -124,6 +124,7 @@
     var causeValue = fieldText("rv-cause");
     var callStored = fieldText("rv-call-ref") || fieldText("rv-call-reason") || fieldText("rv-call-notes");
     var restrictorStored = fieldText("rv-restrictor-count") || fieldText("rv-restrictor-locations") || fieldText("rv-restrictor-material");
+    var dampChoice = fieldText("rv-damp-mould");
     var damp = /damp/i.test(hazard) && /mould|mold/i.test(hazard);
     var show = {
       calls: !!(extras.calls || (site.mtvh && (rating === "High - Emergency risk" || callStored))),
@@ -134,7 +135,8 @@
       work_order: !!extras.work_order,
       online_form: !!extras.online_form,
       other_details: !!projectCfg,
-      restrictors: !!(site.mtvh && (hazard === "Falling Between Levels" || restrictorStored))
+      restrictors: !!(site.mtvh && (hazard === "Falling Between Levels" || restrictorStored)),
+      damp_mould: !!(site.mtvh && (damp || dampChoice))
     };
     for (var i = 0; i < nodes.length; i++) {
       var key = nodes[i].getAttribute("data-extra");
@@ -791,7 +793,7 @@
   }
 
   function clearBlankReview() {
-    ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-notes", "rv-call-ref", "rv-call-notes", "rv-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"].forEach(function (id) {
+    ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-notes", "rv-call-ref", "rv-call-notes", "rv-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes", "rv-damp-mould"].forEach(function (id) {
       var el = $(id);
       if (el && !el.readOnly) el.value = "";
     });
@@ -874,7 +876,7 @@
   var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1";
   var REVIEW_LAST_KEY = "hhsrs-review-last-key-v1";
   var REVIEW_SENT_CLEAR_KEY = "hhsrs-review-sent-clear";
-  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes"];
+  var REVIEW_CASE_FIELD_IDS = ["rv-uprn", "rv-surveyor", "rv-address", "rv-hazard", "rv-rating", "rv-notes", "rv-call-reason", "rv-call-ref", "rv-call-notes", "rv-survey-date", "rv-onward-topic", "rv-cat1", "rv-cause", "rv-include-cause", "rv-vulnerabilities", "rv-work-order", "rv-online-action", "rv-internal-notes", "rv-damp-mould"];
   var REVIEW_EMAIL_FIELD_IDS = ["hhsrs-to", "hhsrs-cc", "hhsrs-bcc", "hhsrs-subject", "hhsrs-body"];
   var reviewDraftSaveTimer = null;
   var resumeCleared = false;
@@ -1528,7 +1530,7 @@
       if (field.type === "checkbox") field.checked = id === "rv-include-cause";
       else field.value = "";
     });
-    ["rv-restrictor-count", "rv-restrictor-locations", "rv-restrictor-material"].forEach(function (id) {
+    ["rv-restrictor-count", "rv-restrictor-locations", "rv-restrictor-material", "rv-damp-mould"].forEach(function (id) {
       var field = $(id);
       if (!field || field.readOnly) return;
       field.value = "";

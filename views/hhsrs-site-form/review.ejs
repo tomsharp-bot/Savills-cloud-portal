@@ -54,6 +54,9 @@
               <div class="hhsrs-rv-head"><h2 class="hhsrs-rv-title">Hazard</h2><%- edit("step-hazard", "Hazard") %></div>
               <dl class="hhsrs-rv-list">
                 <div><dt>HHSRS category</dt><dd><%= draft.category %></dd></div>
+                <% if (String(draft.dampMouldChoice || "").trim()) { %>
+                  <div><dt>Damp or mould</dt><dd><%= draft.dampMouldChoice %></dd></div>
+                <% } %>
                 <div><dt>Rating</dt><dd><span class="hhsrs-rv-pill <%= tone %>"><%= draft.rating %></span></dd></div>
                 <div><dt>Comment</dt><dd class="prewrap"><%= draft.comment %></dd></div>
                 <% if (String(draft.suspectedCause || "").trim()) { %>
