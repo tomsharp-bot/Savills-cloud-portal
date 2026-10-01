@@ -427,7 +427,7 @@ describe("HHSRS portal send and Main Log record", () => {
       for (const filename of ["sample-photo-1.jpg", "sample-photo-2.jpg"]) {
         const at = raw.indexOf(filename);
         assert.ok(at >= 0, filename);
-        const part = raw.slice(Math.max(0, at - 500), at + filename.length);
+        const part = raw.slice(at, at + 400);
         assert.match(part, /Content-Disposition:\s*attachment/i);
         assert.doesNotMatch(part, /Content-Disposition:\s*inline/i);
         assert.doesNotMatch(part, /Content-ID:/i);

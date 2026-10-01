@@ -181,8 +181,9 @@ describe("HHSRS email signature", () => {
       assert.doesNotMatch(unfolded, />a4a6fb82-7a49-4f8e-9262-e41674058ece\.jpg</);
       const photoNameAt = raw.indexOf("a4a6fb82-7a49-4f8e-9262-e41674058ece.jpg");
       assert.ok(photoNameAt >= 0);
-      const photoPart = raw.slice(Math.max(0, photoNameAt - 500), photoNameAt + 80);
+      const photoPart = raw.slice(photoNameAt, photoNameAt + 400);
       assert.match(photoPart, /Content-Disposition:\s*attachment/i);
+      assert.doesNotMatch(photoPart, /Content-Disposition:\s*inline/i);
       assert.doesNotMatch(photoPart, /Content-ID:/i);
       const logoStart = signatureLogoBytes().toString("base64").slice(0, 48);
       assert.equal(raw.includes(logoStart), true);
