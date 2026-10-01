@@ -197,44 +197,67 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.equal(input.surveyDate, "2026-09-20");
   });
 
-  it("puts a couldn't-get-through note on the existing Attempted call bullet", () => {
-    const onward = draftFromSubmission({
-      projectName: "Onward 2026",
+  it("says the project call centre could not be contacted when there is no call reference", () => {
+    const shared = {
       fullAddress: "1 High Street",
       postcode: "EX1 1AA",
       uprn: "100123",
       surveyDate: "2026-09-20",
       category: "Electrical Hazards",
       rating: "High",
-      comment: "ignored",
-      clientDescription: "Exposed wire to hallway ceiling.",
+      comment: "Exposed wire to hallway ceiling.",
       clientCallReference: "",
       callOutcome: "Attempted",
       callNotes: "Voicemail full",
+      photoCount: 0,
+    };
+    const onward = draftFromSubmission({
+      ...shared,
+      projectName: "Onward 2026",
+      clientDescription: "Exposed wire to hallway ceiling.",
       onwardTopic: "Electrical",
       cat1Confirmed: true,
-      photoCount: 0,
     });
-    assert.match(onward.body, /• Onward call: Voicemail full/);
-    assert.doesNotMatch(onward.body, /Onward call reference/);
-    assert.doesNotMatch(onward.body, /Call reference: couldn't get through/i);
+    assert.equal(
+      onward.body.split("\n").find((line) => line.startsWith("• Call reference:")),
+      "• Call reference: We were unable to contact the Onward Call Centre to report the issue."
+    );
+    assert.doesNotMatch(onward.body, /• Onward call:/);
+    assert.doesNotMatch(onward.body, /Voicemail full/);
 
     const saxon = draftFromSubmission({
+      ...shared,
       projectName: "Saxon Weald 2026 Phase 4",
-      fullAddress: "1 High Street",
-      postcode: "EX1 1AA",
-      uprn: "100123",
-      surveyDate: "2026-09-20",
       category: "Damp & Mould Growth",
-      rating: "High",
       comment: "Visible mould in bathroom.",
-      clientCallReference: "",
-      callOutcome: "Attempted",
-      callNotes: "Voicemail full",
       photoCount: 1,
     });
-    assert.match(saxon.body, /• Call: Voicemail full/);
-    assert.doesNotMatch(saxon.body, /Call reference/);
+    assert.match(
+      saxon.body,
+      /• Call reference: We were unable to contact the Saxon Weald Call Centre to report the issue\./
+    );
+    assert.doesNotMatch(saxon.body, /• Call:/);
+
+    const a2 = draftFromSubmission({
+      ...shared,
+      projectName: "A2D 2026 Phase 4",
+    });
+    assert.match(
+      a2.body,
+      /• Call reference: We were unable to contact the A2Dominion Call Centre to report the issue\./
+    );
+
+    const mtvh = draftFromSubmission({
+      ...shared,
+      projectName: "MTVH Pilot 2026",
+      rating: "High - Significant risk",
+      callOutcome: "",
+      callNotes: "",
+    });
+    assert.match(
+      mtvh.body,
+      /• Call reference: We were unable to contact the MTVH Call Centre to report the issue\./
+    );
   });
 
   it("uses the site-form call labels for projects that need a call reference", () => {
@@ -257,7 +280,9 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.match(withRef.body, /• Call reference: CR-9/);
     assert.doesNotMatch(withRef.body, /Why the call reference is blank/);
+    assert.doesNotMatch(withRef.body, /unable to contact/i);
 
+    const missed = "• Call reference: We were unable to contact the Vico Call Centre to report the issue.";
     const noAnswer = draftFromSubmission({
       ...shared,
       projectName: "Vico 2026",
@@ -266,7 +291,8 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callNotes: "No answer",
     });
     assert.doesNotMatch(noAnswer.body, /Why the call reference is blank/);
-    assert.doesNotMatch(noAnswer.body, /call reference/i);
+    assert.equal(noAnswer.body.split("\n").find((line) => line.startsWith("• Call reference:")), missed);
+    assert.doesNotMatch(noAnswer.body, /No answer/);
     assert.doesNotMatch(noAnswer.body, /• Call:/);
     assert.match(noAnswer.body, /• Comments: Visible mould in bathroom\./);
     assert.match(noAnswer.body, /• Survey date: 20\/09\/2026/);
@@ -280,7 +306,7 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.doesNotMatch(busy.body, /Why the call reference is blank/);
     assert.doesNotMatch(busy.body, /Engaged\/busy/);
-    assert.doesNotMatch(busy.body, /call reference/i);
+    assert.equal(busy.body.split("\n").find((line) => line.startsWith("• Call reference:")), missed);
 
     const other = draftFromSubmission({
       ...shared,
@@ -291,7 +317,7 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.doesNotMatch(other.body, /Why the call reference is blank/);
     assert.doesNotMatch(other.body, /Voicemail full/);
-    assert.doesNotMatch(other.body, /call reference/i);
+    assert.equal(other.body.split("\n").find((line) => line.startsWith("• Call reference:")), missed);
 
     const mtvh = draftFromSubmission({
       ...shared,
@@ -301,6 +327,7 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       callNotes: "No answer",
     });
     assert.match(mtvh.body, /• Call reference: CR-9/);
+    assert.doesNotMatch(mtvh.body, /unable to contact/i);
     assert.doesNotMatch(mtvh.body, /Why the call reference is blank/);
     assert.doesNotMatch(mtvh.body, /• Call:/);
     assert.doesNotMatch(mtvh.body, /No answer/);
@@ -480,7 +507,10 @@ describe("HHSRS Reporter draftFromSubmission", () => {
       restrictorLocations: "",
       restrictorMaterial: "",
     });
-    assert.doesNotMatch(without.body, /Call reference/);
+    assert.match(
+      without.body,
+      /• Call reference: We were unable to contact the MTVH Call Centre to report the issue\./
+    );
     assert.doesNotMatch(without.body, /Any other details/);
     assert.doesNotMatch(without.body, /restrictors missing/i);
     assert.doesNotMatch(without.body, /• Locations?:/);
@@ -554,6 +584,10 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     });
     assert.doesNotMatch(vicoNoCause.body, /Cause:/);
     assert.doesNotMatch(vicoNoCause.body, /Vulnerabilities/);
+    assert.match(
+      vicoNoCause.body,
+      /• Call reference: We were unable to contact the Vico Call Centre to report the issue\./
+    );
     assert.doesNotMatch(vicoNoCause.body, /Why the call reference is blank/);
     assert.doesNotMatch(vicoNoCause.body, /No answer/);
     assert.doesNotMatch(vicoNoCause.body, /Any other details/);
@@ -621,7 +655,10 @@ describe("HHSRS Reporter draftFromSubmission", () => {
     assert.match(posted.body, /• Locations: Kitchen/);
     assert.match(posted.body, /• Window material: Timber/);
     assert.doesNotMatch(posted.body, /Tenant was home/);
-    assert.doesNotMatch(posted.body, /Call reference/);
+    assert.match(
+      posted.body,
+      /• Call reference: We were unable to contact the MTVH Call Centre to report the issue\./
+    );
     assert.doesNotMatch(posted.body, /CR-9/);
   });
 

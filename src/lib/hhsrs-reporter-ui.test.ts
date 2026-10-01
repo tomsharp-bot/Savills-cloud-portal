@@ -156,8 +156,12 @@ describe("HHSRS Reporter UI helpers", () => {
     const attemptedDraft = draftEmailFromReviewFields(attempted);
     assert.equal(attemptedDraft.to, "");
     assert.equal(attemptedDraft.cc, "");
-    assert.match(attemptedDraft.body, /• Onward call: Voicemail full/);
+    assert.match(
+      attemptedDraft.body,
+      /• Call reference: We were unable to contact the Onward Call Centre to report the issue\./
+    );
     assert.doesNotMatch(attemptedDraft.body, /couldn't get through/i);
+    assert.doesNotMatch(attemptedDraft.body, /Voicemail full/);
 
     const edited = mergeReviewDraftFields(row, {
       notes: "Loose socket in the kitchen.",
