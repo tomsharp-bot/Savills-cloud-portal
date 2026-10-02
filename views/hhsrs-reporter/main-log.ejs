@@ -20,6 +20,7 @@
       href: row.href,
       rowClass: row.selected ? "is-sel" : "",
       amendedNote: row.correctedNote ? "Amended" : "",
+      showReviewed: row.kind === "dismissed",
       rowNote: row.kind === "dismissed" ? (row.logLine || "") : ""
     };
   });

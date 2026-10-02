@@ -2996,7 +2996,12 @@ tr.is-new-log td { background: #f5f3ff; }
   font-family: var(--font);
   table-layout: auto;
   width: max-content;
-  min-width: 100%;
+  min-width: 0;
+}
+/* Shared list minimums stretch a short Main Log value. Here a column is only as wide as its text. */
+.hhsrs-reporter .ml-page .pending-issues-table th,
+.hhsrs-reporter .ml-page .pending-issues-table td {
+  min-width: 0;
 }
 .ml-page .pending-issues-table col.c-ref,
 .ml-page .pending-issues-table col.c-proj,
@@ -3364,12 +3369,37 @@ tr.is-new-log td { background: #f5f3ff; }
   font-weight: 650;
 }
 .hhsrs-reporter .btn-dismiss-hazard:hover { background: #fdf6f6; }
-.hhsrs-reporter .ml-row-note {
-  display: block;
-  margin-top: 4px;
+.hhsrs-reporter .ml-page .ml-row-note {
+  display: inline;
+  position: relative;
+  margin: 0 0 0 0.35rem;
   color: #8a1f1f;
-  font-size: 0.82rem;
-  font-weight: 650;
+  font-size: inherit;
+  font-weight: 700;
+  cursor: default;
+  white-space: nowrap;
+}
+.hhsrs-reporter .ml-page .ml-row-note .ml-row-note-full {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 1.35rem;
+  z-index: 6;
+  width: max-content;
+  max-width: 280px;
+  background: #222;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  white-space: normal;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+.hhsrs-reporter .ml-page .ml-row-note:hover .ml-row-note-full,
+.hhsrs-reporter .ml-page .ml-row-note:focus-within .ml-row-note-full {
+  display: block;
 }
 .hhsrs-reporter .finish-bar .send-block {
   display: flex;

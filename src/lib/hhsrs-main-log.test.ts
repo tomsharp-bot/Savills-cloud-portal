@@ -256,9 +256,13 @@ describe("HHSRS main log arrangement", () => {
     const split = splitAddress("Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH", "ZZ1 3GH");
     assert.equal(split.line, "Flat 5, 40 Fictional Way, Sampleton");
     assert.equal(split.full, "Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH");
-    assert.equal(addressFirstLine(split.full), "Flat 5");
+    assert.equal(addressFirstLine(split.full), "Flat 5, 40 Fictional Way");
     assert.equal(addressFirstLine("12 Laburnum Crescent, London SE5 8AB"), "12 Laburnum Crescent");
+    assert.equal(addressFirstLine("12, Moor Cross, Bude, EX23 9EH"), "12, Moor Cross");
+    assert.equal(addressFirstLine("3, A, New Road, Bude"), "3, A, New Road");
+    assert.equal(addressFirstLine("G12, Quay Street, Bude, EX23 8JZ"), "G12, Quay Street");
     assert.equal(addressFirstLine("3 Peregrine Road"), "3 Peregrine Road");
+    assert.equal(addressFirstLine("12, EX23 9EH"), "12");
     assert.equal(addressFirstLine("  "), "");
     assert.match(describeMainLogFilters(blankFilters({ type: "not_sent", q: "Moor" }), 1), /Not sent from portal/);
     assert.match(describeMainLogFilters(blankFilters({ q: "Moor" }), 1), /“Moor”/);
@@ -607,9 +611,9 @@ describe("HHSRS main log filters", () => {
     assert.match(tbody, /<td class="col-actioned ml-actioned"><b>24\/09\/2026<\/b><\/td>/);
     assert.match(tbody, /<td class="col-by ml-actioned-by"><b>Carly Farrell<\/b><\/td>/);
     assert.match(tbody, /<td class="col-by ml-actioned-by"><b>Alex Surveyor<\/b><\/td>/);
-    assert.match(tbody, /<strong>Flat 3<\/strong>/);
+    assert.match(tbody, /<strong>Flat 3, 40 /);
     assert.match(tbody, /class="ml-addr-full">Flat 3, 40 /);
-    assert.doesNotMatch(tbody, /<strong>Flat 3, 40 /);
+    assert.doesNotMatch(tbody, /<strong>Flat 3<\/strong>/);
 
     const detailsPage = await request(app, "GET", `/HHSRSreporter/main-log/${sentCase.id}/details`, { cookie });
     assert.equal(detailsPage.status, 200);
