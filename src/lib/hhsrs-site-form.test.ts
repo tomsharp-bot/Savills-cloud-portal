@@ -40,6 +40,7 @@ import {
   siteFormRatingChoices,
   siteFormSectionState,
   siteFormShowsCallReference,
+  siteFormShowsExtraDetailsWording,
   siteFormShowsSuspectedCause,
   siteFormShowsWindowRestrictor,
   reporterCaseDetailExtras,
@@ -338,6 +339,14 @@ describe("validateHhsrsForm", () => {
     assert.equal(siteFormShowsCallReference("MTVH 2026", "High - Significant risk"), false);
     assert.equal(siteFormShowsCallReference("MTVH 2026", "High - Emergency risk"), true);
     assert.equal(siteFormShowsCallReference("Onward 2026", "Low"), true);
+    assert.equal(siteFormShowsExtraDetailsWording("MTVH 2026", true), false);
+    assert.equal(siteFormShowsExtraDetailsWording("MTVH 2026", false), false);
+    assert.equal(siteFormShowsExtraDetailsWording("Onward 2026", true), true);
+    assert.equal(siteFormShowsExtraDetailsWording("Onward 2026", false), false);
+    assert.equal(siteFormShowsExtraDetailsWording("Vico 2026", true), true);
+    assert.equal(siteFormShowsExtraDetailsWording("Vico 2026", false), false);
+    assert.equal(siteFormShowsExtraDetailsWording("Saxon Weald 2026 Phase 4", true), true);
+    assert.equal(siteFormShowsExtraDetailsWording("Gateway 2026", true), false);
     const mtvhEmergency = reporterCaseDetailExtras({
       projectName: "MTVH 2026",
       category: "Falling Between Levels",
@@ -925,7 +934,10 @@ describe("HHSRS site form project option flags", () => {
     assert.match(flowJs, /Falling Between Levels/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsAlways"));
     assert.match(hazardFn, /suspectedCause/);
-    assert.match(flowJs, /if \(extrasHasField\(\) && \(!extrasDone\(\) \|\| !extrasPassed\)\)/);
+    assert.match(flowJs, /if \(extrasHasField\(\) && !extrasDone\(\)\)/);
+    assert.doesNotMatch(flowJs, /!extrasDone\(\) \|\| !extrasPassed/);
+    assert.match(flowJs, /function syncCallWording/);
+    assert.match(flowJs, /callsAlways\(\) && section && !section\.hidden/);
     const reviewDraft = {
       ...emptyHhsrsValues(),
       id: "draft-1",

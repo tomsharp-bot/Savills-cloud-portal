@@ -605,7 +605,24 @@
     return "";
   }
 
+  function syncCallWording() {
+    var wording = $("call-ref-wording");
+    if (!wording) return;
+    var section = $("extra-box");
+    // Onward and Vico (data-calls) only, and only while Extra details is on screen.
+    // MTVH can open the call-reference box for an emergency rating, but not this sentence.
+    wording.hidden = !(callsAlways() && section && !section.hidden);
+  }
+
   function updateFlow(opts) {
+    try {
+      updateFlowBody(opts);
+    } finally {
+      syncCallWording();
+    }
+  }
+
+  function updateFlowBody(opts) {
     opts = opts || {};
     var announce = !!opts.announce;
     var project = val("projectId");
@@ -671,9 +688,9 @@
 
     if (extrasSectionShown()) showStep(stepEx, announce);
     else hideStep(stepEx);
-    // Stay on Extra details until the surveyor leaves that section. Hazard still opens it.
-    // With no remaining field in the section, it does not hold the surveyor.
-    if (extrasHasField() && (!extrasDone() || !extrasPassed)) {
+    // Open the next section as soon as Extra details is complete, including a filled
+    // call reference. Do not wait for Tab or for focus to leave the box.
+    if (extrasHasField() && !extrasDone()) {
       hideStep(stepPh);
       if (actions) actions.hidden = true;
       setCurrent(stepEx);
