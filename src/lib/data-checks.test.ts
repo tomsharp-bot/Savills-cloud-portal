@@ -119,7 +119,10 @@ describe("Data Review practice page hosting", () => {
     const parts = [
       "function fmt(v){",
       "function mdfNorm(s){",
+      "const SEC_KINDS = {q:1, qa:1, qr:1, qq:1, y:1, ia:1, ir:1, iq:1, p:1};",
       "function sectionFromHeader(header, comps){",
+      "function headerGroup(header){",
+      "function sectionOfCol(col, B){",
       "function headerStripes(cols, sectionOf){",
       "function excelCol(n){",
       "function freezePaneXml(y, x){",
@@ -127,13 +130,15 @@ describe("Data Review practice page hosting", () => {
     const sandbox: {
       __api?: {
         sectionFromHeader: (header: string, comps: Record<string, { section?: string }>) => string;
+        headerGroup: (header: string) => string;
+        sectionOfCol: (col: { section?: string; key?: string; header?: string; name?: string }, B: { comps?: Record<string, { section?: string }> }) => string;
         headerStripes: (cols: { section?: string }[], sectionOf: (col: { section?: string }) => string) => string[];
         freezePaneXml: (y: number, x: number) => string;
       };
     } = {};
     vm.runInNewContext(
       parts.join("\n") +
-        "\nglobalThis.__api = { sectionFromHeader: sectionFromHeader, headerStripes: headerStripes, freezePaneXml: freezePaneXml };\n",
+        "\nglobalThis.__api = { sectionFromHeader: sectionFromHeader, headerGroup: headerGroup, sectionOfCol: sectionOfCol, headerStripes: headerStripes, freezePaneXml: freezePaneXml };\n",
       sandbox
     );
     const api = sandbox.__api!;
@@ -161,6 +166,32 @@ describe("Data Review practice page hosting", () => {
     assert.equal(api.sectionFromHeader("Green Energy - PV Panels - Age", comps), "Roofs");
     assert.equal(api.sectionFromHeader("Property Type", comps), "");
     assert.equal(api.sectionFromHeader("Not a component", comps), "");
+
+    assert.equal(api.headerGroup("Main Roof - Age"), "Main Roof");
+    assert.equal(api.headerGroup("Green Energy - PV Panels - Age"), "Green Energy");
+    assert.equal(api.headerGroup("Soffits-Fascias-Bargeboards - SFB - PVCu - Age"), "Soffits-Fascias-Bargeboards");
+    assert.equal(api.headerGroup("UPRN"), "");
+    assert.equal(api.headerGroup("General Comments"), "");
+    assert.equal(api.headerGroup("HHSRS Issue 1 Category"), "");
+    assert.equal(api.headerGroup("Front Elevation Photo"), "");
+
+    const ofEmpty = (col: { section?: string; key?: string; header?: string }) => api.sectionOfCol(col, { comps: {} });
+    assert.equal(
+      JSON.stringify(api.headerStripes([
+        { key: "c|main roof - age|1", header: "Main Roof - Age" },
+        { key: "c|main roof - covering|2", header: "Main Roof - Covering" },
+        { key: "c|green energy - pv panels - age|3", header: "Green Energy - PV Panels - Age" },
+        { key: "u|uprn", header: "UPRN" },
+        { key: "g|comments", header: "General Comments" },
+      ], ofEmpty)),
+      JSON.stringify(["hb", "hyel", "hb", "", ""])
+    );
+    assert.equal(api.sectionOfCol({ key: "q|Green Energy|age", header: "Green Energy - PV Panels - Age" }, { comps }), "Roofs");
+    assert.equal(api.sectionOfCol({ key: "q|Main Roof|age", header: "Main Roof - Age" }, { comps }), "Roofs");
+    assert.match(source, /#grid \.h\.hb:not\(\.f\)/);
+    assert.match(source, /#grid \.h\.hyel:not\(\.f\) \.hn\{background:#FFF4CC\}/);
+    assert.match(source, /stripeBg \? ';background:' \+ stripeBg : ''/);
+    assert.match(source, /style="background:\$\{stripeBg\}"/);
 
     const pane = api.freezePaneXml(9, 4);
     assert.match(pane, /xSplit="4"/);
