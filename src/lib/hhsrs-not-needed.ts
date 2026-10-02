@@ -1,8 +1,10 @@
 /**
  * Duplicates & errors. A case leaves Pending with a reason. Nothing is deleted.
  * Move back to Pending restores status "new" and clears the current fields.
- * notNeededLog keeps the move, the restore, and a "not a duplicate" choice.
- * That choice also sets notADuplicate so a later UPRN sweep cannot file the same case again.
+ * notNeededLog keeps the move, the restore, a "not a duplicate" choice, and an "it's a duplicate" choice.
+ * "Not a duplicate" also sets notADuplicate so a later UPRN sweep cannot file the same case again.
+ * "It's a duplicate" sets duplicateConfirmed. The pair leaves this list. The newer case stays
+ * a pending Dupe until that case is completed or cleared. Nothing is deleted and no email is sent.
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
@@ -20,7 +22,7 @@ export const NOT_NEEDED_REASONS = [
 export type NotNeededReason = (typeof NOT_NEEDED_REASONS)[number]["id"];
 
 export type NotNeededLogEntry = {
-  action: "moved" | "restored" | "not_duplicate";
+  action: "moved" | "restored" | "not_duplicate" | "is_duplicate";
   reason: string;
   duplicateOf: string;
   note: string;
@@ -51,7 +53,9 @@ export function readNotNeededLog(value: unknown): NotNeededLogEntry[] {
           ? "moved"
           : row.action === "not_duplicate"
             ? "not_duplicate"
-            : "";
+            : row.action === "is_duplicate"
+              ? "is_duplicate"
+              : "";
     if (!action) continue;
     entries.push({
       action,
@@ -376,6 +380,81 @@ export async function markCaseNotADuplicate(args: {
         partnerReference,
         partnerEmailed,
       };
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not update the case.";
+    return { ok: false, error: message };
+  }
+}
+
+async function writeDuplicateConfirmed(
+  tx: Prisma.TransactionClient,
+  row: LockedMoveRow,
+  by: string,
+  at: Date
+): Promise<void> {
+  const log = readNotNeededLog(row.notNeededLog);
+  log.push({
+    action: "is_duplicate",
+    reason: row.notNeededReason,
+    duplicateOf: row.notNeededDuplicateOf,
+    note: row.notNeededNote,
+    by,
+    at: at.toISOString(),
+  });
+  await tx.hhsrsSiteSubmission.update({
+    where: { id: row.id },
+    data: {
+      duplicateConfirmed: true,
+      notNeededLog: log,
+      lastEditedBy: by,
+    },
+  });
+}
+
+/**
+ * The office confirmed this comparison is a duplicate.
+ * The newer case stays filed as a duplicate, so Pending still marks it Dupe
+ * until that case is completed or cleared. duplicateConfirmed takes the pair
+ * off Duplicates & errors. The original already-sent case is not rewritten
+ * when it is already in the Main Log. If that original is itself on the list,
+ * it leaves too. Neither case is deleted, and no email is sent.
+ */
+export async function confirmCaseIsADuplicate(args: {
+  id: string;
+  by: string;
+}): Promise<{ ok: true; reference: string; originalId: string } | { ok: false; error: string }> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const peek = await tx.hhsrsSiteSubmission.findUnique({
+        where: { id: args.id },
+        select: { id: true, notNeededDuplicateOf: true },
+      });
+      if (!peek) return { ok: false, error: "Case not found." };
+
+      const hintedPartnerId = await comparisonPartnerId(tx, peek.notNeededDuplicateOf, peek.id);
+      if (!hintedPartnerId) return { ok: false, error: "The original case was not found." };
+
+      const locked = new Map<string, LockedMoveRow>();
+      for (const id of [peek.id, hintedPartnerId].sort()) {
+        const row = await lockCase(tx, id);
+        if (row) locked.set(row.id, row);
+      }
+
+      const row = locked.get(peek.id) || null;
+      if (!row) return { ok: false, error: "Case not found." };
+      if (row.status !== "not_needed") return { ok: false, error: "This case is not in Duplicates & Errors." };
+
+      const partnerId = await comparisonPartnerId(tx, row.notNeededDuplicateOf, row.id);
+      let partner = partnerId ? locked.get(partnerId) || null : null;
+      if (partnerId && !partner) partner = await lockCase(tx, partnerId);
+      if (!partner) return { ok: false, error: "The original case was not found." };
+
+      const at = new Date();
+      await writeDuplicateConfirmed(tx, row, args.by, at);
+      if (listedDuplicate(partner)) await writeDuplicateConfirmed(tx, partner, args.by, at);
+
+      return { ok: true, reference: row.reference || "", originalId: partner.id };
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update the case.";

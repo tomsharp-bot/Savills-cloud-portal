@@ -60,6 +60,7 @@ describe("pending issue list query", () => {
     const dupes = pendingDuplicateListArgs();
     assert.equal(dupes.where.status, "not_needed");
     assert.equal(dupes.where.notNeededReason, "duplicate");
+    assert.equal("duplicateConfirmed" in dupes.where, false);
     assert.equal("take" in dupes, false);
     const waiting = pendingIssueListArgs();
     assert.deepEqual([...waiting.where.status.in], ["new", "in_review", "email_ready"]);

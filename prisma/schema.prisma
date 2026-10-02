@@ -384,6 +384,9 @@ model HhsrsSiteSubmission {
   notNeededLog         Json      @default("[]")
   /// Office said this case is not a duplicate. Automatic UPRN filing leaves it alone.
   notADuplicate        Boolean   @default(false)
+  /// Office confirmed this comparison is a duplicate. The pair leaves Duplicates & errors.
+  /// A newer case stays on Pending marked Dupe until that case is completed or cleared.
+  duplicateConfirmed   Boolean   @default(false)
   /// Surveyor answers at the office's first check. Empty until the office saves, sends, or dismisses.
   surveyorCheck        Json      @default("{}")
   /// test | hazard, or an older free-text decision. Kept after restore so abandon can repeat the line. Cleared when sent.

@@ -82,6 +82,9 @@
           <form method="post" action="<%= reporterBase %>/duplicates/<%= item.id %>/not-duplicate">
             <button type="submit" class="btn">Not a duplicate</button>
           </form>
+          <form method="post" action="<%= reporterBase %>/duplicates/<%= item.id %>/is-duplicate">
+            <button type="submit" class="btn">It's a duplicate</button>
+          </form>
           <% if (item.amendUrl) { %>
           <a class="btn" href="<%= item.amendUrl %>">Amend and resend</a>
           <% } %>
