@@ -28,7 +28,15 @@
         <% } %>
         <% rows.forEach((item) => { %>
           <tr class="dup-row <%= item.open ? "is-open" : "" %>" <% if (item.canCompare) { %>data-dup-id="<%= item.id %>" tabindex="0"<% } %>>
-            <td><%= item.address %></td>
+            <td class="dup-addr">
+              <% const addrLine = addressFirstLine(item.address); %>
+              <span class="ml-addr-hover">
+                <strong><%= addrLine %></strong>
+                <% if (item.address && addrLine && item.address !== addrLine) { %>
+                  <span class="ml-addr-full"><%= item.address %></span>
+                <% } %>
+              </span>
+            </td>
             <td><%= item.uprn %></td>
             <td><%= item.matches %></td>
             <td><%= item.whereFirst %></td>

@@ -115,6 +115,11 @@ a.linkish.active, .linkish.active {
   margin: 0 auto;
   min-height: calc(100vh - 120px);
 }
+/* Case lists: grey card is 1.5× the old 1246px (1869px). Sidebar stays 220px. 220 + 14 + 1869 = 2103. */
+body.hhsrs-reporter:has(.pending-issues-table) .app-shell,
+body.hhsrs-reporter:has(.dup-table) .app-shell {
+  max-width: 2103px;
+}
 .side-tabs {
   flex: 0 0 var(--sidebar-w);
   width: var(--sidebar-w);
@@ -3073,6 +3078,48 @@ tr.is-new-log td { background: #f5f3ff; }
 }
 .ml-page .ml-addr-hover:hover .ml-addr-full,
 .ml-page .ml-addr-hover:focus-within .ml-addr-full { display: block; }
+body.hhsrs-reporter:not(:has(.ml-page)) .pending-issues-table td.addr-cell,
+body.hhsrs-reporter .dup-table td.dup-addr { overflow: visible; }
+body.hhsrs-reporter:not(:has(.ml-page)) .pending-issues-table .ml-addr-hover,
+body.hhsrs-reporter:not(:has(.ml-page)) .pending-issues-table .ml-addr-hover > strong,
+body.hhsrs-reporter .dup-table .ml-addr-hover,
+body.hhsrs-reporter .dup-table .ml-addr-hover > strong { white-space: nowrap; }
+body.hhsrs-reporter:not(:has(.ml-page)) .pending-issues-table .ml-addr-hover,
+body.hhsrs-reporter .dup-table .ml-addr-hover {
+  position: relative;
+  display: block;
+  width: max-content;
+  cursor: default;
+}
+body.hhsrs-reporter:not(:has(.ml-page)) .ml-addr-full,
+body.hhsrs-reporter .dup-table .ml-addr-full {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 1.35rem;
+  z-index: 6;
+  width: 220px;
+  background: #222;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  white-space: normal;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+body.hhsrs-reporter:not(:has(.ml-page)) .pending-issues-table td.addr-cell:hover,
+body.hhsrs-reporter:not(:has(.ml-page)) .pending-issues-table td.addr-cell:focus-within,
+body.hhsrs-reporter .dup-table td.dup-addr:hover,
+body.hhsrs-reporter .dup-table td.dup-addr:focus-within {
+  position: relative;
+  z-index: 7;
+}
+body.hhsrs-reporter:not(:has(.ml-page)) .ml-addr-hover:hover .ml-addr-full,
+body.hhsrs-reporter:not(:has(.ml-page)) .ml-addr-hover:focus-within .ml-addr-full,
+body.hhsrs-reporter .dup-table .ml-addr-hover:hover .ml-addr-full,
+body.hhsrs-reporter .dup-table .ml-addr-hover:focus-within .ml-addr-full { display: block; }
 .ml-page .pending-issues-table td.ml-actioned,
 .ml-page .pending-issues-table td.ml-actioned-by {
   font-weight: 700;

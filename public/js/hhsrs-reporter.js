@@ -2076,9 +2076,58 @@
     attPopPinned = !!pinned;
     anchor.classList.add("is-pop-open");
     ensureAttPhotoPop();
+    if (anchor.closest && anchor.closest(".pending-issues-table")) attPopEl.classList.add("ml-photo-source");
+    else attPopEl.classList.remove("ml-photo-source");
     attPopEl.setAttribute("aria-hidden", "false");
     renderAttPopThumbs(photos);
     positionAttPop(anchor);
+  }
+
+  function listFullPhoto() {
+    return document.getElementById("ml-photo-full");
+  }
+
+  function closeListFullPhoto(event) {
+    var full = listFullPhoto();
+    if (!full) return false;
+    if (event && event.type === "mouseleave") {
+      var next = event.relatedTarget;
+      if (next && full.contains(next)) return false;
+    }
+    if (!full.classList.contains("is-show")) return false;
+    full.classList.remove("is-show");
+    full.hidden = true;
+    var img = full.querySelector("img");
+    if (img) {
+      img.removeAttribute("src");
+      img.alt = "";
+    }
+    return true;
+  }
+
+  function openListFullPhoto(photo) {
+    var full = listFullPhoto();
+    if (!full || !photo || !photo.url) return;
+    var img = full.querySelector("img");
+    if (!img) return;
+    hideAttPop(true);
+    img.src = photo.url;
+    img.alt = photo.caption || "Photo";
+    full.hidden = false;
+    full.classList.add("is-show");
+  }
+
+  function wireListFullPhoto() {
+    var full = listFullPhoto();
+    if (!full || full.getAttribute("data-list-photo") === "1") return;
+    full.setAttribute("data-list-photo", "1");
+    var img = full.querySelector("img");
+    if (img) img.addEventListener("mouseleave", closeListFullPhoto);
+    full.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.target === full) closeListFullPhoto();
+    });
   }
 
   function wireAttPhotoPopovers() {
@@ -2097,7 +2146,30 @@
       scheduleHideAttPop();
     });
     document.addEventListener("click", function (e) {
+      var full = listFullPhoto();
+      if (full && full.classList.contains("is-show") && full.contains(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.target === full) closeListFullPhoto();
+        return;
+      }
       if (e.target.closest && e.target.closest("#main-log-table .photo-att-icon")) return;
+      var listIcon = e.target.closest && e.target.closest(".pending-issues-table .photo-att-icon");
+      if (listIcon) {
+        e.preventDefault();
+        e.stopPropagation();
+        var first = photosFromButton(listIcon)[0];
+        if (first) openListFullPhoto(first);
+        return;
+      }
+      var thumbImg = e.target.closest && e.target.closest("#photo-att-pop img");
+      var openIcon = document.querySelector(".pending-issues-table .photo-att-icon.is-pop-open");
+      if (thumbImg && openIcon && !(openIcon.closest && openIcon.closest("#main-log-table"))) {
+        e.preventDefault();
+        e.stopPropagation();
+        openListFullPhoto({ url: thumbImg.getAttribute("src"), caption: thumbImg.getAttribute("alt") });
+        return;
+      }
       var btn = e.target.closest && e.target.closest(".photo-att-icon");
       if (btn) {
         e.preventDefault();
@@ -2114,8 +2186,11 @@
       hideAttPop(true);
     }, true);
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") hideAttPop(true);
+      if (e.key !== "Escape") return;
+      if (closeListFullPhoto()) return;
+      hideAttPop(true);
     });
+    wireListFullPhoto();
     window.addEventListener("scroll", function () {
       if (attPopEl && attPopEl.classList.contains("is-visible")) hideAttPop(true);
     }, true);

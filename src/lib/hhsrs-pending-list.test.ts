@@ -163,7 +163,7 @@ function references(html: string, tableId: string): string[] {
 function addresses(html: string, tableId: string): string[] {
   const body = tableSlice(html, tableId);
   const tbody = body.slice(body.indexOf("<tbody>"));
-  return [...tbody.matchAll(/<td class="addr-cell[^"]*">\s*<strong>([^<]*)<\/strong>/g)].map((match) => match[1]);
+  return [...tbody.matchAll(/<td class="addr-cell[^"]*">[\s\S]*?<strong>([^<]*)<\/strong>/g)].map((match) => match[1]);
 }
 
 function rowCount(html: string, tableId: string): number {
@@ -184,7 +184,7 @@ function isPendingDupeRow(row: string): boolean {
 
 function addressesInRows(rows: string[]): string[] {
   return rows.flatMap((row) => {
-    const match = row.match(/<td class="addr-cell[^"]*">\s*<strong>([^<]*)<\/strong>/);
+    const match = row.match(/<td class="addr-cell[^"]*">[\s\S]*?<strong>([^<]*)<\/strong>/);
     return match ? [match[1]] : [];
   });
 }
