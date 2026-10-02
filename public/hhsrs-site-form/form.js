@@ -1134,32 +1134,58 @@
     return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   }
 
+  function blankControl(el) {
+    if (!el) return;
+    if (el.type === "checkbox" || el.type === "radio") el.checked = false;
+    else if (el.tagName === "SELECT") {
+      var blank = 0;
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].value === "") blank = i;
+        el.options[i].selected = false;
+      }
+      el.selectedIndex = blank;
+      el.value = el.options[blank] ? el.options[blank].value : "";
+    } else el.value = "";
+    el.classList.remove("is-invalid");
+  }
+
   function resetFormToDefaults() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    var draft = form && form.querySelector('input[name="draftId"]');
+    if (draft) draft.remove();
     FIELD_IDS.forEach(function (id) {
-      var el = $(id);
-      if (!el) return;
-      el.value = "";
-      el.classList.remove("is-invalid");
+      blankControl($(id));
     });
     var dateEl = $("surveyDate");
     if (dateEl) {
       dateEl.value = todayLondonDate();
       dateEl.classList.remove("is-invalid");
     }
+    ["category", "rating"].forEach(function (id) {
+      var select = $(id);
+      if (select) select.setAttribute("data-scheme", "");
+    });
     chosen = [];
-    syncFiles([]);
-    renderNew();
+    try {
+      syncFiles([]);
+      renderNew();
+    } catch (err) {
+      chosen = [];
+    }
     if (existing) existing.innerHTML = "";
     setPhotoStatus("");
     clearAddressMatch(false);
     clearManualFields();
     typedInstead = false;
     missedUprn = false;
-    lastProject = "";
+    // Not the previous project, so the next flow pass treats this as a project change.
+    lastProject = "\u0000";
     lastFocusedStep = "";
     extrasPassed = false;
     var callUnreached = $("callUnreached");
     if (callUnreached) callUnreached.checked = false;
+    var confirmed = $("addressConfirmed");
+    if (confirmed) confirmed.checked = false;
     document.querySelectorAll('#restrictor-box input[name="restrictorLocations"]').forEach(function (box) {
       box.checked = false;
     });
