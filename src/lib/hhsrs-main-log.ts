@@ -201,13 +201,37 @@ export function filtersActive(filters: MainLogFilters): boolean {
   return Boolean(filters.q || filters.project || filters.by || filters.type || filters.from || filters.to);
 }
 
-/** First line of a comma-joined address. The full string stays for hover. */
+/** House number, flat, or a one-letter block. "12 Laburnum Crescent" is already a street line. */
+function premisesOnly(part: string): boolean {
+  const value = part.trim();
+  if (/^(?:flat|apartment|apt|unit|maisonette)\s+[a-z]{0,2}\d+[a-z]?$/i.test(value)) return true;
+  if (/^[a-z]{0,2}\d+[a-z]?(?:\s*-\s*[a-z]{0,2}\d+[a-z]?)?$/i.test(value)) return true;
+  if (/^[a-z]$/i.test(value)) return true;
+  if (/^block\s+[a-z0-9]+$/i.test(value)) return true;
+  return false;
+}
+
+function postcodeOnly(part: string): boolean {
+  return /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(part.trim());
+}
+
+/**
+ * House number or flat, plus the street. A line that already contains the street stays as it is.
+ * Town and postcode stay on the full address for hover.
+ */
 export function addressFirstLine(fullAddress: string): string {
   const full = String(fullAddress || "").trim();
   if (!full) return "";
-  const comma = full.indexOf(",");
-  const line = (comma === -1 ? full : full.slice(0, comma)).trim();
-  return line || full;
+  const parts = full.split(",").map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return "";
+  if (!premisesOnly(parts[0])) return parts[0];
+  const kept = [parts[0]];
+  for (let i = 1; i < parts.length; i++) {
+    if (postcodeOnly(parts[i])) break;
+    kept.push(parts[i]);
+    if (!premisesOnly(parts[i])) break;
+  }
+  return kept.join(", ");
 }
 
 /** Address for the table (no postcode) and the panel (postcode included once). */

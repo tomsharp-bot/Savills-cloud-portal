@@ -832,6 +832,11 @@ describe("HHSRS Reporter UI helpers", () => {
     const headers = [...head.matchAll(/<th[^>]*>([^<]*)/g)].map((match) => match[1].trim()).filter(Boolean);
     assert.deepEqual(headers, ["Reference", "Project", "Address", "Photos", "UPRN", "Surveyor", "Category", "Rating", "Received"]);
     assert.match(css, /\.ml-page \.pending-issues-table thead th,\s*\.ml-page \.pending-issues-table tbody td \{[^}]*white-space:\s*nowrap/);
+    assert.match(css, /\.ml-page \.pending-issues-table \{[^}]*min-width:\s*0/);
+    assert.match(css, /\.hhsrs-reporter \.ml-page \.pending-issues-table th,\s*\.hhsrs-reporter \.ml-page \.pending-issues-table td \{[^}]*min-width:\s*0/);
+    assert.match(table, /class="ml-row-note">Reviewed/);
+    assert.match(table, /class="ml-row-note-full"/);
+    assert.match(main, /showReviewed: row\.kind === "dismissed"/);
     assert.match(css, /\.ml-page \.pending-issues-table thead th,\s*\.ml-page \.pending-issues-table tbody td \{[^}]*padding:\s*0\.28rem 0\.22rem/);
     assert.match(css, /\.ml-photo-full img \{[^}]*width:\s*min\(960px, 92vw\)/);
     assert.match(css, /\.ml-photo-full img \{[^}]*height:\s*min\(680px, 86vh\)/);

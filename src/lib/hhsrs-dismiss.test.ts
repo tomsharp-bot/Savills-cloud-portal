@@ -317,7 +317,8 @@ describe("dismiss hazard flow with the database", () => {
     assert.equal(parked?.dismissedAt?.toISOString(), dismissedAt);
     assert.equal(parked?.claimedBy, "");
     const parkedLog = await request(port, "GET", abandoned.location, { cookie });
-    assert.match(parkedLog.body, /<span class="ml-row-note">Test case<\/span>/);
+    assert.match(parkedLog.body, /<span class="ml-row-note">Reviewed<span class="ml-row-note-full">Test case<\/span><\/span>/);
+    assert.doesNotMatch(parkedLog.body, /<span class="ml-row-note">Test case<\/span>/);
 
     const again = await request(port, "POST", `/HHSRSreporter/review/${testCase.id}/restore`, { cookie });
     assert.equal(again.status, 302);
@@ -347,7 +348,8 @@ describe("dismiss hazard flow with the database", () => {
       { cookie }
     );
     assert.match(sentLog.body, new RegExp(`1 Test Dismiss ${stamp}`));
-    assert.doesNotMatch(sentLog.body, /ml-row-note">Test case/);
+    assert.doesNotMatch(sentLog.body, /ml-row-note">Reviewed/);
+    assert.doesNotMatch(sentLog.body, /ml-row-note-full">Test case/);
     assert.doesNotMatch(sentLog.body, /Reviewed, hazard rating not required/);
 
     const hazard = await request(port, "POST", `/HHSRSreporter/review/${hazardCase.id}/dismiss`, {
@@ -362,7 +364,10 @@ describe("dismiss hazard flow with the database", () => {
     assert.equal(hazardRow?.emailSentAt, null);
     assert.equal(await prisma.hhsrsSentEmail.count({ where: { submissionId: hazardCase.id } }), 0);
     const hazardLog = await request(port, "GET", hazard.location, { cookie });
-    assert.match(hazardLog.body, /Reviewed, hazard rating not required\./);
+    assert.match(
+      hazardLog.body,
+      /<span class="ml-row-note">Reviewed<span class="ml-row-note-full">Reviewed, hazard rating not required\.<\/span><\/span>/
+    );
     const hazardOpen = await request(port, "GET", `/HHSRSreporter/review/${hazardCase.id}`, { cookie });
     assert.match(hazardOpen.body, /id="btn-restore-dismiss"/);
     assert.match(hazardOpen.body, /Reviewed, hazard rating not required\./);
