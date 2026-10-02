@@ -104,6 +104,133 @@ describe("Data Review practice page hosting", () => {
     assert.ok(garage.indexOf("Property Age") < garage.indexOf("Loft Hatch"));
     assert.equal(garage.filter((h) => h === "UPRN").length, 1);
   });
+
+  it("doubles the header, alternates section colours, and freezes columns on the left", () => {
+    const source = readDataReviewPage();
+    assert.match(source, /--hh:200px/);
+    assert.match(source, /const RH = 22, GUT = 56, HH = 200/);
+    assert.match(source, /ht="150"/);
+    assert.match(source, /id="bFixLeft"/);
+    assert.match(source, /FFD6EAF8/);
+    assert.match(source, /FFFFF4CC/);
+    assert.match(source, /function backfillSections/);
+    assert.match(source, /xSplit="/);
+
+    const parts = [
+      "function fmt(v){",
+      "function mdfNorm(s){",
+      "function sectionFromHeader(header, comps){",
+      "function headerStripes(cols, sectionOf){",
+      "function excelCol(n){",
+      "function freezePaneXml(y, x){",
+    ].map((needle) => extractDecl(source, needle));
+    const sandbox: {
+      __api?: {
+        sectionFromHeader: (header: string, comps: Record<string, { section?: string }>) => string;
+        headerStripes: (cols: { section?: string }[], sectionOf: (col: { section?: string }) => string) => string[];
+        freezePaneXml: (y: number, x: number) => string;
+      };
+    } = {};
+    vm.runInNewContext(
+      parts.join("\n") +
+        "\nglobalThis.__api = { sectionFromHeader: sectionFromHeader, headerStripes: headerStripes, freezePaneXml: freezePaneXml };\n",
+      sandbox
+    );
+    const api = sandbox.__api!;
+    const of = (col: { section?: string }) => col.section || "";
+    const stripes = (cols: { section?: string }[]) => JSON.stringify(api.headerStripes(cols, of));
+
+    assert.equal(stripes([{ section: "General" }, { section: "General" }, { section: "General" }]), JSON.stringify(["hb", "hyel", "hb"]));
+    assert.equal(stripes([{ section: "Roofs" }, { section: "Roofs" }, { section: "Roofs" }]), JSON.stringify(["hb", "hyel", "hb"]));
+    assert.equal(
+      stripes([
+        { section: "General" },
+        { section: "" },
+        { section: "General" },
+        { section: "Roofs" },
+        { section: "Roofs" },
+      ]),
+      JSON.stringify(["hb", "", "hyel", "hb", "hyel"])
+    );
+
+    const comps = {
+      "Green Energy": { section: "Roofs" },
+      "Main Roof": { section: "Roofs" },
+      Green: { section: "Other" },
+    };
+    assert.equal(api.sectionFromHeader("Green Energy - PV Panels - Age", comps), "Roofs");
+    assert.equal(api.sectionFromHeader("Property Type", comps), "");
+    assert.equal(api.sectionFromHeader("Not a component", comps), "");
+
+    const pane = api.freezePaneXml(9, 4);
+    assert.match(pane, /xSplit="4"/);
+    assert.match(pane, /ySplit="9"/);
+    assert.match(pane, /activePane="bottomRight"/);
+    assert.match(pane, /topLeftCell="E10"/);
+    const rowsOnly = api.freezePaneXml(9, 0);
+    assert.match(rowsOnly, /ySplit="9"/);
+    assert.doesNotMatch(rowsOnly, /xSplit=/);
+  });
+
+  it("writes the tall header, left-column freeze, and section colours into the workbook", () => {
+    const source = readDataReviewPage();
+    const xlsxStart = source.indexOf('<script id="xlsxlib">');
+    const xlsxJs = source.slice(source.indexOf(">", xlsxStart) + 1, source.indexOf("</script>", xlsxStart));
+    const drvAt = source.indexOf("function drvCore(scope){");
+    const ready = "post({type:'ready'});";
+    const readyAt = source.indexOf(ready, drvAt);
+    const drv =
+      source.slice(drvAt, readyAt) +
+      "scope.__api = {styleZip:styleZip};\n  " +
+      ready +
+      "\n}";
+    const sandbox: { TextDecoder: typeof TextDecoder; TextEncoder: typeof TextEncoder; __go?: () => { sheet: string; styles: string } } = {
+      TextDecoder,
+      TextEncoder,
+    };
+    vm.runInNewContext(
+      xlsxJs +
+        "\n" +
+        drv +
+        `
+var scope = {postMessage:function(){}, onmessage:null};
+drvCore(scope);
+globalThis.__go = function(){
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet([["Note"],["std"],["Property Type","Detachment","Main Roof"],["House","Semi","Pitched"]]);
+  XLSX.utils.book_append_sheet(wb, ws, "Dwelling");
+  var buf = XLSX.write(wb, {type:"array", bookType:"xlsx"});
+  var u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  var out = scope.__api.styleZip(u8, {Dwelling:{A3:"hb", B3:"hyel", C3:"hhr"}}, ["Dwelling"], {Dwelling:{y:3, x:2}});
+  var zip = XLSX.CFB.read(out, {type:"buffer"});
+  function text(name){
+    for (var i = 0; i < zip.FullPaths.length; i++) {
+      var p = zip.FullPaths[i].replace(/^[^\\/]*\\//, "");
+      if (p === name) return new TextDecoder().decode(zip.FileIndex[i].content);
+    }
+    return "";
+  }
+  return {sheet:text("xl/worksheets/sheet1.xml"), styles:text("xl/styles.xml")};
+};
+`,
+      sandbox
+    );
+    const got = sandbox.__go!();
+    assert.match(got.sheet, /xSplit="2"/);
+    assert.match(got.sheet, /ySplit="3"/);
+    assert.match(got.sheet, /activePane="bottomRight"/);
+    assert.match(got.sheet, /topLeftCell="C4"/);
+    assert.match(got.sheet, /<row[^>]*\br="3"[^>]*ht="150"/);
+    assert.doesNotMatch(got.sheet, /<row[^>]*\br="4"[^>]*ht="150"/);
+    assert.match(got.sheet, /<c r="A3"[^>]*\ss="/);
+    assert.match(got.styles, /FFD6EAF8/);
+    assert.match(got.styles, /FFFFF4CC/);
+    assert.match(got.styles, /wrapText="1"/);
+    const a3 = /<c r="A3"[^>]*\ss="(\d+)"/.exec(got.sheet);
+    const a4 = /<c r="A4"[^>]*\ss="(\d+)"/.exec(got.sheet);
+    assert.ok(a3);
+    assert.notEqual(a3![1], a4 ? a4[1] : "");
+  });
 });
 
 function sliceBalanced(source: string, openAt: number): string {

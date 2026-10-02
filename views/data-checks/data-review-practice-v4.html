@@ -6,7 +6,7 @@
 <title>Data Review (practice v4)</title>
 <!-- Data Review (practice) v4 – offline single-file page: Vision export → validation master, file builder, imports, validator grid. Includes SheetJS Community Edition 0.20.3 (Apache-2.0), inlined. -->
 <style>
-:root{--navy:#14213d;--navy2:#22335f;--line:#e3e6ec;--line2:#c8ced9;--sel:#1a73e8;--edit:#fff4b8;--ins:#dff3e3;--hdr:#f3f5f8;--txt:#1d2433;--muted:#6b7385;--hh:100px;--hy:#ffe98a;--dup:#ffc9de}
+:root{--navy:#14213d;--navy2:#22335f;--line:#e3e6ec;--line2:#c8ced9;--sel:#1a73e8;--edit:#fff4b8;--ins:#dff3e3;--hdr:#f3f5f8;--txt:#1d2433;--muted:#6b7385;--hh:200px;--hy:#ffe98a;--dup:#ffc9de}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font-family:Aptos,"Segoe UI",-apple-system,BlinkMacSystemFont,Arial,sans-serif;font-size:12.5px;color:var(--txt);background:#fff;overflow:hidden}
 button{font:inherit}
@@ -294,11 +294,16 @@ body:not(.tab-grid) #main{visibility:hidden}
 .vbaBox code{background:#f1f2f5;border-radius:3px;padding:0 4px}
 #thumbs{max-height:236px;overflow-y:auto;align-content:flex-start}
 #bDupes.on{background:#d6246e!important;border-color:#b51d5c!important;color:#fff!important;opacity:1!important}
+#bFixLeft.on{background:#1a73e8;border-color:#1a73e8;color:#fff;font-weight:600}
 
 /* ===== v4 ===== */
 .h.h0:not(.f):not(.hi){background:#fff}
 .h.hr:not(.f){background:#f6b3b3}.h.hr .hl{background:#eb9a9a;color:#5c1717}
 .h.ho:not(.f){background:#fcdcb4}.h.ho .hl{background:#f3c68f;color:#5a3500}
+.h.hb:not(.f){background:#D6EAF8;color:#1d2433}.h.hb:not(.f) .hl{background:#C5DCF0;color:#1c3d7a}
+.h.hyel:not(.f){background:#FFF4CC;color:#1d2433}.h.hyel:not(.f) .hl{background:#F3E6A8;color:#5b4a00}
+.h.hb .hn,.h.hyel .hn{color:#1d2433}
+.h.nw.hb:not(.f),.h.nw.hyel:not(.f){box-shadow:inset 0 -3px 0 #2e9d4a}
 .c.vAdd,#frozen .c.vAdd{background:#ffff00;font-weight:600}
 .c.vHigh,#frozen .c.vHigh{background:#ffd7a8;font-weight:600}
 .c.vAuto{background:#cdefea}
@@ -427,9 +432,10 @@ body:not(.tab-grid) #main{visibility:hidden}
       <button class="gbtn" id="bHh" title="Hide or show the 35 HHSRS issue columns (General Comments, the counts and HHSRS Checked stay visible)" disabled>Hide HHSRS Section</button>
       <button class="gbtn" id="bUnhide" title="Unhide every column hidden in the validator" disabled>Unhide all columns</button>
       <button class="gbtn" id="bTop" title="Scroll to the top of this sheet. If a filter is on, this is the first visible row, not a hidden row above the filter." disabled>Return to top</button>
+      <button class="gbtn" id="bFixLeft" title="Fix the columns to the left of the selected column so they stay visible while you scroll right. These are the fixed items on the left. Choose that same column again to clear the extra freeze. The first column always stays." disabled>Fixed items: 1</button>
       <span id="newColNote"></span>
       <span class="grow"></span>
-      <span id="gridHint">Right-click a header (or use its &#9660; menu) to hide a column. Drag a column edge to narrow it &ndash; headers wrap, then turn vertical. Shift-click headers to resize or hide several columns; shift-click row numbers to select several rows.</span>
+      <span id="gridHint">Right-click a header (or use its &#9660; menu) to hide a column, or to fix the columns on its left. Drag a column edge to narrow it &ndash; headers wrap, then turn vertical. Shift-click headers to resize or hide several columns; shift-click row numbers to select several rows.</span>
     </div>
     <div id="gridArea">
       <div id="bigDrop">
@@ -588,20 +594,55 @@ function drvCore(scope){
   }
   /* ---- v3: colours for the saved master (post-processes the .xlsx/.xlsm zip; SheetJS CE does not write fills) ---- */
   var FILLS = {hhr:'FFF6B3B3', gco:'FFFCDCB4', edit:'FFFFF4B8', dup:'FFFFC9DE', hy:'FFFFE98A', hp:'FFE2F0F3', nw:'FFD4F5DC', note:'FFFFF1D6', link:'FFE8EEFC',
-    addin:'FFFFFF00', high:'FFFFD7A8', unk:'FFFFB4B4', late:'FFE9D8FD', std:'FFE6EDF5', stdh:'FFC9D6E8', auto:'FFCDEFEA', x7:'FFFF8A80'};
+    addin:'FFFFFF00', high:'FFFFD7A8', unk:'FFFFB4B4', late:'FFE9D8FD', std:'FFE6EDF5', stdh:'FFC9D6E8', auto:'FFCDEFEA', x7:'FFFF8A80', hb:'FFD6EAF8', hyel:'FFFFF4CC'};
   function u8s(u){ return new TextDecoder('utf-8').decode(u); }
   function su8(s){ return new TextEncoder().encode(s); }
   function zfind(zip, name){ for (var i = 0; i < zip.FullPaths.length; i++) { var p = zip.FullPaths[i].replace(/^[^\/]*\//, ''); if (p === name) return zip.FileIndex[i]; } return null; }
+  function excelCol(n){
+    var s = ''; n = (+n || 0) + 1;
+    while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function freezeSplit(v){
+    if (v && typeof v === 'object') return {y:+v.y || 0, x:+v.x || 0};
+    return {y:+v || 0, x:0};
+  }
+  function freezePaneXml(y, x){
+    y = +y || 0; x = +x || 0;
+    if (!y && !x) return '';
+    var pane, cell;
+    if (x && y) { pane = 'bottomRight'; cell = excelCol(x) + (y + 1); }
+    else if (x) { pane = 'topRight'; cell = excelCol(x) + '1'; }
+    else { pane = 'bottomLeft'; cell = 'A' + (y + 1); }
+    var attrs = '';
+    if (x) attrs += ' xSplit="' + x + '"';
+    if (y) attrs += ' ySplit="' + y + '"';
+    attrs += ' topLeftCell="' + cell + '" activePane="' + pane + '" state="frozen"';
+    return '<sheetViews><sheetView workbookViewId="0"><pane' + attrs + '/><selection pane="' + pane + '" activeCell="' + cell + '" sqref="' + cell + '"/></sheetView></sheetViews>';
+  }
+  function setHeaderRowHeight(xml, rowNum){
+    if (!rowNum) return xml;
+    return xml.replace(/<row\b[^>]*?\br="(\d+)"[^>]*?\/?>/g, function(tag, rn){
+      if (+rn !== rowNum) return tag;
+      var sl = /\/>$/.test(tag) ? '/' : '';
+      var attrs = tag.replace(/^<row\b/, '').replace(/\/?>$/, '');
+      attrs = attrs.replace(/\sht="[^"]*"/g, '').replace(/\scustomHeight="[^"]*"/g, '');
+      return '<row' + attrs + ' ht="150" customHeight="1"' + sl + '>';
+    });
+  }
   function freezeZip(zip, freeze, sheetNames){
     var n = 0;
     Object.keys(freeze || {}).forEach(function(sn){
       var idx = sheetNames.indexOf(sn); if (idx < 0) return;
       var ent = zfind(zip, 'xl/worksheets/sheet' + (idx + 1) + '.xml'); if (!ent) return;
-      var rows = freeze[sn], xml = u8s(ent.content);
-      var view = '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' + rows + '" topLeftCell="A' + (rows + 1) + '" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A' + (rows + 1) + '" sqref="A' + (rows + 1) + '"/></sheetView></sheetViews>';
-      if (/<sheetViews>[\s\S]*?<\/sheetViews>/.test(xml)) xml = xml.replace(/<sheetViews>[\s\S]*?<\/sheetViews>/, view);
-      else if (/<sheetViews\/>/.test(xml)) xml = xml.replace(/<sheetViews\/>/, view);
-      else xml = xml.replace(/(<dimension[^>]*\/>)/, '$1' + view);
+      var sp = freezeSplit(freeze[sn]), xml = u8s(ent.content);
+      var view = freezePaneXml(sp.y, sp.x);
+      if (view) {
+        if (/<sheetViews>[\s\S]*?<\/sheetViews>/.test(xml)) xml = xml.replace(/<sheetViews>[\s\S]*?<\/sheetViews>/, view);
+        else if (/<sheetViews\/>/.test(xml)) xml = xml.replace(/<sheetViews\/>/, view);
+        else xml = xml.replace(/(<dimension[^>]*\/>)/, '$1' + view);
+      }
+      xml = setHeaderRowHeight(xml, sp.y);
       ent.content = su8(xml); ent.size = ent.content.length; n++;
     });
     return n;
@@ -634,24 +675,61 @@ function drvCore(scope){
   function styleZip(u8, marks, sheetNames, freeze){
     var zip = XLSX.CFB.read(u8, {type:'buffer'});
     var froze = freeze ? freezeZip(zip, freeze, sheetNames) : 0;
-    var st = zfind(zip, 'xl/styles.xml'); if (!st) return u8;
+    function finish(){
+      var out = XLSX.CFB.write(zip, {fileType:'zip', type:'array', compression:true});
+      return out instanceof Uint8Array ? out : new Uint8Array(out);
+    }
+    var st = zfind(zip, 'xl/styles.xml'); if (!st) return froze ? finish() : u8;
     var sx = u8s(st.content);
     var fm = /<fills count="(\d+)">([\s\S]*?)<\/fills>/.exec(sx), xm = /<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/.exec(sx);
-    if (!fm || !xm) return u8;
+    if (!fm || !xm) return froze ? finish() : u8;
     var nFill = +fm[1], fillId = {}, addF = '';
     Object.keys(FILLS).forEach(function(k){ fillId[k] = nFill++; addF += '<fill><patternFill patternType="solid"><fgColor rgb="' + FILLS[k] + '"/><bgColor indexed="64"/></patternFill></fill>'; });
     var xfs = xm[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) || [];
+    var xfXml = xfs.slice();
     var nXf = xfs.length, newXf = {}, addX = '';
+    function remember(id, xml){ xfXml[id] = xml; }
     function xfFor(base, kind){
       var key = base + '|' + kind; if (newXf[key] != null) return newXf[key];
-      var src = xfs[base] || xfs[0] || '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>';
+      var src = xfXml[base] || xfXml[0] || '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>';
       var x = src.replace(/fillId="\d+"/, 'fillId="' + fillId[kind] + '"');
       if (!/fillId=/.test(x)) x = x.replace('<xf ', '<xf fillId="' + fillId[kind] + '" ');
       if (!/applyFill=/.test(x)) x = x.replace('<xf ', '<xf applyFill="1" ');
-      newXf[key] = nXf++; addX += x; return newXf[key];
+      newXf[key] = nXf++; addX += x; remember(newXf[key], x); return newXf[key];
+    }
+    function withWrap(src){
+      var x = src;
+      if (/<alignment\b[^>]*\/>/.test(x)) {
+        x = x.replace(/<alignment\b([^>]*?)\/>/, function(a, attrs){
+          attrs = attrs.replace(/\swrapText="[^"]*"/g, '').replace(/\svertical="[^"]*"/g, '');
+          return '<alignment' + attrs + ' wrapText="1" vertical="center"/>';
+        });
+      } else if (/<alignment\b[^>]*>/.test(x)) {
+        x = x.replace(/<alignment\b([^>]*?)>/, function(a, attrs){
+          attrs = attrs.replace(/\swrapText="[^"]*"/g, '').replace(/\svertical="[^"]*"/g, '');
+          return '<alignment' + attrs + ' wrapText="1" vertical="center">';
+        });
+      } else if (/\/>\s*$/.test(x)) x = x.replace(/\/>\s*$/, '><alignment wrapText="1" vertical="center"/></xf>');
+      else x = x.replace(/<\/xf>\s*$/, '<alignment wrapText="1" vertical="center"/></xf>');
+      if (!/applyAlignment=/.test(x)) x = x.replace('<xf ', '<xf applyAlignment="1" ');
+      return x;
+    }
+    function xfWrap(base){
+      var key = base + '|wrap'; if (newXf[key] != null) return newXf[key];
+      var src = xfXml[base] || xfXml[0] || '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>';
+      var x = withWrap(src);
+      newXf[key] = nXf++; addX += x; remember(newXf[key], x); return newXf[key];
+    }
+    function wrapHeaderRow(xml, rowNum){
+      if (!rowNum) return xml;
+      return xml.replace(/<c r="([A-Z]+)(\d+)"([^>]*?)(\/?)>/g, function(all, L, rn, attrs, sl){
+        if (+rn !== rowNum) return all;
+        var sm = / s="(\d+)"/.exec(attrs), base = sm ? +sm[1] : 0, ns = xfWrap(base);
+        return '<c r="' + L + rn + '"' + (sm ? attrs.replace(/ s="\d+"/, ' s="' + ns + '"') : ' s="' + ns + '"' + attrs) + sl + '>';
+      });
     }
     var touched = false;
-    Object.keys(marks).forEach(function(sn){
+    Object.keys(marks || {}).forEach(function(sn){
       var idx = sheetNames.indexOf(sn); if (idx < 0) return;
       var ent = zfind(zip, 'xl/worksheets/sheet' + (idx + 1) + '.xml'); if (!ent) return;
       var mk = marks[sn], xml = u8s(ent.content), n = 0;
@@ -664,11 +742,17 @@ function drvCore(scope){
       var filled = fillEmpty(xml, mk, xfFor); if (filled.n) { xml = filled.xml; n += filled.n; }
       if (n) { ent.content = su8(xml); ent.size = ent.content.length; touched = true; }
     });
+    Object.keys(freeze || {}).forEach(function(sn){
+      var sp = freezeSplit(freeze[sn]); if (!sp.y) return;
+      var idx = sheetNames.indexOf(sn); if (idx < 0) return;
+      var ent = zfind(zip, 'xl/worksheets/sheet' + (idx + 1) + '.xml'); if (!ent) return;
+      var xml = u8s(ent.content), next = wrapHeaderRow(xml, sp.y);
+      if (next !== xml) { ent.content = su8(next); ent.size = ent.content.length; touched = true; }
+    });
     if (!touched && !froze) return u8;
     if (touched) sx = sx.replace(fm[0], '<fills count="' + nFill + '">' + fm[2] + addF + '</fills>').replace(xm[0], '<cellXfs count="' + nXf + '">' + xm[2] + addX + '</cellXfs>');
     if (touched) { st.content = su8(sx); st.size = st.content.length; }
-    var out = XLSX.CFB.write(zip, {fileType:'zip', type:'array', compression:true});
-    return out instanceof Uint8Array ? out : new Uint8Array(out);
+    return finish();
   }
   /* ---- v3: pull the VBA project (and sheet code names) out of a macro workbook without parsing all its cells ---- */
   function readVbaFromFile(u8, name){
@@ -906,14 +990,14 @@ var UI = Object.assign({}, UI_DEFAULT, lsGet('drv3.ui', {}));
 
 'use strict';
 /* ===================== Data Review (practice) – main page ===================== */
-const RH = 22, GUT = 56, HH = 100;
+const RH = 22, GUT = 56, HH = 200;
 const $ = id => document.getElementById(id);
 const els = {};
 ['top','dropMini','sheetSel','fileInfo','counter','bUndo','bRedo','bInsRow','bDelRow','bInsCol','bDelCol','bClearF','bExport',
  'left','split','photoBar','bPhotoDir','bPhotoFiles','bPhotoSet','photoCount','photoBox','mainImg','photoMsg','pPrev','pNext','photoCap','thumbs','chooseFields','kd',
  'gridArea','bigDrop','bigOpen','grid','corner','colHead','colHeadIn','frozen','frozenIn','body','spacer','cells','editor','stCell','stInfo',
  'fileIn','photoDirIn','photoFilesIn','lb','lbImg','lbCap','lbPrev','lbNext','lbClose','loading','loadText','loadSub','toast',
- 'bThumbs','kdToggle','kdCaret','gridBar','bDupes','bUnhide','bTop','newColNote','saveState','bSaveNew','fixHint'].forEach(k => els[k] = $(k));
+ 'bThumbs','kdToggle','kdCaret','gridBar','bDupes','bUnhide','bTop','bFixLeft','newColNote','saveState','bSaveNew','fixHint'].forEach(k => els[k] = $(k));
 
 let book = null;   // {fileName, base, ext, isCsv, sheetNames, tables:Map, dirty}
 let T = null;      // current table
@@ -1102,22 +1186,37 @@ function structureChanged(){
   if (T.sel.r >= T.view.length) T.sel.r = Math.max(0, T.view.length - 1);
   layout();
 }
+function freezeCount(t){
+  t = t || T;
+  if (!t || !t.cols || !t.cols.length) return 1;
+  const key = t.fixedLeft;
+  if (key) {
+    const i = t.cols.findIndex(c => c.key === key || c.id === key);
+    if (i > 0) return i;
+  }
+  return 1;
+}
 function layout(){
   if (!T) return;
-  const n = T.cols.length, w0 = n ? T.cols[0].w : 0, fw = GUT + w0;
+  const n = T.cols.length, F = Math.min(freezeCount(T), Math.max(1, n || 1));
+  const left = new Float64Array(Math.max(1, n));
+  let fw = GUT;
+  for (let k = 0; k < F && k < n; k++) { left[k] = fw; fw += T.cols[k].hid ? 0 : T.cols[k].w; }
+  T.frozenLeft = left; T.freezeN = F;
   els.corner.style.width = fw + 'px'; els.colHead.style.left = fw + 'px';
   els.frozen.style.width = fw + 'px'; els.body.style.left = fw + 'px';
   const X = new Float64Array(Math.max(1, n));
-  for (let k = 1; k < n; k++) X[k] = X[k - 1] + (T.cols[k].hid ? 0 : T.cols[k].w);
+  if (F > 0 && F - 1 < X.length) X[F - 1] = 0;
+  for (let k = F; k < n; k++) X[k] = X[k - 1] + (T.cols[k].hid ? 0 : T.cols[k].w);
   T.colX = X;
-  els.spacer.style.width = (n > 1 ? X[n - 1] : 0) + 'px';
+  els.spacer.style.width = (n > F ? X[n - 1] : 0) + 'px';
   els.spacer.style.height = (T.view.length * RH) + 'px';
   const sbH = els.body.offsetHeight - els.body.clientHeight, sbW = els.body.offsetWidth - els.body.clientWidth;
   els.frozen.style.bottom = sbH + 'px'; els.colHead.style.right = sbW + 'px';
 }
 function findCol(x){ // body column position whose span contains x
-  const X = T.colX, n = T.cols.length;
-  let lo = 1, hi = n - 1;
+  const X = T.colX, n = T.cols.length, F = T.freezeN || 1;
+  let lo = Math.max(0, Math.min(F, n - 1)), hi = n - 1;
   while (lo < hi) { const mid = (lo + hi) >> 1; if (X[mid] > x) hi = mid; else lo = mid + 1; }
   return lo;
 }
@@ -1136,16 +1235,17 @@ let rafPending = false;
 function scheduleRender(){ if (!rafPending) { rafPending = true; requestAnimationFrame(() => { rafPending = false; render(); }); } }
 function render(){
   if (!T) return;
+  refreshStripes();
   const b = els.body, st = b.scrollTop, sl = b.scrollLeft, ch = b.clientHeight, cw = b.clientWidth;
   const n = T.cols.length, nv = T.view.length, sel = T.sel, colsA = T.cols, X = T.colX;
+  const F = T.freezeN || 1, leftF = T.frozenLeft;
   const r0 = Math.max(0, Math.floor(st / RH) - 3), r1 = Math.min(nv, Math.ceil((st + ch) / RH) + 3);
-  let c0 = 1, c1 = 0;
-  if (n > 1) { c0 = Math.max(1, findCol(sl) - 1); c1 = Math.min(n - 1, findCol(sl + cw) + 1); }
+  let c0 = F, c1 = F - 1;
+  if (n > F) { c0 = Math.max(F, findCol(sl) - 1); c1 = Math.min(n - 1, findCol(sl + cw) + 1); }
   const cid = colsA.map(c => c.id);
   const dc = isMaster() ? dupCounts(T) : null, up = dc ? uprnPos(T) : -1;
   const dupC = (val, c) => dc && c === up && !isBlank(val) && (dc.get(keyOf(val).trim()) || 0) > 1 ? ' dup' : '';
   let h = '', fh = '';
-  const w0 = n ? colsA[0].w : 0;
   for (let r = r0; r < r1; r++) {
     const row = T.view[r], rs = T.selRows.has(row), v = row.v, e = row.e, top = r * RH;
     h += `<div class="r${rs ? ' rs' : ''}" style="top:${top}px" data-r="${r}">`;
@@ -1156,9 +1256,10 @@ function render(){
     }
     h += '</div>';
     fh += `<div class="g${rs ? ' rs' : ''}${row.ins ? ' ri' : ''}${r === sel.r ? ' cur' : ''}" style="top:${top}px" data-r="${r}">${row.i + xlOff()}</div>`;
-    if (n) {
-      const val = v[0];
-      fh += `<div class="c${typeof val === 'number' ? ' n' : ''}${(e && e.has(cid[0])) || (row.ins && val !== '' && val != null) ? ' e' : ''}${r === sel.r && sel.c === 0 ? ' s' : ''}${rs ? ' rsc' : ''}${photoCls(val, 0)}${dupC(val, 0)}${v4Cls(row, 0, val, r)}" style="top:${top}px;left:${GUT}px;width:${w0}px" data-r="${r}" data-c="0"${v4Tip(row, 0)}>${cellBody(row, 0, val)}</div>`;
+    for (let c = 0; c < F && c < n; c++) {
+      if (colsA[c].hid) continue;
+      const val = v[c];
+      fh += `<div class="c${typeof val === 'number' ? ' n' : ''}${(e && e.has(cid[c])) || (row.ins && val !== '' && val != null) ? ' e' : ''}${r === sel.r && c === sel.c ? ' s' : ''}${rs ? ' rsc' : ''}${photoCls(val, c)}${dupC(val, c)}${v4Cls(row, c, val, r)}" style="top:${top}px;left:${leftF[c]}px;width:${colsA[c].w}px" data-r="${r}" data-c="${c}"${v4Tip(row, c)}>${cellBody(row, c, val)}</div>`;
     }
   }
   els.cells.innerHTML = h;
@@ -1168,7 +1269,9 @@ function render(){
   for (let c = c0; c <= c1; c++) if (!colsA[c].hid) hh += hdrHtml(c, X[c - 1]);
   els.colHeadIn.innerHTML = hh;
   els.colHeadIn.style.transform = `translateX(${-sl}px)`;
-  els.corner.innerHTML = `<div class="h gh" style="left:0;width:${GUT}px"><div class="hl"></div><div class="hn" title="Row numbers as in Excel">#</div></div>` + (n ? hdrHtml(0, GUT) : '');
+  let chh = `<div class="h gh" style="left:0;width:${GUT}px"><div class="hl"></div><div class="hn" title="Row numbers as in Excel">#</div></div>`;
+  for (let c = 0; c < F && c < n; c++) if (!colsA[c].hid) chh += hdrHtml(c, leftF[c]);
+  els.corner.innerHTML = chh;
   v4RenderStd(c0, c1);
   if (ED && !edPositioning) positionEditor();
 }
@@ -1216,7 +1319,8 @@ function ensureVisible(r, c){
   const b = els.body, ch = b.clientHeight, cw = b.clientWidth;
   const y = r * RH;
   if (y < b.scrollTop) b.scrollTop = y; else if (y + RH > b.scrollTop + ch) b.scrollTop = y + RH - ch;
-  if (c >= 1) { const x0 = T.colX[c - 1], x1 = T.colX[c]; if (x0 < b.scrollLeft) b.scrollLeft = x0; else if (x1 > b.scrollLeft + cw) b.scrollLeft = Math.min(x0, x1 - cw); }
+  const F = T.freezeN || 1;
+  if (c >= F) { const x0 = T.colX[c - 1], x1 = T.colX[c]; if (x0 < b.scrollLeft) b.scrollLeft = x0; else if (x1 > b.scrollLeft + cw) b.scrollLeft = Math.min(x0, x1 - cw); }
 }
 function selectCell(r, c, keepRows){
   if (!T) return;
@@ -1422,7 +1526,8 @@ function setFilter(cid, set){
 /* ---------- editing ---------- */
 let ED = null, edPositioning = false;
 function cellEl(r, c){
-  if (c === 0) return els.frozenIn.querySelector(`.c[data-r="${r}"]`);
+  const F = (T && T.freezeN) || 1;
+  if (c < F) return els.frozenIn.querySelector(`.c[data-r="${r}"][data-c="${c}"]`);
   return els.cells.querySelector(`.r[data-r="${r}"] > .c[data-c="${c}"]`);
 }
 function positionEditor(){
@@ -1479,7 +1584,7 @@ els.frozenIn.addEventListener('mousedown', e => {
   const g = el.closest('.g'), cell = el.closest('.c');
   e.preventDefault(); els.grid.focus({preventScroll:true});
   if (g) { const r = +g.dataset.r; if (e.button === 2 && T.selRows.has(T.view[r])) return; gutterClick(r, e); }
-  else if (cell) { const r = +cell.dataset.r; if (e.button === 2 && T.selRows.has(T.view[r])) { T.sel = {r, c:0}; render(); updateSide(); return; } selectCell(r, 0); }
+  else if (cell) { const r = +cell.dataset.r, c = +cell.dataset.c; if (e.button === 2 && T.selRows.has(T.view[r])) { T.sel = {r, c}; render(); updateSide(); return; } selectCell(r, c); }
 });
 els.cells.addEventListener('dblclick', e => { if (e.target.closest('.c')) startEdit(); });
 els.frozenIn.addEventListener('dblclick', e => { if (e.target.closest('.c')) startEdit(); });
@@ -1559,6 +1664,9 @@ els.grid.addEventListener('contextmenu', e => {
     [colsSel.length > 1 ? `Delete ${nf(colsSel.length)} selected columns` : `Delete column “${col.name}”`, actDeleteCol, T.cols.length <= 1],
     [colsSel.length > 1 ? `Hide ${nf(colsSel.length)} selected columns` : `Hide column “${col.name}”`, () => hideCol(c), colsSel.every(i => i === 0)],
     [`Unhide all columns${nHidden() ? ' (' + nHidden() + ' hidden)' : ''}`, unhideAll, !nHidden()],
+    '-',
+    [c > 0 ? `Fix columns to the left of “${col.name}”` : 'Fix columns to the left (pick a column further right)', () => actFixLeft(c), !(isMaster() && !T.ro && c > 0)],
+    ['Clear fixed items on the left', clearFixedLeft, !(isMaster() && T && T.fixedLeft)],
     '-',
     ['Sort A to Z', () => actSort(c, 1)],
     ['Sort Z to A', () => actSort(c, -1)],
@@ -1685,7 +1793,9 @@ function openFilter(c, anchor){
   const el = document.createElement('div'); el.className = 'pop filt';
   el.innerHTML = `<div class="mi" data-a="asc">↑&nbsp; Sort A to Z</div><div class="mi" data-a="desc">↓&nbsp; Sort Z to A</div>` +
     `<div class="mi${cur ? '' : ' dis'}" data-a="clear">✕&nbsp; Clear filter from “${esc(col.name)}”</div>` +
-    `<div class="mi${(typeof adjustCols === 'function' ? adjustCols(c) : [c]).every(i => i === 0) ? ' dis' : ''}" data-a="hide">&#128065;&nbsp; ${(typeof adjustCols === 'function' && adjustCols(c).length > 1) ? 'Hide ' + adjustCols(c).length + ' selected columns' : 'Hide this column'}</div><div class="msep"></div>` +
+    `<div class="mi${(typeof adjustCols === 'function' ? adjustCols(c) : [c]).every(i => i === 0) ? ' dis' : ''}" data-a="hide">&#128065;&nbsp; ${(typeof adjustCols === 'function' && adjustCols(c).length > 1) ? 'Hide ' + adjustCols(c).length + ' selected columns' : 'Hide this column'}</div>` +
+    `<div class="mi${(!isMaster() || T.ro || c <= 0) ? ' dis' : ''}" data-a="fix">Fix columns to the left of this column</div>` +
+    `<div class="mi${(isMaster() && T.fixedLeft) ? '' : ' dis'}" data-a="unfix">Clear fixed items on the left</div><div class="msep"></div>` +
     `<input class="fs" placeholder="Search" type="text"><div class="top2"><div class="fi sp" data-a="all"><span class="chk"></span><span class="t">(Select all)</span></div>` +
     `<div class="fi sp" data-a="nonblank"><span class="chk"></span><span class="t">(Non-blanks)</span><span class="n"></span></div></div>` +
     `<div class="fl"><div class="fsp"></div></div><div class="fbt"><span class="info"></span><button class="pbtn ok">OK</button><button class="pbtn cancel">Cancel</button></div>`;
@@ -1733,7 +1843,8 @@ function openFilter(c, anchor){
   fs.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } else if (e.key === 'Escape') { e.preventDefault(); closePopups(); } e.stopPropagation(); });
   el.querySelectorAll('.mi').forEach(m => m.addEventListener('click', () => {
     const a = m.dataset.a; closePopups();
-    if (a === 'asc') actSort(c, 1); else if (a === 'desc') actSort(c, -1); else if (a === 'clear') setFilter(cid, null); else if (a === 'hide') hideCol(c);
+    if (m.classList.contains('dis') && (a === 'fix' || a === 'unfix')) return;
+    if (a === 'asc') actSort(c, 1); else if (a === 'desc') actSort(c, -1); else if (a === 'clear') setFilter(cid, null); else if (a === 'hide') hideCol(c); else if (a === 'fix') actFixLeft(c); else if (a === 'unfix') clearFixedLeft();
   }));
   filterPop = {el, c};
   const r = anchor.getBoundingClientRect();
@@ -2216,6 +2327,7 @@ function detectComps(V, props, known){
       cnt.set(comp, (cnt.get(comp) || 0) + 1);
       let d = comps[comp];
       if (!d) { d = comps[comp] = {multi:false, section:c.section != null ? fmt(vText(r[c.section])) : '', life:false, photo:false, n:0, isNew:true}; order.push(comp); }
+      else if (!fmt(d.section) && c.section != null) { const sec = fmt(vText(r[c.section])); if (sec) d.section = sec; }
       if (hasLife(r, c)) d.life = true;
       if (/photo/i.test(comp) && /^(true|false)$/i.test(fmt(vText(r[c.ans])))) d.photo = true;
     }
@@ -2992,6 +3104,29 @@ function unhideAll(){
   T.cols.forEach(c => c.hid = false);
   layout(); render(); updateSide(); onViewChange(true);
   if (n) toast(`${n} column${n === 1 ? '' : 's'} unhidden.`, 1800);
+}
+function setFixedLeft(key){
+  if (!MS || !T) return;
+  if (!MS.B.xl) MS.B.xl = {};
+  if (!MS.B.xl.fixedLeft) MS.B.xl.fixedLeft = {};
+  if (key) MS.B.xl.fixedLeft[T.name] = key; else delete MS.B.xl.fixedLeft[T.name];
+  T.fixedLeft = key || '';
+  layout(); render(); updateGridBar(); setMasterDirty();
+}
+function actFixLeft(c){
+  if (!T || !isMaster() || T.ro) return;
+  if (c == null || !T.cols[c]) c = T.sel.c;
+  const col = T.cols[c];
+  if (!col || c <= 0) { toast('Choose a column further to the right. The columns to its left stay put while you scroll.'); return; }
+  const key = col.key || col.id;
+  if (c === freezeCount(T) && T.fixedLeft === key) { setFixedLeft(''); toast('Fixed items cleared. The first column stays on the left.'); return; }
+  setFixedLeft(key);
+  toast('Fixed items: ' + c + ' column' + (c === 1 ? '' : 's') + ' stay on the left while you scroll right.');
+}
+function clearFixedLeft(){
+  if (!T || !isMaster() || !T.fixedLeft) return;
+  setFixedLeft('');
+  toast('Fixed items cleared. The first column stays on the left.');
 }
 function onViewChange(structural){
   if (!T) return;
@@ -3992,13 +4127,87 @@ function ensureV4State(){
   B.hzApplied = B.hzApplied || {}; B.cmApplied = B.cmApplied || {}; B.hhRemoved = B.hhRemoved || [];
   if (!MS.orig) MS.orig = MS.raw && MS.raw.rows.length ? origFromRaw(MS.raw, MS.log || []) : {header:['Data Type', 'Import Date', 'Batch', 'File'], rows:[]};
   if (!MS.std) MS.std = {};
+  backfillSections(B);
 }
 function itemComp(col){ if (!col || !isMaster() || isPhotoCol(col)) return null; const n = hhIssueOf(col.id); if (n) return '~HHSRS ' + n; return itemCompOf(col.id, col.name, photoCompsFor(T.name)); }
-/* header colours (Tom): General Comments light orange, the whole HHSRS section light red, yellow = photo-linked item, green = new from the last import, everything else no fill */
+/* Neighbouring headers inside a section the file already has: pale blue, then pale yellow. A column with no section keeps the older header colour. */
+const SEC_KINDS = {q:1, qa:1, qr:1, qq:1, y:1, ia:1, ir:1, iq:1, p:1};
+function sectionFromHeader(header, comps){
+  const h = mdfNorm(header);
+  if (!h || !comps) return '';
+  let bestLen = 0, sec = '';
+  const names = Object.keys(comps);
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i], n = mdfNorm(name);
+    if (!n || n.length <= bestLen) continue;
+    if (h === n || h.indexOf(n + ' - ') === 0 || h.indexOf(n + '-') === 0) {
+      const d = comps[name], s = d && d.section ? String(d.section) : '';
+      if (!s) continue;
+      bestLen = n.length; sec = s;
+    }
+  }
+  return sec;
+}
+function sectionOfCol(col, B){
+  if (!col) return '';
+  if (col.section) return String(col.section);
+  const comps = (B && B.comps) || {};
+  const key = typeof col.key === 'string' ? col.key : (typeof col.id === 'string' ? col.id : '');
+  if (key) {
+    const parts = key.split('|');
+    if (SEC_KINDS[parts[0]] && parts[1] && comps[parts[1]] && comps[parts[1]].section) return String(comps[parts[1]].section);
+  }
+  return sectionFromHeader(col.header || col.name || '', comps);
+}
+function headerStripes(cols, sectionOf){
+  const out = new Array(cols.length), n = {};
+  for (let i = 0; i < cols.length; i++) {
+    const sec = String((sectionOf ? sectionOf(cols[i]) : (cols[i] && cols[i].section)) || '');
+    if (!sec) { out[i] = ''; continue; }
+    const k = n[sec] || 0;
+    out[i] = k % 2 === 0 ? 'hb' : 'hyel';
+    n[sec] = k + 1;
+  }
+  return out;
+}
+const secFillN = new WeakMap();
+function backfillSections(B){
+  if (!B || !B.comps || !MS || !MS.orig || !MS.orig.header || !MS.orig.rows || !MS.orig.rows.length) return;
+  if (secFillN.get(B) === MS.orig.rows.length) return;
+  const nh = MS.orig.header.map(mdfNorm);
+  const secI = nh.findIndex(h => h === 'section name' || h === 'section');
+  const compI = nh.findIndex(h => h === 'subsection name' || h === 'component');
+  secFillN.set(B, MS.orig.rows.length);
+  if (secI < 0 || compI < 0) return;
+  const byNorm = new Map();
+  for (const name of Object.keys(B.comps)) byNorm.set(mdfNorm(name), name);
+  for (const a of MS.orig.rows) {
+    if (!a || mdfNorm(a[0]) !== 'condition') continue;
+    const comp = fmt(a[compI]).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+    const sec = fmt(a[secI]).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!comp || !sec) continue;
+    const hit = B.comps[comp] ? comp : byNorm.get(mdfNorm(comp));
+    if (!hit || fmt(B.comps[hit].section)) continue;
+    B.comps[hit].section = sec;
+  }
+}
+function refreshStripes(){
+  if (!T) return;
+  if (!isMaster() || T.ro || !MS || !MS.B || !MS.B.columns || !MS.B.columns[T.name]) { T.stripe = null; return; }
+  backfillSections(MS.B);
+  const cols = MS.B.columns[T.name];
+  const stripes = headerStripes(cols, c => sectionOfCol(c, MS.B));
+  const map = new Map();
+  for (let i = 0; i < cols.length; i++) if (stripes[i] && cols[i].key) map.set(cols[i].key, stripes[i]);
+  T.stripe = map;
+}
+/* header colours: a section stripe replaces the older fill on that header only. General Comments stays light orange, HHSRS light red, photo-linked items yellow, and a new column keeps its green underline. Data cells are not recoloured here. */
 function headerCls(col){
   if (!isMaster() || T.ro) return '';
   const id = col.id; let s = '';
-  if (isHhKey(id)) s = ' hr';
+  const stripe = T.stripe && T.stripe.get(col.key || id);
+  if (stripe) s = ' ' + stripe;
+  else if (isHhKey(id)) s = ' hr';
   else if (id === 'g|comments') s = ' ho';
   else if (!isPhotoCol(col) && itemComp(col)) s = ' hy';
   const nc = MS.B.newCols && MS.B.newCols[T.name]; if (nc && nc.includes(id)) s += ' nw';
@@ -4614,9 +4823,19 @@ function toggleHh(){
 }
 updateGridBar = (o => function(){
   o();
-  const b = $('bHh'); if (!b) return;
-  const m = !!(T && isMaster() && !T.ro && T.cols.some(c => hhIssueOf(c.id)));
-  b.disabled = !m; b.textContent = m && hhHiddenNow() ? 'Show HHSRS Section' : 'Hide HHSRS Section';
+  const b = $('bHh');
+  if (b) {
+    const m = !!(T && isMaster() && !T.ro && T.cols.some(c => hhIssueOf(c.id)));
+    b.disabled = !m; b.textContent = m && hhHiddenNow() ? 'Show HHSRS Section' : 'Hide HHSRS Section';
+  }
+  const fx = $('bFixLeft');
+  if (fx) {
+    const on = !!(T && isMaster() && !T.ro);
+    const n = on ? freezeCount(T) : 1;
+    fx.disabled = !on;
+    fx.textContent = 'Fixed items: ' + n;
+    fx.classList.toggle('on', on && n > 1);
+  }
 })(updateGridBar);
 /* ---------- photo codes that depend on which photos exist ---------- */
 function hhRefreshPhotos(){
@@ -4676,7 +4895,9 @@ function v4Layout(){
   els.stdBar.style.display = els.stdCorner.style.display = els.stdHead.style.display = on ? '' : 'none';
   els.grid.style.setProperty('--sb', (on ? 26 + n * RH : 0) + 'px');
   if (on) {
-    const fw = GUT + (T.cols.length ? T.cols[0].w : 0);
+    const F = (T && T.freezeN) || 1;
+    let fw = GUT;
+    if (T) for (let k = 0; k < F && k < T.cols.length; k++) fw += T.cols[k].hid ? 0 : T.cols[k].w;
     els.stdCorner.style.width = fw + 'px'; els.stdHead.style.left = fw + 'px';
     els.stdCorner.style.height = els.stdHead.style.height = (n * RH) + 'px';
     els.stdHead.style.right = els.colHead.style.right;
@@ -4691,22 +4912,26 @@ function v4RenderStd(c0, c1){
   els.grid.classList.toggle('stdOn', !!STD.on);
   const rows = stdRows();
   if (!rows || MS.B.stdCollapsed) { els.stdHeadIn.innerHTML = ''; els.stdCornerIn.innerHTML = ''; return; }
-  const X = T.colX, cols = T.cols, R = stdRect();
+  const X = T.colX, cols = T.cols, R = stdRect(), F = T.freezeN || 1, left = T.frozenLeft;
   let h = '', fh = '';
   rows.forEach((sr, i) => {
     const top = i * RH;
     h += `<div class="r" style="top:${top}px">`;
     for (let c = c0; c <= c1; c++) { if (cols[c].hid) continue; const v = sr[cols[c].id]; h += `<div class="c sb${stdSelCls(i, c, R)}" style="left:${X[c - 1]}px;width:${cols[c].w}px" data-sr="${i}" data-c="${c}" title="${isBlank(v) ? '' : esc(fmt(v))}">${isBlank(v) ? '' : esc(fmt(v))}</div>`; }
     h += '</div>';
-    const v0 = cols.length ? sr[cols[0].id] : '';
-    fh += `<div class="g sbg" style="top:${top}px" title="Standard answer row ${i + 1}">S${i + 1}</div><div class="c sb${stdSelCls(i, 0, R)}" style="top:${top}px;left:${GUT}px;width:${cols.length ? cols[0].w : 0}px" data-sr="${i}" data-c="0">${isBlank(v0) ? '' : esc(fmt(v0))}</div>`;
+    fh += `<div class="g sbg" style="top:${top}px" title="Standard answer row ${i + 1}">S${i + 1}</div>`;
+    for (let c = 0; c < F && c < cols.length; c++) {
+      if (cols[c].hid) continue;
+      const v0 = sr[cols[c].id];
+      fh += `<div class="c sb${stdSelCls(i, c, R)}" style="top:${top}px;left:${left[c]}px;width:${cols[c].w}px" data-sr="${i}" data-c="${c}">${isBlank(v0) ? '' : esc(fmt(v0))}</div>`;
+    }
   });
   els.stdHeadIn.innerHTML = h; els.stdHeadIn.style.transform = `translateX(${-els.body.scrollLeft}px)`;
   els.stdCornerIn.innerHTML = fh;
   if (STD.ed) stdPosEditor();
 }
-function stdCellEl(i, c){ return (c === 0 ? els.stdCornerIn : els.stdHeadIn).querySelector(`.c[data-sr="${i}"][data-c="${c}"]`); }
-function stdEnsureVisible(c){ if (c >= 1) { const b = els.body, x0 = T.colX[c - 1], x1 = T.colX[c]; if (x0 < b.scrollLeft) b.scrollLeft = x0; else if (x1 > b.scrollLeft + b.clientWidth) b.scrollLeft = Math.min(x0, x1 - b.clientWidth); } }
+function stdCellEl(i, c){ const F = (T && T.freezeN) || 1; return (c < F ? els.stdCornerIn : els.stdHeadIn).querySelector(`.c[data-sr="${i}"][data-c="${c}"]`); }
+function stdEnsureVisible(c){ const F = (T && T.freezeN) || 1; if (c >= F) { const b = els.body, x0 = T.colX[c - 1], x1 = T.colX[c]; if (x0 < b.scrollLeft) b.scrollLeft = x0; else if (x1 > b.scrollLeft + b.clientWidth) b.scrollLeft = Math.min(x0, x1 - b.clientWidth); } }
 function stdSelect(r, c, extend){
   const rows = stdRows(); if (!rows) return;
   r = Math.max(0, Math.min(rows.length - 1, r)); c = Math.max(0, Math.min(T.cols.length - 1, c));
@@ -4837,7 +5062,7 @@ function cellAt(target){
   const cell = target.closest && target.closest('.c'); if (!cell) return null;
   if (cell.dataset.sr != null) return null;
   if (els.cells.contains(cell)) return {r:+cell.parentNode.dataset.r, c:+cell.dataset.c, el:cell};
-  if (els.frozenIn.contains(cell)) return {r:+cell.dataset.r, c:0, el:cell};
+  if (els.frozenIn.contains(cell)) return {r:+cell.dataset.r, c:+cell.dataset.c, el:cell};
   return null;
 }
 function onDataMouseDown(e){
@@ -4871,7 +5096,10 @@ function masterToGrid(keepSheet){
     const rows = MS.data.get(s.name) || [];
     if (!rows.length && i > 0) return;
     const cols = ensureSheetColumns(B, s.name).filter(c => c.visible);
-    tables.set(s.name, tableFor(s.name, cols, rows, old && old.get(s.name)));
+    const t = tableFor(s.name, cols, rows, old && old.get(s.name));
+    const fx = B.xl && B.xl.fixedLeft && B.xl.fixedLeft[s.name];
+    if (fx) t.fixedLeft = fx;
+    tables.set(s.name, t);
   });
   const origT = buildTable(ORIG_SHEET, [MS.orig.header].concat(MS.orig.rows), null); origT.ro = true;
   const logT = buildTable(LOG_SHEET, [LOG_HEADER].concat(MS.log), null); logT.ro = true;
@@ -4895,6 +5123,15 @@ function hhMark(r, c, v){
   if (m && m.unk && m.unk.includes(id)) k = 'unk';
   return k;
 }
+function fixedColSplit(name, cols){
+  const B = MS && MS.B;
+  const key = B && B.xl && B.xl.fixedLeft && B.xl.fixedLeft[name];
+  if (key && cols) {
+    const i = cols.findIndex(c => c.key === key);
+    if (i > 0) return i;
+  }
+  return 1;
+}
 function masterSheetsPayload(){
   ensureV4State(); ensureHhsrsColumns(MS.B);
   const B = MS.B, xl = B.xl || (B.xl = {markerRow:true, linkCell:'F1'}), marker = xl.markerRow !== false;
@@ -4903,6 +5140,8 @@ function masterSheetsPayload(){
   const dataNames = dataSheetNames();
   for (const name of dataNames) {
     const rows = MS.data.get(name) || [], cols = ensureSheetColumns(B, name), comps = photoCompsFor(name), std = ensureStd(name);
+    backfillSections(B);
+    const stripeList = headerStripes(cols, c => sectionOfCol(c, B));
     B.savedKeys[name] = cols.map(c => c.key);
     const mk = {}, aoa = [], nc = new Set((B.newCols && B.newCols[name]) || []);
     if (marker) {
@@ -4921,10 +5160,12 @@ function masterSheetsPayload(){
     aoa.push(cols.map(c => c.header));
     cols.forEach((c, i) => {
       const ref = colLetter(i) + H;
-      if (isHhKey(c.key)) mk[ref] = 'hhr';
+      const st = stripeList[i];
+      if (st) mk[ref] = st;
+      else if (isHhKey(c.key)) mk[ref] = 'hhr';
       else if (c.key === 'g|comments') mk[ref] = 'gco';
       else if (!c.key.startsWith('p|') && itemCompOf(c.key, c.header, comps)) mk[ref] = 'hy';
-      if (nc.has(c.key)) mk[ref] = 'nw';
+      if (nc.has(c.key) && !st) mk[ref] = 'nw';
     });
     const counts = new Map(); for (const r of rows) { const u = fmt(r.vals['u|uprn']).trim(); if (u) counts.set(u, (counts.get(u) || 0) + 1); }
     const ui = cols.findIndex(c => c.key === 'u|uprn'), meta = [];
@@ -4946,7 +5187,7 @@ function masterSheetsPayload(){
       const m = {u}; if (r.sig) m.s = r.sig; if (r.e && r.e.size) m.e = [...r.e]; if (r.ins) m.i = 1; if (r.m && Object.keys(r.m).length) m.x = r.m;
       meta.push(m);
     });
-    B.rowMeta[name] = meta; marks[name] = mk; freeze[name] = H; xl.hdrRows[name] = H; xl.stdRows[name] = std.length;
+    B.rowMeta[name] = meta; marks[name] = mk; freeze[name] = {y:H, x:fixedColSplit(name, cols)}; xl.hdrRows[name] = H; xl.stdRows[name] = std.length;
     sheets.push({name, aoa, hdrRows:H, widths:cols.map(c => c.hid ? (c.w || 60) : (c.w || Math.min(260, Math.max(60, c.header.length * 7 + 30)))), hiddenCols:cols.map(c => !c.visible || !!c.hid)});
   }
   xl.hdrRow = dataNames.length ? xl.hdrRows[dataNames[0]] : 2;
@@ -5312,6 +5553,7 @@ els.stdEd.addEventListener('keydown', e => {
 els.stdEd.addEventListener('blur', () => { if (STD.ed) { stdCommit(); render(); } });
 $('stdAdd').onclick = stdAddRow; $('stdDel').onclick = stdDelRow; $('stdCol').onclick = stdToggle;
 if (els.bHh) els.bHh.onclick = toggleHh;
+if (els.bFixLeft) els.bFixLeft.addEventListener('click', () => actFixLeft());
 els.editor.setAttribute('spellcheck', 'true'); els.editor.setAttribute('lang', 'en-GB');
 
 /* ---------- import an existing horizontal MDF (v4) ---------- */
