@@ -630,7 +630,6 @@
     var stepEx = $("extra-box");
     var stepPh = $("step-photos");
     var vDone = visitDone();
-    var narrow = progressive();
 
     if (hint) hint.hidden = vDone;
     if (details) details.hidden = !vDone;
@@ -644,16 +643,6 @@
     }
 
     showStep(stepProp, false);
-    if (!narrow) {
-      showStep(stepHaz, false);
-      if (extrasSectionShown()) showStep(stepEx, false);
-      else hideStep(stepEx);
-      showStep(stepPh, false);
-      if (actions) actions.hidden = false;
-      setCurrent(stepVisit);
-      return;
-    }
-
     if (!propertyDone()) {
       hideStep(stepHaz);
       hideStep(stepEx);
@@ -1076,12 +1065,15 @@
 
   if (form) {
     form.addEventListener("submit", function (e) {
+      // Keep every answer on the page. Changing the file input during submit
+      // can wipe the form in the browser, so this handler stops that event
+      // and posts itself only when the issue is ready for review.
+      e.preventDefault();
+      if (e.target !== form) return;
       if (photoBusy) {
-        e.preventDefault();
         setPhotoStatus("Still preparing photos…", "err");
         return;
       }
-      syncFiles(chosen);
       var total = existingCount() + chosen.length;
       var oversized = "";
       for (var i = 0; i < chosen.length; i++) {
@@ -1091,19 +1083,22 @@
         }
       }
       if (oversized) {
-        e.preventDefault();
         setPhotoStatus(oversized + " is still over 25 MB after shrink — choose another shot.", "err");
         return;
       }
       if (total > max) {
-        e.preventDefault();
         setPhotoStatus("Add " + minPhotos + " to " + max + " photos.", "err");
         return;
       }
-      if (total < minPhotos && !visibleRequiredMissing()) {
-        e.preventDefault();
+      if (total < minPhotos) {
         setPhotoStatus(minPhotos === 1 ? "Add at least 1 photo." : "Add at least " + minPhotos + " photos.", "err");
+        return;
       }
+      if (visibleRequiredMissing()) {
+        setPhotoStatus("Finish this section, then press Review.", "err");
+        return;
+      }
+      HTMLFormElement.prototype.submit.call(form);
     });
   }
 
