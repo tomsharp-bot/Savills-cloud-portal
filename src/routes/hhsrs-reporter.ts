@@ -1454,7 +1454,7 @@ hhsrsReporterRouter.post("/review/:id/mark-actioned", (_req: Request, res: Respo
   res.status(410).type("text/plain").send("Gone.");
 });
 
-hhsrsReporterRouter.post("/review/:id/send", async (req: Request, res: Response) => {
+hhsrsReporterRouter.post("/review/:id/send", uploadReviewSendPhotos, async (req: Request, res: Response) => {
   await handleSend(req, res, req.params.id);
 });
 
@@ -1788,8 +1788,15 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
     return;
   }
-  const result = await deliverCaseEmail(req, prepared.row, prepared.body);
+  const stored = await storeReviewAddedPhotos(req, prepared.row, prepared.body);
+  if (!stored.ok) {
+    flashErr(req, stored.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+    return;
+  }
+  const result = await deliverCaseEmail(req, stored.row, stored.body);
   if (!result.ok) {
+    await stored.rollback();
     flashErr(req, result.error);
     res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
     return;
@@ -1805,6 +1812,97 @@ const officeUpload = multer({
   storage: multer.memoryStorage(),
   limits: hhsrsMulterLimits,
 });
+
+function uploadReviewSendPhotos(req: Request, res: Response, next: NextFunction): void {
+  const type = String(req.headers["content-type"] || "");
+  if (!type.includes("multipart/form-data")) {
+    next();
+    return;
+  }
+  officeUpload.array("photos", HHSRS_MAX_PHOTOS)(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    const code = typeof err === "object" && err && "code" in err ? String((err as { code: string }).code) : "";
+    flashErr(
+      req,
+      code === "LIMIT_FILE_SIZE"
+        ? hhsrsPhotoSizeError()
+        : code === "LIMIT_FILE_COUNT" || code === "LIMIT_UNEXPECTED_FILE"
+          ? `Add up to ${HHSRS_MAX_PHOTOS} photos.`
+          : "Could not upload photos."
+    );
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${encodeURIComponent(String(req.params.id || ""))}`);
+  });
+}
+
+type ReviewPhotoFile = { originalname: string; mimetype: string; size: number; buffer: Buffer };
+
+function reviewAddedPhotoFiles(req: Request): ReviewPhotoFile[] {
+  const files = Array.isArray(req.files) ? req.files : [];
+  return files
+    .map((file) => ({
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      buffer: file.buffer,
+    }))
+    .filter((file) => file.buffer && file.buffer.length > 0 && file.size > 0);
+}
+
+async function storeReviewAddedPhotos(
+  req: Request,
+  row: NonNullable<Awaited<ReturnType<typeof loadCase>>>,
+  body: Record<string, unknown>
+): Promise<
+  | {
+      ok: true;
+      row: NonNullable<Awaited<ReturnType<typeof loadCase>>>;
+      body: Record<string, unknown>;
+      rollback: () => Promise<void>;
+    }
+  | { ok: false; error: string }
+> {
+  const files = reviewAddedPhotoFiles(req);
+  const rollback = async () => undefined;
+  if (!files.length) return { ok: true, row, body, rollback };
+  const photoError = officePhotoError(files);
+  if (photoError) return { ok: false, error: photoError };
+  const previousPaths = photoNames(row);
+  if (previousPaths.length + files.length > HHSRS_MAX_PHOTOS) {
+    return { ok: false, error: `Add up to ${HHSRS_MAX_PHOTOS} photos.` };
+  }
+  const storage = sitePhotoStorageFromApp(req.app);
+  let added: string[] = [];
+  const restore = async () => {
+    await prisma.hhsrsSiteSubmission
+      .update({ where: { id: row.id }, data: { photoPaths: previousPaths } })
+      .catch(() => undefined);
+    await discardAppendedCasePhotos(row.id, added, storage);
+  };
+  try {
+    added = await appendCasePhotos(row.id, files, previousPaths, storage);
+    await prisma.hhsrsSiteSubmission.update({
+      where: { id: row.id },
+      data: { photoPaths: [...previousPaths, ...added] },
+    });
+    const fresh = await loadCase(row.id);
+    if (!fresh) throw new SitePhotoError("Could not upload photos.");
+    const addedNames = added
+      .map((key) => key.split("/").filter(Boolean).pop() || "")
+      .filter(Boolean);
+    return {
+      ok: true,
+      row: fresh,
+      body: { ...body, photo: [...postedValues(body.photo), ...addedNames] },
+      rollback: restore,
+    };
+  } catch (err) {
+    await restore();
+    return { ok: false, error: err instanceof SitePhotoError ? err.message : "Could not upload photos." };
+  }
+}
 
 function uploadOfficePhotos(req: Request, res: Response, next: NextFunction): void {
   officeUpload.array("photos", HHSRS_MAX_PHOTOS)(req, res, (err: unknown) => {

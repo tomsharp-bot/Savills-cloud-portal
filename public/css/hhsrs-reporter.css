@@ -2238,7 +2238,15 @@ body.hhsrs-reporter {
   margin-top: 0.65rem;
 }
 .hhsrs-reporter .photos-add-row[hidden] { display: none !important; }
-.hhsrs-reporter .photos-block:not(.is-blank-mode) .photos-add-row { display: none !important; }
+.hhsrs-reporter .photos-block:not(.is-blank-mode) #rv-photos-add-row { display: none !important; }
+.hhsrs-reporter #rv-case-photo-msg {
+  margin: 8px 0 0;
+  color: var(--savills-red);
+  font-size: 13px;
+  font-weight: 650;
+  flex: 1 1 100%;
+}
+.hhsrs-reporter #rv-case-photo-msg[hidden] { display: none !important; }
 .hhsrs-reporter .photos-dropzone {
   flex: 1 1 160px;
   display: flex;

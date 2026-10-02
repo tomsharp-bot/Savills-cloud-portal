@@ -1069,6 +1069,37 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(mainJs, /fullImg\.addEventListener\("mouseleave", closeFullPhoto\)/);
   });
 
+  it("adds a case-details photo drop that matches the amend drop", () => {
+    const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const route = readFileSync("src/routes/hhsrs-reporter.ts", "utf8");
+    const photos = review.slice(review.indexOf('id="rv-photos-block"'), review.indexOf('id="btn-generate-email"'));
+    assert.match(photos, /id="rv-case-photo-add"/);
+    assert.match(photos, /id="rv-case-photo-drop"/);
+    assert.match(photos, /id="rv-case-photo-file"/);
+    assert.match(photos, /Add or drop a photo/);
+    assert.match(photos, /class="photos-dropzone"/);
+    assert.match(photos, /JPEG, PNG, WebP or HEIC/);
+    assert.match(photos, /id="rv-photo-thumbs"/);
+    assert.match(photos, /<span>Add photo<\/span>/);
+    assert.match(photos, /Drop an image here, or browse \(up to 4\)/);
+    assert.match(find, /Drop a replacement photo here, or click to upload/);
+    assert.match(js, /function addDroppedCasePhotos/);
+    assert.match(js, /function isAddedPhotoFile/);
+    assert.match(js, /wireCasePhotoDrop\(caseDrop, true\)/);
+    assert.match(js, /wireCasePhotoDrop\(caseGrid, false\)/);
+    assert.match(js, /Add up to 4 photos\./);
+    assert.match(js, /Photos must be JPEG, PNG, WebP or HEIC\./);
+    assert.match(js, /queueAddedCasePhotos\(form\)/);
+    assert.match(css, /\.photos-block:not\(\.is-blank-mode\) #rv-photos-add-row/);
+    assert.doesNotMatch(css, /\.photos-block:not\(\.is-blank-mode\) \.photos-add-row/);
+    assert.match(route, /post\("\/review\/:id\/send", uploadReviewSendPhotos/);
+    assert.match(route, /function storeReviewAddedPhotos/);
+    assert.equal(photos.includes("Drag a photo"), false);
+  });
+
   it("declares review draft storage keys before restore runs", () => {
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const draftsAt = js.indexOf('var REVIEW_DRAFTS_KEY = "hhsrs-review-drafts-v1"');
