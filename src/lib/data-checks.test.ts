@@ -265,6 +265,70 @@ globalThis.__go = function(){
     assert.ok(a3);
     assert.notEqual(a3![1], a4 ? a4[1] : "");
   });
+
+  it("restores a narrowed Master Data File column at the saved pixel width", () => {
+    const source = readDataReviewPage();
+    assert.match(source, /const RH = 22, GUT = 56, HH = 200/);
+    assert.match(source, /ht="150"/);
+    assert.match(source, /xSplit="/);
+    assert.match(source, /visible:true, w:c\.w/);
+
+    const parts = ["function fmt(v){", "function colLetter(n){", "function buildTable(name, aoa, widths){"].map((needle) =>
+      extractDecl(source, needle)
+    );
+    const grid: { __bt?: (name: string, aoa: unknown[][], widths: number[]) => { cols: { w: number }[] } } = {};
+    vm.runInNewContext(parts.join("\n") + "\nglobalThis.__bt = buildTable;\n", grid);
+    const table = grid.__bt!("S", [["UPRN", "Phase Status", "Notes", "Wide"], ["100", "Open", "short", "x"]], [36, 64, 0, 400]);
+    assert.equal(table.cols[0].w, 36);
+    assert.equal(table.cols[1].w, 64);
+    assert.equal(table.cols[3].w, 400);
+    assert.ok(table.cols[2].w >= 48 && table.cols[2].w <= 320);
+
+    const xlsxStart = source.indexOf('<script id="xlsxlib">');
+    const xlsxJs = source.slice(source.indexOf(">", xlsxStart) + 1, source.indexOf("</script>", xlsxStart));
+    const drvAt = source.indexOf("function drvCore(scope){");
+    const ready = "post({type:'ready'});";
+    const readyAt = source.indexOf(ready, drvAt);
+    const drv =
+      source.slice(drvAt, readyAt) +
+      "scope.__api = {attachSavedColWidths:attachSavedColWidths, excelWidthPx:excelWidthPx};\n  " +
+      ready +
+      "\n}";
+    const sandbox: {
+      TextDecoder: typeof TextDecoder;
+      TextEncoder: typeof TextEncoder;
+      __go?: () => number[];
+    } = { TextDecoder, TextEncoder };
+    vm.runInNewContext(
+      xlsxJs +
+        "\n" +
+        drv +
+        `
+var scope = {postMessage:function(){}, onmessage:null};
+drvCore(scope);
+globalThis.__go = function(){
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet([["UPRN","Phase Status","Notes"],["100","Open","short"]]);
+  ws["!cols"] = [{wpx:36},{wpx:64, hidden:true},{wpx:400}];
+  XLSX.utils.book_append_sheet(wb, ws, "Data Horizontal DW");
+  var buf = XLSX.write(wb, {type:"array", bookType:"xlsx"});
+  var u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  var read = XLSX.read(u8, {type:"array", dense:true, cellStyles:false, cellText:false});
+  if (read.Sheets["Data Horizontal DW"]["!cols"]) throw new Error("cellStyles off should not parse cols by itself");
+  scope.__api.attachSavedColWidths(u8, read);
+  var cols = read.Sheets["Data Horizontal DW"]["!cols"];
+  return cols.map(function(c){ return c && c.wpx; });
+};
+`,
+      sandbox
+    );
+    assert.deepEqual([...sandbox.__go!()], [36, 64, 400]);
+    const px = vm.runInNewContext(
+      extractDecl(source, "function excelWidthPx(width){") + "\nexcelWidthPx(6.00390625);",
+      {}
+    );
+    assert.equal(px, 36);
+  });
 });
 
 function sliceBalanced(source: string, openAt: number): string {
