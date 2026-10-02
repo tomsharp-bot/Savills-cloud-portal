@@ -611,7 +611,7 @@ describe("HHSRS main log filters", () => {
     assert.match(tbody, /<td class="col-actioned ml-actioned"><b>24\/09\/2026<\/b><\/td>/);
     assert.match(tbody, /<td class="col-by ml-actioned-by"><b>Carly Farrell<\/b><\/td>/);
     assert.match(tbody, /<td class="col-by ml-actioned-by"><b>Alex Surveyor<\/b><\/td>/);
-    assert.match(tbody, /<strong>Flat 3, 40 /);
+    assert.match(tbody, /<strong>Flat 3, 40 [^<]*, ZZ1 3GH<\/strong>/);
     assert.match(tbody, /class="ml-addr-full">Flat 3, 40 /);
     assert.doesNotMatch(tbody, /<strong>Flat 3<\/strong>/);
 

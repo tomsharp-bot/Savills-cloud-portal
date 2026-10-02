@@ -308,8 +308,8 @@ describe("pending and review lists", () => {
     const own = (list: string[]) => list.filter((address) => address.includes(`${stamp} Harbour Lane`));
     const pendingOwn = own(pendingWaitingAddresses);
     const reviewOwn = own(reviewAddresses);
-    assert.equal(reviewOwn[0], `1 ${stamp} Harbour Lane`);
-    assert.equal(pendingOwn[0], `22 ${stamp} Harbour Lane`);
+    assert.equal(reviewOwn[0], `1 ${stamp} Harbour Lane, EX23 8AB`);
+    assert.equal(pendingOwn[0], `22 ${stamp} Harbour Lane, EX23 8AB`);
     assert.deepEqual(pendingOwn, [...reviewOwn].reverse());
     const pendingSection = pending.body.slice(pending.body.indexOf('id="not-actioned"'), pending.body.indexOf('id="last-actioned"'));
     assert.match(pendingSection, /class="pending-sort-default on"/);
@@ -340,7 +340,7 @@ describe("pending and review lists", () => {
     assert.doesNotMatch(ratingSection, /pending-sort-default on/);
     assert.match(ratingSection, /aria-sort="descending"/);
     assert.match(ratingSection, /Highest rating first/);
-    assert.equal(own(addresses(byRating.body, "waiting-table"))[0], `1 ${stamp} Harbour Lane`);
+    assert.equal(own(addresses(byRating.body, "waiting-table"))[0], `1 ${stamp} Harbour Lane, EX23 8AB`);
     assert.equal(tableSlice(byRating.body, "last-actioned-table").includes("ml-sort"), false);
     assert.deepEqual(headers(byRating.body, "last-actioned-table"), LIST_HEADERS);
 
@@ -457,7 +457,7 @@ describe("pending and review lists", () => {
     assert.match(uprnCell[1], new RegExp(`${uprn}</span> <span class="pending-dupe-tag">Dupe</span>`));
     const addrCell = dupeRow.match(/<td class="addr-cell[^"]*">([\s\S]*?)<\/td>/);
     assert.ok(addrCell);
-    assert.match(addrCell[1], new RegExp(`<strong>${dupeAddress}</strong>`));
+    assert.match(addrCell[1], new RegExp(`<strong>${dupeAddress}, EX23 8AB</strong>`));
     assert.doesNotMatch(addrCell[1], /Dupe/);
 
     const last = pending.body.slice(pending.body.indexOf('id="last-actioned"'));
