@@ -211,7 +211,7 @@
                     <textarea id="callUnreachedNote" name="callUnreachedNote" rows="2" placeholder="<%= values.callRefBlankReason === 'Other' ? 'Please say why…' : 'Add a short note if needed…' %>" class="<%= errors.callUnreachedNote ? 'is-invalid' : '' %>" <%= showCalls && values.callUnreached ? "" : "disabled" %>><%= values.callUnreachedNote || "" %></textarea>
                     <% if (errors.callUnreachedNote) { %><p class="field-error"><%= errors.callUnreachedNote %></p><% } %>
                   </div>
-                  <p class="hhsrs-hint">Required for this project. Enter the call reference, or pick why it is blank.</p>
+                  <p class="hhsrs-hint" id="call-ref-wording" <%= flags.calls && steps.hazard ? "" : "hidden" %>>Required for this project. Enter the call reference, or pick why it is blank.</p>
                 </div>
                 <div class="project-extra" data-extra="vulnerabilities" <%= flags.vulnerabilities ? "" : "hidden" %>>
                   <label for="vulnerabilities">Vulnerabilities *</label>

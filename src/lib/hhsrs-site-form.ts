@@ -300,6 +300,16 @@ export function siteFormShowsCallReference(projectName: string, rating: string):
   return flags.mtvh && String(rating || "") === HHSRS_EMERGENCY_RISK_RATING;
 }
 
+/**
+ * The sentence under the call reference ("Required for this project…").
+ * Onward, Vico, and any project that always collects a call reference show it
+ * only once Extra details is the section on screen. MTVH never shows it, even
+ * when an emergency rating opens the call-reference box. A hidden section does not.
+ */
+export function siteFormShowsExtraDetailsWording(projectName: string, sectionReached: boolean): boolean {
+  return Boolean(sectionReached) && siteFormProjectFlags(projectName).calls;
+}
+
 export function siteFormShowsWindowRestrictor(projectName: string, category: string): boolean {
   return siteFormProjectFlags(projectName).mtvh && String(category || "") === WINDOW_RESTRICTOR_CATEGORY;
 }

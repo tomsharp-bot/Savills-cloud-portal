@@ -677,6 +677,66 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.doesNotMatch(thanks.body, /OFFLINE MOCK/);
   });
 
+  it("hides the extra-details sentence unless that section is open for a call-reference project", async () => {
+    const app = createApp({ basePath: "/projectprogress" });
+    const fresh = await request(app, "GET", "/HHSRS-site-form/new");
+    const freshWording = fresh.body.match(/<p class="hhsrs-hint" id="call-ref-wording"[^>]*>/);
+    assert.ok(freshWording);
+    assert.match(freshWording[0], /\shidden/);
+    assert.match(fresh.body, /Required for this project\. Enter the call reference, or pick why it is blank\./);
+
+    const reached = [
+      "projectId=hhsrs-demo-vico",
+      "surveyDate=2026-09-20",
+      "surveyorName=Alex+Surveyor",
+      "uprn=100123",
+      "fullAddress=1+High+Street",
+      "postcode=EX1+1AA",
+      "addressConfirmed=true",
+      "category=Electrical+Hazards",
+      "rating=Moderate",
+      "comment=Loose+socket",
+    ].join("&");
+    const vico = await request(app, "POST", "/HHSRS-site-form/review", { body: reached });
+    assert.equal(vico.status, 200);
+    const vicoWording = vico.body.match(/<p class="hhsrs-hint" id="call-ref-wording"[^>]*>/);
+    assert.ok(vicoWording);
+    assert.doesNotMatch(vicoWording[0], /\shidden/);
+    const vicoExtra = vico.body.slice(vico.body.indexOf('id="extra-box"'), vico.body.indexOf('id="step-photos"'));
+    assert.doesNotMatch(vicoExtra, /id="extra-box"[^>]*hidden/);
+
+    const early = [
+      "projectId=hhsrs-demo-vico",
+      "surveyDate=2026-09-20",
+      "surveyorName=Alex+Surveyor",
+    ].join("&");
+    const before = await request(app, "POST", "/HHSRS-site-form/review", { body: early });
+    const beforeWording = before.body.match(/<p class="hhsrs-hint" id="call-ref-wording"[^>]*>/);
+    assert.ok(beforeWording);
+    assert.match(beforeWording[0], /\shidden/);
+    assert.match(before.body, /id="extra-box"[^>]*hidden/);
+
+    const mtvh = await request(app, "POST", "/HHSRS-site-form/review", {
+      body: reached.replace("hhsrs-demo-vico", "hhsrs-demo-mtvh").replace("rating=Moderate", "rating=High+-+Emergency+risk"),
+    });
+    const mtvhWording = mtvh.body.match(/<p class="hhsrs-hint" id="call-ref-wording"[^>]*>/);
+    assert.ok(mtvhWording);
+    assert.match(mtvhWording[0], /\shidden/);
+    assert.match(mtvh.body, /data-extra="calls"/);
+    assert.doesNotMatch(
+      mtvh.body.slice(mtvh.body.indexOf('data-extra="calls"'), mtvh.body.indexOf('data-extra="vulnerabilities"')),
+      /data-extra="calls"[^>]*hidden/
+    );
+
+    const js = await request(app, "GET", "/HHSRS-site-form/assets/form.js");
+    assert.match(js.body, /function syncCallWording/);
+    assert.match(js.body, /callsAlways\(\) && section && !section\.hidden/);
+    assert.match(js.body, /if \(extrasHasField\(\) && !extrasDone\(\)\)/);
+    assert.doesNotMatch(js.body, /!extrasDone\(\) \|\| !extrasPassed/);
+    const css = await request(app, "GET", "/HHSRS-site-form/assets/form.css");
+    assert.match(css.body, /#call-ref-wording\[hidden\]/);
+  });
+
   it("keeps the rest of the form hidden until project, date and surveyor are filled", async () => {
     const app = createApp({ basePath: "/projectprogress" });
     const closed = await request(app, "GET", "/HHSRS-site-form/new");
