@@ -211,6 +211,9 @@ async function insertOriginalAndClose(tx: Tx, submissionId: string, commit: Send
         "lastEditedBy" = ${commit.sentBy},
         "claimedBy" = '',
         "claimedAt" = NULL,
+        "dismissedDecision" = '',
+        "dismissedBy" = '',
+        "dismissedAt" = NULL,
         "updatedAt" = CURRENT_TIMESTAMP
       WHERE "id" = ${submissionId}
         AND "emailSentAt" IS NULL
@@ -474,6 +477,9 @@ export async function sendCaseEmail(args: {
                 throw new PortalSendError(
                   "This case is in Duplicates & Errors. Move it back to Pending before sending."
                 );
+              }
+              if (!correction && locked[0].status === "dismissed") {
+                throw new PortalSendError("This hazard was dismissed. No email is sent.");
               }
               if (correction) {
                 const anchor = await earliestSentEmail(tx, submissionId);

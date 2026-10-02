@@ -2108,6 +2108,12 @@
     var line = $("rv-send-line");
     if (!btn || !line) return;
     if (!cfg.findResend && cfg.send && cfg.send.sent) return;
+    if (!cfg.findResend && btn.getAttribute("data-dismissed") === "1") {
+      btn.disabled = true;
+      line.hidden = false;
+      line.textContent = "Restore it before sending.";
+      return;
+    }
     if (!cfg.findResend && btn.getAttribute("data-not-needed") === "1") {
       btn.disabled = true;
       line.hidden = false;
@@ -2490,56 +2496,19 @@
   }
 
   function wireDismissHazard() {
-    var form = $("rv-dismiss-form");
-    var decision = $("rv-decision");
-    var star = $("rv-decision-star");
-    if (!form || !decision) return;
-    form.addEventListener("submit", function (e) {
-      if (String(decision.value || "").replace(/^\s+|\s+$/g, "")) return;
-      e.preventDefault();
-      if (star) star.hidden = false;
-      decision.focus();
-      var note = $("rv-office-note");
-      if (note) {
-        delete note.dataset.office;
-        note.textContent = "Add the decision, then press Dismiss hazard again. No email goes out.";
-      }
-    });
-  }
-  wireDismissHazard();
-
-  function wireNotNeeded() {
-    var openBtn = $("btn-not-needed");
-    var overlay = $("nn-overlay");
-    var form = $("nn-form");
+    var openBtn = $("btn-dismiss-hazard");
+    var overlay = $("dh-overlay");
+    var form = $("dh-form");
     if (!openBtn || !overlay || !form) return;
-    var moveBtn = $("nn-move");
-    var cancelBtn = $("nn-cancel");
-    var dupField = $("nn-dup-field");
-    var noteField = $("nn-note-field");
-    var noteReq = $("nn-note-req");
-    var note = $("nn-note");
-    var dupOf = $("nn-duplicate-of");
-    var ownRef = String(form.getAttribute("data-ref") || "").trim().toUpperCase();
+    var confirmBtn = $("dh-confirm");
+    var cancelBtn = $("dh-cancel");
 
     function selectedReason() {
       var picked = form.querySelector("input[name='reason']:checked");
       return picked ? picked.value : "";
     }
-    function syncMove() {
-      var reason = selectedReason();
-      if (dupField) dupField.hidden = reason !== "duplicate";
-      if (noteField) noteField.hidden = !reason;
-      if (noteReq) noteReq.hidden = reason !== "other";
-      if (note) note.placeholder = reason === "other" ? "Say why" : "Optional";
-      var noteText = note ? String(note.value || "").trim() : "";
-      var ref = dupOf ? String(dupOf.value || "").trim().toUpperCase() : "";
-      var refOk = /^[A-Z0-9]{2,8}-\d{1,4}$/.test(ref) && ref !== ownRef;
-      var ok = false;
-      if (reason === "duplicate") ok = refOk;
-      else if (reason === "other") ok = !!noteText;
-      else if (reason) ok = true;
-      if (moveBtn) moveBtn.disabled = !ok;
+    function syncConfirm() {
+      if (confirmBtn) confirmBtn.disabled = !selectedReason();
     }
     openBtn.addEventListener("click", function () {
       overlay.hidden = false;
@@ -2547,24 +2516,23 @@
       var first = form.querySelector("input[name='reason']");
       if (first) first.focus();
     });
-    function closeNotNeeded() {
+    function closeDismiss() {
       overlay.hidden = true;
       document.body.style.overflow = "";
       openBtn.focus();
     }
-    if (cancelBtn) cancelBtn.addEventListener("click", closeNotNeeded);
-    overlay.addEventListener("click", function (e) { if (e.target === overlay) closeNotNeeded(); });
-    form.addEventListener("change", syncMove);
-    form.addEventListener("input", syncMove);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeDismiss);
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) closeDismiss(); });
+    form.addEventListener("change", syncConfirm);
     form.addEventListener("submit", function (e) {
-      syncMove();
-      if (moveBtn && moveBtn.disabled) e.preventDefault();
+      syncConfirm();
+      if (confirmBtn && confirmBtn.disabled) e.preventDefault();
     });
     document.addEventListener("keydown", function (e) {
       if (overlay.hidden || e.key !== "Escape") return;
-      closeNotNeeded();
+      closeDismiss();
     });
-    syncMove();
+    syncConfirm();
   }
-  wireNotNeeded();
+  wireDismissHazard();
 })();

@@ -386,7 +386,7 @@ model HhsrsSiteSubmission {
   notADuplicate        Boolean   @default(false)
   /// Surveyor answers at the office's first check. Empty until the office saves, sends, or dismisses.
   surveyorCheck        Json      @default("{}")
-  /// Why the office dismissed the hazard. Empty unless status is dismissed.
+  /// test | hazard, or an older free-text decision. Kept after restore so abandon can repeat the line. Cleared when sent.
   dismissedDecision    String    @default("")
   dismissedBy          String    @default("")
   dismissedAt          DateTime?

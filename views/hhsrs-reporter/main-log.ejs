@@ -192,7 +192,14 @@
     <% } %>
   </div>
   <div class="ml-d-foot">
-    <a class="btn btn-primary" href="<%= panel.caseHref %>">Open case</a>
+    <% if (panel.kind === "dismissed") { %>
+      <form method="post" action="<%= reporterBase %>/review/<%= panel.submissionId %>/restore" style="margin:0">
+        <button type="submit" class="btn btn-primary">Restore</button>
+      </form>
+      <a class="btn ml-pack" href="<%= panel.caseHref %>">Open case</a>
+    <% } else { %>
+      <a class="btn btn-primary" href="<%= panel.caseHref %>">Open case</a>
+    <% } %>
     <a class="btn ml-pack" href="<%= panel.caseHref %>">View pack</a>
     <% if (panel.originalHref) { %><a class="btn ml-pack" href="<%= panel.originalHref %>">View original</a><% } %>
     <a class="btn ml-pack ml-close-link" href="<%= panel.closeHref %>">Close</a>

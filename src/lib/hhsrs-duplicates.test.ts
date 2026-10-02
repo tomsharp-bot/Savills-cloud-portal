@@ -103,7 +103,7 @@ describe("not needed checks", () => {
       readFileSync("public/css/hhsrs-reporter.css", "utf8"),
       /\.side-tabs \.tab-link\.needs-attention\s*\{[\s\S]*?background:\s*var\(--savills-red\)/
     );
-    assert.match(review, /showNotNeeded/);
+    assert.match(review, /showDismissHazard/);
     assert.match(review, /review\/office-send/);
   });
 
@@ -300,12 +300,13 @@ describe("duplicates and office emails with the database", () => {
       const blank = await request(port, "GET", "/HHSRSreporter/review", { cookie });
       assert.equal(blank.status, 200);
       assert.match(blank.body, /Send and log/);
-      assert.doesNotMatch(blank.body, /id="btn-not-needed"/);
+      assert.doesNotMatch(blank.body, /id="btn-dismiss-hazard"/);
 
       const review = await request(port, "GET", `/HHSRSreporter/review/${duplicate.id}`, { cookie });
       assert.equal(review.status, 200);
-      assert.match(review.body, /id="btn-not-needed"/);
-      assert.match(review.body, /Duplicate, error or test/);
+      assert.match(review.body, /id="btn-dismiss-hazard"/);
+      assert.match(review.body, /No email is sent/);
+      assert.doesNotMatch(review.body, /id="btn-not-needed"/);
       assert.match(review.body, /Sends the email and adds it to the Main Log/);
       assert.match(review.body, /Abandon claim — return to pending/);
       const actions = review.body.slice(review.body.indexOf('class="actions-row"'), review.body.indexOf('id="review-workspace"'));
