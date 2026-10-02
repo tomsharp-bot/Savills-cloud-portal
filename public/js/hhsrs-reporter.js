@@ -549,6 +549,8 @@
     var isBlank = cfg.mode !== "filled";
     if (block) block.classList.toggle("is-blank-mode", isBlank);
     if (addRow) addRow.hidden = !isBlank;
+    var caseAdd = $("rv-case-photo-add");
+    if (caseAdd) caseAdd.hidden = isBlank;
     var drop = $("rv-photos-dropzone");
     if (drop) drop.classList.toggle("is-disabled", casePhotos.length >= MAX_CASE_PHOTOS);
     var countEl = $("rv-photos-count");
@@ -676,7 +678,7 @@
     grid.innerHTML = "";
     var canRemove = cfg.mode !== "filled";
     casePhotos.forEach(function (photo) {
-      appendThumb(grid, photo, { email: false, removable: canRemove });
+      appendThumb(grid, photo, { email: false, removable: canRemove || !!photo.added });
     });
     if (caseLocked) setEmailPhotoTools(true);
   }
@@ -767,6 +769,7 @@
     });
     casePhotos = kept;
     renderCaseThumbs();
+    syncAddedPhotoForm();
   }
 
   function readImageFiles(fileList) {
@@ -790,6 +793,125 @@
         url: url,
       });
     });
+  }
+
+  function isAddedPhotoFile(file) {
+    var type = String((file && file.type) || "").toLowerCase();
+    if (/^image\/(jpeg|jpg|png|webp|heic|heif)/.test(type)) return true;
+    return /\.(jpe?g|png|webp|heic|heif)$/i.test(String((file && file.name) || ""));
+  }
+
+  function setCasePhotoMsg(text) {
+    var msg = $("rv-case-photo-msg");
+    if (!msg) return;
+    msg.textContent = text || "";
+    msg.hidden = !text;
+  }
+
+  function casePhotoDropOpen() {
+    if (sentStage() || dismissedStage() || caseLocked) return false;
+    var block = $("rv-photos-block");
+    return !!(block && !block.hidden);
+  }
+
+  function addDroppedCasePhotos(fileList) {
+    if (!casePhotoDropOpen() || !fileList || !fileList.length) return;
+    var rejected = false;
+    var capped = false;
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      if (!file) continue;
+      if (casePhotos.length >= MAX_CASE_PHOTOS) {
+        capped = true;
+        break;
+      }
+      if (!isAddedPhotoFile(file)) {
+        rejected = true;
+        continue;
+      }
+      var url = URL.createObjectURL(file);
+      var base = (file.name || "photo").replace(/\.[^.]+$/, "");
+      var added = addCasePhoto({
+        id: nextPhotoId(),
+        name: file.name || "photo.jpg",
+        caption: base || "Photo",
+        mime: file.type || "image/jpeg",
+        blob: file,
+        blobUrl: url,
+        url: url,
+        added: true,
+      });
+      if (!added) {
+        URL.revokeObjectURL(url);
+        capped = true;
+        break;
+      }
+    }
+    if (capped) setCasePhotoMsg("Add up to 4 photos.");
+    else if (rejected) setCasePhotoMsg("Photos must be JPEG, PNG, WebP or HEIC.");
+    else setCasePhotoMsg("");
+    syncAddedPhotoForm();
+  }
+
+  function syncAddedPhotoForm() {
+    var form = $("rv-send-form");
+    if (!form) return;
+    var has = false;
+    for (var i = 0; i < casePhotos.length; i++) {
+      if (casePhotos[i] && casePhotos[i].added && casePhotos[i].blob) has = true;
+    }
+    if (has) form.setAttribute("enctype", "multipart/form-data");
+    else form.removeAttribute("enctype");
+  }
+
+  function wireCasePhotoDrop(target, mark) {
+    if (!target) return;
+    target.addEventListener("dragenter", function (e) {
+      e.preventDefault();
+      if (mark) target.classList.add("is-dragover");
+    });
+    target.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      if (mark) target.classList.add("is-dragover");
+    });
+    target.addEventListener("dragleave", function () {
+      if (mark) target.classList.remove("is-dragover");
+    });
+    target.addEventListener("drop", function (e) {
+      e.preventDefault();
+      if (mark) target.classList.remove("is-dragover");
+      addDroppedCasePhotos(e.dataTransfer && e.dataTransfer.files);
+    });
+  }
+
+  function queueAddedCasePhotos(form) {
+    var added = [];
+    casePhotos.forEach(function (photo) {
+      if (photo && photo.added && photo.blob) added.push(photo);
+    });
+    if (!added.length || !form) return;
+    form.setAttribute("enctype", "multipart/form-data");
+    var input = $("rv-send-new-photos");
+    if (!input) {
+      input = document.createElement("input");
+      input.type = "file";
+      input.id = "rv-send-new-photos";
+      input.name = "photos";
+      input.multiple = true;
+      input.hidden = true;
+      form.appendChild(input);
+    }
+    if (typeof DataTransfer === "undefined") return;
+    try {
+      var dt = new DataTransfer();
+      added.forEach(function (photo) {
+        var file = photo.blob;
+        if (typeof File !== "undefined" && file instanceof File) dt.items.add(file);
+        else dt.items.add(new File([file], photo.name || "photo.jpg", { type: photo.mime || file.type || "image/jpeg" }));
+      });
+      input.files = dt.files;
+    } catch (err) {}
   }
 
   function setPhotoDragData(dt, photo) {
@@ -833,6 +955,8 @@
     var emailGrid = $("rv-email-photo-thumbs");
     var fileInput = $("rv-photo-file");
     var dropzone = $("rv-photos-dropzone");
+    var caseDrop = $("rv-case-photo-drop");
+    var caseFile = $("rv-case-photo-file");
     var dlBtn = $("btn-download-photos");
     wirePhotoPreview(caseGrid);
     wirePhotoPreview(emailGrid);
@@ -881,6 +1005,14 @@
         dropzone.classList.remove("is-dragover");
         if (casePhotos.length >= MAX_CASE_PHOTOS) return;
         readImageFiles(e.dataTransfer && e.dataTransfer.files);
+      });
+    }
+    wireCasePhotoDrop(caseDrop, true);
+    wireCasePhotoDrop(caseGrid, false);
+    if (caseFile) {
+      caseFile.addEventListener("change", function () {
+        addDroppedCasePhotos(caseFile.files);
+        caseFile.value = "";
       });
     }
   }
@@ -2531,6 +2663,7 @@
         input.value = p.name;
         holder.appendChild(input);
       });
+      queueAddedCasePhotos(form);
     });
   }
 

@@ -271,6 +271,14 @@
               </label>
               <input type="file" id="rv-photo-file" accept="image/*" hidden multiple />
             </div>
+            <div class="photos-add-row" id="rv-case-photo-add" <%= isFilled ? "" : "hidden" %>>
+              <label class="photos-dropzone" id="rv-case-photo-drop" for="rv-case-photo-file">
+                Add or drop a photo
+                <span class="photos-drop-hint">JPEG, PNG, WebP or HEIC</span>
+              </label>
+              <input id="rv-case-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" hidden multiple />
+            </div>
+            <p id="rv-case-photo-msg" hidden></p>
           </div>
         </fieldset>
         <% if (isFilled && !sentEmail) { %>
