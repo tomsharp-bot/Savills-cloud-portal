@@ -6,7 +6,7 @@
 <title>Data Review (practice v4)</title>
 <!-- Data Review (practice) v4 – offline single-file page: Vision export → validation master, file builder, imports, validator grid. Includes SheetJS Community Edition 0.20.3 (Apache-2.0), inlined. -->
 <style>
-:root{--navy:#14213d;--navy2:#22335f;--line:#e3e6ec;--line2:#c8ced9;--sel:#1a73e8;--edit:#fff4b8;--ins:#dff3e3;--hdr:#f3f5f8;--txt:#1d2433;--muted:#6b7385;--hh:200px;--hy:#ffe98a;--dup:#ffc9de}
+:root{--navy:#14213d;--navy2:#22335f;--line:#e3e6ec;--line2:#c8ced9;--sel:#1a73e8;--edit:#fff4b8;--ins:#dff3e3;--hdr:#f3f5f8;--txt:#1d2433;--muted:#6b7385;--hh:300px;--hy:#ffe98a;--dup:#ffc9de}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font-family:Aptos,"Segoe UI",-apple-system,BlinkMacSystemFont,Arial,sans-serif;font-size:12.5px;color:var(--txt);background:#fff;overflow:hidden}
 button{font:inherit}
@@ -305,6 +305,8 @@ body:not(.tab-grid) #main{visibility:hidden}
 #grid .h.hb .hn,#grid .h.hyel .hn{color:#1d2433}
 .h.nw.hb:not(.f),.h.nw.hyel:not(.f){box-shadow:inset 0 -3px 0 #2e9d4a}
 .c.vAdd,#frozen .c.vAdd{background:#ffff00;font-weight:600}
+.c.phMiss,#frozen .c.phMiss,.rs .c.phMiss,.c.rsc.phMiss,.rs .c.e.phMiss,.c.rsc.e.phMiss{background:#ffff00}
+.c.phMark,#frozen .c.phMark,.rs .c.phMark,.c.rsc.phMark,.rs .c.e.phMark,.c.rsc.e.phMark{background:#fff}
 .c.vHigh,#frozen .c.vHigh{background:#ffd7a8;font-weight:600}
 .c.vAuto{background:#cdefea}
 .autoGo{display:inline-block;margin:0 5px 0 0;padding:0 5px;border:0;border-radius:3px;background:#138a7c;color:#fff;font:inherit;font-size:11px;font-weight:700;line-height:15px;vertical-align:1px;cursor:pointer}
@@ -594,7 +596,7 @@ function drvCore(scope){
   }
   /* ---- v3: colours for the saved master (post-processes the .xlsx/.xlsm zip; SheetJS CE does not write fills) ---- */
   var FILLS = {hhr:'FFF6B3B3', gco:'FFFCDCB4', edit:'FFFFF4B8', dup:'FFFFC9DE', hy:'FFFFE98A', hp:'FFE2F0F3', nw:'FFD4F5DC', note:'FFFFF1D6', link:'FFE8EEFC',
-    addin:'FFFFFF00', high:'FFFFD7A8', unk:'FFFFB4B4', late:'FFE9D8FD', std:'FFE6EDF5', stdh:'FFC9D6E8', auto:'FFCDEFEA', x7:'FFFF8A80', hb:'FFD6EAF8', hyel:'FFFFF4CC'};
+    addin:'FFFFFF00', phm:'FFFFFF00', high:'FFFFD7A8', unk:'FFFFB4B4', late:'FFE9D8FD', std:'FFE6EDF5', stdh:'FFC9D6E8', auto:'FFCDEFEA', x7:'FFFF8A80', hb:'FFD6EAF8', hyel:'FFFFF4CC'};
   function u8s(u){ return new TextDecoder('utf-8').decode(u); }
   function su8(s){ return new TextEncoder().encode(s); }
   function zfind(zip, name){ for (var i = 0; i < zip.FullPaths.length; i++) { var p = zip.FullPaths[i].replace(/^[^\/]*\//, ''); if (p === name) return zip.FileIndex[i]; } return null; }
@@ -627,7 +629,7 @@ function drvCore(scope){
       var sl = /\/>$/.test(tag) ? '/' : '';
       var attrs = tag.replace(/^<row\b/, '').replace(/\/?>$/, '');
       attrs = attrs.replace(/\sht="[^"]*"/g, '').replace(/\scustomHeight="[^"]*"/g, '');
-      return '<row' + attrs + ' ht="150" customHeight="1"' + sl + '>';
+      return '<row' + attrs + ' ht="225" customHeight="1"' + sl + '>';
     });
   }
   function freezeZip(zip, freeze, sheetNames){
@@ -1043,7 +1045,7 @@ var UI = Object.assign({}, UI_DEFAULT, lsGet('drv3.ui', {}));
 
 'use strict';
 /* ===================== Data Review (practice) – main page ===================== */
-const RH = 22, GUT = 56, HH = 200;
+const RH = 22, GUT = 56, HH = 300;
 const $ = id => document.getElementById(id);
 const els = {};
 ['top','dropMini','sheetSel','fileInfo','counter','bUndo','bRedo','bInsRow','bDelRow','bInsCol','bDelCol','bClearF','bExport',
@@ -2445,7 +2447,7 @@ function computeProp(p, V, B, comps){
   // Property Age = survey year − Year Built (MTVH column AS)
   const yb = out.get('q|Year Built'); const ybY = yearOf(yb);
   if (sdY != null && ybY != null) put('u|age', sdY - ybY);
-  // photo codes for the builder's photo components
+  // photo codes for the builder photo components
   const sheet = sheetForType(B, p.ptype);
   for (const g of B.photos) {
     if (g.sheet && g.sheet !== 'all' && g.sheet !== sheet) continue;
@@ -2977,7 +2979,7 @@ function firstPhotoCode(){
   for (const rows of MS.data.values()) for (const r of rows) for (const k in r.vals) if (k.startsWith('p|') && !isMarker(r.vals[k])) return fmt(r.vals[k]);
   return '';
 }
-function isMarker(v){ return /^(NP|RA|TR|EXT|Comm|N\/?A|No Access|None|-)$/i.test(fmt(v).trim()); }
+function isMarker(v){ return /^(NP|RA|TR|TBC|EXT|Comm|N\/?A|No Access|None|-|\.)$/i.test(fmt(v).trim()); }
 function isPhotoCol(col){ return !!col && typeof col.id === 'string' && col.id.startsWith('p|'); }
 function photoCls(val, c){
   if (isMaster() && isPhotoCol(T.cols[c])) {
@@ -3498,6 +3500,7 @@ function exactFillProp(p, V, B, copies, st){
     if (col) row.vals[col.key] = v;
   }
   if (!cs) {
+    if (sheetRole(sheet) === 'dwelling') fillNewDwellingPhotoCodes(row, B, sheet, p.uprn);
     sheetRows(sheet).push(row);
     copies.set(u, [{sheet, row}]);
     st.newProps++; st.newUprns.push(u);
@@ -4142,7 +4145,44 @@ function hhIssueOf(k){ if (typeof k !== 'string') return 0; const m = /^h\|(\d+)
 function isGarage(B, sheet){ const s = B.sheets.find(x => x.name === sheet); return !!s && s.types.some(t => /garage/i.test(t)); }
 function addTo(m, f, k){ const a = m[f] || (m[f] = []); if (!a.includes(k)) a.push(k); }
 function photoExists(code){ const lc = normCode(code); return photos.map.has(lc) || !!(shareRT.set && shareRT.set.has(lc)); }
-function isMarker(v){ return /^(NP|RA|TR|EXT|Comm|N\/?A|No Access|None|-|\.)$/i.test(fmt(v).trim()); }
+function isMarker(v){ return /^(NP|RA|TR|TBC|EXT|Comm|N\/?A|No Access|None|-|\.)$/i.test(fmt(v).trim()); }
+function isMainPhotoCol(col){
+  if (!col) return false;
+  const key = typeof col.key === 'string' ? col.key : (typeof col.id === 'string' ? col.id : '');
+  if (!key.startsWith('p|') || key.startsWith('p|~')) return false;
+  if (col.kind && col.kind !== 'photo') return false;
+  return true;
+}
+function photoRow(row){ return row && row.ref && row.ref.m ? row.ref : row; }
+/* Yellow means that photo code is not in the photo pool. Only a new dwelling row is flagged, so rows already on the sheet stay as they are. */
+function dwellingPhotoYellow(row, col, val){
+  const master = photoRow(row);
+  if (!master || !master.m || !master.m.phNew) return false;
+  if (!isMainPhotoCol(col)) return false;
+  if (isBlank(val) || isMarker(val)) return false;
+  return !photoExists(val);
+}
+function dwellingPhotoMark(row, col, val){
+  const master = photoRow(row);
+  if (!master || !master.m || !master.m.phNew) return false;
+  if (!isMainPhotoCol(col)) return false;
+  return isMarker(val);
+}
+/* New dwelling rows get a photo code in every main photo column, including components Vision did not send. */
+function fillNewDwellingPhotoCodes(row, B, sheet, uprn){
+  if (!row || !B || sheetRole(sheet) !== 'dwelling') return 0;
+  const list = (B.columns && B.columns[sheet]) || [];
+  let n = 0;
+  for (let i = 0; i < list.length; i++) {
+    const col = list[i];
+    if (!isMainPhotoCol(col) || !isBlank(row.vals[col.key])) continue;
+    const parts = col.key.split('|');
+    row.vals[col.key] = photoCode(B, String(uprn), parts[1] || '', parts[2] == null ? '' : parts[2]);
+    n++;
+  }
+  if (list.some(isMainPhotoCol)) { if (!row.m) row.m = {}; row.m.phNew = 1; }
+  return n;
+}
 
 /* ---------- columns ---------- */
 function hhColDefs(){
@@ -4696,11 +4736,16 @@ function v4Cls(row, c, val, r){
     }
     if (r === T.sel.r && c === T.sel.c && !STD.on && ddListFor(id)) s += ' vDd';
   }
+  if (dwellingPhotoYellow(row, T.cols[c], val)) s += ' phMiss';
+  else if (dwellingPhotoMark(row, T.cols[c], val)) s += ' phMark';
   return s;
 }
 function v4Tip(row, c){
   if (!MS || !book || !book.master || !T || T.ro) return '';
-  const id = T.cols[c].id; if (typeof id !== 'string' || !(id.startsWith('h|') || id.startsWith('p|~') || id === 'g|comments')) return '';
+  const col = T.cols[c], id = col && col.id;
+  if (typeof id !== 'string') return '';
+  if (dwellingPhotoYellow(row, col, row && row.v ? row.v[c] : '')) return ` title="${esc('Image not present')}"`;
+  if (!(id.startsWith('h|') || id.startsWith('p|~') || id === 'g|comments')) return '';
   const t = [];
   if (id.startsWith('h|sum|')) t.push('Counted from HHSRS 1–7 (Low / Medium / High; ADD IN and other ratings count in the Total only). Updates as you edit.');
   if (id === 'h|chk') t.push('Set to Yes once you have checked this row’s HHSRS issues (right-click or ▾ for Yes / No).');
@@ -5245,6 +5290,8 @@ function masterSheetsPayload(){
         let k = ed && !isBlank(v) ? 'edit' : '';
         const h = isHhKey(c.key) || c.key === 'g|comments' ? hhMark(r, c, v) : '';
         if (h) k = h;
+        if (dwellingPhotoYellow(r, c, v)) k = 'phm';
+        else if (dwellingPhotoMark(r, c, v)) k = '';
         if (k) mk[colLetter(ci) + xr] = k;
         return v;
       }));
