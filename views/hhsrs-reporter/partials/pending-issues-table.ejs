@@ -49,13 +49,14 @@
         const claim = claimView(row);
         const addrFull = splitAddress(String(row.fullAddress || ""), String(row.postcode || "")).full;
         const addrLine = String(row.addressLine || "").trim() || addressFirstLine(addrFull);
+        const addrShown = addrFull || addrLine;
       %>
         <tr class="<%= [showClaim ? claimRowClass(row) : "", row.href ? "find-result" : "", row.rowClass || "", row.pendingDupe ? "pending-dupe" : ""].filter(Boolean).join(" ") %>" data-claim-status="<%= showClaim ? claim.status : "open" %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
           <% if (showReference) { %><td class="col-ref"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td><% } %>
           <td class="col-proj"><span class="project-pill"><%= row.projectName %></span></td>
           <td class="addr-cell col-addr">
             <span class="ml-addr-hover">
-              <strong><%= addrLine %></strong>
+              <strong><%= addrShown %></strong>
               <% if (addrFull && addrLine && addrFull !== addrLine) { %>
                 <span class="ml-addr-full"><%= addrFull %></span>
               <% } %>

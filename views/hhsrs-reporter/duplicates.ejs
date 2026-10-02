@@ -31,7 +31,7 @@
             <td class="dup-addr">
               <% const addrLine = addressFirstLine(item.address); %>
               <span class="ml-addr-hover">
-                <strong><%= addrLine %></strong>
+                <strong><%= item.address || addrLine %></strong>
                 <% if (item.address && addrLine && item.address !== addrLine) { %>
                   <span class="ml-addr-full"><%= item.address %></span>
                 <% } %>

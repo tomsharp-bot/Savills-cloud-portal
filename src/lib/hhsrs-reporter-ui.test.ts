@@ -988,13 +988,14 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.ok(blank.includes("<select"));
   });
 
-  it("shows house and street on every case list, with the full address on hover", () => {
+  it("shows the full address on every case list, and keeps it on hover", () => {
     const duplicates = readFileSync("views/hhsrs-reporter/duplicates.ejs", "utf8");
     const tablePath = "views/hhsrs-reporter/partials/pending-issues-table.ejs";
     const table = readFileSync(tablePath, "utf8");
     assert.match(table, /splitAddress\(String\(row\.fullAddress/);
     assert.match(table, /addressFirstLine\(addrFull\)/);
     assert.match(duplicates, /addressFirstLine\(item\.address\)/);
+    assert.match(duplicates, /<strong><%= item\.address \|\| addrLine %><\/strong>/);
     assert.match(duplicates, /class="ml-addr-full"/);
     assert.match(duplicates, /Not a duplicate/);
     assert.match(duplicates, /View duplicate/);
@@ -1042,10 +1043,10 @@ describe("HHSRS Reporter UI helpers", () => {
       addressFirstLine,
       splitAddress,
     }, { filename: tablePath });
-    assert.match(html, /<strong>12, Moor Cross<\/strong>/);
+    assert.match(html, /<strong>12, Moor Cross, Bude, EX23 9EH<\/strong>/);
     assert.match(html, /class="ml-addr-full">12, Moor Cross, Bude, EX23 9EH<\/span>/);
-    assert.doesNotMatch(html, /<strong>12, Moor Cross, Bude<\/strong>/);
-    assert.match(html, /<strong>Flat 5, 40 Fictional Way<\/strong>/);
+    assert.doesNotMatch(html, /<strong>12, Moor Cross<\/strong>/);
+    assert.match(html, /<strong>Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH<\/strong>/);
     assert.match(html, /class="ml-addr-full">Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH<\/span>/);
     assert.match(html, />Review Case</);
     assert.doesNotMatch(html, />Amend</);
