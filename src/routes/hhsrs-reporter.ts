@@ -133,11 +133,18 @@ import {
 } from "../lib/hhsrs-main-log.js";
 import { loadDuplicateComparisons } from "../lib/hhsrs-duplicate-compare.js";
 import {
-  NOT_NEEDED_REASONS,
   markCaseNotADuplicate,
   moveCaseToNotNeeded,
   restoreCaseToPending,
 } from "../lib/hhsrs-not-needed.js";
+import {
+  DISMISS_HAZARD_REASONS,
+  dismissHazardLogLine,
+  dismissWaitingCase,
+  parkedDismissDecision,
+  restoreDismissedCase,
+  returnAbandonedDismiss,
+} from "../lib/hhsrs-dismiss.js";
 import { createOfficeCaseAndSend, officePhotoError } from "../lib/hhsrs-office-case.js";
 import {
   baselineSurveyorCheck,
@@ -579,7 +586,8 @@ async function renderReview(
     sentBanner: sentEmail ? sentBannerText(sentEmail.sentBy, sentEmail.sentAt) : "",
     showSentPopup,
     ...signature,
-    notNeededReasons: NOT_NEEDED_REASONS,
+    dismissHazardReasons: DISMISS_HAZARD_REASONS,
+    dismissedLineText: dismissHazardLogLine(row.dismissedDecision || "", row.dismissedBy || ""),
     surveyorCheck: baselineSurveyorCheck(row.surveyorCheck, row),
   });
 }
@@ -1455,6 +1463,10 @@ hhsrsReporterRouter.post("/review/:id/dismiss", async (req: Request, res: Respon
   await handleDismiss(req, res, req.params.id);
 });
 
+hhsrsReporterRouter.post("/review/:id/restore", async (req: Request, res: Response) => {
+  await handleRestoreDismissed(req, res, req.params.id);
+});
+
 hhsrsReporterRouter.get("/duplicates", async (req: Request, res: Response) => {
   await handleDuplicates(req, res);
 });
@@ -1850,50 +1862,52 @@ async function handleDismiss(req: Request, res: Response, id: string): Promise<v
     return;
   }
   const back = `${HHSRS_REPORTER_PATH}/review/${row.id}`;
-  if (row.emailSentAt || !isWaitingStatus(row.status)) {
-    flashErr(req, "This case is not pending.");
-    res.redirect(back);
+  const owner = heldClaim(row, claimerLabel(req.user));
+  if (owner) {
+    flashErr(req, claimHeldMessage(owner));
+    res.redirect(HHSRS_REPORTER_PATH);
     return;
   }
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const decision = String(body.decision || "").trim().slice(0, 2000);
-  if (!decision) {
-    flashErr(req, "Add the decision, then press Dismiss hazard again. No email goes out.");
-    res.redirect(back);
-    return;
-  }
-  const expected = new Date(String(body.expectedUpdatedAt || ""));
-  if (Number.isNaN(expected.getTime())) {
-    flashErr(req, "Missing concurrency token. Reload the case and try again.");
-    res.redirect(back);
-    return;
-  }
-  if (row.updatedAt.getTime() !== expected.getTime()) {
-    flashErr(req, "This case was updated by someone else since you opened it. Reload to see their changes, then try again.");
-    res.redirect(back);
-    return;
-  }
   const names = senderNamesFromLogin(req.user);
   const viewedBy = names.senderFullName || names.sentBy || "someone";
   const surveyorCheck = surveyorCheckToStore(row.surveyorCheck, row);
-  const result = await prisma.hhsrsSiteSubmission.updateMany({
-    where: { id: row.id, updatedAt: expected, status: { in: [...HHSRS_WAITING_STATUSES] } },
-    data: {
-      status: "dismissed",
-      dismissedDecision: decision,
-      dismissedBy: viewedBy,
-      dismissedAt: new Date(),
-      lastEditedBy: viewedBy,
-      ...(surveyorCheck ? { surveyorCheck } : {}),
-    },
+  const result = await dismissWaitingCase({
+    id: row.id,
+    reason: String(body.reason || ""),
+    by: viewedBy,
+    actor: claimerLabel(req.user),
+    surveyorCheck,
   });
-  if (result.count !== 1) {
-    flashErr(req, "This case was updated by someone else since you opened it. Reload to see their changes, then try again.");
+  if (!result.ok) {
+    if (result.error === "Case not found.") {
+      res.status(404).send("Case not found.");
+      return;
+    }
+    flashErr(req, result.error);
     res.redirect(back);
     return;
   }
   flashOk(req, "Dismissed. No email sent.");
   res.redirect(`${HHSRS_REPORTER_PATH}/main-log?open=case:${encodeURIComponent(row.id)}`);
+}
+
+async function handleRestoreDismissed(req: Request, res: Response, id: string): Promise<void> {
+  const result = await restoreDismissedCase({
+    id,
+    actor: claimerLabel(req.user),
+  });
+  if (!result.ok) {
+    if (result.error === "Case not found.") {
+      res.status(404).send("Case not found.");
+      return;
+    }
+    flashErr(req, result.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/main-log?open=case:${encodeURIComponent(id)}`);
+    return;
+  }
+  flashOk(req, "Restored to Review & Create.");
+  res.redirect(`${HHSRS_REPORTER_PATH}/review/${id}`);
 }
 
 async function handleNotNeeded(req: Request, res: Response, id: string): Promise<void> {
@@ -2050,6 +2064,17 @@ async function handleAbandon(req: Request, res: Response, id: string): Promise<v
     flashErr(req, claimHeldMessage(owner));
     res.redirect(HHSRS_REPORTER_PATH);
     return;
+  }
+  if (
+    isWaitingStatus(row.status) &&
+    !row.emailSentAt &&
+    parkedDismissDecision(row.dismissedDecision)
+  ) {
+    const returned = await returnAbandonedDismiss({ id: row.id });
+    if (returned.ok) {
+      res.redirect(`${HHSRS_REPORTER_PATH}/main-log?open=case:${encodeURIComponent(row.id)}`);
+      return;
+    }
   }
   if (isWaitingStatus(row.status) && String(row.claimedBy || "").trim()) {
     await prisma.hhsrsSiteSubmission.updateMany({

@@ -310,19 +310,20 @@ describe("office rating check", () => {
 });
 
 describe("office check on case details", () => {
-  it("puts Dismiss hazard and the red stars on case details, and leaves the finish bar alone", () => {
+  it("keeps the red stars on case details and puts Dismiss hazard on the finish bar", () => {
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
     const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const log = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
     const finishAt = review.indexOf('id="rv-finish-bar"');
     const caseAt = review.indexOf('id="rv-case-panel"');
     const dismissAt = review.indexOf('id="btn-dismiss-hazard"');
-    assert.ok(caseAt >= 0 && dismissAt > caseAt && dismissAt < finishAt);
+    assert.ok(caseAt >= 0 && finishAt > caseAt && dismissAt > finishAt);
     assert.match(review, /Dismiss hazard/);
-    assert.match(review, /id="rv-decision"/);
+    assert.match(review, /id="rv-office-note"/);
     assert.match(review, /data-office-star="restrictorMissingCount"/);
     assert.match(review, /data-office-star="clientCallReference"/);
-    assert.match(review, /id="rv-dismiss-form"/);
+    assert.doesNotMatch(review, /id="rv-decision"/);
+    assert.doesNotMatch(review, /id="rv-dismiss-form"/);
     assert.match(js, /function syncOfficeCheck/);
     assert.match(js, /High - Emergency risk/);
     assert.match(js, /High - Significant risk/);
@@ -336,12 +337,14 @@ describe("office check on case details", () => {
     assert.match(js, /Raised to /);
     assert.match(js, /function raiseWord/);
     assert.match(js, /Dropped below /);
-    assert.match(js, /Add the decision, then press Dismiss hazard again/);
+    assert.doesNotMatch(js, /Add the decision, then press Dismiss hazard again/);
+    assert.match(js, /function wireDismissHazard/);
     assert.match(log, /panel\.kind === "dismissed"/);
     assert.match(log, /Viewed by/);
-    const finish = review.slice(finishAt);
-    assert.match(finish, /id="btn-not-needed"/);
+    assert.match(log, /\/restore/);
+    const finish = review.slice(finishAt, review.indexOf('class="footer-note"'));
+    assert.match(finish, /id="btn-dismiss-hazard"/);
     assert.match(finish, /id="btn-send-email"/);
-    assert.doesNotMatch(finish, /btn-dismiss-hazard/);
+    assert.doesNotMatch(finish, /id="btn-not-needed"/);
   });
 });

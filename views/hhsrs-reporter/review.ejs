@@ -9,8 +9,11 @@
   const claimState = typeof claim !== "undefined" && claim ? claim : null;
   const showAbandon = !!(claimState && (claimState.status === "claimed" || claimState.status === "stale"));
   const caseWaiting = isFilled && (row.status === "new" || row.status === "in_review" || row.status === "email_ready");
-  const showNotNeeded = caseWaiting && !sentEmail;
+  const showDismissHazard = caseWaiting && !sentEmail;
   const caseNotNeeded = isFilled && row.status === "not_needed";
+  const caseDismissed = isFilled && row.status === "dismissed";
+  const restoredFromDismiss = showDismissHazard && String(row.dismissedDecision || "").trim() !== "";
+  const dismissedLine = typeof dismissedLineText === "undefined" ? "" : dismissedLineText;
   const detailExtras = typeof caseDetailExtras !== "undefined" && caseDetailExtras
     ? caseDetailExtras
     : { calls: false, otherDetails: false, vulnerabilities: false, cause: false, restrictors: false, surveyDate: false };
@@ -35,7 +38,7 @@
   <% if (isFilled) { %>
     <%- include("partials/claim-chip", { claimRow: claimState }) %>
     <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/abandon" id="abandon-claim-form">
-      <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>>Abandon claim — return to pending</button>
+      <button type="submit" class="btn btn-abandon-claim" id="btn-abandon-claim" <%= showAbandon ? "" : "hidden" %>><%= restoredFromDismiss ? "Abandon — return to dismissed" : "Abandon claim — return to pending" %></button>
     </form>
   <% } %>
   <a class="btn btn-create-email" id="btn-create-plain-email" href="<%= reporterBase %>/review?compose=1">Create new email</a>
@@ -270,16 +273,8 @@
             </div>
           </div>
         </fieldset>
-        <% const showDismiss = isFilled && caseWaiting && !sentEmail; %>
-        <% if (showDismiss) { %>
-          <div class="office-dismiss" id="rv-office-dismiss">
-            <label for="rv-decision">Decision <span class="req-star" id="rv-decision-star" hidden>*</span></label>
-            <textarea id="rv-decision" name="decision" form="rv-dismiss-form" placeholder="Why you changed the rating, or why it is not a hazard"></textarea>
-            <div class="office-dismiss-row">
-              <button type="submit" class="btn btn-dismiss-hazard" id="btn-dismiss-hazard" form="rv-dismiss-form">Dismiss hazard</button>
-              <p class="review-project-hint" id="rv-office-note"></p>
-            </div>
-          </div>
+        <% if (isFilled && !sentEmail) { %>
+          <p class="review-project-hint" id="rv-office-note"></p>
         <% } %>
         <div class="case-actions">
           <div class="generate-email-row case-save-row">
@@ -295,11 +290,6 @@
         </div>
       </div>
       <% if (isFilled) { %></form><% } %>
-      <% if (isFilled && caseWaiting && !sentEmail) { %>
-        <form id="rv-dismiss-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/dismiss">
-          <input type="hidden" name="expectedUpdatedAt" value="<%= row.updatedAt.toISOString() %>" />
-        </form>
-      <% } %>
     </section>
 
     <section class="panel email-draft-panel<%= sentEmail ? ' is-sent-lock' : ' is-pre-generate' %>" id="rv-email-draft" aria-label="Client Email Draft">
@@ -385,18 +375,23 @@
 
   <section class="finish-bar" id="rv-finish-bar" aria-label="Finish this case">
     <div class="finish-bar-left">
-      <% if (showNotNeeded) { %>
-        <button type="button" class="btn btn-not-needed" id="btn-not-needed">
+      <% if (showDismissHazard) { %>
+        <button type="button" class="btn btn-not-needed" id="btn-dismiss-hazard">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="7" width="12" height="13" rx="1.4"/><path d="M6 16.5V5.5h10"/><path d="m11.2 11.2 5.2 5.2M16.4 11.2l-5.2 5.2"/></svg>
-          Not needed
+          Dismiss hazard
         </button>
-        <p class="finish-hint">Duplicate, error or test</p>
+        <p class="finish-hint">No email is sent</p>
+      <% } else if (caseDismissed) { %>
+        <form method="post" action="<%= reporterBase %>/review/<%= row.id %>/restore">
+          <button type="submit" class="btn btn-not-needed" id="btn-restore-dismiss">Restore</button>
+        </form>
+        <p class="finish-hint"><%= dismissedLine %></p>
       <% } %>
     </div>
     <div class="finish-bar-right">
       <div class="send-block" id="rv-send-block">
-        <p class="finish-hint send-line" id="rv-send-line"><% if (sentEmail) { %>Sent and logged in the Main Log. Can't be sent again.<% } else if (caseNotNeeded) { %>Move it back to Pending before sending.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Sends the email and adds it to the Main Log.<% } %></p>
-        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" <%= (sentEmail || caseNotNeeded) ? "disabled" : "" %> data-not-needed="<%= caseNotNeeded ? "1" : "" %>" aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent and logged" : "Send and log" %></button>
+        <p class="finish-hint send-line" id="rv-send-line"><% if (sentEmail) { %>Sent and logged in the Main Log. Can't be sent again.<% } else if (caseDismissed) { %>Restore it before sending.<% } else if (caseNotNeeded) { %>Move it back to Pending before sending.<% } else if (!sendConfig.configured) { %>Sending not set up yet.<% } else { %>Sends the email and adds it to the Main Log.<% } %></p>
+        <button type="button" class="btn btn-primary btn-send <%= sentEmail ? 'is-sent' : '' %>" id="btn-send-email" <%= (sentEmail || caseNotNeeded || caseDismissed) ? "disabled" : "" %> data-not-needed="<%= caseNotNeeded ? "1" : "" %>" data-dismissed="<%= caseDismissed ? "1" : "" %>" aria-describedby="rv-send-line"><%= sentEmail ? "✓ Sent and logged" : "Send and log" %></button>
       </div>
     </div>
   </section>
@@ -404,7 +399,7 @@
 
 <p class="footer-note">Review &amp; Create · Project extras are stubbed from desktop rules · Live drafts from site submissions</p>
 
-<% if (!sentEmail && !caseNotNeeded) { %>
+<% if (!sentEmail && !caseNotNeeded && !caseDismissed) { %>
 <div class="ck-overlay" id="ck-overlay" hidden>
   <div class="ck-dialog" role="dialog" aria-modal="true" aria-labelledby="ck-title">
     <form id="rv-send-form" autocomplete="off" method="post" action="<%= isFilled ? reporterBase + '/review/' + row.id + '/send' : reporterBase + '/review/office-send' %>">
@@ -450,11 +445,11 @@
   </div>
 </div>
 
-<% if (showNotNeeded) { %>
-<div class="nn-overlay" id="nn-overlay" hidden>
-  <div class="nn-dialog" role="dialog" aria-modal="true" aria-labelledby="nn-title">
-    <form id="nn-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/not-needed" data-ref="<%= row.reference || '' %>">
-      <h2 id="nn-title">Move to Duplicates &amp; Errors?</h2>
+<% if (showDismissHazard) { %>
+<div class="nn-overlay" id="dh-overlay" hidden>
+  <div class="nn-dialog" role="dialog" aria-modal="true" aria-labelledby="dh-title">
+    <form id="dh-form" method="post" action="<%= reporterBase %>/review/<%= row.id %>/dismiss">
+      <h2 id="dh-title">Dismiss hazard?</h2>
       <p class="nn-case">
         <% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } %>
         <%= row.fullAddress %><% if (row.postcode) { %>, <%= row.postcode %><% } %> · <%= row.category %>
@@ -462,26 +457,18 @@
       <fieldset class="nn-reasons-set">
         <legend>Reason <abbr title="required">*</abbr></legend>
         <div class="nn-reasons">
-          <% (typeof notNeededReasons !== "undefined" ? notNeededReasons : []).forEach((item) => { %>
+          <% (typeof dismissHazardReasons !== "undefined" ? dismissHazardReasons : []).forEach((item) => { %>
             <label class="nn-reason">
               <input type="radio" name="reason" value="<%= item.id %>" />
-              <span class="nn-reason-copy"><strong><%= item.label %></strong><span><%= item.hint %></span></span>
+              <span class="nn-reason-copy"><strong><%= item.label %></strong><% if (item.hint) { %><span><%= item.hint %></span><% } %></span>
             </label>
           <% }) %>
         </div>
       </fieldset>
-      <label class="nn-field" id="nn-dup-field" hidden>
-        Duplicate of (reference) <abbr title="required">*</abbr>
-        <input name="duplicateOf" id="nn-duplicate-of" class="nn-ref" placeholder="e.g. MTVH-012" autocomplete="off" />
-      </label>
-      <label class="nn-field" id="nn-note-field" hidden>
-        Note <span id="nn-note-req" hidden><abbr title="required">*</abbr></span>
-        <textarea name="note" id="nn-note" rows="3" placeholder="Optional"></textarea>
-      </label>
-      <p class="nn-safe">✓ Nothing is deleted. You can move it back.</p>
+      <p class="nn-safe">No email is sent. You can restore it from the Main Log.</p>
       <div class="nn-foot">
-        <button type="button" class="btn btn-back" id="nn-cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="nn-move" disabled>Move</button>
+        <button type="button" class="btn btn-back" id="dh-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="dh-confirm" disabled>Dismiss</button>
       </div>
     </form>
   </div>

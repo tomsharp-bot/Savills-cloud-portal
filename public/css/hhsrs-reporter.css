@@ -3308,7 +3308,7 @@ tr.is-new-log td { background: #f5f3ff; }
   .ml-d-foot .ml-close-link { margin-left: 0; }
 }
 
-/* Not needed — quiet outlined button on the static finish bar */
+/* Dismiss hazard — quiet outlined button on the static finish bar */
 .hhsrs-reporter .btn-not-needed {
   display: inline-flex;
   align-items: center;

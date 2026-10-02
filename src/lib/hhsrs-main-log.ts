@@ -10,7 +10,7 @@ import { prisma } from "./prisma.js";
 import { loadPortalProjectNames, storedNamesForPortalProject } from "./hhsrs-portal-projects.js";
 import { HHSRS_ACTIONED_STATUSES, ratingDisplayClass } from "./hhsrs-reporter.js";
 import { formatLondonDateTime, londonDayBounds, MISSING_EMAIL_BODY } from "./hhsrs-find.js";
-import { dismissLogLine } from "./hhsrs-office-check.js";
+import { dismissHazardLogLine } from "./hhsrs-dismiss.js";
 
 export const MAIN_LOG_PAGE_SIZE = 50;
 export const NOT_SENT_LABEL = "Not sent from portal";
@@ -694,7 +694,7 @@ function caseEntry(row: CaseRow): MainLogEntry {
     key: `case:${row.id}`,
     kind: dismissed ? "dismissed" : "not_sent",
     at: dismissed ? row.dismissedAt || row.updatedAt : row.emailSentAt || row.updatedAt,
-    logLine: dismissed ? dismissLogLine(viewedBy, row.dismissedDecision || "") : "",
+    logLine: dismissed ? dismissHazardLogLine(row.dismissedDecision || "", viewedBy) : "",
     reference: row.reference || "",
     projectName: row.projectName,
     uprn: row.uprn,
