@@ -361,6 +361,9 @@ describe("HHSRS Reporter UI helpers", () => {
     const emailPanel = review.slice(review.indexOf("email-draft-panel"), review.indexOf('id="rv-finish-bar"'));
     const casePanel = review.slice(review.indexOf('id="rv-case-panel"'), review.indexOf("email-draft-panel"));
     assert.match(casePanel, /id="rv-email-generate-row"[\s\S]*id="btn-generate-email"/);
+    const generateRow = casePanel.slice(casePanel.indexOf('id="rv-email-generate-row"'));
+    assert.match(generateRow, /id="btn-generate-email"[\s\S]*id="btn-amend-case"[\s\S]*id="rv-generate-note"/);
+    assert.equal(casePanel.slice(0, casePanel.indexOf('id="rv-email-generate-row"')).includes('id="btn-amend-case"'), false);
     assert.match(casePanel, /Save review/);
     assert.doesNotMatch(emailPanel, /id="btn-generate-email"/);
     assert.match(review, /id="rv-email-draft"/);
