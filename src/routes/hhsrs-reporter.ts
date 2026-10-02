@@ -132,8 +132,9 @@ import {
   type MainLogFilters,
   type MainLogSortKey,
 } from "../lib/hhsrs-main-log.js";
-import { loadDuplicateComparisons } from "../lib/hhsrs-duplicate-compare.js";
+import { loadDuplicateComparisons, sentCaseAmendUrl } from "../lib/hhsrs-duplicate-compare.js";
 import {
+  confirmCaseIsADuplicate,
   markCaseNotADuplicate,
   moveCaseToNotNeeded,
   restoreCaseToPending,
@@ -314,7 +315,7 @@ async function loadSummary(): Promise<ReporterSummary> {
       },
     }),
     prisma.hhsrsSiteSubmission.count({ where: { status: { in: [...HHSRS_ACTIONED_STATUSES] } } }),
-    prisma.hhsrsSiteSubmission.count({ where: { status: "not_needed" } }),
+    prisma.hhsrsSiteSubmission.count({ where: { status: "not_needed", duplicateConfirmed: false } }),
   ]);
   return { waiting, inReview, actionedMonth, mainLog, duplicates };
 }
@@ -1482,6 +1483,10 @@ hhsrsReporterRouter.post("/duplicates/:id/not-duplicate", async (req: Request, r
   await handleNotDuplicate(req, res, req.params.id);
 });
 
+hhsrsReporterRouter.post("/duplicates/:id/is-duplicate", async (req: Request, res: Response) => {
+  await handleIsDuplicate(req, res, req.params.id);
+});
+
 hhsrsReporterRouter.post("/review/:id/abandon", async (req: Request, res: Response) => {
   await handleAbandon(req, res, req.params.id);
 });
@@ -2142,6 +2147,23 @@ async function handleNotDuplicate(req: Request, res: Response, id: string): Prom
     flashOk(req, `${label} and ${partner} are not duplicates and are back in Pending.`);
   }
   res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
+}
+
+async function handleIsDuplicate(req: Request, res: Response, id: string): Promise<void> {
+  const result = await confirmCaseIsADuplicate({
+    id,
+    by: senderNamesFromLogin(req.user).sentBy || "someone",
+  });
+  if (!result.ok) {
+    if (result.error === "Case not found.") {
+      res.status(404).send("Case not found.");
+      return;
+    }
+    flashErr(req, result.error);
+    res.redirect(`${HHSRS_REPORTER_PATH}/duplicates`);
+    return;
+  }
+  res.redirect(sentCaseAmendUrl(HHSRS_REPORTER_PATH, result.originalId));
 }
 
 /** Tests replace this with a stub. Production copies into Spaces. */

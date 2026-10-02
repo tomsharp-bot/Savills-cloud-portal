@@ -23,8 +23,9 @@ export function withoutOpenCase<T extends { id: string }>(rows: T[], openId?: st
 }
 
 /**
- * Cases filed as duplicates. The Dupes tab already lists these. Pending shows
- * the same rows as well; nothing here removes them from either list.
+ * Cases filed as duplicates. Pending shows them marked Dupe.
+ * Confirming a pair removes it from Duplicates & errors and leaves it here
+ * until that newer case is completed or cleared.
  */
 export function pendingDuplicateListArgs() {
   return {

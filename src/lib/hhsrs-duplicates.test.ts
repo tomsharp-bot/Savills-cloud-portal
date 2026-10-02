@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,7 +10,7 @@ import { HHSRS_CASE_SEND, HHSRS_PHOTO_COPY } from "../routes/hhsrs-reporter.js";
 import { HHSRS_SITE_PHOTO_STORAGE } from "./hhsrs-site-photos.js";
 import { createSubmissionWithReference } from "./hhsrs-reference.js";
 import { splitAddressPostcode } from "./hhsrs-office-case.js";
-import { toDuplicateCompareRow, type CompareCase } from "./hhsrs-duplicate-compare.js";
+import { sentCaseAmendUrl, toDuplicateCompareRow, type CompareCase } from "./hhsrs-duplicate-compare.js";
 import { validateNotNeededMove } from "./hhsrs-not-needed.js";
 
 function refNumber(reference: string | null): number {
@@ -92,6 +93,11 @@ describe("not needed checks", () => {
     assert.match(page, /Close duplicate/);
     assert.match(page, /Not a duplicate/);
     assert.match(page, /\/duplicates\/<%= item.id %>\/not-duplicate/);
+    assert.match(page, /It's a duplicate/);
+    assert.match(page, /\/duplicates\/<%= item.id %>\/is-duplicate/);
+    const foot = page.slice(page.indexOf('class="dup-foot"'));
+    assert.ok(foot.indexOf("Not a duplicate") < foot.indexOf("It's a duplicate"));
+    assert.ok(foot.indexOf("It's a duplicate") < foot.indexOf("Amend and resend"));
     assert.match(page, /Amend and resend/);
     assert.match(page, /already sent/);
     assert.match(page, /Where the first is/);
@@ -150,6 +156,7 @@ describe("not needed checks", () => {
     assert.equal(row.diff.siteNotes, true);
     assert.equal(row.diff.surveyDate, true);
     assert.equal(row.amendUrl, "/HHSRSreporter/find?case=sent-id&view=amend");
+    assert.equal(row.amendUrl, sentCaseAmendUrl("/HHSRSreporter", "sent-id"));
 
     const same = toDuplicateCompareRow(
       { ...later, rating: "Medium", comment: "Mould around window", surveyDate: "2026-09-20", uprn: "98 756" },
@@ -624,5 +631,196 @@ describe("duplicates and office emails with the database", () => {
     assert.match(photoPage.body, /Photos could not be saved|Nothing was kept/);
     const leftover = await prisma.hhsrsSiteSubmission.findFirst({ where: { uprn: photoUprn } });
     assert.equal(leftover, null);
+  });
+
+  it("opens the original amend page and keeps the newer case a pending dupe", async (t) => {
+    try {
+      await prisma.$queryRaw`SELECT "duplicateConfirmed" FROM "HhsrsSiteSubmission" LIMIT 1`;
+    } catch {
+      t.skip("Postgres with duplicateConfirmed is not available");
+      return;
+    }
+    const admin = await prisma.user.findFirst({ where: { username: "phil.m", role: "admin" } });
+    if (!admin) {
+      t.skip("Seeded admin is not available");
+      return;
+    }
+    const stamp = randomUUID().slice(0, 8);
+    const uprn = `4444${stamp}`;
+    const project = await prisma.project.create({
+      data: {
+        name: `Is Dup ${stamp}`,
+        projectManager: "Test",
+        stage: "current",
+        hhsrsCode: `I${stamp}`.slice(0, 8).toUpperCase(),
+      },
+    });
+    const created: string[] = [];
+    t.after(async () => {
+      if (created.length) {
+        await prisma.hhsrsSentEmail.deleteMany({ where: { submissionId: { in: created } } });
+        await prisma.hhsrsSiteSubmission.deleteMany({ where: { id: { in: created } } });
+      }
+      await prisma.hhsrsReferenceCounter.deleteMany({ where: { key: project.id } });
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
+    });
+
+    const originalAddress = `1 Original House ${stamp}`;
+    const newerAddress = `2 Newer House ${stamp}`;
+    const original = await createSubmissionWithReference(
+      { projectId: project.id, projectName: project.name },
+      (tx, reference) =>
+        tx.hhsrsSiteSubmission.create({
+          data: {
+            projectId: project.id,
+            projectName: project.name,
+            surveyDate: "2026-09-20",
+            uprn,
+            fullAddress: originalAddress,
+            postcode: "B14 6ES",
+            surveyorName: "Sam Surveyor",
+            category: "Damp & Mould Growth",
+            rating: "Medium",
+            comment: "Already emailed.",
+            photoPaths: [],
+            reference,
+            status: "email_sent",
+            emailSentAt: new Date("2026-09-20T12:00:00.000Z"),
+            emailSubject: "HHSRS hazard",
+            emailBody: "The first email stays in the Main Log.",
+            createdAt: new Date("2026-09-20T09:00:00.000Z"),
+          },
+        })
+    );
+    created.push(original.id);
+    const sentEmail = await prisma.hhsrsSentEmail.create({
+      data: {
+        submissionId: original.id,
+        sentAt: new Date("2026-09-20T12:00:00.000Z"),
+        sentBy: "Tom Sharp",
+        from: "HHSRS@savillshousing.co.uk",
+        to: "repairs@savillshousing.co.uk",
+        subject: "HHSRS hazard",
+        body: "The first email stays in the Main Log.",
+        photoNames: [],
+      },
+    });
+    const newer = await createSubmissionWithReference(
+      { projectId: project.id, projectName: project.name },
+      (tx, reference) =>
+        tx.hhsrsSiteSubmission.create({
+          data: {
+            projectId: project.id,
+            projectName: project.name,
+            surveyDate: "2026-09-28",
+            uprn,
+            fullAddress: newerAddress,
+            postcode: "B14 6ES",
+            surveyorName: "Sam Surveyor",
+            category: "Damp & Mould Growth",
+            rating: "High",
+            comment: "Later visit.",
+            photoPaths: [],
+            reference,
+            status: "new",
+            createdAt: new Date("2026-09-28T09:00:00.000Z"),
+          },
+        })
+    );
+    created.push(newer.id);
+
+    const app = createApp({ basePath: "" });
+    const { server, port } = await listen(app);
+    t.after(() => server.close());
+    const login = await request(port, "POST", "/login", {
+      form: { username: "phil.m", password: "PhilMoon2468" },
+    });
+    assert.equal(login.status, 302);
+    let cookie = cookieHeader(login.setCookie);
+
+    const page = await request(
+      port,
+      "GET",
+      `/HHSRSreporter/duplicates?q=${encodeURIComponent(uprn)}&open=${newer.id}`,
+      { cookie }
+    );
+    assert.equal(page.status, 200);
+    const pairStart = page.body.indexOf(`id="dup-pair-${newer.id}"`);
+    assert.ok(pairStart > 0);
+    const pair = page.body.slice(pairStart, page.body.indexOf("<script", pairStart));
+    assert.match(pair, /Not a duplicate/);
+    assert.match(pair, /It's a duplicate/);
+    assert.ok(pair.indexOf("Not a duplicate") < pair.indexOf("It's a duplicate"));
+    assert.match(pair, new RegExp(`/HHSRSreporter/duplicates/${newer.id}/not-duplicate`));
+    assert.match(pair, new RegExp(`/HHSRSreporter/duplicates/${newer.id}/is-duplicate`));
+    const amendUrl = sentCaseAmendUrl("/HHSRSreporter", original.id);
+    assert.match(pair, new RegExp(amendUrl.replace("?", "\\?").replace("&", "&amp;")));
+    assert.match(pair, new RegExp(originalAddress));
+    assert.match(pair, new RegExp(newerAddress));
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { id: sentEmail.id } }), 1);
+
+    const confirmed = await request(port, "POST", `/HHSRSreporter/duplicates/${newer.id}/is-duplicate`, { cookie });
+    assert.equal(confirmed.status, 302);
+    assert.equal(confirmed.location, amendUrl);
+    cookie = cookieHeader(confirmed.setCookie, cookie);
+
+    const amend = await request(port, "GET", confirmed.location, { cookie });
+    assert.equal(amend.status, 200);
+    assert.match(amend.body, /id="fr-amend"/);
+    assert.match(amend.body, /Amend &amp; resend/);
+    assert.match(amend.body, /Change the case, then generate the correction/);
+    assert.match(amend.body, new RegExp(original.reference || "missing-original"));
+    assert.match(amend.body, /The first email stays in the Main Log\./);
+    assert.match(amend.body, new RegExp(`/HHSRSreporter/find/${original.id}/resend`));
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { submissionId: original.id } }), 1);
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { submissionId: newer.id } }), 0);
+
+    const [originalRow, newerRow] = await Promise.all([
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: original.id } }),
+      prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: newer.id } }),
+    ]);
+    assert.equal(originalRow.status, "email_sent");
+    assert.equal(originalRow.duplicateConfirmed, false);
+    assert.equal(originalRow.notADuplicate, false);
+    assert.equal(originalRow.notNeededReason, "");
+    assert.equal(originalRow.emailBody, "The first email stays in the Main Log.");
+    assert.equal(newerRow.status, "not_needed");
+    assert.equal(newerRow.notNeededReason, "duplicate");
+    assert.equal(newerRow.notNeededDuplicateOf, original.reference);
+    assert.equal(newerRow.duplicateConfirmed, true);
+    assert.equal(newerRow.notADuplicate, false);
+    assert.equal(newerRow.emailSentAt, null);
+    const choice = Array.isArray(newerRow.notNeededLog) ? newerRow.notNeededLog : [];
+    assert.equal((choice.at(-1) as { action?: string }).action, "is_duplicate");
+    assert.equal(await prisma.hhsrsSiteSubmission.count({ where: { id: { in: [original.id, newer.id] } } }), 2);
+
+    const dupes = await request(port, "GET", `/HHSRSreporter/duplicates?q=${encodeURIComponent(uprn)}`, { cookie });
+    assert.equal(dupes.status, 200);
+    assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${newer.id}"`));
+    assert.doesNotMatch(dupes.body, new RegExp(`data-dup-id="${original.id}"`));
+    assert.doesNotMatch(dupes.body, new RegExp(originalAddress));
+    assert.doesNotMatch(dupes.body, new RegExp(newerAddress));
+    assert.doesNotMatch(dupes.body, new RegExp(original.reference || "missing-original"));
+    assert.doesNotMatch(dupes.body, new RegExp(`/duplicates/${newer.id}/is-duplicate`));
+    assert.doesNotMatch(dupes.body, new RegExp(`/duplicates/${newer.id}/not-duplicate`));
+
+    const pending = await request(port, "GET", "/HHSRSreporter", { cookie });
+    const waiting = pending.body.slice(
+      pending.body.indexOf('id="waiting-table"'),
+      pending.body.indexOf('id="last-actioned"')
+    );
+    const newerPending = waiting.split("<tr").find((part) => part.includes(newerAddress));
+    assert.ok(newerPending);
+    assert.match(newerPending, /\bpending-dupe\b/);
+    assert.match(newerPending, /pending-dupe-tag">Dupe</);
+    assert.equal(waiting.includes(originalAddress), false);
+
+    const stillNewer = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: newer.id } });
+    const stillOriginal = await prisma.hhsrsSiteSubmission.findUniqueOrThrow({ where: { id: original.id } });
+    assert.equal(stillNewer.status, "not_needed");
+    assert.equal(stillNewer.notNeededReason, "duplicate");
+    assert.equal(stillNewer.duplicateConfirmed, true);
+    assert.equal(stillOriginal.status, "email_sent");
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { id: sentEmail.id } }), 1);
   });
 });

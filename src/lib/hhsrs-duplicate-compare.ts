@@ -122,6 +122,11 @@ function caseLabel(reference: string | null | undefined): string {
   return ref ? `Case ${ref}` : "Case";
 }
 
+/** Existing Find and resend amend screen. The duplicates page does not have its own. */
+export function sentCaseAmendUrl(reporterBase: string, caseId: string): string {
+  return `${reporterBase}/find?case=${encodeURIComponent(caseId)}&view=amend`;
+}
+
 function sideOf(row: CompareCase, heading: string): DuplicateCompareSide {
   return {
     heading,
@@ -174,8 +179,7 @@ export function toDuplicateCompareRow(
     diff[field] = !sameField(field, fieldValue(match, field), fieldValue(row, field));
   }
   const differs = fields.some((field) => diff[field]);
-  const amendUrl =
-    sentAt && differs ? `${opts.reporterBase}/find?case=${encodeURIComponent(match.id)}&view=amend` : "";
+  const amendUrl = sentAt && differs ? sentCaseAmendUrl(opts.reporterBase, match.id) : "";
 
   return {
     id: row.id,
@@ -197,7 +201,7 @@ export async function loadDuplicateComparisons(
   reporterBase: string,
   openId = ""
 ): Promise<DuplicateCompareRow[]> {
-  const and: Prisma.HhsrsSiteSubmissionWhereInput[] = [{ status: "not_needed" }];
+  const and: Prisma.HhsrsSiteSubmissionWhereInput[] = [{ status: "not_needed" }, { duplicateConfirmed: false }];
   const q = String(filters.q || "").trim();
   if (q) {
     and.push({
