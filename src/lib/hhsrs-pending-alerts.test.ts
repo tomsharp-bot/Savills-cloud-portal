@@ -29,6 +29,8 @@ const pendingAlertScript = nodeRequire("../../public/js/hhsrs-pending-alerts.js"
     body: string;
   };
   countsDiffer: (waitingCount: number | null, shownCount: number | null) => boolean;
+  pendingCaseIdFromHref: (href: string) => string;
+  planPendingQueuePatch: (liveIds: string[], freshIds: string[], openId?: string) => string[];
   planPendingSurface: (state: {
     waitingCount?: number | null;
     shownCount?: number | null;
@@ -264,8 +266,17 @@ describe("HHSRS pending alert marker", () => {
       hasPendingList: true,
       focusInsideList: true,
     });
-    assert.equal(focused.refreshList, false);
-    assert.equal(focused.showNotice, true);
+    assert.equal(focused.refreshList, true);
+    assert.equal(focused.showNotice, false);
+
+    const reviewFocused = pendingAlertScript.planPendingSurface({
+      waitingCount: 2,
+      shownCount: 1,
+      hasReviewList: true,
+      focusInsideList: true,
+    });
+    assert.equal(reviewFocused.refreshList, false);
+    assert.equal(reviewFocused.showNotice, true);
 
     const countsOnly = pendingAlertScript.planPendingSurface({
       waitingCount: 5,
@@ -289,6 +300,34 @@ describe("HHSRS pending alert marker", () => {
     });
     assert.equal(retry.refreshList, true);
     assert.equal(retry.showNotice, false);
+  });
+
+  it("inserts new pending cases without moving the open row or the current order", () => {
+    assert.equal(
+      pendingAlertScript.pendingCaseIdFromHref("/HHSRSreporter/review/case%201?claim=1"),
+      "case 1"
+    );
+    assert.equal(pendingAlertScript.pendingCaseIdFromHref("/HHSRSreporter"), "");
+
+    assert.deepEqual(
+      pendingAlertScript.planPendingQueuePatch(["a", "b"], ["a", "c", "b"]),
+      ["a", "c", "b"]
+    );
+    assert.deepEqual(
+      pendingAlertScript.planPendingQueuePatch(["a", "b"], ["c", "a", "b"]),
+      ["c", "a", "b"]
+    );
+    assert.deepEqual(pendingAlertScript.planPendingQueuePatch(["a", "b"], ["b"]), ["b"]);
+    assert.deepEqual(
+      pendingAlertScript.planPendingQueuePatch(["a", "open", "b"], ["a", "b"], "open"),
+      ["a", "open", "b"]
+    );
+    assert.deepEqual(
+      pendingAlertScript.planPendingQueuePatch(["b", "a"], ["a", "c", "b"]),
+      ["b", "a", "c"]
+    );
+    assert.deepEqual(pendingAlertScript.planPendingQueuePatch([], ["a", "b"]), ["a", "b"]);
+    assert.deepEqual(pendingAlertScript.planPendingQueuePatch(["a", "", "a"], ["a"]), ["a"]);
   });
 
   it("lets one fresh leader record block every other tab", () => {
@@ -426,7 +465,19 @@ describe("HHSRS Reporter alert wiring", () => {
     assert.match(sharedJs, /New issue, refresh list/);
     assert.match(sharedJs, /id === "not-actioned"/);
     assert.match(sharedJs, /id === "rv-also-waiting"/);
+    assert.match(sharedJs, /planPendingQueuePatch/);
+    assert.match(sharedJs, /patchPendingQueue/);
+    assert.match(sharedJs, /live\.id === "not-actioned"/);
+    assert.match(sharedJs, /overflowAnchor/);
+    assert.match(sharedJs, /scrollLeft/);
+    assert.match(sharedJs, /getBoundingClientRect/);
+    assert.match(sharedJs, /tr\.is-open/);
+    assert.match(sharedJs, /photo-att-icon\.is-pop-open/);
+    assert.match(sharedJs, /pending-sort-bar/);
+    assert.match(sharedJs, /keepQueueControl/);
+    assert.match(sharedJs, /tagName === "FORM"/);
     assert.match(sharedJs, /live\.replaceWith\(fresh\)/);
+    assert.doesNotMatch(sharedJs, /not-actioned[\s\S]{0,80}replaceWith/);
     assert.doesNotMatch(sharedJs, /<td|createElement\("td"\)|createElement\("th"\)/);
     const pendingTable = fs.readFileSync(
       path.join(root, "views/hhsrs-reporter/partials/pending-issues-table.ejs"),
