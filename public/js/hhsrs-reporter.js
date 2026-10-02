@@ -389,9 +389,14 @@
     return !!(cfg.send && cfg.send.sent);
   }
 
+  function dismissedStage() {
+    var panel = $("rv-case-panel");
+    return !!(panel && panel.classList && panel.classList.contains("is-dismissed-case"));
+  }
+
   function lockSentEmailFields() {
     var nodes = document.querySelectorAll(
-      ".email-draft-panel.is-sent-lock .field-locked, .email-draft-panel.is-sent-lock .field-with-copy, .email-draft-panel.is-sent-lock .attach-block, .email-draft-panel.is-sent-lock .email-photo-tools"
+      ".email-draft-panel.is-sent-lock .field-locked, .email-draft-panel.is-sent-lock .field-with-copy, .email-draft-panel.is-sent-lock .attach-block, .email-draft-panel.is-sent-lock .email-photo-tools, .email-draft-panel.is-dismissed-lock .field-locked, .email-draft-panel.is-dismissed-lock .field-with-copy, .email-draft-panel.is-dismissed-lock .attach-block, .email-draft-panel.is-dismissed-lock .email-photo-tools"
     );
     for (var i = 0; i < nodes.length; i++) nodes[i].inert = true;
   }
@@ -399,6 +404,12 @@
   function syncEmailPanelLock() {
     var panel = document.querySelector(".email-draft-panel");
     if (!panel || !panel.classList) return;
+    if (dismissedStage()) {
+      panel.classList.remove("is-pre-generate");
+      panel.classList.add("is-dismissed-lock");
+      lockSentEmailFields();
+      return;
+    }
     if (sentStage()) {
       panel.classList.remove("is-pre-generate");
       lockSentEmailFields();
@@ -435,6 +446,7 @@
   function applyProjectChange(opts) {
     opts = opts || {};
     var sent = sentStage();
+    var dismissed = dismissedStage();
     var name = ($("rv-project") && $("rv-project").value) || "";
     var projectCfg = matchProject(name);
     var fields = $("rv-case-fields");
@@ -442,24 +454,31 @@
     var generateBtn = $("btn-generate-email");
     var genRow = document.querySelector("#rv-email-generate-row");
     if (fields) {
-      // After send, CSS supplies the same grey as Generate email. inert keeps the
-      // fields read-only without the extra browser disabled fade.
-      if (sent) fields.removeAttribute("disabled");
+      // After send, and while a case is dismissed, CSS supplies the same grey
+      // as Generate email. inert keeps the fields read-only without the extra
+      // browser disabled fade.
+      if (sent || dismissed) fields.removeAttribute("disabled");
       else if (!name && cfg.mode !== "filled") fields.setAttribute("disabled", "disabled");
       else fields.removeAttribute("disabled");
-      fields.inert = sent;
+      fields.inert = sent || dismissed;
     }
-    if (genRow) genRow.inert = sent;
-    if (generateBtn) generateBtn.disabled = sent || !name;
-    if (sent) lockSentEmailFields();
-    if (hint && !sent) {
+    if (genRow) genRow.inert = sent || dismissed;
+    if (generateBtn) generateBtn.disabled = sent || dismissed || !name;
+    if (sent || dismissed) lockSentEmailFields();
+    if (dismissed) {
+      var projectBlock = $("rv-project-block");
+      var project = $("rv-project");
+      if (project) project.removeAttribute("disabled");
+      if (projectBlock) projectBlock.inert = true;
+    }
+    if (hint && !sent && !dismissed) {
       hint.textContent = projectCfg
         ? projectCfg.hint
         : "Choose the project first. Extra fields and the email draft follow its rules.";
     }
     fillRatingOptions(projectCfg ? projectCfg.ratingScheme : "NEW", opts.keepRating);
     setExtraVisibility(projectCfg);
-    if (sent) return;
+    if (sent || dismissed) return;
     if (!(opts.skipDraft || opts.keepEmail)) clearEmailDraft();
   }
 
@@ -676,6 +695,7 @@
   }
 
   function amendCaseDetails() {
+    if (dismissedStage()) return;
     if (cfg.send && cfg.send.sent) return;
     caseLocked = false;
     syncCaseLock();
@@ -952,6 +972,7 @@
   }
 
   function generateEmail() {
+    if (dismissedStage() || sentStage()) return;
     var name = ($("rv-project") && $("rv-project").value) || "";
     var note = $("rv-generate-note");
     var btn = $("btn-generate-email");
@@ -992,7 +1013,7 @@
         if (note) note.textContent = "Could not prepare the client email. Check the case details and try again.";
       })
       .then(function () {
-        if (btn) btn.disabled = !!(cfg.send && cfg.send.sent) || !(($("rv-project") && $("rv-project").value) || "");
+        if (btn) btn.disabled = !!(cfg.send && cfg.send.sent) || dismissedStage() || !(($("rv-project") && $("rv-project").value) || "");
       });
   }
 
@@ -1690,6 +1711,7 @@
 
   function saveReviewDraftNow() {
     reviewDraftSaveTimer = null;
+    if (dismissedStage()) return;
     if (skipDraftSave || !$("hhsrs-body") || (cfg.send && cfg.send.sent)) return;
     var key = reviewDraftKey();
     if (!resumeCleared) setReviewLastKey(key);
@@ -1799,6 +1821,10 @@
   }
 
   function restoreReviewDraft(key) {
+    if (dismissedStage()) {
+      setReviewDraftStatus(false);
+      return false;
+    }
     if (cfg.send && cfg.send.sent) {
       setReviewDraftStatus(false);
       return false;

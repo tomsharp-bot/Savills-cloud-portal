@@ -38,6 +38,19 @@ describe("dismiss hazard reasons", () => {
     assert.doesNotMatch(dialog, /surveyor_error|Surveyor correction|value="duplicate"|value="other"/);
     assert.match(review, /id="btn-restore-dismiss"/);
     assert.match(review, /Abandon — return to dismissed/);
+    const log = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const js = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    assert.doesNotMatch(log, /View pack/);
+    assert.match(log, />Open case</);
+    assert.match(review, /is-dismissed-case/);
+    assert.match(review, /is-dismissed-lock/);
+    assert.match(review, /sentEmail \|\| caseDismissed \? "disabled"/);
+    assert.match(css, /#rv-case-panel\.is-dismissed-case #rv-case-fields/);
+    assert.match(css, /#rv-project-block\.is-dismissed-case/);
+    assert.match(css, /\.email-draft-panel\.is-dismissed-lock \.field-with-copy/);
+    assert.match(js, /function dismissedStage/);
+    assert.match(js, /fields\.inert = sent \|\| dismissed/);
   });
 });
 
@@ -215,13 +228,62 @@ describe("dismiss hazard flow with the database", () => {
     assert.match(log.body, /Test case/);
     assert.match(log.body, new RegExp(`1 Test Dismiss ${stamp}`));
     assert.match(log.body, /\/restore/);
+    assert.match(log.body, /Open case/);
+    assert.doesNotMatch(log.body, /View pack/);
 
     const opened = await request(port, "GET", `/HHSRSreporter/review/${testCase.id}`, { cookie });
     assert.equal(opened.status, 200);
     assert.match(opened.body, /id="btn-restore-dismiss"/);
     assert.match(opened.body, /Test case/);
     assert.match(opened.body, /Restore it before sending/);
+    assert.match(opened.body, /is-dismissed-case/);
+    assert.match(opened.body, /is-dismissed-lock/);
+    assert.match(opened.body, /id="rv-case-fields"[^>]*disabled/);
+    assert.match(opened.body, /id="rv-project"[^>]*disabled/);
+    assert.match(opened.body, /disabled[^>]*>Save review</);
+    assert.match(opened.body, /id="btn-generate-email"[^>]*disabled/);
+    assert.match(opened.body, /id="btn-send-email"[^>]*disabled/);
+    assert.match(opened.body, /id="hhsrs-body"[^>]*readonly/);
     assert.doesNotMatch(opened.body, /id="btn-dismiss-hazard"/);
+    assert.doesNotMatch(opened.body, /View pack/);
+
+    const tamper = await request(port, "POST", `/HHSRSreporter/review/${testCase.id}`, {
+      cookie,
+      form: {
+        expectedUpdatedAt: stored?.updatedAt.toISOString() || "",
+        status: "in_review",
+        rating: "High - Emergency risk",
+        clientDescription: "Changed while dismissed",
+      },
+    });
+    assert.equal(tamper.status, 302);
+    cookie = cookieHeader(tamper.setCookie, cookie);
+    const tamperPage = await request(port, "GET", tamper.location, { cookie });
+    assert.match(tamperPage.body, /Restore it before editing/);
+    assert.match(tamperPage.body, /is-dismissed-case/);
+    const untouched = await prisma.hhsrsSiteSubmission.findUnique({ where: { id: testCase.id } });
+    assert.equal(untouched?.status, "dismissed");
+    assert.equal(untouched?.rating, "Low");
+    assert.notEqual(untouched?.clientDescription, "Changed while dismissed");
+    assert.equal(untouched?.dismissedAt?.toISOString(), dismissedAt);
+
+    const blockedSend = await request(port, "POST", `/HHSRSreporter/review/${testCase.id}/send`, {
+      cookie,
+      form: {
+        checked: "1",
+        to: "housing.team@savillshousing.co.uk",
+        subject: "HHSRS hazard",
+        body: "Should not send.",
+        rating: "High - Emergency risk",
+      },
+    });
+    assert.equal(blockedSend.status, 302);
+    cookie = cookieHeader(blockedSend.setCookie, cookie);
+    const stillDismissed = await prisma.hhsrsSiteSubmission.findUnique({ where: { id: testCase.id } });
+    assert.equal(stillDismissed?.status, "dismissed");
+    assert.equal(stillDismissed?.rating, "Low");
+    assert.equal(stillDismissed?.emailSentAt, null);
+    assert.equal(await prisma.hhsrsSentEmail.count({ where: { submissionId: testCase.id } }), 0);
 
     const restored = await request(port, "POST", `/HHSRSreporter/review/${testCase.id}/restore`, { cookie });
     assert.equal(restored.status, 302);
@@ -238,6 +300,12 @@ describe("dismiss hazard flow with the database", () => {
     assert.match(review.body, /Abandon — return to dismissed/);
     assert.match(review.body, /<strong>Test case<\/strong>/);
     assert.match(review.body, /Reviewed, hazard rating not required\./);
+    assert.doesNotMatch(review.body, /is-dismissed-case/);
+    assert.doesNotMatch(review.body, /is-dismissed-lock/);
+    assert.doesNotMatch(review.body, /disabled[^>]*>Save review</);
+    assert.match(review.body, /id="btn-generate-email"\s*>/);
+    assert.doesNotMatch(review.body, /id="btn-send-email"[^>]*disabled/);
+    assert.doesNotMatch(review.body, /id="rv-case-fields"[^>]*disabled/);
 
     const abandoned = await request(port, "POST", `/HHSRSreporter/review/${testCase.id}/abandon`, { cookie });
     assert.equal(abandoned.status, 302);

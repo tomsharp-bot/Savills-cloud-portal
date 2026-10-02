@@ -1,6 +1,8 @@
 /**
  * Dismiss hazard from Review & Create.
  * A waiting case leaves Pending with one of two reasons. No email is sent.
+ * The case can still be opened. Its information stays greyed out and cannot
+ * be edited or sent until Restore.
  * Restore puts it back on Review & Create and keeps the reason, so abandon
  * can write the same Main Log line again. A later send clears that line.
  */
