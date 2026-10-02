@@ -180,6 +180,12 @@
                 <label for="comment">Comment *</label>
                 <textarea id="comment" name="comment" required rows="5" enterkeyhint="next" placeholder="Describe the hazard in plain facts…" class="<%= errors.comment ? 'is-invalid' : '' %>"><%= values.comment %></textarea>
                 <% if (errors.comment) { %><p class="field-error"><%= errors.comment %></p><% } %>
+
+                <div id="suspected-cause-box" <%= showCause ? "" : "hidden" %>>
+                  <label for="suspectedCause">Suspected cause *</label>
+                  <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || "" %>" class="<%= errors.suspectedCause ? 'is-invalid' : '' %>" <%= showCause ? "required" : "disabled" %> />
+                  <% if (errors.suspectedCause) { %><p class="field-error"><%= errors.suspectedCause %></p><% } %>
+                </div>
               </div>
 
               <div class="info-box flow-step" id="extra-box" data-flow="extras" <%= steps.hazard ? "" : "hidden" %>>
@@ -214,12 +220,6 @@
                 </div>
                 <div class="project-extra" data-extra="saxon" <%= flags.saxon ? "" : "hidden" %>>
                   <p class="hhsrs-hint" id="saxon-damp-note">Saxon Weald: all damp and mould is phoned in. Email only if Severe, and include the call reference.</p>
-                </div>
-
-                <div id="suspected-cause-box" <%= showCause ? "" : "hidden" %>>
-                  <label for="suspectedCause">Suspected cause *</label>
-                  <input id="suspectedCause" name="suspectedCause" type="text" value="<%= values.suspectedCause || "" %>" class="<%= errors.suspectedCause ? 'is-invalid' : '' %>" <%= showCause ? "required" : "disabled" %> />
-                  <% if (errors.suspectedCause) { %><p class="field-error"><%= errors.suspectedCause %></p><% } %>
                 </div>
               </div>
 

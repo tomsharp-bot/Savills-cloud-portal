@@ -286,14 +286,16 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.match(form.body, /name="surveyDate"/);
     assert.match(form.body, /HHSRS category/);
     const hazard = form.body.slice(form.body.indexOf('id="step-hazard"'), form.body.indexOf('id="extra-box"'));
-    assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
+    assert.match(hazard, /id="suspected-cause-box"[^>]*hidden/);
+    assert.match(hazard, /Suspected cause \*/);
+    assert.match(hazard, /id="suspectedCause"/);
     assert.doesNotMatch(form.body, /suspected-cause-hint/);
-    assert.match(form.body, /id="suspected-cause-box"[^>]*hidden/);
     assert.match(hazard, /id="comment"[^>]*enterkeyhint="next"/);
     const extras = form.body.slice(form.body.indexOf('id="extra-box"'), form.body.indexOf('id="step-photos"'));
     assert.doesNotMatch(extras, /id="otherDetails"/);
     assert.doesNotMatch(extras, /Any other details/);
-    assert.match(extras, /id="suspectedCause"/);
+    assert.doesNotMatch(extras, /id="suspectedCause"/);
+    assert.doesNotMatch(extras, /suspected-cause-box/);
     const ratingSelect = form.body.slice(
       form.body.indexOf('<select id="rating"'),
       form.body.indexOf("</select>", form.body.indexOf('<select id="rating"'))

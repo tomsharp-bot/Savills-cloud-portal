@@ -415,6 +415,7 @@
   }
 
   function hazardDone() {
+    if (causeShown() && !val("suspectedCause")) return false;
     return Boolean(val("category") && val("rating") && val("comment") && restrictorDone());
   }
 
@@ -440,7 +441,6 @@
       }
     }
     if (vicoSelected() && !val("vulnerabilities")) return false;
-    if (causeShown() && !val("suspectedCause")) return false;
     return true;
   }
 
@@ -585,7 +585,7 @@
   }
 
   function extrasHasField() {
-    return callsShown() || vicoSelected() || causeShown();
+    return callsShown() || vicoSelected();
   }
 
   function saxonNoteShown() {
@@ -602,7 +602,6 @@
       return $("callUnreached") && $("callUnreached").checked ? "callRefBlankReason" : "clientCallReference";
     }
     if (vicoSelected()) return "vulnerabilities";
-    if (causeShown()) return "suspectedCause";
     return "";
   }
 
@@ -762,7 +761,7 @@
   var photosAtLoad = $("step-photos");
   if (photosAtLoad && !photosAtLoad.hidden) extrasPassed = true;
 
-  // Phone keyboard Next on Comment moves one step, into Extra details.
+  // Phone keyboard Next on the last Hazard field moves one step, into Extra details.
   // From there Next on Extra details moves on. A blank Extra details value is never required,
   // and never keeps Hazard as the current step.
   function isFreeText(el) {

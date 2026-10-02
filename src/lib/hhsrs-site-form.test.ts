@@ -786,6 +786,39 @@ describe("stock UPRN address", () => {
       "Onward 2026"
     );
     assert.equal(onwardCalled.extras, true);
+    const vicoBase = {
+      ...emptyHhsrsValues(),
+      projectId: "p",
+      surveyDate: "2026-09-20",
+      surveyorName: "Alex Surveyor",
+      uprn: "1001",
+      fullAddress: "1 High Street",
+      postcode: "EX1 1AA",
+      addressConfirmed: true,
+      rating: "Moderate",
+      comment: "Damp patch.",
+      vulnerabilities: "Elderly resident",
+      clientCallReference: "CR-1",
+    };
+    const vicoMissingCause = siteFormSectionState(
+      { ...vicoBase, category: "Damp & Mould Growth" },
+      "Vico 2026"
+    );
+    assert.equal(vicoMissingCause.hazard, false);
+    assert.equal(vicoMissingCause.extras, false);
+    const vicoCaused = siteFormSectionState(
+      { ...vicoBase, category: "Damp & Mould Growth", suspectedCause: "Leaking gutter" },
+      "Vico 2026"
+    );
+    assert.equal(vicoCaused.hazard, true);
+    assert.equal(vicoCaused.extras, true);
+    const vicoOtherHazard = siteFormSectionState(
+      { ...vicoBase, category: "Electrical Hazards" },
+      "Vico 2026"
+    );
+    assert.equal(vicoOtherHazard.hazard, true);
+    assert.equal(siteFormSectionState({ ...vicoBase, category: "Damp & Mould Growth" }, "MTVH 2026").hazard, true);
+    assert.equal(siteFormSectionState({ ...vicoBase, category: "Damp & Mould Growth" }, "Onward 2026").hazard, true);
   });
 });
 
@@ -852,7 +885,9 @@ describe("HHSRS site form project option flags", () => {
     assert.match(readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8"), /UPRN not found\./);
     assert.doesNotMatch(html, /data-calls=&#34;|data-saxon=&#34;|data-online=&#34;/);
     const hazard = html.slice(html.indexOf('id="step-hazard"'), html.indexOf('id="extra-box"'));
-    assert.equal(hazard.indexOf('id="suspectedCause"'), -1);
+    assert.match(hazard, /id="suspected-cause-box"[^>]*hidden/);
+    assert.match(hazard, /Suspected cause \*/);
+    assert.match(hazard, /id="suspectedCause"/);
     assert.match(html, /id="restrictor-box"[^>]*hidden/);
     assert.match(html, /class="restrictor-locs"/);
     assert.match(html, /How many window restrictors are missing \*/);
@@ -878,8 +913,8 @@ describe("HHSRS site form project option flags", () => {
     assert.doesNotMatch(html, /25 MB/);
     assert.match(html, /id="photos"/);
     assert.match(html, /Add photos/);
-    assert.match(extras, /id="suspected-cause-box"[^>]*hidden/);
-    assert.match(extras, /id="suspectedCause"/);
+    assert.doesNotMatch(extras, /suspected-cause-box/);
+    assert.doesNotMatch(extras, /id="suspectedCause"/);
     assert.doesNotMatch(hazard, /data-extra=/);
     const flowJs = readFileSync(join(process.cwd(), "public/hhsrs-site-form/form.js"), "utf8");
     assert.match(flowJs, /function stepKeyboardNext/);
@@ -889,7 +924,7 @@ describe("HHSRS site form project option flags", () => {
     assert.match(flowJs, /function syncRestrictorBox/);
     assert.match(flowJs, /Falling Between Levels/);
     const hazardFn = flowJs.slice(flowJs.indexOf("function hazardDone"), flowJs.indexOf("function callsAlways"));
-    assert.doesNotMatch(hazardFn, /suspectedCause/);
+    assert.match(hazardFn, /suspectedCause/);
     assert.match(flowJs, /if \(extrasHasField\(\) && \(!extrasDone\(\) \|\| !extrasPassed\)\)/);
     const reviewDraft = {
       ...emptyHhsrsValues(),

@@ -699,10 +699,13 @@ export function siteFormSectionState(
         canonicalRestrictorLocations(values.restrictorLocations) &&
         (WINDOW_RESTRICTOR_MATERIALS as readonly string[]).includes(String(values.restrictorMaterial || "").trim())
     );
+  const causeOk =
+    !siteFormShowsSuspectedCause(projectName, values.category) || Boolean(String(values.suspectedCause || "").trim());
   const hazard =
     property &&
     Boolean(String(values.category || "").trim() && String(values.rating || "").trim() && String(values.comment || "").trim()) &&
-    restrictorOk;
+    restrictorOk &&
+    causeOk;
   const flags = siteFormProjectFlags(projectName);
   const showCalls = siteFormShowsCallReference(projectName, values.rating);
   let callOk = true;
@@ -716,9 +719,7 @@ export function siteFormSectionState(
     }
   }
   const vulnOk = !flags.vulnerabilities || Boolean(String(values.vulnerabilities || "").trim());
-  const causeOk =
-    !siteFormShowsSuspectedCause(projectName, values.category) || Boolean(String(values.suspectedCause || "").trim());
-  const extras = hazard && callOk && vulnOk && causeOk;
+  const extras = hazard && callOk && vulnOk;
   return { visit, property, hazard, extras };
 }
 
