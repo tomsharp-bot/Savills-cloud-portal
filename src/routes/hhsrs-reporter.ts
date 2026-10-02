@@ -128,6 +128,7 @@ import {
   MAIN_LOG_COLUMNS,
   mainLogTypeLabel,
   showingLabel,
+  splitAddress,
   type MainLogFilters,
   type MainLogSortKey,
 } from "../lib/hhsrs-main-log.js";
@@ -225,6 +226,8 @@ hhsrsReporterRouter.use((req: Request, res: Response, next) => {
   res.locals.claimView = claimView;
   res.locals.claimRowClass = (row: { claimedBy?: string | null; claimedAt?: Date | string | null }) =>
     claimRowClass(claimView(row).status);
+  res.locals.addressFirstLine = addressFirstLine;
+  res.locals.splitAddress = splitAddress;
   res.locals.siteFormPublicUrl = SITE_FORM_PUBLIC_URL;
   res.locals.categoryOptions = { NEW: HHSRS_CATEGORIES, OLD: HHSRS_LEGACY_CATEGORIES };
   res.locals.logoUrl = SIGNATURE_LOGO_PUBLIC_PATH;

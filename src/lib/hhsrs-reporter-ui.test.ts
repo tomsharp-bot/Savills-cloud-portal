@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import ejs from "ejs";
 import {
   formatTimeAgo,
   ratingDisplayClass,
@@ -13,6 +14,8 @@ import {
   emailRecipientsFromProject,
   readReporterUpdate,
 } from "./hhsrs-reporter.js";
+import { claimRowClass, claimView } from "./hhsrs-claims.js";
+import { addressFirstLine, splitAddress } from "./hhsrs-main-log.js";
 import { HHSRS_PROJECT_ROSTER, hhsrsKey, matchDemoProject, SITE_FORM_PUBLIC_URL } from "./hhsrs-reporter-projects.js";
 
 describe("HHSRS Reporter UI helpers", () => {
@@ -814,18 +817,19 @@ describe("HHSRS Reporter UI helpers", () => {
     const reporterJs = readFileSync("public/js/hhsrs-reporter.js", "utf8");
     const filters = main.slice(main.indexOf('id="ml-filters"'), main.indexOf('class="ml-bar"'));
     assert.match(main, /pendingShowActioned:\s*true/);
-    assert.match(main, /pendingAddressFirstLine:\s*true/);
     assert.match(main, /id="ml-photo-full"/);
     assert.match(main, /placeholder="Reference, UPRN or address"/);
     assert.match(filters, /name="q"/);
     assert.match(filters, /name="project"/);
     assert.match(filters, /name="by"/);
-    assert.doesNotMatch(pending, /pendingShowActioned|pendingAddressFirstLine/);
-    assert.doesNotMatch(find, /pendingShowActioned|pendingAddressFirstLine/);
-    assert.doesNotMatch(review, /pendingShowActioned|pendingAddressFirstLine/);
+    assert.doesNotMatch(pending, /pendingShowActioned/);
+    assert.doesNotMatch(find, /pendingShowActioned/);
+    assert.doesNotMatch(review, /pendingShowActioned/);
     assert.match(table, /const showActioned = typeof pendingShowActioned !== "undefined" && pendingShowActioned === true/);
-    assert.match(table, /if \(addressFirstLine\)/);
-    assert.match(table, /<strong><%= row\.fullAddress %><\/strong>/);
+    assert.match(table, /addressFirstLine\(addrFull\)/);
+    assert.match(table, /class="ml-addr-hover"/);
+    assert.match(table, /class="ml-addr-full"/);
+    assert.doesNotMatch(table, /<strong><%= row\.fullAddress %><\/strong>/);
     assert.match(table, /class="col-actioned ml-actioned"/);
     assert.match(table, /class="col-by ml-actioned-by"/);
     const head = table.slice(table.indexOf('<th class="col-ref">Reference</th>'), table.indexOf("</thead>"));
@@ -979,6 +983,90 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(office, /Choose a hazard from the list\./);
     assert.match(office, /Choose a rating from the list\./);
     assert.ok(blank.includes("<select"));
+  });
+
+  it("shows house and street on every case list, with the full address on hover", async () => {
+    const duplicates = readFileSync("views/hhsrs-reporter/duplicates.ejs", "utf8");
+    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    assert.match(table, /splitAddress\(String\(row\.fullAddress/);
+    assert.match(table, /addressFirstLine\(addrFull\)/);
+    assert.match(duplicates, /addressFirstLine\(item\.address\)/);
+    assert.match(duplicates, /class="ml-addr-full"/);
+    assert.match(duplicates, /Not a duplicate/);
+    assert.match(duplicates, /View duplicate/);
+
+    const html = await ejs.renderFile("views/hhsrs-reporter/partials/pending-issues-table.ejs", {
+      pendingRows: [
+        {
+          id: "case-1",
+          projectName: "Onward",
+          fullAddress: "12, Moor Cross, Bude",
+          postcode: "EX23 9EH",
+          photoPaths: [],
+          uprn: "100012345678",
+          surveyorName: "Tom Sharp",
+          category: "Damp & Mould Growth",
+          rating: "High",
+          createdAt: new Date("2026-10-01T09:15:00Z"),
+        },
+        {
+          id: "case-2",
+          projectName: "Vico",
+          fullAddress: "Flat 5, 40 Fictional Way, Sampleton",
+          postcode: "ZZ1 3GH",
+          addressLine: "Flat 5, 40 Fictional Way",
+          photoPaths: [],
+          uprn: "100087654321",
+          surveyorName: "Alex Surveyor",
+          category: "Fire & Explosions",
+          rating: "Low",
+          createdAt: new Date("2026-10-01T08:00:00Z"),
+        },
+      ],
+      pendingTableId: "waiting-table",
+      pendingShowReference: false,
+      pendingAction: "review",
+      pendingFoot: "",
+      reporterBase: "/HHSRSreporter",
+      formatTimeAgo,
+      claimView,
+      claimRowClass: (row: { claimedBy?: string | null; claimedAt?: Date | string | null }) =>
+        claimRowClass(claimView(row).status),
+      ratingDisplayClass,
+      photoAttachmentCount,
+      reporterCasePhotos,
+      addressFirstLine,
+      splitAddress,
+    });
+    assert.match(html, /<strong>12, Moor Cross<\/strong>/);
+    assert.match(html, /class="ml-addr-full">12, Moor Cross, Bude, EX23 9EH<\/span>/);
+    assert.doesNotMatch(html, /<strong>12, Moor Cross, Bude<\/strong>/);
+    assert.match(html, /<strong>Flat 5, 40 Fictional Way<\/strong>/);
+    assert.match(html, /class="ml-addr-full">Flat 5, 40 Fictional Way, Sampleton, ZZ1 3GH<\/span>/);
+    assert.match(html, />Review Case</);
+    assert.doesNotMatch(html, />Amend</);
+    assert.match(html, /High – emergency risk|High/);
+  });
+
+  it("widens list cards only, and closes an enlarged photo without opening the case", () => {
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const layout = readFileSync("views/hhsrs-reporter/partials/layout-close.ejs", "utf8");
+    const reporterJs = readFileSync("public/js/hhsrs-reporter.js", "utf8");
+    const mainJs = readFileSync("public/js/hhsrs-main-log.js", "utf8");
+    assert.match(css, /--sidebar-w:\s*220px/);
+    assert.match(css, /max-width:\s*2103px/);
+    assert.match(css, /:has\(\.pending-issues-table\) \.app-shell/);
+    assert.match(css, /:has\(\.dup-table\) \.app-shell/);
+    assert.match(css, /\.pending-issues-table th\.col-rate,\s*\.hhsrs-reporter \.pending-issues-table td\.col-rate \{[^}]*min-width:\s*13rem/);
+    assert.match(layout, /id="ml-photo-full"/);
+    assert.match(layout, /activeNav !== "main-log"/);
+    assert.match(reporterJs, /\.pending-issues-table \.photo-att-icon/);
+    assert.match(reporterJs, /if \(e\.target === full\) closeListFullPhoto\(\)/);
+    assert.match(reporterJs, /full\.contains\(next\)/);
+    assert.match(reporterJs, /e\.stopPropagation\(\)/);
+    assert.match(mainJs, /full\.contains\(next\)/);
+    assert.match(mainJs, /if \(event\.target === full\) closeFullPhoto\(\)/);
+    assert.match(mainJs, /fullImg\.addEventListener\("mouseleave", closeFullPhoto\)/);
   });
 
   it("declares review draft storage keys before restore runs", () => {

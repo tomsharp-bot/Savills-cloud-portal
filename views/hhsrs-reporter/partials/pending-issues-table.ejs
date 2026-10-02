@@ -8,7 +8,6 @@
   const showReference = typeof pendingShowReference === "undefined" || pendingShowReference !== false;
   const showClaim = typeof pendingShowClaim === "undefined" || pendingShowClaim !== false;
   const showActioned = typeof pendingShowActioned !== "undefined" && pendingShowActioned === true;
-  const addressFirstLine = typeof pendingAddressFirstLine !== "undefined" && pendingAddressFirstLine === true;
   const sortColumns = typeof pendingSortColumns !== "undefined" && Array.isArray(pendingSortColumns) ? pendingSortColumns : [];
 %>
 <div class="table-wrap pending-issues-wrap"<% if (wrapId) { %> id="<%= wrapId %>"<% } %>>
@@ -48,21 +47,19 @@
       <% rows.forEach((row) => {
         const ago = formatTimeAgo(row.createdAt);
         const claim = claimView(row);
+        const addrFull = splitAddress(String(row.fullAddress || ""), String(row.postcode || "")).full;
+        const addrLine = String(row.addressLine || "").trim() || addressFirstLine(addrFull);
       %>
         <tr class="<%= [showClaim ? claimRowClass(row) : "", row.href ? "find-result" : "", row.rowClass || "", row.pendingDupe ? "pending-dupe" : ""].filter(Boolean).join(" ") %>" data-claim-status="<%= showClaim ? claim.status : "open" %>"<% if (row.href) { %> data-href="<%= row.href %>"<% } %>>
           <% if (showReference) { %><td class="col-ref"><% if (row.reference) { %><span class="ref-chip"><%= row.reference %></span><% } else { %>—<% } %></td><% } %>
           <td class="col-proj"><span class="project-pill"><%= row.projectName %></span></td>
           <td class="addr-cell col-addr">
-            <% if (addressFirstLine) { %>
-              <span class="ml-addr-hover">
-                <strong><%= row.addressLine || row.fullAddress %></strong>
-                <% if (row.fullAddress && row.addressLine && row.fullAddress !== row.addressLine) { %>
-                  <span class="ml-addr-full"><%= row.fullAddress %></span>
-                <% } %>
-              </span>
-            <% } else { %>
-              <strong><%= row.fullAddress %></strong>
-            <% } %>
+            <span class="ml-addr-hover">
+              <strong><%= addrLine %></strong>
+              <% if (addrFull && addrLine && addrFull !== addrLine) { %>
+                <span class="ml-addr-full"><%= addrFull %></span>
+              <% } %>
+            </span>
             <% if (row.amendedNote) { %><span class="ml-amended"><%= row.amendedNote %></span><% } %>
             <% if (row.showReviewed) { %><span class="ml-row-note">Reviewed<% if (row.rowNote) { %><span class="ml-row-note-full"><%= row.rowNote %></span><% } %></span><% } %>
             <% if (showClaim) { %><%- include("claim-chip", { claimRow: claim }) %><% } %>

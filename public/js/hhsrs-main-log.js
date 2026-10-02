@@ -38,7 +38,11 @@
     });
   }
 
-  function closeFullPhoto() {
+  function closeFullPhoto(event) {
+    if (event && event.type === "mouseleave") {
+      var next = event.relatedTarget;
+      if (next && full && full.contains(next)) return false;
+    }
     if (!full || !full.classList.contains("is-show")) return false;
     full.classList.remove("is-show");
     full.hidden = true;
@@ -98,9 +102,20 @@
       openFull({ url: thumbImg.getAttribute("src"), caption: thumbImg.getAttribute("alt") });
       return;
     }
+    if (event.target === full) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     if (event.target === full) closeFullPhoto();
   });
 
+  if (full) {
+    full.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.target === full) closeFullPhoto();
+    });
+  }
   if (fullImg) fullImg.addEventListener("mouseleave", closeFullPhoto);
 
   var closeLink = document.getElementById("ml-close");

@@ -3,6 +3,11 @@
     </div><!-- /.app-shell -->
   </div><!-- /.stage -->
 </div><!-- /#screen-app -->
+<% if (typeof activeNav === "undefined" || activeNav !== "main-log") { %>
+<div id="ml-photo-full" class="ml-photo-full" hidden>
+  <img alt="" />
+</div>
+<% } %>
 <div class="alert-toast" id="hhsrs-alert-toast" role="alert" aria-live="assertive" aria-atomic="true">
   <div class="toast-kicker" id="hhsrs-toast-kicker">New hazard</div>
   <p class="toast-title" id="hhsrs-toast-title"></p>
