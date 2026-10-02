@@ -139,6 +139,10 @@
                   <option value="<%= r %>" <%= currentRating === r ? "selected" : "" %>><%= r %></option>
                 <% }) %>
               </select>
+              <div class="check-row" id="rv-rating-happy-row">
+                <input id="rv-rating-happy" type="checkbox" aria-required="true" />
+                <label for="rv-rating-happy" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--text);margin:0">I'm happy with the rating</label>
+              </div>
             </div>
           </div>
           <div>
