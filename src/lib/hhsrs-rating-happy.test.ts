@@ -327,7 +327,7 @@ describe("Review and Create rating confirmation", () => {
     assert.equal(count.classList.contains("office-needed"), false);
 
     let prevented = false;
-    (ids["ck-tick"] as { checked: boolean }).checked = true;
+    ids["ck-tick"].checked = true;
     fire("ck-tick", "change");
     fire("rv-send-form", "submit", {
       preventDefault() {
@@ -380,11 +380,11 @@ describe("Review and Create rating confirmation", () => {
     assert.equal(send.disabled, false);
 
     ids["ck-overlay"].hidden = false;
-    (ids["ck-tick"] as { checked: boolean }).checked = false;
+    ids["ck-tick"].checked = false;
     fire("ck-tick", "change");
     assert.equal(ids["ck-tick"].classList.contains("office-needed"), true);
     assert.equal(dialogSend.disabled, true);
-    (ids["ck-tick"] as { checked: boolean }).checked = true;
+    ids["ck-tick"].checked = true;
     fire("ck-tick", "change");
     assert.equal(ids["ck-tick"].classList.contains("office-needed"), false);
     assert.equal(dialogSend.disabled, false);
