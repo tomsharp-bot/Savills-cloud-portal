@@ -985,9 +985,10 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.ok(blank.includes("<select"));
   });
 
-  it("shows house and street on every case list, with the full address on hover", async () => {
+  it("shows house and street on every case list, with the full address on hover", () => {
     const duplicates = readFileSync("views/hhsrs-reporter/duplicates.ejs", "utf8");
-    const table = readFileSync("views/hhsrs-reporter/partials/pending-issues-table.ejs", "utf8");
+    const tablePath = "views/hhsrs-reporter/partials/pending-issues-table.ejs";
+    const table = readFileSync(tablePath, "utf8");
     assert.match(table, /splitAddress\(String\(row\.fullAddress/);
     assert.match(table, /addressFirstLine\(addrFull\)/);
     assert.match(duplicates, /addressFirstLine\(item\.address\)/);
@@ -995,7 +996,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(duplicates, /Not a duplicate/);
     assert.match(duplicates, /View duplicate/);
 
-    const html = await ejs.renderFile("views/hhsrs-reporter/partials/pending-issues-table.ejs", {
+    const html = ejs.render(table, {
       pendingRows: [
         {
           id: "case-1",
@@ -1037,7 +1038,7 @@ describe("HHSRS Reporter UI helpers", () => {
       reporterCasePhotos,
       addressFirstLine,
       splitAddress,
-    });
+    }, { filename: tablePath });
     assert.match(html, /<strong>12, Moor Cross<\/strong>/);
     assert.match(html, /class="ml-addr-full">12, Moor Cross, Bude, EX23 9EH<\/span>/);
     assert.doesNotMatch(html, /<strong>12, Moor Cross, Bude<\/strong>/);
