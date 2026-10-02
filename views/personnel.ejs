@@ -23,8 +23,11 @@
       <% if (error) { %><p class="flash flash-err"><%= error %></p><% } %>
 
       <div class="personnel-section">
-        <h3>A. Surveyors</h3>
-        <p class="sec-sub">Field surveyors. Initials + agency drive the stock Agency column. Project access ticks. No Admin flag here.</p>
+        <div class="personnel-head">
+          <h3>A. Surveyors</h3>
+          <button type="button" class="btn btn-ghost" id="surveyor-assign-refresh" title="Pack chosen projects to the left">Refresh</button>
+        </div>
+        <p class="sec-sub">Field surveyors. Initials + agency drive the stock Agency column. Up to five Current or Upcoming projects, one per dropdown. Refresh packs the chosen projects to the left. No Admin flag here.</p>
         <form class="admin-add" method="post" action="<%= baseUrl('/personnel/surveyors') %>">
           <div><label for="new-name">Name</label><br/><input id="new-name" name="name" type="text" placeholder="John Smith" /></div>
           <div><label for="new-user">Username</label><br/><input id="new-user" name="username" type="text" placeholder="john.smith" /></div>
@@ -32,7 +35,7 @@
           <button type="submit" class="btn btn-primary">Add surveyor</button>
         </form>
         <div class="personnel-table-wrap">
-          <table class="personnel-table">
+          <table class="personnel-table personnel-surveyors">
             <thead>
               <tr>
                 <th class="col-name">Name</th>
@@ -40,24 +43,31 @@
                 <th class="col-user">Username</th>
                 <th class="col-agency">Agency</th>
                 <th class="col-pw">Temp password</th>
-                <% projects.forEach(p => { %><th class="col-tick" title="<%= p.name %>"><%= p.name %></th><% }) %>
+                <th class="col-assign">Projects</th>
                 <th class="col-actions"></th>
               </tr>
             </thead>
             <tbody>
               <% surveyors.forEach(s => { %>
-                <% const granted = new Set(s.access.map(a => a.projectId)); %>
                 <tr>
                   <td class="col-name"><%= s.name %></td>
                   <td class="col-initials"><input class="initials-input" type="text" data-initials="<%= s.id %>" value="<%= s.initials || '' %>" /></td>
                   <td class="col-user"><%= s.username %></td>
                   <td class="col-agency"><input class="agency-input" type="text" data-agency="<%= s.id %>" value="<%= s.agency || '' %>" /></td>
                   <%- include("partials/temp-password-cell", { person: s }) %>
-                  <% projects.forEach(p => { %>
-                    <td class="col-tick">
-                      <input type="checkbox" data-access="<%= s.id %>" data-project="<%= p.id %>" <%= granted.has(p.id) ? "checked" : "" %> />
-                    </td>
-                  <% }) %>
+                  <td class="col-assign">
+                    <div class="personnel-assign-row">
+                      <% for (let slot = 0; slot < 5; slot++) { %>
+                        <% const projectId = (s.assignSlots && s.assignSlots[slot]) || ""; %>
+                        <select aria-label="Project <%= slot + 1 %> for <%= s.name %>" data-access="<%= s.id %>" data-selected="<%= projectId %>" autocomplete="off">
+                          <option value=""></option>
+                          <% assignProjects.forEach(p => { %>
+                            <option value="<%= p.id %>" <%= projectId === p.id ? "selected" : "" %>><%= p.name %></option>
+                          <% }) %>
+                        </select>
+                      <% } %>
+                    </div>
+                  </td>
                   <td class="col-actions">
                     <form class="inline-form" method="post" action="<%= baseUrl('/personnel/' + s.id + '/delete') %>" onsubmit="return confirm('Wipe <%= s.name %> off the system completely?');">
                       <button class="btn btn-danger btn-sm" type="submit">Remove completely</button>

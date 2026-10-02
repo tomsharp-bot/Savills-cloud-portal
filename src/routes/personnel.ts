@@ -2,13 +2,14 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { issueTempPassword } from "../lib/passwords.js";
 import { uniqueInitials } from "../lib/initials.js";
+import { assignableProjects, assignmentSlots } from "../lib/personnel-assign.js";
 import { requireAdmin } from "../middleware/auth.js";
 
 export const personnelRouter = Router();
 personnelRouter.use(requireAdmin);
 
 personnelRouter.get("/", async (req: Request, res: Response) => {
-  const [surveyors, clients, admins, projects] = await Promise.all([
+  const [surveyors, clients, admins, projects, liveProjects] = await Promise.all([
     prisma.user.findMany({
       where: { role: "surveyor" },
       include: { access: true },
@@ -21,14 +22,27 @@ personnelRouter.get("/", async (req: Request, res: Response) => {
     }),
     prisma.user.findMany({ where: { role: "admin" }, orderBy: { name: "asc" } }),
     prisma.project.findMany({ orderBy: { name: "asc" } }),
+    prisma.project.findMany({
+      where: { stage: { in: ["current", "upcoming"] } },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
+  const assignProjects = assignableProjects(liveProjects);
+  const assignIds = assignProjects.map((project) => project.id);
   res.render("personnel", {
     title: "Personnel",
     user: req.user,
-    surveyors,
+    surveyors: surveyors.map((surveyor) => ({
+      ...surveyor,
+      assignSlots: assignmentSlots(
+        surveyor.access.map((row) => row.projectId),
+        assignIds
+      ),
+    })),
     clients,
     admins,
     projects,
+    assignProjects,
     notice: req.query.notice || "",
     error: req.query.error || "",
   });
