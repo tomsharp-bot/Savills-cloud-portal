@@ -4,7 +4,16 @@ import http from "node:http";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
-import { HHSRS_WAITING_STATUSES } from "./hhsrs-reporter.js";
+import ejs from "ejs";
+import { claimRowClass, claimView } from "./hhsrs-claims.js";
+import { addressFirstLine, splitAddress } from "./hhsrs-main-log.js";
+import {
+  HHSRS_WAITING_STATUSES,
+  formatTimeAgo,
+  photoAttachmentCount,
+  ratingDisplayClass,
+  reporterCasePhotos,
+} from "./hhsrs-reporter.js";
 import {
   PENDING_ISSUE_LIST_LIMIT,
   mergePendingDuplicates,
@@ -82,6 +91,67 @@ describe("pending issue list query", () => {
     assert.match(uprnCell, /row\.pendingDupe/);
     assert.match(uprnCell, /pending-dupe-tag">Dupe</);
     assert.doesNotMatch(addressCell, /pendingDupe|Dupe/);
+    assert.match(table, /row\.pendingDupe[\s\S]*\/duplicates\?open=<%= encodeURIComponent\(row\.id\) %>/);
+    assert.match(table, /\/review\/<%= row\.id %>\?claim=1/);
+    const html = ejs.render(
+      table,
+      {
+        pendingRows: [
+          {
+            id: "plain-1",
+            projectName: "Onward",
+            fullAddress: "12 Example Street",
+            postcode: "EX23 8AB",
+            photoPaths: [],
+            uprn: "10001",
+            surveyorName: "Tom Sharp",
+            category: "Damp & Mould Growth",
+            rating: "High",
+            createdAt: new Date("2026-10-01T09:15:00Z"),
+            pendingDupe: false,
+          },
+          {
+            id: "dupe-9",
+            projectName: "Onward",
+            fullAddress: "4 Sample Road",
+            postcode: "EX23 8AB",
+            photoPaths: [],
+            uprn: "10002",
+            surveyorName: "Tom Sharp",
+            category: "Falls on stairs",
+            rating: "Severe",
+            createdAt: new Date("2026-10-01T08:00:00Z"),
+            pendingDupe: true,
+          },
+        ],
+        pendingTableId: "waiting-table",
+        pendingShowReference: false,
+        pendingAction: "review",
+        pendingFoot: "",
+        reporterBase: "/HHSRSreporter",
+        formatTimeAgo,
+        claimView,
+        claimRowClass: (row: { claimedBy?: string | null; claimedAt?: Date | string | null }) =>
+          claimRowClass(claimView(row).status),
+        ratingDisplayClass,
+        photoAttachmentCount,
+        reporterCasePhotos,
+        addressFirstLine,
+        splitAddress,
+      },
+      { filename: "views/hhsrs-reporter/partials/pending-issues-table.ejs" }
+    );
+    const rendered = tbodyRows(html, "waiting-table");
+    const plain = rendered.find((row) => row.includes("12 Example Street"));
+    const dupe = rendered.find((row) => row.includes("4 Sample Road"));
+    assert.ok(plain);
+    assert.ok(dupe);
+    assert.match(plain, /href="\/HHSRSreporter\/review\/plain-1\?claim=1"/);
+    assert.match(plain, />Review Case</);
+    assert.doesNotMatch(plain, /\/duplicates\?open=/);
+    assert.match(dupe, /href="\/HHSRSreporter\/duplicates\?open=dupe-9"/);
+    assert.match(dupe, />Review Case</);
+    assert.doesNotMatch(dupe, /\/review\/dupe-9/);
     assert.doesNotMatch(table, /<th[^>]*>\s*Dupe\s*</);
     const rule = css.slice(css.indexOf("tr.pending-dupe"), css.indexOf(".pending-dupe-tag") + 180);
     assert.match(rule, /#waiting-table/);
@@ -450,6 +520,11 @@ describe("pending and review lists", () => {
     assert.match(dupeRow, /\bpending-dupe\b/);
     assert.match(earlierRow, /\bpending-dupe\b/);
     assert.doesNotMatch(plainRow, /\bpending-dupe\b/);
+    assert.match(dupeRow, new RegExp(`href="/HHSRSreporter/duplicates\\?open=${later.id}"`));
+    assert.doesNotMatch(dupeRow, new RegExp(`/HHSRSreporter/review/${later.id}`));
+    assert.match(earlierRow, new RegExp(`href="/HHSRSreporter/duplicates\\?open=${earlier.id}"`));
+    assert.match(plainRow, new RegExp(`href="/HHSRSreporter/review/${plain.id}\\?claim=1"`));
+    assert.doesNotMatch(plainRow, /\/duplicates\?open=/);
     assert.equal(tableSlice(pending.body, "waiting-table").includes(errorAddress), false);
 
     const uprnCell = dupeRow.match(/<td class="col-uprn">([\s\S]*?)<\/td>/);
@@ -472,6 +547,12 @@ describe("pending and review lists", () => {
     assert.match(dupes.body, new RegExp(errorAddress));
     assert.match(dupes.body, new RegExp(`data-dup-id="${later.id}"`));
     assert.match(dupes.body, new RegExp(`data-dup-id="${earlier.id}"`));
+
+    const openedLater = await request(app, "GET", `/HHSRSreporter/duplicates?open=${encodeURIComponent(later.id)}`, { cookie });
+    assert.equal(openedLater.status, 200);
+    assert.match(openedLater.body, new RegExp(`class="dup-pair is-open" id="dup-pair-${later.id}"`));
+    assert.match(openedLater.body, /Close duplicate/);
+    assert.doesNotMatch(openedLater.body, new RegExp(`class="dup-pair is-open" id="dup-pair-${earlier.id}"`));
 
     const review = await request(app, "GET", "/HHSRSreporter/review", { cookie });
     const also = tableSlice(review.body, "rv-also-table");

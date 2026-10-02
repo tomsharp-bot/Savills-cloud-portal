@@ -83,6 +83,8 @@
               <a class="btn-review-create" href="<%= row.amendUrl %>">Amend</a>
             <% } else if (action === "details") { %>
               <a class="btn-review-create" href="<%= reporterBase %>/main-log/<%= row.id %>/details">View details</a>
+            <% } else if (row.pendingDupe) { %>
+              <a class="btn-review-create" href="<%= reporterBase %>/duplicates?open=<%= encodeURIComponent(row.id) %>">Review Case</a>
             <% } else { %>
               <a class="btn-review-create" href="<%= reporterBase %>/review/<%= row.id %>?claim=1">Review Case</a>
             <% } %>
