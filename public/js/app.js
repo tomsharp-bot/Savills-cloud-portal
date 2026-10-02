@@ -104,17 +104,78 @@
     if (inp.matches("input[data-omit]")) {
       const ok = await patchAsset(projectId, inp.dataset.omit, { omitAsset: inp.checked });
       if (ok) loadStockWindow(table, { offset: table.dataset.offset || "0" });
-      return;
-    }
-    if (inp.matches("input[data-epc]")) {
-      const ok = await patchAsset(projectId, inp.dataset.epc, { epcRequired: inp.checked });
-      if (ok) loadStockWindow(table, { offset: table.dataset.offset || "0" });
     }
   });
 
+  function paintMultiFilter(el) {
+    const checked = Array.from(el.querySelectorAll('input[type="checkbox"]:checked'));
+    const summary = el.querySelector(".multi-filter-summary");
+    if (summary) {
+      const label = checked.length
+        ? checked.map((box) => box.getAttribute("data-label") || box.value).join(", ")
+        : "All";
+      summary.textContent = label;
+      summary.title = label;
+    }
+    el.classList.toggle("filter-active", checked.length > 0);
+  }
+
   function markFilterActive(el) {
+    if (el.matches && el.matches("[data-multi-filter]")) {
+      paintMultiFilter(el);
+      return;
+    }
     el.classList.toggle("filter-active", String(el.value || "").trim() !== "");
   }
+
+  function filterControlValues(el) {
+    if (el.matches && el.matches("[data-multi-filter]")) {
+      return Array.from(el.querySelectorAll('input[type="checkbox"]:checked'))
+        .map((box) => String(box.value || "").trim())
+        .filter(Boolean);
+    }
+    const value = String(el.value || "").trim();
+    return value ? [value] : [];
+  }
+
+  function placeMultiMenu(el) {
+    const menu = el.querySelector(".multi-filter-menu");
+    const summary = el.querySelector(".multi-filter-summary");
+    if (!menu || !summary) return;
+    const rect = summary.getBoundingClientRect();
+    const width = Math.max(rect.width, 168);
+    let left = rect.left;
+    if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - width);
+    menu.style.position = "fixed";
+    menu.style.left = Math.max(8, left) + "px";
+    menu.style.width = width + "px";
+    menu.style.zIndex = "80";
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    const want = Math.min(menu.scrollHeight || 240, 240);
+    if (spaceBelow < 120 && spaceAbove > spaceBelow) {
+      const height = Math.min(want, Math.max(80, spaceAbove));
+      menu.style.maxHeight = height + "px";
+      menu.style.top = Math.max(8, rect.top - height - 2) + "px";
+    } else {
+      menu.style.maxHeight = Math.max(80, Math.min(240, spaceBelow)) + "px";
+      menu.style.top = (rect.bottom + 2) + "px";
+    }
+  }
+
+  function closeMultiFilters(except) {
+    document.querySelectorAll("details[data-multi-filter][open]").forEach((open) => {
+      if (open !== except) open.open = false;
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    document.querySelectorAll("details[data-multi-filter][open]").forEach((open) => {
+      if (target instanceof Node && open.contains(target)) return;
+      open.open = false;
+    });
+  });
 
   function stockQuery(table, overrides) {
     const kind = table.dataset.stock;
@@ -132,17 +193,18 @@
     });
     document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter]').forEach((el) => {
       markFilterActive(el);
-      const value = String(el.value || "").trim();
-      if (!value) return;
+      const values = filterControlValues(el);
+      if (!values.length) return;
       const key = "f_" + el.dataset.filter;
       const chosen = params.get(key);
       if (chosen && presence.has(chosen)) return;
-      params.set("f_" + el.dataset.filter, value);
+      values.forEach((value) => params.append(key, value));
     });
     return params;
   }
 
   const stockLoads = new WeakMap();
+  let suppressMenuCloseUntil = 0;
 
   function paintSort(table, sort, dir) {
     table.querySelectorAll("[data-sort-col]").forEach((btn) => {
@@ -193,7 +255,7 @@
     params.forEach((value, key) => {
       if (key === "kind" || key === "limit") return;
       if (key === "offset" && (value === "0" || value === "")) return;
-      url.searchParams.set(key, value);
+      url.searchParams.append(key, value);
     });
     history.replaceState(null, "", url);
   }
@@ -314,7 +376,10 @@
     if (data.rowHeight) table.dataset.rowHeight = String(data.rowHeight);
     applyPads(table, Number(data.offset || 0), shown, Number(data.matched || 0));
     const wrap = table.closest(".stock-table-wrap");
-    if (overrides && overrides.scrollTop && wrap) wrap.scrollTop = 0;
+    if (overrides && overrides.scrollTop && wrap) {
+      suppressMenuCloseUntil = Date.now() + 80;
+      wrap.scrollTop = 0;
+    }
     paintStockLabel(table);
     paintSort(table, table.dataset.sort, table.dataset.dir);
     syncStockUrl(table, params);
@@ -348,7 +413,27 @@
       markFilterActive(el);
       let timer = 0;
       const run = () => loadStockWindow(table, { offset: "0", scrollTop: true });
+      if (el.matches("[data-multi-filter]")) {
+        el.addEventListener("toggle", () => {
+          if (!el.open) return;
+          closeMultiFilters(el);
+          placeMultiMenu(el);
+        });
+        el.addEventListener("click", (event) => {
+          const node = event.target && event.target.nodeType === 3 ? event.target.parentElement : event.target;
+          const clear = node && node.closest ? node.closest("[data-multi-all]") : null;
+          if (!clear || !el.contains(clear)) return;
+          el.querySelectorAll('input[type="checkbox"]').forEach((box) => {
+            box.checked = false;
+          });
+          paintMultiFilter(el);
+          el.open = false;
+          clearTimeout(timer);
+          run();
+        });
+      }
       el.addEventListener("input", () => {
+        if (el.matches("[data-multi-filter]")) return;
         if (filterRoot && el.matches("input[data-filter]") && el.value.trim()) {
           const presenceEl = filterRoot.querySelector('[data-filter-presence="' + el.dataset.filter + '"]');
           if (presenceEl) {
@@ -362,6 +447,12 @@
         timer = setTimeout(run, 250);
       });
       el.addEventListener("change", () => {
+        if (el.matches("[data-multi-filter]")) {
+          paintMultiFilter(el);
+          clearTimeout(timer);
+          run();
+          return;
+        }
         if (filterRoot && el.matches("[data-filter-presence]") && el.value.trim()) {
           const text = filterRoot.querySelector('input[data-filter="' + el.dataset.filterPresence + '"]');
           if (text) {
@@ -381,6 +472,7 @@
     paintStockLabel(table);
     let frame = 0;
     wrap.addEventListener("scroll", () => {
+      if (filterRoot && Date.now() >= suppressMenuCloseUntil) closeMultiFilters(null);
       paintStockLabel(table);
       if (frame) return;
       frame = requestAnimationFrame(() => {
@@ -394,6 +486,14 @@
     btn.addEventListener("click", () => {
       const kind = btn.getAttribute("data-clear-filters");
       document.querySelectorAll('[data-stock-filters="' + kind + '"] [data-filter], [data-stock-filters="' + kind + '"] [data-filter-presence]').forEach((el) => {
+        if (el.matches("[data-multi-filter]")) {
+          el.querySelectorAll('input[type="checkbox"]').forEach((box) => {
+            box.checked = false;
+          });
+          el.open = false;
+          paintMultiFilter(el);
+          return;
+        }
         el.value = "";
         markFilterActive(el);
       });

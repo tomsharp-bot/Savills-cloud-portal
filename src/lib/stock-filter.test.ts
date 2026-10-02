@@ -2,9 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import ejs from "ejs";
 import { statusFromVisitLogs } from "./asset-status.js";
-import { BLANK_FILTER, NONBLANK_FILTER, filterStockRows } from "./stock-filter.js";
-import { STOCK_DATE_COLS, STOCK_SELECT_COLS, stockColumns } from "./stock-columns.js";
+import { BLANK_FILTER, NONBLANK_FILTER, filterStockRows, stockFilterValues } from "./stock-filter.js";
+import { STOCK_DATE_COLS, STOCK_LABELS, STOCK_SELECT_COLS, stockColumns } from "./stock-columns.js";
+import { formatStockDate } from "./dates.js";
+import { parseStockListQuery } from "./stock-page.js";
+import { flattenSql, stockFilterSql } from "./stock-sql.js";
 
 const root = process.cwd();
 
@@ -247,5 +251,159 @@ describe("Visit import → Full Survey Asset Status filter", () => {
       filterStockRows(rows, { surveyDate: BLANK_FILTER }, exact).map((row) => row.uprn),
       ["empty", "named", "patched"]
     );
+  });
+
+  it("matches a row when its cell is any of two selected values, including two dates", () => {
+    const columns = ["uprn", "assetStatus", "surveyDate", "patch"];
+    const rows = [
+      { uprn: "a", assetStatus: "Full Survey", surveyDate: "02/04/2026", patch: "Patch 8" },
+      { uprn: "b", assetStatus: "No Access", surveyDate: "03/04/2026", patch: "Patch 8" },
+      { uprn: "c", assetStatus: "Void", surveyDate: "04/04/2026", patch: "Patch 1" },
+      { uprn: "d", assetStatus: "No Visit", surveyDate: "", patch: "Patch 8" },
+    ];
+    const parsed = parseStockListQuery(
+      {
+        f_assetStatus: ["Full Survey", "No Access"],
+        f_surveyDate: ["02/04/26", "03/04/26"],
+      },
+      columns
+    );
+    assert.deepEqual(parsed.filters.assetStatus, ["Full Survey", "No Access"]);
+    assert.deepEqual(parsed.filters.surveyDate, ["02/04/26", "03/04/26"]);
+    assert.deepEqual(
+      filterStockRows(rows, parsed.filters).map((row) => row.uprn),
+      ["a", "b"]
+    );
+    assert.deepEqual(
+      filterStockRows(rows, {
+        assetStatus: ["Full Survey", "Void"],
+        surveyDate: ["02/04/26", "03/04/26"],
+      }).map((row) => row.uprn),
+      ["a"]
+    );
+    assert.deepEqual(filterStockRows(rows, { assetStatus: ["No Access"] }).map((row) => row.uprn), ["b"]);
+    assert.deepEqual(filterStockRows(rows, { surveyDate: "02/04/26" }).map((row) => row.uprn), ["a"]);
+    assert.deepEqual(filterStockRows(rows, { surveyDate: [BLANK_FILTER] }).map((row) => row.uprn), ["d"]);
+    assert.deepEqual(
+      filterStockRows(rows, { surveyDate: [NONBLANK_FILTER] }).map((row) => row.uprn),
+      ["a", "b", "c"]
+    );
+    assert.deepEqual(
+      filterStockRows(rows, { surveyDate: ["02/04/26", BLANK_FILTER] }).map((row) => row.uprn),
+      ["a", "d"]
+    );
+    assert.deepEqual(
+      stockFilterValues({ 0: "02/04/26", 1: "03/04/26" }),
+      ["02/04/26", "03/04/26"]
+    );
+    const where = stockFilterSql(
+      { surveyDate: ["02/04/26", "03/04/26"], patch: "Patch 8" },
+      new Set(["surveyDate", "patch"]),
+      false,
+      new Set(["surveyDate", "patch"])
+    );
+    const flat = flattenSql(where);
+    const sql = flat.text.replace(/\s+/g, " ");
+    assert.match(sql, /OR/);
+    assert.match(sql, /AND/);
+    assert.ok(flat.values.includes("02/04/26"));
+    assert.ok(flat.values.includes("03/04/26"));
+    assert.ok(flat.values.some((value) => String(value).toLowerCase() === "patch 8"));
+  });
+
+  it("renders EPC Req. as the word YES and nothing else", () => {
+    const template = readFileSync(join(root, "views/partials/stock-rows.ejs"), "utf8");
+    const script = readFileSync(join(root, "public/js/app.js"), "utf8");
+    for (const isAdmin of [true, false]) {
+      const html = ejs.render(
+        template,
+        {
+          rows: [
+            { id: "yes", epcRequired: true, omitAsset: false, stockMissing: false },
+            { id: "no", epcRequired: false, omitAsset: false, stockMissing: false },
+          ],
+          cols: ["epcRequired"],
+          stockVirtual: false,
+          stockFiltered: false,
+          isAdmin,
+          isSurveyor: false,
+          formatStockDate,
+          stockDateCols: STOCK_DATE_COLS,
+          adminEditCols: [],
+        },
+        { filename: join(root, "views/partials/stock-rows.ejs") }
+      );
+      for (const [id, text] of [
+        ["yes", "YES"],
+        ["no", ""],
+      ] as const) {
+        const cell = html.match(new RegExp(`data-asset="${id}"[\\s\\S]*?<td[^>]*data-col="epcRequired"[^>]*>([\\s\\S]*?)<\\/td>`));
+        assert.ok(cell, `${id} admin=${isAdmin}`);
+        assert.equal(cell[1].trim(), text, `${id} admin=${isAdmin}`);
+        assert.doesNotMatch(cell[1], /input|checkbox|✓|✔|☑|✅/i, `${id} admin=${isAdmin}`);
+      }
+    }
+    assert.doesNotMatch(template, /data-epc/);
+    assert.doesNotMatch(script, /input\[data-epc\]/);
+    assert.doesNotMatch(script, /epcRequired: inp\.checked/);
+  });
+
+  it("renders column filters so two values, including two dates, can be selected together", () => {
+    const columns = ["assetStatus", "surveyDate", "street"];
+    const template = readFileSync(join(root, "views/partials/stock-table.ejs"), "utf8");
+    const html = ejs.render(
+      template,
+      {
+        kind: "dwelling",
+        stockColsByKind: { dwelling: columns },
+        stockLabels: STOCK_LABELS,
+        stockSelectCols: STOCK_SELECT_COLS,
+        stockFilters: {
+          assetStatus: ["Full Survey", "No Access"],
+          surveyDate: ["02/04/26", "03/04/26"],
+        },
+        stockFilterOptions: {
+          assetStatus: ["Full Survey", "No Access", "No Visit"],
+          surveyDate: ["", "02/04/26", "03/04/26", "04/04/26"],
+        },
+        stockSort: "uprn",
+        stockDir: "asc",
+        stockPage: { page: 1, pageCount: 1, matched: 0, total: 0, offset: 0 },
+        stockLabel: "0 of 0 Assets Displayed",
+        stockWindowSize: 100,
+        stockRowHeight: 40,
+        stockMatched: 0,
+        stockOffset: 0,
+        rows: [],
+        isAdmin: true,
+        isClient: false,
+        isSurveyor: false,
+        project: { id: "p" },
+        baseUrl: (path: string) => path,
+        formatStockDate,
+        stockDateCols: STOCK_DATE_COLS,
+        adminEditCols: [],
+        stockFiltered: false,
+        stockVirtual: false,
+      },
+      { filename: join(root, "views/partials/stock-table.ejs") }
+    );
+    assert.match(html, /data-multi-filter/);
+    assert.match(html, /data-filter="assetStatus"/);
+    assert.match(html, /data-filter="surveyDate"/);
+    assert.match(html, /value="Full Survey"[^>]*checked/);
+    assert.match(html, /value="No Access"[^>]*checked/);
+    assert.match(html, /value="02\/04\/26"[^>]*checked/);
+    assert.match(html, /value="03\/04\/26"[^>]*checked/);
+    assert.match(html, /\(blank\)/);
+    assert.match(html, /\(Non-blanks\)/);
+    assert.match(html, /__blank__/);
+    assert.match(html, /__nonblank__/);
+    assert.doesNotMatch(html, /<select[^>]*data-filter="assetStatus"/);
+    assert.doesNotMatch(html, /<select[^>]*data-filter="surveyDate"/);
+    const script = readFileSync(join(root, "public/js/app.js"), "utf8");
+    assert.match(script, /input\[type="checkbox"\]:checked/);
+    assert.match(script, /const key = "f_" \+ el\.dataset\.filter/);
+    assert.match(script, /values\.forEach\(\(value\) => params\.append\(key, value\)\)/);
   });
 });

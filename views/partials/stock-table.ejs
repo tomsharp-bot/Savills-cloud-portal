@@ -13,7 +13,43 @@
   const rowHeight = typeof stockRowHeight !== "undefined" ? stockRowHeight : 40;
   const matchedCount = typeof stockMatched !== "undefined" ? stockMatched : (pageInfo.matched || 0);
   const offsetCount = typeof stockOffset !== "undefined" ? stockOffset : (pageInfo.offset || 0);
-  const filterClass = (value) => String(value || "").trim() ? "filter-active" : "";
+  const filterValues = (column) => {
+    const raw = filters[column];
+    const list = Array.isArray(raw) ? raw : raw == null || String(raw).trim() === "" ? [] : [raw];
+    return list.map((value) => String(value ?? "").trim()).filter(Boolean);
+  };
+  const multiChoices = (column) => {
+    if (column === "omitAsset") {
+      return [
+        { value: "included", label: "Included" },
+        { value: "omitted", label: "Omitted" },
+      ];
+    }
+    if (column === "epcRequired") {
+      return [
+        { value: "__nonblank__", label: "(Non-blanks)" },
+        { value: "YES", label: "YES" },
+        { value: "__blank__", label: "(blank)" },
+      ];
+    }
+    if (selectCols.has(column) && Array.isArray(options[column])) {
+      const items = [{ value: "__nonblank__", label: "(Non-blanks)" }];
+      (options[column] || []).forEach((v) => {
+        const shown = String(v ?? "").trim();
+        items.push({ value: shown ? shown : "__blank__", label: shown || "(blank)" });
+      });
+      return items;
+    }
+    return null;
+  };
+  const choiceLabel = (column, items) => {
+    const picked = filterValues(column);
+    if (!picked.length) return "All";
+    return picked.map((value) => {
+      const hit = items.find((item) => item.value === value);
+      return hit ? hit.label : value;
+    }).join(", ");
+  };
 %>
 <div class="stock-tab-head">
   <h3><%= title %></h3>
@@ -48,30 +84,24 @@
       </tr>
       <tr class="col-filter-row" data-stock-filters="<%= kind %>">
         <% cols.forEach(c => { %>
-          <% const current = filters[c] || ""; %>
+          <% const picked = filterValues(c); %>
+          <% const choices = multiChoices(c); %>
+          <% const current = picked[0] || ""; %>
           <th>
-            <% if (c === "omitAsset") { %>
-              <select data-filter="omitAsset" class="<%= filterClass(current) %>">
-                <option value="">All</option>
-                <option value="included" <%= current === "included" ? "selected" : "" %>>Included</option>
-                <option value="omitted" <%= current === "omitted" ? "selected" : "" %>>Omitted</option>
-              </select>
-            <% } else if (c === "epcRequired") { %>
-              <select data-filter="epcRequired" class="<%= filterClass(current) %>">
-                <option value="">All</option>
-                <option value="__nonblank__" <%= current === "__nonblank__" ? "selected" : "" %>>(Non-blanks)</option>
-                <option value="YES" <%= current === "YES" ? "selected" : "" %>>YES</option>
-                <option value="__blank__" <%= current === "__blank__" ? "selected" : "" %>>(blank)</option>
-              </select>
-            <% } else if (selectCols.has(c) && Array.isArray(options[c])) { %>
-              <select data-filter="<%= c %>" class="<%= filterClass(current) %>">
-                <option value="">All</option>
-                <option value="__nonblank__" <%= current === "__nonblank__" ? "selected" : "" %>>(Non-blanks)</option>
-                <% const vals = options[c] || (c === "assetStatus" && typeof assetStatusOptions !== "undefined" ? assetStatusOptions : []); %>
-                <% vals.forEach(v => { const shown = String(v ?? "").trim(); const value = shown ? shown : "__blank__"; %>
-                  <option value="<%= value %>" <%= current === value ? "selected" : "" %>><%= shown || "(blank)" %></option>
-                <% }) %>
-              </select>
+            <% if (choices) { %>
+              <% const summary = choiceLabel(c, choices); %>
+              <details class="multi-filter <%= picked.length ? "filter-active" : "" %>" data-multi-filter data-filter="<%= c %>">
+                <summary class="multi-filter-summary" title="<%= summary %>"><%= summary %></summary>
+                <div class="multi-filter-menu">
+                  <button type="button" class="multi-filter-all" data-multi-all>All</button>
+                  <% choices.forEach((item) => { %>
+                    <label>
+                      <input type="checkbox" value="<%= item.value %>" data-label="<%= item.label %>" <%= picked.includes(item.value) ? "checked" : "" %> />
+                      <%= item.label %>
+                    </label>
+                  <% }) %>
+                </div>
+              </details>
             <% } else if (selectCols.has(c)) { %>
               <% const presence = current === "__nonblank__" || current === "__blank__"; %>
               <select data-filter-presence="<%= c %>" class="<%= presence ? "filter-active" : "" %>">
@@ -81,7 +111,7 @@
               </select>
               <input type="text" data-filter="<%= c %>" class="<%= !presence && current ? "filter-active" : "" %>" value="<%= presence ? "" : current %>" placeholder="Filter" />
             <% } else { %>
-              <input type="text" data-filter="<%= c %>" class="<%= filterClass(current) %>" value="<%= current %>" placeholder="Filter" />
+              <input type="text" data-filter="<%= c %>" class="<%= current ? "filter-active" : "" %>" value="<%= current %>" placeholder="Filter" />
             <% } %>
           </th>
         <% }) %>
