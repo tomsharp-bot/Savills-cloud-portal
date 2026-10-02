@@ -478,6 +478,55 @@
       });
     });
   });
+  function packProjectSlots(values) {
+    const filled = [];
+    for (const value of values) {
+      if (value) filled.push(value);
+    }
+    const out = [];
+    for (let i = 0; i < values.length; i++) out.push(filled[i] || "");
+    return out;
+  }
+  function saveSurveyorProjectChange(sel) {
+    const userId = sel.dataset.access;
+    const row = sel.closest("tr");
+    const prev = sel.dataset.selected || "";
+    const next = sel.value || "";
+    if (!userId || !row || prev === next) return Promise.resolve();
+    const others = [...row.querySelectorAll("select[data-access]")].filter((other) => other !== sel);
+    const stillHas = (projectId) => others.some((other) => other.value === projectId);
+    const jobs = [];
+    if (prev && !stillHas(prev)) jobs.push({ projectId: prev, granted: false });
+    if (next && !stillHas(next)) jobs.push({ projectId: next, granted: true });
+    sel.dataset.selected = next;
+    return jobs.reduce(
+      (chain, job) => chain.then(() => postJson(appUrl("/personnel/" + userId + "/access"), job)),
+      Promise.resolve()
+    );
+  }
+  const assignSave = new Map();
+  document.querySelectorAll("select[data-access]").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const userId = sel.dataset.access || "";
+      const previous = assignSave.get(userId) || Promise.resolve();
+      const next = previous.catch(() => {}).then(() => saveSurveyorProjectChange(sel));
+      assignSave.set(userId, next);
+    });
+  });
+  const refreshAssign = document.getElementById("surveyor-assign-refresh");
+  if (refreshAssign) {
+    refreshAssign.addEventListener("click", () => {
+      document.querySelectorAll(".personnel-surveyors tbody tr").forEach((row) => {
+        const selects = [...row.querySelectorAll("select[data-access]")];
+        if (!selects.length) return;
+        const packed = packProjectSlots(selects.map((sel) => sel.value));
+        selects.forEach((sel, i) => {
+          sel.value = packed[i] || "";
+          sel.dataset.selected = sel.value;
+        });
+      });
+    });
+  }
   document.querySelectorAll("input[data-freeze]").forEach((cb) => {
     cb.addEventListener("change", () => {
       postJson(appUrl("/personnel/" + cb.dataset.freeze + "/freeze"), { frozen: cb.checked });
