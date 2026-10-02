@@ -12,7 +12,7 @@ import { isWaitingStatus, reporterCasePhotos, type ReporterCasePhoto } from "./h
 
 export const NOT_NEEDED_REASONS = [
   { id: "duplicate", label: "Duplicate", hint: "Already reported" },
-  { id: "surveyor_error", label: "Surveyor error", hint: "Wrong details sent" },
+  { id: "surveyor_error", label: "Surveyor correction", hint: "Wrong details sent" },
   { id: "test", label: "Test", hint: "Test submission" },
   { id: "other", label: "Other", hint: "Say why below" },
 ] as const;

@@ -470,6 +470,10 @@ describe("pending and review lists", () => {
     assert.match(dupes.body, new RegExp(dupeAddress));
     assert.match(dupes.body, new RegExp(earlierAddress));
     assert.match(dupes.body, new RegExp(errorAddress));
+    const errorRow = dupes.body.split("<tr").find((part) => part.includes(errorAddress));
+    assert.ok(errorRow);
+    assert.match(errorRow, /Surveyor correction/);
+    assert.doesNotMatch(errorRow, /Surveyor error/);
     assert.match(dupes.body, new RegExp(`data-dup-id="${later.id}"`));
     assert.match(dupes.body, new RegExp(`data-dup-id="${earlier.id}"`));
 

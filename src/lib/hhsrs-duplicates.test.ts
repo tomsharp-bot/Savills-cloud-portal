@@ -10,7 +10,7 @@ import { HHSRS_SITE_PHOTO_STORAGE } from "./hhsrs-site-photos.js";
 import { createSubmissionWithReference } from "./hhsrs-reference.js";
 import { splitAddressPostcode } from "./hhsrs-office-case.js";
 import { toDuplicateCompareRow, type CompareCase } from "./hhsrs-duplicate-compare.js";
-import { validateNotNeededMove } from "./hhsrs-not-needed.js";
+import { NOT_NEEDED_REASONS, notNeededReasonLabel, validateNotNeededMove } from "./hhsrs-not-needed.js";
 
 function refNumber(reference: string | null): number {
   return Number(String(reference || "").split("-").pop());
@@ -72,6 +72,50 @@ describe("not needed checks", () => {
     });
     assert.equal(test.ok, true);
     if (test.ok) assert.equal(test.duplicateOf, "");
+
+    const correction = await validateNotNeededMove({
+      reason: "surveyor_error",
+      duplicateOf: "",
+      note: "",
+      selfReference: "MTVH-015",
+      findReference: find,
+    });
+    assert.equal(correction.ok, true);
+    if (correction.ok) {
+      assert.equal(correction.reason, "surveyor_error");
+      assert.equal(correction.duplicateOf, "");
+    }
+  });
+
+  it("labels a stored surveyor error as Surveyor correction", () => {
+    const option = NOT_NEEDED_REASONS.find((item) => item.id === "surveyor_error");
+    assert.ok(option);
+    assert.equal(option.label, "Surveyor correction");
+    assert.equal(notNeededReasonLabel("surveyor_error"), "Surveyor correction");
+    assert.equal(notNeededReasonLabel("duplicate"), "Duplicate");
+    assert.equal(notNeededReasonLabel("test"), "Test");
+    assert.equal(notNeededReasonLabel("other"), "Other");
+
+    const stored: CompareCase = {
+      id: "error-id",
+      reference: "MTVH-030",
+      uprn: "100",
+      fullAddress: "4 Example Road",
+      postcode: "EX1 1AA",
+      category: "Damp & Mould Growth",
+      rating: "High",
+      comment: "Wrong address",
+      surveyDate: "2026-09-05",
+      status: "not_needed",
+      emailSentAt: null,
+      createdAt: new Date("2026-09-05T09:00:00.000Z"),
+      notNeededReason: "surveyor_error",
+      notNeededDuplicateOf: "",
+    };
+    const row = toDuplicateCompareRow(stored, null, { open: false, reporterBase: "/HHSRSreporter" });
+    assert.equal(row.matches, "Surveyor correction");
+    assert.equal(row.canCompare, false);
+    assert.equal(row.amendUrl, "");
   });
 
   it("splits a trailing postcode from an office address", () => {
@@ -305,6 +349,9 @@ describe("duplicates and office emails with the database", () => {
       const review = await request(port, "GET", `/HHSRSreporter/review/${duplicate.id}`, { cookie });
       assert.equal(review.status, 200);
       assert.match(review.body, /id="btn-not-needed"/);
+      assert.match(review.body, /value="surveyor_error"/);
+      assert.match(review.body, /Surveyor correction/);
+      assert.doesNotMatch(review.body, /Surveyor error/);
       assert.match(review.body, /Duplicate, error or test/);
       assert.match(review.body, /Sends the email and adds it to the Main Log/);
       assert.match(review.body, /Abandon claim — return to pending/);
