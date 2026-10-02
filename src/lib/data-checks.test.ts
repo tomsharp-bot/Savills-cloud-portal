@@ -105,11 +105,11 @@ describe("Data Review practice page hosting", () => {
     assert.equal(garage.filter((h) => h === "UPRN").length, 1);
   });
 
-  it("doubles the header, alternates section colours, and freezes columns on the left", () => {
+  it("uses a 300px header, alternates section colours, and freezes columns on the left", () => {
     const source = readDataReviewPage();
-    assert.match(source, /--hh:200px/);
-    assert.match(source, /const RH = 22, GUT = 56, HH = 200/);
-    assert.match(source, /ht="150"/);
+    assert.match(source, /--hh:300px/);
+    assert.match(source, /const RH = 22, GUT = 56, HH = 300/);
+    assert.match(source, /ht="225"/);
     assert.match(source, /id="bFixLeft"/);
     assert.match(source, /FFD6EAF8/);
     assert.match(source, /FFFFF4CC/);
@@ -254,8 +254,8 @@ globalThis.__go = function(){
     assert.match(got.sheet, /ySplit="3"/);
     assert.match(got.sheet, /activePane="bottomRight"/);
     assert.match(got.sheet, /topLeftCell="C4"/);
-    assert.match(got.sheet, /<row[^>]*\br="3"[^>]*ht="150"/);
-    assert.doesNotMatch(got.sheet, /<row[^>]*\br="4"[^>]*ht="150"/);
+    assert.match(got.sheet, /<row[^>]*\br="3"[^>]*ht="225"/);
+    assert.doesNotMatch(got.sheet, /<row[^>]*\br="4"[^>]*ht="225"/);
     assert.match(got.sheet, /<c r="A3"[^>]*\ss="/);
     assert.match(got.styles, /FFD6EAF8/);
     assert.match(got.styles, /FFFFF4CC/);
@@ -268,8 +268,8 @@ globalThis.__go = function(){
 
   it("restores a narrowed Master Data File column at the saved pixel width", () => {
     const source = readDataReviewPage();
-    assert.match(source, /const RH = 22, GUT = 56, HH = 200/);
-    assert.match(source, /ht="150"/);
+    assert.match(source, /const RH = 22, GUT = 56, HH = 300/);
+    assert.match(source, /ht="225"/);
     assert.match(source, /xSplit="/);
     assert.match(source, /visible:true, w:c\.w/);
 
@@ -328,6 +328,120 @@ globalThis.__go = function(){
       {}
     );
     assert.equal(px, 36);
+  });
+
+  it("writes a photo code in every new dwelling photo column and yellows a code with no photo", () => {
+    const source = readDataReviewPage();
+    assert.match(source, /function fillNewDwellingPhotoCodes/);
+    assert.match(source, /\.c\.phMiss/);
+    assert.match(source, /phm:'FFFFFF00'/);
+    assert.match(source, /TBC/);
+    const api = loadDwellingPhotoApi(source);
+    const dw = "Data Horizontal DW";
+    const blk = "Data Horizontal BLK";
+    const gar = "Data Horizontal GAR";
+    const dwCols = api.starterFixedColumns(dw);
+    const blkCols = api.starterFixedColumns(blk);
+    const garCols = api.starterFixedColumns(gar);
+    const before = {
+      dw: dwCols.map((c) => c.header + "|" + c.key).join("\n"),
+      blk: blkCols.map((c) => c.header + "|" + c.key).join("\n"),
+      gar: garCols.map((c) => c.header + "|" + c.key).join("\n"),
+    };
+    const photos = dwCols.filter((c) => c.kind === "photo");
+    assert.equal(photos.length, 31);
+    assert.equal(photos[0].header, "Front Elevation Photo");
+    assert.equal(photos[photos.length - 1].header, "Roof Void Underfelt Photo");
+    assert.equal(dwCols.some((c) => String(c.key).startsWith("p|~")), true);
+    assert.equal(photos.some((c) => String(c.key).startsWith("p|~")), false);
+
+    const B = {
+      exactColumns: true,
+      photoPattern: "{UPRN}-{component}{n}",
+      photoFill: "present",
+      surveyorInitials: false,
+      sheets: [
+        { name: dw, types: ["*"] },
+        { name: blk, types: ["Block"] },
+        { name: gar, types: ["Garage"] },
+      ],
+      photos: api.starterPhotoGroups(dw).concat(api.starterPhotoGroups(blk)),
+      columns: { [dw]: dwCols, [blk]: blkCols, [gar]: garCols },
+      comps: {},
+    };
+    api.setMaster({ data: new Map(), B });
+    const V = {
+      col: { uprn: 0, comp: 1, ans: 2, addr: 3, ptype: 4, sdate: 5, by: 6 },
+      header: ["UPRN", "SubSection Name", "SubSection Value", "Address", "Property Type", "Survey Date", "Created By"],
+    };
+    const prop = (uprn: string, ptype: string, comp: string, ans: string) => ({
+      uprn,
+      rows: [[uprn, comp, ans, "1 High Street", ptype, "2024-06-01", "Ann Lee"]],
+      addr: "1 High Street",
+      ptype,
+      cstatus: "",
+      parent: "",
+      sdate: "2024-06-01",
+      by: "Ann Lee",
+    });
+    const copies = new Map<string, { sheet: string; row: { vals: Record<string, unknown>; e: Set<string>; ins: boolean; m?: { phNew?: number } } }[]>();
+    const st = { newProps: 0, newUprns: [] as string[], filled: 0 };
+    api.exactFillProp(prop("100200", "House", "Year Built", "1930"), V, B, copies, st);
+    const row = api.master().data.get(dw)![0];
+    assert.equal(st.newProps, 1);
+    assert.equal(row.m && row.m.phNew, 1);
+    for (const col of photos) {
+      assert.equal(row.vals[col.key], "100200-" + col.key.split("|")[1] + col.key.split("|")[2], col.header);
+      assert.equal(api.dwellingPhotoYellow(row, col, row.vals[col.key]), true, col.header);
+    }
+    const hh = dwCols.find((c) => String(c.key).startsWith("p|~"));
+    assert.ok(hh);
+    assert.equal(row.vals[hh!.key], undefined);
+    assert.equal(api.dwellingPhotoYellow(row, hh, "100200-nullDamp-1"), false);
+
+    api.exactFillProp(prop("100201", "Flat", "Kitchen Renewal", "Modern"), V, B, copies, st);
+    const partial = api.master().data.get(dw)![1];
+    assert.equal(partial.vals["p|Kitchen Renewal|1"], "100201-Kitchen Renewal1");
+    assert.equal(partial.vals["p|Kitchen Renewal|3"], "100201-Kitchen Renewal3");
+    assert.equal(partial.vals["p|Property Type|1"], "100201-Property Type1");
+    assert.equal(partial.m && partial.m.phNew, 1);
+
+    const front = photos[0];
+    api.photos().map.set(String(row.vals[front.key]).toLowerCase(), {});
+    assert.equal(api.dwellingPhotoYellow(row, front, row.vals[front.key]), false);
+    const other = photos[1];
+    assert.equal(api.dwellingPhotoYellow(row, other, row.vals[other.key]), true);
+    for (const mark of ["NP", "RA", "TR", "TBC", "EXT", "Comm", "N/A", "NA", "No Access", "None", "-", ".", "tbc"]) {
+      assert.equal(api.dwellingPhotoYellow(row, other, mark), false, mark);
+      assert.equal(api.dwellingPhotoMark(row, other, mark), true, mark);
+    }
+    api.photos().map.clear();
+    api.share().set = new Set([String(row.vals[other.key]).toLowerCase()]);
+    assert.equal(api.dwellingPhotoYellow(row, other, row.vals[other.key]), false);
+    api.share().set = null;
+
+    const existing: MasterRow = { vals: { "u|uprn": 55 }, e: new Set<string>(), ins: false };
+    copies.set("55", [{ sheet: dw, row: existing }]);
+    api.exactFillProp(prop("55", "House", "Year Built", "1901"), V, B, copies, st);
+    assert.equal(existing.m, undefined);
+    assert.equal(existing.vals[front.key], undefined);
+    assert.equal(api.dwellingPhotoYellow(existing, front, "55-Property Type1"), false);
+    assert.equal(st.filled, 1);
+
+    api.exactFillProp(prop("300", "Block", "Year Built", "1960"), V, B, copies, st);
+    const blockRow = api.master().data.get(blk)![0];
+    assert.equal(blockRow.m, undefined);
+    assert.equal(blockRow.vals[front.key], undefined);
+    assert.equal(api.master().data.get(dw)!.length, 2);
+
+    api.exactFillProp(prop("400", "Garage", "Year Built", "1980"), V, B, copies, st);
+    const garageRow = api.master().data.get(gar)![0];
+    assert.equal(garageRow.m, undefined);
+    assert.equal(Object.keys(garageRow.vals).some((k) => k.startsWith("p|")), false);
+
+    assert.equal(dwCols.map((c) => c.header + "|" + c.key).join("\n"), before.dw);
+    assert.equal(blkCols.map((c) => c.header + "|" + c.key).join("\n"), before.blk);
+    assert.equal(garCols.map((c) => c.header + "|" + c.key).join("\n"), before.gar);
   });
 });
 
@@ -409,6 +523,72 @@ function extractDecl(source: string, needle: string): string {
   let body = source.slice(at, openAt) + sliceBalanced(source, openAt);
   if (source[at + body.length] === ";") body += ";";
   return body;
+}
+
+type MasterCol = { key: string; header: string; kind?: string };
+type MasterRow = { vals: Record<string, unknown>; e: Set<string>; ins: boolean; m?: { phNew?: number } };
+
+function loadDwellingPhotoApi(source: string) {
+  const parts = [
+    "function fmt(v){",
+    "function keyOf(v){",
+    "function isBlank(v){",
+    "function vText(v){",
+    "function vBlank(v){",
+    "function yearOf(v){",
+    "function postcodeOf(addr){",
+    "function initials(name){",
+    "function hasLife(r, col){",
+    "function sheetForType(B, ptype){",
+    "function colDefFor(key){",
+    "function photoCode(B, uprn, comp, n){",
+    "function computeProp(p, V, B, comps){",
+    "function photoColDefs(B, sheet){",
+    "const USUAL = [",
+    "const PRESET_MTVH_DW = [",
+    "const PRESET_MTVH_BLK = [",
+    "function presetGroups(list, sheet){",
+    "const HH_N = 7;",
+    "function hk(n, f){",
+    "function hhColDefs(){",
+    "function mdfNorm(s){",
+    "function visionHeaderFor(key){",
+    "function columnByVisionKey(list, key){",
+    "function exactTargetSheet(B, ptype, existingSheet){",
+    "function sheetRole(name){",
+    "function sheetRows(name){",
+    "function exactFillProp(p, V, B, copies, st){",
+    "function normCode(v){",
+    "function photoExists(code){",
+    "function isMarker(v){",
+    "function isMainPhotoCol(col){",
+    "function photoRow(row){",
+    "function dwellingPhotoYellow(row, col, val){",
+    "function dwellingPhotoMark(row, col, val){",
+    "function fillNewDwellingPhotoCodes(row, B, sheet, uprn){",
+    "function starterPhotoGroups(sheetName){",
+    "function starterFixedColumns(sheetName){",
+  ].map((needle) => extractDecl(source, needle));
+  const sandbox: {
+    __api?: {
+      starterFixedColumns: (sheet: string) => MasterCol[];
+      starterPhotoGroups: (sheet: string) => { component: string; count: number; sheet?: string }[];
+      exactFillProp: (p: unknown, V: unknown, B: unknown, copies: Map<string, { sheet: string; row: MasterRow }[]>, st: { newProps: number; filled?: number }) => void;
+      dwellingPhotoYellow: (row: unknown, col: unknown, val: unknown) => boolean;
+      dwellingPhotoMark: (row: unknown, col: unknown, val: unknown) => boolean;
+      setMaster: (next: { data: Map<string, MasterRow[]>; B?: unknown }) => void;
+      master: () => { data: Map<string, MasterRow[]> };
+      photos: () => { map: Map<string, unknown> };
+      share: () => { set: Set<string> | null };
+    };
+  } = {};
+  vm.runInNewContext(
+    "var photos = {map:new Map()}; var shareRT = {set:null}; var MS = {data:new Map()};\n" +
+      parts.join("\n") +
+      "\nglobalThis.__api = {starterFixedColumns:starterFixedColumns, starterPhotoGroups:starterPhotoGroups, exactFillProp:exactFillProp, dwellingPhotoYellow:dwellingPhotoYellow, dwellingPhotoMark:dwellingPhotoMark, setMaster:function(next){ MS = next; }, master:function(){ return MS; }, photos:function(){ return photos; }, share:function(){ return shareRT; }};\n",
+    sandbox
+  );
+  return sandbox.__api!;
 }
 
 function previousMasterHeaders(
