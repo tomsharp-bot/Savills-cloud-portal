@@ -508,14 +508,97 @@
     return waitingCount !== shownCount;
   }
 
-  /* Decide whether a poll or alert may patch counts, swap the pending list,
-     or only offer a manual list refresh. A review form that is being typed
-     in, or focus inside the list, blocks the swap so that work is kept. */
+  function pendingCaseIdFromHref(href) {
+    var text = String(href || "");
+    var match = text.match(/\/review\/([^/?#]+)/);
+    if (!match) return "";
+    try {
+      return decodeURIComponent(match[1]);
+    } catch (e) {
+      return match[1];
+    }
+  }
+
+  function cleanQueueIds(ids) {
+    var out = [];
+    var seen = {};
+    var list = Array.isArray(ids) ? ids : [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var id = list[i] ? String(list[i]) : "";
+      if (!id || seen[id]) continue;
+      seen[id] = true;
+      out.push(id);
+    }
+    return out;
+  }
+
+  /* Keep the rows already on screen, in the order the user is looking at.
+     New ids from the current sort are inserted beside the neighbour they
+     follow in that sort. A row the user has open stays even if it has left
+     the queue. */
+  function planPendingQueuePatch(liveIds, freshIds, openId) {
+    var live = cleanQueueIds(liveIds);
+    var fresh = cleanQueueIds(freshIds);
+    var open = openId ? String(openId) : "";
+    var freshSet = {};
+    var i;
+    for (i = 0; i < fresh.length; i++) freshSet[fresh[i]] = true;
+    var result = [];
+    var kept = {};
+    for (i = 0; i < live.length; i++) {
+      var id = live[i];
+      if (freshSet[id] || (open && id === open)) {
+        result.push(id);
+        kept[id] = true;
+      }
+    }
+    for (i = 0; i < fresh.length; i++) {
+      var nextId = fresh[i];
+      if (kept[nextId]) continue;
+      var insertAt = result.length;
+      var placed = false;
+      var j;
+      for (j = i - 1; j >= 0; j--) {
+        var prevAt = result.indexOf(fresh[j]);
+        if (prevAt !== -1) {
+          insertAt = prevAt + 1;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        for (j = i + 1; j < fresh.length; j++) {
+          var nextAt = result.indexOf(fresh[j]);
+          if (nextAt !== -1) {
+            insertAt = nextAt;
+            break;
+          }
+        }
+      }
+      result.splice(insertAt, 0, nextId);
+      kept[nextId] = true;
+    }
+    return result;
+  }
+
+  function sameQueueIds(left, right) {
+    if (!left || !right || left.length !== right.length) return false;
+    var i;
+    for (i = 0; i < left.length; i++) if (left[i] !== right[i]) return false;
+    return true;
+  }
+
+  /* Decide whether a poll or alert may patch counts, refresh the pending
+     queue, or only offer a manual list refresh. Typing in a review form, or
+     focus inside the review list, blocks that swap. The Pending list still
+     refreshes in place so an open row is kept. */
   function planPendingSurface(state) {
     var countChanged = countsDiffer(state.waitingCount, state.shownCount);
     var wants = !!(state.force || state.alertFired || countChanged || state.listStale);
     var hasList = !!(state.hasPendingList || state.hasReviewList);
-    var unsafe = !state.force && (!!state.focusInsideList || (!!state.hasReviewList && !!state.typingInReview));
+    var reviewUnsafe = !!state.hasReviewList && (!!state.focusInsideList || !!state.typingInReview);
+    var unsafe = !state.force && reviewUnsafe;
     return {
       updateCounts: !!(countChanged || state.alertFired || state.force),
       refreshList: !!(hasList && wants && !unsafe),
@@ -700,7 +783,222 @@
     note.hidden = false;
   }
 
+  function pendingRowId(row) {
+    if (!row || !row.querySelector) return "";
+    var link = row.querySelector("a[href*='/review/']");
+    if (!link) return "";
+    return pendingCaseIdFromHref(link.getAttribute("href"));
+  }
+
+  function findPendingRow(list, id) {
+    if (!list || !id) return null;
+    var rows = list.querySelectorAll("tbody tr");
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (pendingRowId(rows[i]) === id) return rows[i];
+    }
+    return null;
+  }
+
+  /* The row the user is in: an expanded or selected row, an open photo, or
+     the row that holds focus. */
+  function openPendingRowId(list) {
+    if (!list || !list.querySelector) return "";
+    var marked = list.querySelector("tr.is-open, tr.is-sel, .photo-att-icon.is-pop-open");
+    var row = null;
+    if (marked) {
+      if (marked.matches && marked.matches("tr")) row = marked;
+      else if (marked.closest) row = marked.closest("tr");
+    }
+    if (!row && typeof document !== "undefined") {
+      var active = document.activeElement;
+      if (active && active.closest && list.contains(active)) row = active.closest("tr");
+    }
+    return pendingRowId(row);
+  }
+
+  function queueRowIds(body) {
+    var ids = [];
+    if (!body) return ids;
+    var rows = body.querySelectorAll("tr");
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      var id = pendingRowId(rows[i]);
+      if (id) ids.push(id);
+    }
+    return ids;
+  }
+
+  function pageScroll() {
+    var root = document.scrollingElement || document.documentElement;
+    return {
+      x: window.pageXOffset || (root && root.scrollLeft) || 0,
+      y: window.pageYOffset || (root && root.scrollTop) || 0,
+    };
+  }
+
+  function queueWrap(list) {
+    if (!list || !list.querySelector) return null;
+    return list.querySelector(".pending-issues-wrap") || list.querySelector(".table-wrap");
+  }
+
+  function rowInView(row) {
+    if (!row || !row.getBoundingClientRect) return false;
+    var rect = row.getBoundingClientRect();
+    var height = window.innerHeight || 0;
+    return rect.bottom > 0 && rect.top < height;
+  }
+
+  /* Remember what is on screen. An open row in view stays put, so a photo
+     pop does not drift. Otherwise the first visible row stays put once the
+     page is scrolled. At the top of the page the window scroll stays, and a
+     new case can appear in the list. Sideways scroll is always kept. */
+  function captureQueueView(list) {
+    var wrap = queueWrap(list);
+    var scroll = pageScroll();
+    var panel = list.getBoundingClientRect();
+    var openId = openPendingRowId(list);
+    var openRow = openId ? findPendingRow(list, openId) : null;
+    var anchor = null;
+    var holdOpen = !!(openRow && rowInView(openRow));
+    if (holdOpen) anchor = { id: openId, top: openRow.getBoundingClientRect().top };
+    if (!anchor) {
+      var rows = list.querySelectorAll("tbody tr");
+      var i;
+      for (i = 0; i < rows.length; i++) {
+        if (!rowInView(rows[i])) continue;
+        var id = pendingRowId(rows[i]);
+        if (!id) continue;
+        anchor = { id: id, top: rows[i].getBoundingClientRect().top };
+        break;
+      }
+    }
+    return {
+      x: scroll.x,
+      y: scroll.y,
+      left: wrap ? wrap.scrollLeft : 0,
+      top: wrap ? wrap.scrollTop : 0,
+      panelHeight: panel.height,
+      panelBottom: panel.bottom,
+      anchor: anchor,
+      lockScroll: !holdOpen && scroll.y <= 1,
+    };
+  }
+
+  function restoreQueueView(list, saved) {
+    if (!saved) return;
+    window.scrollTo(saved.x, saved.y);
+    if (!saved.lockScroll) {
+      var delta = 0;
+      if (saved.anchor && saved.anchor.id) {
+        var row = findPendingRow(list, saved.anchor.id);
+        if (row) delta = row.getBoundingClientRect().top - saved.anchor.top;
+        else if (saved.panelBottom <= 0) delta = list.getBoundingClientRect().height - saved.panelHeight;
+      } else if (saved.panelBottom <= 0) {
+        delta = list.getBoundingClientRect().height - saved.panelHeight;
+      }
+      if (delta) window.scrollBy(0, delta);
+    }
+    var wrap = queueWrap(list);
+    if (wrap) {
+      wrap.scrollLeft = saved.left;
+      wrap.scrollTop = saved.top;
+    }
+  }
+
+  function isQueueChrome(node) {
+    return !!(node && node.classList && (node.classList.contains("panel-head") || node.classList.contains("waiting-banner")));
+  }
+
+  function keepQueueControl(node) {
+    if (!node) return false;
+    if (node.tagName === "FORM") return true;
+    return !!(node.classList && node.classList.contains("pending-sort-bar"));
+  }
+
+  /* Swap the empty message or the table. Leave the sort bar and any filters. */
+  function replaceQueueTail(live, fresh) {
+    var remove = [];
+    var child = live.firstElementChild;
+    while (child) {
+      if (!isQueueChrome(child) && !keepQueueControl(child)) remove.push(child);
+      child = child.nextElementSibling;
+    }
+    var i;
+    for (i = 0; i < remove.length; i++) {
+      if (remove[i].parentNode) remove[i].parentNode.removeChild(remove[i]);
+    }
+    var hasSort = !!live.querySelector(".pending-sort-bar");
+    var hasForm = !!live.querySelector("form");
+    child = fresh.firstElementChild;
+    while (child) {
+      var isSort = !!(child.classList && child.classList.contains("pending-sort-bar"));
+      var isForm = child.tagName === "FORM";
+      if (!isQueueChrome(child) && !(isSort && hasSort) && !(isForm && hasForm)) {
+        live.appendChild(document.importNode(child, true));
+      }
+      child = child.nextElementSibling;
+    }
+  }
+
+  function patchPendingQueue(live, fresh) {
+    if (!live || !fresh) return;
+    var liveBody = live.querySelector("tbody");
+    var freshBody = fresh.querySelector("tbody");
+    var openId = openPendingRowId(live);
+    if (!liveBody || !freshBody) {
+      var view = captureQueueView(live);
+      live.style.overflowAnchor = "none";
+      if (openId && liveBody && !freshBody) {
+        var staying = liveBody.querySelectorAll("tr");
+        var s;
+        for (s = 0; s < staying.length; s++) {
+          var stayId = pendingRowId(staying[s]);
+          if (stayId && stayId !== openId && staying[s].parentNode) staying[s].parentNode.removeChild(staying[s]);
+        }
+      } else if (!openId) {
+        replaceQueueTail(live, fresh);
+      }
+      restoreQueueView(live, view);
+      live.style.overflowAnchor = "";
+      return;
+    }
+    var liveIds = queueRowIds(liveBody);
+    var freshIds = queueRowIds(freshBody);
+    var order = planPendingQueuePatch(liveIds, freshIds, openId);
+    if (sameQueueIds(liveIds, order)) return;
+    var view = captureQueueView(live);
+    live.style.overflowAnchor = "none";
+    var freshRows = freshBody.querySelectorAll("tr");
+    var freshById = {};
+    var i;
+    for (i = 0; i < freshRows.length; i++) {
+      var freshId = pendingRowId(freshRows[i]);
+      if (freshId && !freshById[freshId]) freshById[freshId] = freshRows[i];
+    }
+    var liveRows = liveBody.querySelectorAll("tr");
+    for (i = 0; i < liveRows.length; i++) {
+      var existingId = pendingRowId(liveRows[i]);
+      if (!existingId) continue;
+      if (order.indexOf(existingId) === -1 && liveRows[i].parentNode) liveRows[i].parentNode.removeChild(liveRows[i]);
+    }
+    for (i = 0; i < order.length; i++) {
+      var id = order[i];
+      var node = findPendingRow(live, id);
+      if (!node && freshById[id]) node = document.importNode(freshById[id], true);
+      if (!node || !liveBody.rows) continue;
+      var current = liveBody.rows[i];
+      if (current !== node) liveBody.insertBefore(node, current || null);
+    }
+    restoreQueueView(live, view);
+    live.style.overflowAnchor = "";
+  }
+
   function swapPendingList(live, fresh) {
+    if (live.id === "not-actioned") {
+      patchPendingQueue(live, fresh);
+      return;
+    }
     var liveWrap = live.querySelector(".table-wrap");
     var top = liveWrap ? liveWrap.scrollTop : 0;
     if (live.id === "rv-also-waiting") {
@@ -752,7 +1050,7 @@
         }
         var fresh = doc.getElementById(live.id);
         if (!fresh) return false;
-        if (!swapForce && (listBusy(live) || (live.id === "rv-also-waiting" && typingInReview()))) {
+        if (live.id !== "not-actioned" && !swapForce && (listBusy(live) || (live.id === "rv-also-waiting" && typingInReview()))) {
           listStale = true;
           showRefreshNotice(live);
           return false;
@@ -974,6 +1272,9 @@
     desktopAlertsOn: desktopAlertsOn,
     unlockAlertSound: unlockAlertSound,
     countsDiffer: countsDiffer,
+    pendingCaseIdFromHref: pendingCaseIdFromHref,
+    planPendingQueuePatch: planPendingQueuePatch,
+    patchPendingQueue: patchPendingQueue,
     planPendingSurface: planPendingSurface,
     start: start,
   };
