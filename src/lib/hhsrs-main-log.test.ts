@@ -584,7 +584,7 @@ describe("HHSRS main log filters", () => {
     assert.match(html, /Correction of email sent 24\/09\/2026 14:32/);
     assert.match(html, /Reason: Wrong address/);
     assert.match(html, /View original email/);
-    assert.match(html, /View pack/);
+    assert.doesNotMatch(html, /View pack/);
     assert.match(html, /Open case/);
     assert.match(html, new RegExp(`Flat 5|Use flat 5|${stamp}`));
     assert.doesNotMatch(html, new RegExp(`>${stamp} Way, ZZ1`));

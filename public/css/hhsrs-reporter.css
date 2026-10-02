@@ -2266,48 +2266,65 @@ body.hhsrs-reporter {
   border-top: 1px solid var(--border);
 }
 .hhsrs-reporter .generate-email-row .review-project-hint { margin: 0; }
+.hhsrs-reporter #rv-project-block.is-dismissed-case,
 .hhsrs-reporter #rv-case-panel.is-drafted > form > .panel-head,
 .hhsrs-reporter #rv-case-panel.is-sent-case > form > .panel-head,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case > form > .panel-head,
 .hhsrs-reporter #rv-case-panel.is-drafted > .panel-head,
 .hhsrs-reporter #rv-case-panel.is-sent-case > .panel-head,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case > .panel-head,
 .hhsrs-reporter #rv-case-panel.is-drafted #rv-case-fields,
 .hhsrs-reporter #rv-case-panel.is-sent-case #rv-case-fields,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case #rv-case-fields,
 .hhsrs-reporter #rv-case-panel.is-drafted .case-save-row,
-.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row {
+.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case .case-save-row {
   opacity: 0.45;
   filter: grayscale(0.65);
   pointer-events: none;
   user-select: none;
 }
 .hhsrs-reporter #rv-case-panel.is-drafted #rv-photos-block img,
-.hhsrs-reporter #rv-case-panel.is-sent-case #rv-photos-block img {
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-photos-block img,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case #rv-photos-block img {
   filter: grayscale(1);
 }
 .hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row .btn:disabled,
-.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row button:disabled {
+.hhsrs-reporter #rv-case-panel.is-sent-case .case-save-row button:disabled,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case .case-save-row .btn:disabled,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case .case-save-row button:disabled {
   opacity: 1;
 }
-.hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row {
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case #rv-email-generate-row {
   opacity: 0.45;
   filter: grayscale(0.65);
   pointer-events: none;
   user-select: none;
 }
 .hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row .btn:disabled,
-.hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row button:disabled {
+.hhsrs-reporter #rv-case-panel.is-sent-case #rv-email-generate-row button:disabled,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case #rv-email-generate-row .btn:disabled,
+.hhsrs-reporter #rv-case-panel.is-dismissed-case #rv-email-generate-row button:disabled {
   opacity: 1;
 }
 .hhsrs-reporter .email-draft-panel.is-pre-generate > .panel-head,
 .hhsrs-reporter .email-draft-panel.is-sent-lock > .panel-head,
+.hhsrs-reporter .email-draft-panel.is-dismissed-lock > .panel-head,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-locked,
+.hhsrs-reporter .email-draft-panel.is-dismissed-lock .field-locked,
 .hhsrs-reporter .email-draft-panel.is-pre-generate .field-locked,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .field-with-copy,
+.hhsrs-reporter .email-draft-panel.is-dismissed-lock .field-with-copy,
 .hhsrs-reporter .email-draft-panel.is-pre-generate .field-with-copy,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .attach-block,
+.hhsrs-reporter .email-draft-panel.is-dismissed-lock .attach-block,
 .hhsrs-reporter .email-draft-panel.is-pre-generate .attach-block,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .signature-added-note,
+.hhsrs-reporter .email-draft-panel.is-dismissed-lock .signature-added-note,
 .hhsrs-reporter .email-draft-panel.is-pre-generate .signature-added-note,
 .hhsrs-reporter .email-draft-panel.is-sent-lock .email-photo-tools,
+.hhsrs-reporter .email-draft-panel.is-dismissed-lock .email-photo-tools,
 .hhsrs-reporter .email-draft-panel.is-pre-generate .email-photo-tools {
   opacity: 0.45;
   filter: grayscale(0.65);
@@ -2315,6 +2332,7 @@ body.hhsrs-reporter {
   user-select: none;
 }
 .hhsrs-reporter .email-draft-panel.is-sent-lock .attach-item img,
+.hhsrs-reporter .email-draft-panel.is-dismissed-lock .attach-item img,
 .hhsrs-reporter .email-draft-panel.is-pre-generate .attach-item img {
   filter: grayscale(1);
 }

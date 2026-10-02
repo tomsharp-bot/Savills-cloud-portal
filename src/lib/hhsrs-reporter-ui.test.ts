@@ -374,7 +374,7 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(js, /emailGenerated = hasEmail/);
     assert.match(review, /is-sent-case/);
     assert.match(review, /is-sent-lock/);
-    assert.match(review, /sentEmail \? "disabled"/);
+    assert.match(review, /sentEmail \|\| caseDismissed \? "disabled"/);
     assert.match(js, /function lockSentEmailFields/);
     assert.match(js, /fields\.inert = sent/);
     assert.match(js, /if \(sentStage\(\)\) return/);

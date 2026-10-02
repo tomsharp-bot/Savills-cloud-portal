@@ -1511,6 +1511,11 @@ async function handleSave(req: Request, res: Response, id: string): Promise<void
     res.status(404).send("Case not found.");
     return;
   }
+  if (row.status === "dismissed") {
+    flashErr(req, "Restore it before editing.");
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
+    return;
+  }
   const owner = heldClaim(row, claimerLabel(req.user));
   if (owner) {
     flashErr(req, claimHeldMessage(owner));
@@ -1766,6 +1771,11 @@ async function handleSend(req: Request, res: Response, id: string): Promise<void
   if (owner) {
     flashErr(req, claimHeldMessage(owner));
     res.redirect(HHSRS_REPORTER_PATH);
+    return;
+  }
+  if (row.status === "dismissed") {
+    flashErr(req, "Restore it before sending.");
+    res.redirect(`${HHSRS_REPORTER_PATH}/review/${row.id}`);
     return;
   }
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
