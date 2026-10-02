@@ -799,10 +799,10 @@ body.hhsrs-form-page {
 @media (min-width: 1025px) {
   .hhsrs-key-next { display: none !important; }
 }
-/* Desktop stays open once the visit section is done. Phone and tablet step through. */
+/* Desktop keeps sections the script has opened. A hidden section stays hidden, so Extra details follows the project. Phone and tablet step through. */
 @media (min-width: 1025px) {
-  .hhsrs-form-page #issue-details:not([hidden]) .flow-step,
-  .hhsrs-form-page #issue-details:not([hidden]) #form-actions {
+  .hhsrs-form-page #issue-details:not([hidden]) .flow-step:not([hidden]),
+  .hhsrs-form-page #issue-details:not([hidden]) #form-actions:not([hidden]) {
     display: block !important;
   }
 }

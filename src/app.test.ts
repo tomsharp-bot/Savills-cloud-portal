@@ -416,6 +416,19 @@ describe("HHSRS site form at domain-root paths", () => {
     assert.equal(js.status, 200);
     assert.match(js.body, /Clear the form\? This cannot be undone\./);
     assert.match(js.body, /Europe\/London/);
+    assert.match(js.body, /setAttribute\("data-scheme", ""\)/);
+    assert.match(
+      css.body,
+      /#issue-details:not\(\[hidden\]\) \.flow-step:not\(\[hidden\]\)/
+    );
+    assert.match(
+      css.body,
+      /#issue-details:not\(\[hidden\]\) #form-actions:not\(\[hidden\]\)/
+    );
+    assert.doesNotMatch(
+      css.body,
+      /#issue-details:not\(\[hidden\]\) \.flow-step,/
+    );
     assert.match(js.body, /btn-lookup-uprn/);
     assert.match(js.body, /stock-lookup/);
     assert.doesNotMatch(js.body, /address-lookup/);
