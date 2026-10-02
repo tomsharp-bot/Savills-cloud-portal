@@ -132,7 +132,10 @@ describe("Data Review practice page hosting", () => {
         sectionFromHeader: (header: string, comps: Record<string, { section?: string }>) => string;
         headerGroup: (header: string) => string;
         sectionOfCol: (col: { section?: string; key?: string; header?: string; name?: string }, B: { comps?: Record<string, { section?: string }> }) => string;
-        headerStripes: (cols: { section?: string }[], sectionOf: (col: { section?: string }) => string) => string[];
+        headerStripes: (
+          cols: { section?: string; key?: string; header?: string }[],
+          sectionOf: (col: { section?: string; key?: string; header?: string }) => string
+        ) => string[];
         freezePaneXml: (y: number, x: number) => string;
       };
     } = {};
