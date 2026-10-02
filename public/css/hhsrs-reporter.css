@@ -120,6 +120,11 @@ body.hhsrs-reporter:has(.pending-issues-table) .app-shell,
 body.hhsrs-reporter:has(.dup-table) .app-shell {
   max-width: 2103px;
 }
+/* Find and resend uses that same wider grey card, including before a search
+   has drawn the results table. The amend screen has no .find-page. */
+body.hhsrs-reporter:has(.find-page) .app-shell {
+  max-width: 2103px;
+}
 .side-tabs {
   flex: 0 0 var(--sidebar-w);
   width: var(--sidebar-w);
@@ -3694,6 +3699,13 @@ body.hhsrs-reporter:has(.find-split.has-case) .find-page.has-case {
 .find-split.has-case > .find-main > .panel { flex-shrink: 0; }
 .find-split.has-case .find-table { min-width: 0; }
 .find-split.has-case .find-table thead th { white-space: normal; }
+/* Results list only. The shared column minimums are for Pending and Last 20.
+   On this table they push the address and the Amend button off the card.
+   Each column is only as wide as its text, and the row still stays on one line. */
+.hhsrs-reporter #find-table th,
+.hhsrs-reporter #find-table td {
+  min-width: 0;
+}
 .fr-drawer {
   flex: 0 0 420px;
   width: 420px;
