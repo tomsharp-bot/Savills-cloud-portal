@@ -892,6 +892,58 @@ function drvCore(scope){
     post({type:'done', id:m.id, sheets:sheets, skipped:skip});
   }
 
+  /* Excel stores a column width in character units. The grid stores pixels.
+     MDW 6 is the width SheetJS writes for wpx, so this is the reverse of that write. */
+  function excelWidthPx(width){
+    var w = +width;
+    if (!w) return 0;
+    var ac = 6;
+    return Math.floor((w + Math.round(128 / ac) / 256) * ac);
+  }
+  /* SheetJS skips <cols> unless cellStyles is on, and turning cellStyles on also
+     builds a stub for every empty cell. Read the column records from the zip
+     preamble instead, and put pixel widths on the sheet for the grid to restore. */
+  function attachSavedColWidths(u8, book){
+    if (!book || !book.Sheets || !u8) return;
+    var zip = XLSX.CFB.read(u8, {type:'array'});
+    var wbEnt = zfind(zip, 'xl/workbook.xml'), relEnt = zfind(zip, 'xl/_rels/workbook.xml.rels');
+    if (!wbEnt || !relEnt) return;
+    var wx = u8s(wbEnt.content), rx = u8s(relEnt.content), rel = {};
+    rx.replace(/<Relationship\b[^>]*>/g, function(t){
+      var i = /Id="([^"]+)"/.exec(t), tg = /Target="([^"]+)"/.exec(t);
+      if (!i || !tg) return t;
+      var target = tg[1].replace(/^\//, '');
+      if (target.indexOf('xl/') !== 0) target = 'xl/' + target.replace(/^xl\//, '');
+      rel[i[1]] = target;
+      return t;
+    });
+    var names = book.SheetNames || [], si = 0;
+    wx.replace(/<sheet\b[^>]*>/g, function(t){
+      var rid = /r:id="([^"]+)"/.exec(t), name = names[si++];
+      if (!rid || !name || !book.Sheets[name]) return t;
+      var ent = zfind(zip, rel[rid[1]]);
+      if (!ent || !ent.content) return t;
+      var n = Math.min(ent.content.length, 262144);
+      var head = u8s(ent.content.subarray(0, n));
+      var cut = head.indexOf('<sheetData');
+      if (cut >= 0) head = head.slice(0, cut);
+      var cols = [], re = /<col\b[^>]*\/?>/g, m;
+      while ((m = re.exec(head))) {
+        var tag = m[0];
+        var min = +((/\bmin="(\d+)"/.exec(tag) || [])[1] || 0);
+        var max = +((/\bmax="(\d+)"/.exec(tag) || [])[1] || min);
+        var width = +((/\bwidth="([^"]+)"/.exec(tag) || [])[1] || 0);
+        var hidden = /\bhidden="(?:1|true)"/.test(tag);
+        if (!min || !width) continue;
+        var wpx = excelWidthPx(width);
+        var end = Math.min(max, min + 512);
+        for (var c = min; c <= end; c++) cols[c - 1] = {wpx:wpx, width:width, hidden:hidden};
+      }
+      if (cols.length) book.Sheets[name]['!cols'] = cols;
+      return t;
+    });
+  }
+
   scope.onmessage = function(e){
     var m = e.data;
     try {
@@ -901,6 +953,7 @@ function drvCore(scope){
         var t0 = Date.now();
         var wantVba = /\.(xlsm|xltm|xlam)$/i.test(m.name || '');
         wb = XLSX.read(new Uint8Array(m.buf), {type:'array', dense:true, cellNF:true, cellText:false, cellStyles:false, cellHTML:false, cellFormula:false, raw:isCsv, bookVBA:wantVba});
+        try { attachSavedColWidths(new Uint8Array(m.buf), wb); } catch (cw) {}
         var vr = null, cn = null;
         if (wb.vbaraw) { var vu = wb.vbaraw instanceof Uint8Array ? wb.vbaraw : new Uint8Array(wb.vbaraw); vr = vu.slice().buffer; }
         if (wb.Workbook && wb.Workbook.Sheets) { cn = {}; wb.Workbook.Sheets.forEach(function(s, i){ if (s && s.CodeName) cn[wb.SheetNames[i]] = s.CodeName; }); }
@@ -932,7 +985,7 @@ function drvCore(scope){
         var aoa = sheetToAoa(ws);
         var colsInfo = (ws && ws['!cols']) || [];
         var widths = [];
-        for (var i = 0; i < colsInfo.length; i++) { var ci = colsInfo[i]; widths.push(ci ? (ci.wpx || (ci.wch ? ci.wch * 7 + 5 : 0) || (ci.width ? ci.width * 7 + 5 : 0)) : 0); }
+        for (var i = 0; i < colsInfo.length; i++) { var ci = colsInfo[i]; widths.push(ci ? (ci.wpx || excelWidthPx(ci.width || ci.wch) || 0) : 0); }
         // free the parsed cells for this sheet – the page now owns the data and supplies it on export
         wb.Sheets[m.name] = {'!ref':'A1', '!data':[], __freed:true};
         prog(m.id, 'Sending ' + aoa.length.toLocaleString('en-GB') + ' rows to the grid…');
@@ -1140,15 +1193,16 @@ function buildTable(name, aoa, widths){
   }
   const rows = new Array(Math.max(0, aoa.length - 1));
   for (let i = 1; i < aoa.length; i++) rows[i - 1] = {v:aoa[i], i:i - 1, e:null, ins:false};
-  // column widths: from the file if set, otherwise estimated from a sample
+  // A saved width is the width he dragged, in pixels. Keep it, including a column
+  // narrowed below 48 (header goes vertical) or widened past 320. Only a column
+  // with no saved width is estimated, and that estimate stays between 48 and 320.
   const sample = Math.min(rows.length, 300);
   for (let c = 0; c < n; c++) {
-    let w = widths && widths[c] ? widths[c] : 0;
-    if (!w) {
-      let mx = 0;
-      for (let i = 0; i < sample; i++) { const s = fmt(rows[i].v[c]); if (s.length > mx) mx = s.length; }
-      w = Math.max(cols[c].name.length * 7.5 + 46, mx * 7 + 14);
-    }
+    const given = widths && widths[c] ? +widths[c] : 0;
+    if (given) { cols[c].w = Math.round(Math.max(22, given)); continue; }
+    let mx = 0;
+    for (let i = 0; i < sample; i++) { const s = fmt(rows[i].v[c]); if (s.length > mx) mx = s.length; }
+    const w = Math.max(cols[c].name.length * 7.5 + 46, mx * 7 + 14);
     cols[c].w = Math.round(Math.min(320, Math.max(48, w)));
   }
   return {name, cols, rows, view:rows.slice(), filters:new Map(), pinned:new Set(), sort:null,
@@ -2669,7 +2723,7 @@ function gridToMaster(){
         c.key = 'c|' + fmt(c.hdr || c.name) + '|' + Date.now().toString(36) + pos;
         const prevKey = pos > 0 ? t.cols[pos - 1].key : null;
         const at = prevKey ? list.findIndex(x => x.key === prevKey) + 1 : 0;
-        list.splice(at, 0, {key:c.key, header:fmt(c.hdr || c.name), kind:'custom', src:'Added in the grid', visible:true});
+        list.splice(at, 0, {key:c.key, header:fmt(c.hdr || c.name), kind:'custom', src:'Added in the grid', visible:true, w:c.w});
       } else { const e = list.find(x => x.key === c.key); if (e) { e.w = c.w; if (c.hid) e.hid = true; else delete e.hid; } }
       idToKey.set(c.id, c.key);
     });
