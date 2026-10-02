@@ -300,9 +300,9 @@ body:not(.tab-grid) #main{visibility:hidden}
 .h.h0:not(.f):not(.hi){background:#fff}
 .h.hr:not(.f){background:#f6b3b3}.h.hr .hl{background:#eb9a9a;color:#5c1717}
 .h.ho:not(.f){background:#fcdcb4}.h.ho .hl{background:#f3c68f;color:#5a3500}
-.h.hb:not(.f){background:#D6EAF8;color:#1d2433}.h.hb:not(.f) .hl{background:#C5DCF0;color:#1c3d7a}
-.h.hyel:not(.f){background:#FFF4CC;color:#1d2433}.h.hyel:not(.f) .hl{background:#F3E6A8;color:#5b4a00}
-.h.hb .hn,.h.hyel .hn{color:#1d2433}
+#grid .h.hb:not(.f){background:#D6EAF8;color:#1d2433}#grid .h.hb:not(.f) .hn{background:#D6EAF8}#grid .h.hb:not(.f) .hl{background:#C5DCF0;color:#1c3d7a}
+#grid .h.hyel:not(.f){background:#FFF4CC;color:#1d2433}#grid .h.hyel:not(.f) .hn{background:#FFF4CC}#grid .h.hyel:not(.f) .hl{background:#F3E6A8;color:#5b4a00}
+#grid .h.hb .hn,#grid .h.hyel .hn{color:#1d2433}
 .h.nw.hb:not(.f),.h.nw.hyel:not(.f){box-shadow:inset 0 -3px 0 #2e9d4a}
 .c.vAdd,#frozen .c.vAdd{background:#ffff00;font-weight:600}
 .c.vHigh,#frozen .c.vHigh{background:#ffd7a8;font-weight:600}
@@ -1226,9 +1226,10 @@ function hdrHtml(c, left){
   const so = T.sort && T.sort.id === col.id ? (T.sort.dir > 0 ? ' ▲' : ' ▼') : '';
   const rot = hdrMode(col.name + so, col.w) === 'rot', xc = headerCls(col);
   const fb = `<button class="fb" data-c="${c}" title="Filter / sort / hide">${f ? FUNNEL : '▼'}</button>`;
-  const tip = esc(col.name) + (f ? ' (filtered)' : '') + (xc.includes(' hy') ? ' – item with photos: click a cell to see its photo' : '') + (xc.includes(' nw') ? ' – NEW column from the last import' : '');
-  return `<div class="h${f ? ' f' : ''}${col.ins ? ' hi' : ''}${xc}${T.sel.c === c ? ' sc' : ''}${colMulti(c) ? ' mcs' : ''}" style="left:${left}px;width:${col.w}px" data-c="${c}">` +
-    `<div class="hl">${colLetter(c)}</div><div class="hn${rot ? ' rot' : ''}" title="${tip}">` + (rot ? fb + `<span class="ht">${esc(col.name)}${so}</span>` : `<span class="ht">${esc(col.name)}${so}</span>` + fb) +
+  const tip = esc(col.name) + (f ? ' (filtered)' : '') + (/(^| )hy( |$)/.test(xc) ? ' – item with photos: click a cell to see its photo' : '') + (xc.includes(' nw') ? ' – NEW column from the last import' : '');
+  const stripeBg = !f && (/(^| )hb( |$)/.test(xc) ? '#D6EAF8' : (/(^| )hyel( |$)/.test(xc) ? '#FFF4CC' : ''));
+  return `<div class="h${f ? ' f' : ''}${col.ins ? ' hi' : ''}${xc}${T.sel.c === c ? ' sc' : ''}${colMulti(c) ? ' mcs' : ''}" style="left:${left}px;width:${col.w}px${stripeBg ? ';background:' + stripeBg : ''}" data-c="${c}">` +
+    `<div class="hl">${colLetter(c)}</div><div class="hn${rot ? ' rot' : ''}"${stripeBg ? ` style="background:${stripeBg}"` : ''} title="${tip}">` + (rot ? fb + `<span class="ht">${esc(col.name)}${so}</span>` : `<span class="ht">${esc(col.name)}${so}</span>` + fb) +
     `</div><div class="rz" data-c="${c}"></div></div>`;
 }
 let rafPending = false;
@@ -4130,7 +4131,7 @@ function ensureV4State(){
   backfillSections(B);
 }
 function itemComp(col){ if (!col || !isMaster() || isPhotoCol(col)) return null; const n = hhIssueOf(col.id); if (n) return '~HHSRS ' + n; return itemCompOf(col.id, col.name, photoCompsFor(T.name)); }
-/* Neighbouring headers inside a section the file already has: pale blue, then pale yellow. A column with no section keeps the older header colour. */
+/* Neighbouring headers inside a section: pale blue, then pale yellow. A saved section name wins; otherwise the text before " - " is the section. A column with neither keeps the older header colour. */
 const SEC_KINDS = {q:1, qa:1, qr:1, qq:1, y:1, ia:1, ir:1, iq:1, p:1};
 function sectionFromHeader(header, comps){
   const h = mdfNorm(header);
@@ -4148,6 +4149,11 @@ function sectionFromHeader(header, comps){
   }
   return sec;
 }
+function headerGroup(header){
+  const h = fmt(header).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = /^(.*?)\s+[-\u2013\u2014]\s+/.exec(h);
+  return m && m[1] ? m[1] : '';
+}
 function sectionOfCol(col, B){
   if (!col) return '';
   if (col.section) return String(col.section);
@@ -4157,7 +4163,9 @@ function sectionOfCol(col, B){
     const parts = key.split('|');
     if (SEC_KINDS[parts[0]] && parts[1] && comps[parts[1]] && comps[parts[1]].section) return String(comps[parts[1]].section);
   }
-  return sectionFromHeader(col.header || col.name || '', comps);
+  const named = sectionFromHeader(col.header || col.name || '', comps);
+  if (named) return named;
+  return headerGroup(col.header || col.name || '');
 }
 function headerStripes(cols, sectionOf){
   const out = new Array(cols.length), n = {};
@@ -4198,14 +4206,19 @@ function refreshStripes(){
   const cols = MS.B.columns[T.name];
   const stripes = headerStripes(cols, c => sectionOfCol(c, MS.B));
   const map = new Map();
-  for (let i = 0; i < cols.length; i++) if (stripes[i] && cols[i].key) map.set(cols[i].key, stripes[i]);
+  for (let i = 0; i < cols.length; i++) {
+    if (!stripes[i]) continue;
+    if (cols[i].key) map.set(cols[i].key, stripes[i]);
+    const h = mdfNorm(cols[i].header || '');
+    if (h && !map.has('h:' + h)) map.set('h:' + h, stripes[i]);
+  }
   T.stripe = map;
 }
 /* header colours: a section stripe replaces the older fill on that header only. General Comments stays light orange, HHSRS light red, photo-linked items yellow, and a new column keeps its green underline. Data cells are not recoloured here. */
 function headerCls(col){
   if (!isMaster() || T.ro) return '';
   const id = col.id; let s = '';
-  const stripe = T.stripe && T.stripe.get(col.key || id);
+  const stripe = T.stripe && (T.stripe.get(col.key || id) || T.stripe.get('h:' + mdfNorm(col.hdr || col.name || '')));
   if (stripe) s = ' ' + stripe;
   else if (isHhKey(id)) s = ' hr';
   else if (id === 'g|comments') s = ' ho';
