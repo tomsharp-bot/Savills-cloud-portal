@@ -2297,6 +2297,17 @@ body.hhsrs-reporter {
   pointer-events: none;
   user-select: none;
 }
+.hhsrs-reporter #rv-case-panel.is-drafted #rv-rating-happy-row {
+  pointer-events: auto;
+  user-select: auto;
+  position: relative;
+  z-index: 1;
+}
+.hhsrs-reporter #review-workspace .office-needed,
+.hhsrs-reporter #ck-overlay .office-needed {
+  outline: 2px solid var(--savills-red);
+  outline-offset: 2px;
+}
 .hhsrs-reporter #rv-case-panel.is-drafted #rv-photos-block img,
 .hhsrs-reporter #rv-case-panel.is-sent-case #rv-photos-block img,
 .hhsrs-reporter #rv-case-panel.is-dismissed-case #rv-photos-block img {

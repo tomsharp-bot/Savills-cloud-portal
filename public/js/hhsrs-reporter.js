@@ -321,6 +321,7 @@
       ["restrictorMissingCount", "restrictorLocations", "restrictorMaterial", "clientCallReference"].forEach(function (key) {
         setOfficeStar(key, false);
       });
+      syncNeededMarks();
       return;
     }
     var rating = fieldText("rv-rating");
@@ -376,6 +377,7 @@
       officeHoldMessage = "Raised to " + raiseWord(projectCfg, rating) + ". Fill the extra details before sending.";
     }
     if (ratingChanged) markEmailStale();
+    syncNeededMarks();
   }
 
   var MAX_CASE_PHOTOS = 4;
@@ -2336,7 +2338,103 @@
   wirePortalSend();
   wireSentConfirm();
 
+  function ratingConfirmed() {
+    if (cfg.findResend) return true;
+    var box = $("rv-rating-happy");
+    if (!box) return true;
+    return !!box.checked;
+  }
+
+  var OFFICE_STAR_FIELD = {
+    restrictorMissingCount: "rv-restrictor-count",
+    restrictorLocations: "rv-restrictor-locations",
+    restrictorMaterial: "rv-restrictor-material",
+    clientCallReference: "rv-call-ref"
+  };
+
+  function controlBlocked(el) {
+    if (!el || el.disabled || el.readOnly) return true;
+    var node = el;
+    while (node) {
+      if (node.hidden || node.inert) return true;
+      if (String(node.tagName || "").toUpperCase() === "FIELDSET" && node.disabled) return true;
+      node = node.parentElement || null;
+    }
+    return false;
+  }
+
+  function valueMissing(el) {
+    var type = String(el.type || "").toLowerCase();
+    if (type === "hidden" || type === "button" || type === "submit" || type === "file") return false;
+    if (type === "checkbox" || type === "radio") return !el.checked;
+    return !String(el.value || "").replace(/^\s+|\s+$/g, "");
+  }
+
+  function clearNeededMarks() {
+    var nodes = document.querySelectorAll(".office-needed");
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].classList) nodes[i].classList.remove("office-needed");
+    }
+  }
+
+  function markNeeded(el) {
+    if (!el || !el.classList || controlBlocked(el) || !valueMissing(el)) return;
+    el.classList.add("office-needed");
+  }
+
+  /** Red outline on Review and Create for a required control that is still empty or unticked. */
+  function syncNeededMarks() {
+    clearNeededMarks();
+    if (cfg.findResend || !$("review-workspace")) return;
+    if (sentStage() || dismissedStage()) return;
+    var sendBtn = $("btn-send-email");
+    if (sendBtn && (sendBtn.getAttribute("data-dismissed") === "1" || sendBtn.getAttribute("data-not-needed") === "1")) return;
+    markNeeded($("rv-rating-happy"));
+    var required = document.querySelectorAll("#review-workspace [required], #ck-overlay [required]");
+    for (var i = 0; i < required.length; i++) markNeeded(required[i]);
+    Object.keys(OFFICE_STAR_FIELD).forEach(function (key) {
+      var stars = document.querySelectorAll('[data-office-star="' + key + '"]');
+      var active = false;
+      for (var s = 0; s < stars.length; s++) {
+        if (!stars[s].hidden) active = true;
+      }
+      if (active) markNeeded($(OFFICE_STAR_FIELD[key]));
+    });
+    if (!cfg.caseId) {
+      ["rv-project", "rv-address", "rv-uprn", "rv-hazard", "rv-rating"].forEach(function (id) {
+        markNeeded($(id));
+      });
+    }
+    var panel = document.querySelector(".email-draft-panel");
+    var emailLocked = panel && panel.classList && (
+      panel.classList.contains("is-pre-generate") ||
+      panel.classList.contains("is-sent-lock") ||
+      panel.classList.contains("is-dismissed-lock")
+    );
+    if (!emailLocked) {
+      markNeeded($("hhsrs-to"));
+      var subjectEl = $("hhsrs-subject");
+      var bodyEl = $("hhsrs-body");
+      if (subjectEl && bodyEl && valueMissing(subjectEl) && valueMissing(bodyEl)) {
+        markNeeded(subjectEl);
+        markNeeded(bodyEl);
+      }
+    }
+    var overlay = $("ck-overlay");
+    if (overlay && !overlay.hidden) markNeeded($("ck-tick"));
+  }
+
+  function syncDialogSend() {
+    var ckSendBtn = $("ck-send");
+    var ckTickBox = $("ck-tick");
+    if (!ckSendBtn || !ckTickBox) return;
+    ckSendBtn.disabled = !ckTickBox.checked || !ratingConfirmed();
+    var label = $("ck-tick-label");
+    if (label && label.classList) label.classList.toggle("is-on", !!ckTickBox.checked);
+  }
+
   function syncSendButton() {
+    syncNeededMarks();
     var btn = $("btn-send-email");
     var line = $("rv-send-line");
     if (!btn || !line) return;
@@ -2421,6 +2519,11 @@
         return;
       }
     }
+    if (!ratingConfirmed()) {
+      btn.disabled = true;
+      line.textContent = "Tick I'm happy with the rating before sending.";
+      return;
+    }
     btn.disabled = false;
     line.textContent = "Sends the email and adds it to the Main Log.";
   }
@@ -2456,6 +2559,18 @@
       el.addEventListener("input", syncSendButton);
       el.addEventListener("change", syncSendButton);
     });
+    var ratingHappy = $("rv-rating-happy");
+    if (ratingHappy && !cfg.findResend) {
+      ratingHappy.addEventListener("change", function () {
+        syncSendButton();
+        syncDialogSend();
+      });
+    }
+    var reviewRoot = $("review-workspace");
+    if (reviewRoot && !cfg.findResend) {
+      reviewRoot.addEventListener("input", syncNeededMarks);
+      reviewRoot.addEventListener("change", syncNeededMarks);
+    }
     syncSendButton();
     var ck = $("ck-overlay");
     if (!btn || !ck || (!cfg.findResend && cfg.send && cfg.send.sent)) return;
@@ -2500,7 +2615,7 @@
       return esc(trimmed).replace(/\n/g, "<br>\n");
     }
     function openCheck() {
-      if (btn.disabled || sending) return;
+      if (btn.disabled || sending || !ratingConfirmed()) return;
       var photos = tickedPhotos();
       var h = "";
       var test = $("ck-test");
@@ -2527,7 +2642,6 @@
       h += "</div></article></div>";
       ckBody.innerHTML = h;
       ckTick.checked = false;
-      ckSend.disabled = true;
       ckTickLabel.classList.remove("is-on");
       lastFocus = document.activeElement;
       var pane = document.querySelector(".content-pane");
@@ -2539,6 +2653,8 @@
         if (root) root.scrollTop = savedPageScroll;
       };
       ck.hidden = false;
+      syncDialogSend();
+      syncNeededMarks();
       document.body.style.overflow = "hidden";
       function pinCheckToTop() {
         if (pane) pane.scrollTop = 0;
@@ -2562,6 +2678,7 @@
     function closeCheck() {
       if (sending) return;
       ck.hidden = true;
+      syncNeededMarks();
       document.body.style.overflow = "";
       restoreCheckScroll();
       if (lastFocus && lastFocus.focus) {
@@ -2570,8 +2687,8 @@
       }
     }
     ckTick.addEventListener("change", function () {
-      ckSend.disabled = !ckTick.checked;
-      ckTickLabel.classList.toggle("is-on", ckTick.checked);
+      syncDialogSend();
+      syncNeededMarks();
     });
     ckBack.addEventListener("click", closeCheck);
     ck.addEventListener("click", function (e) { if (e.target === ck) closeCheck(); });
@@ -2586,7 +2703,7 @@
     });
     btn.addEventListener("click", openCheck);
     form.addEventListener("submit", function (e) {
-      if (sending || !ckTick.checked) {
+      if (sending || !ckTick.checked || !ratingConfirmed()) {
         e.preventDefault();
         return;
       }
@@ -2628,7 +2745,7 @@
           });
         }).catch(function () {
           sending = false;
-          ckSend.disabled = false;
+          syncDialogSend();
           ckSend.textContent = "Send and log";
           window.alert("Could not send. Try again.");
         });
