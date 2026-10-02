@@ -1074,6 +1074,27 @@ describe("HHSRS Reporter UI helpers", () => {
     assert.match(mainJs, /fullImg\.addEventListener\("mouseleave", closeFullPhoto\)/);
   });
 
+  it("gives Find and resend the wider card so the address and Amend fit", () => {
+    const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
+    const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
+    const pending = readFileSync("views/hhsrs-reporter/pending.ejs", "utf8");
+    const main = readFileSync("views/hhsrs-reporter/main-log.ejs", "utf8");
+    const duplicates = readFileSync("views/hhsrs-reporter/duplicates.ejs", "utf8");
+    const amend = find.slice(find.indexOf('class="amend-screen"'));
+    assert.match(css, /body\.hhsrs-reporter:has\(\.find-page\) \.app-shell \{\s*max-width:\s*2103px;/);
+    assert.match(css, /\.hhsrs-reporter #find-table th,\s*\.hhsrs-reporter #find-table td \{\s*min-width:\s*0;/);
+    assert.match(css, /\.pending-issues-table th\.col-addr,\s*\.hhsrs-reporter \.pending-issues-table td\.col-addr \{[^}]*min-width:\s*14rem/);
+    assert.match(css, /\.pending-issues-table th\.col-act,\s*\.hhsrs-reporter \.pending-issues-table td\.col-act \{[^}]*min-width:\s*9\.5rem/);
+    assert.match(css, /--sidebar-w:\s*220px/);
+    assert.match(find, /class="find-page/);
+    assert.match(find, /pendingTableId:\s*"find-table"/);
+    assert.match(find, /pendingAction:\s*"amend"/);
+    assert.doesNotMatch(amend, /find-page/);
+    assert.doesNotMatch(pending, /find-page|#find-table/);
+    assert.doesNotMatch(main, /find-page|#find-table/);
+    assert.doesNotMatch(duplicates, /find-page|#find-table/);
+  });
+
   it("adds a case-details photo drop that matches the amend drop", () => {
     const review = readFileSync("views/hhsrs-reporter/review.ejs", "utf8");
     const find = readFileSync("views/hhsrs-reporter/find.ejs", "utf8");
