@@ -2345,12 +2345,14 @@
     return !!box.checked;
   }
 
-  var OFFICE_STAR_FIELD = {
-    restrictorMissingCount: "rv-restrictor-count",
-    restrictorLocations: "rv-restrictor-locations",
-    restrictorMaterial: "rv-restrictor-material",
-    clientCallReference: "rv-call-ref"
-  };
+  function officeStarFields() {
+    return {
+      restrictorMissingCount: "rv-restrictor-count",
+      restrictorLocations: "rv-restrictor-locations",
+      restrictorMaterial: "rv-restrictor-material",
+      clientCallReference: "rv-call-ref"
+    };
+  }
 
   function controlBlocked(el) {
     if (!el || el.disabled || el.readOnly) return true;
@@ -2392,13 +2394,14 @@
     markNeeded($("rv-rating-happy"));
     var required = document.querySelectorAll("#review-workspace [required], #ck-overlay [required]");
     for (var i = 0; i < required.length; i++) markNeeded(required[i]);
-    Object.keys(OFFICE_STAR_FIELD).forEach(function (key) {
+    var starFields = officeStarFields();
+    Object.keys(starFields).forEach(function (key) {
       var stars = document.querySelectorAll('[data-office-star="' + key + '"]');
       var active = false;
       for (var s = 0; s < stars.length; s++) {
         if (!stars[s].hidden) active = true;
       }
-      if (active) markNeeded($(OFFICE_STAR_FIELD[key]));
+      if (active) markNeeded($(starFields[key]));
     });
     if (!cfg.caseId) {
       ["rv-project", "rv-address", "rv-uprn", "rv-hazard", "rv-rating"].forEach(function (id) {

@@ -303,7 +303,8 @@ describe("Review and Create rating confirmation", () => {
     assert.doesNotMatch(readFileSync("views/hhsrs-site-form/form.ejs", "utf8"), /I'm happy with the rating|rv-rating-happy/);
     assert.doesNotMatch(readFileSync("views/hhsrs-site-form/review.ejs", "utf8"), /I'm happy with the rating|rv-rating-happy/);
     const css = readFileSync("public/css/hhsrs-reporter.css", "utf8");
-    assert.match(css, /#review-workspace \.office-needed,\s*\n\.hhsrs-reporter #ck-overlay \.office-needed\s*\{[^}]*outline:\s*2px solid var\(--savills-red\)/);
+    assert.match(css, /#review-workspace \.office-needed,[\s\S]*?#ck-overlay \.office-needed[\s\S]*?\{[^}]*outline:\s*2px solid var\(--savills-red\)/);
+    assert.match(css, /#review-workspace \.check-row:has\(\.office-needed\)/);
     assert.doesNotMatch(readFileSync("public/hhsrs-site-form/form.css", "utf8"), /office-needed/);
     const sendFn = script.slice(script.indexOf("function syncSendButton"), script.indexOf("function attachmentBytes"));
     assert.ok(sendFn.indexOf("if (cfg.findResend)") < sendFn.indexOf("!ratingConfirmed()"));
@@ -372,6 +373,7 @@ describe("Review and Create rating confirmation", () => {
     ids["rv-restrictor-locations"].value = "Hall";
     fire("rv-restrictor-locations", "input");
     ids["rv-restrictor-material"].value = "PVC";
+    ids["rv-email-badge"].textContent = "Generated";
     fire("rv-restrictor-material", "input");
     assert.equal(ids["rv-restrictor-locations"].classList.contains("office-needed"), false);
     assert.equal(ids["rv-restrictor-material"].classList.contains("office-needed"), false);
